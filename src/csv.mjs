@@ -1,4 +1,4 @@
-import {AppError, object, validateDataset} from './schema.mjs';
+import {AppError, object, validateDataset, itemTypes, statuses} from './schema.mjs';
 
 // RFC 4180-style CSV, including quoted commas, escaped quotes and multiline cells.
 export function parseCsv(text, delimiter = ',') {
@@ -31,19 +31,31 @@ export const exampleCsvProfile = {
   columns: {id: '문서번호', type: '유형', title: '제목', body: '본문', status: '상태', updatedAt: '수정시각', dueDate: '기한', url: '원문URL', startsAt: '시작시각', endsAt: '종료시각'},
 };
 export function convertCsv(text, profile) {
-  object(profile, 'CSV profile', ['schemaVersion', 'principal', 'source', 'delimiter', 'columns']);
+  object(profile, 'CSV profile', ['schemaVersion', 'principal', 'source', 'delimiter', 'columns', 'valueMaps']);
   if (profile.schemaVersion !== 1) throw new AppError('CSV profile 버전은 1이어야 합니다.');
   object(profile.source, 'source', ['label', 'baseUrl', 'exportedAt']);
   const fields = ['id', 'type', 'title', 'body', 'status', 'updatedAt', 'dueDate', 'url', 'startsAt', 'endsAt', 'effectiveFrom', 'effectiveTo', 'version'];
   object(profile.columns, 'columns', fields);
   for (const key of ['id', 'type', 'title', 'status', 'updatedAt']) if (!profile.columns[key]) throw new AppError(`CSV 열 매핑에 ${key}가 필요합니다.`);
   for (const header of Object.values(profile.columns)) if (typeof header !== 'string' || !header.trim()) throw new AppError('CSV 열 매핑에는 머리글 이름을 지정하세요.');
+  const valueMaps = profile.valueMaps ?? {};
+  object(valueMaps, 'valueMaps', ['type', 'status']);
+  for (const [field, mapping] of Object.entries(valueMaps)) {
+    object(mapping, `valueMaps.${field}`);
+    if (!Object.keys(mapping).length || Object.keys(mapping).length > 100) throw new AppError('값 매핑은 1~100개 항목이어야 합니다.');
+    const allowed = field === 'type' ? itemTypes : statuses;
+    for (const [from, to] of Object.entries(mapping)) if (!from.trim() || from !== from.trim() || !allowed.includes(to)) throw new AppError('값 매핑의 출처 값 또는 표준 값이 잘못되었습니다.');
+  }
   const rows = parseCsv(text, profile.delimiter);
   const items = rows.map(row => {
     const item = {};
     for (const [field, header] of Object.entries(profile.columns)) {
       if (!Object.hasOwn(row, header)) throw new AppError(`CSV에 매핑된 머리글이 없습니다: ${header}`);
       item[field] = row[header].trim();
+      if (Object.hasOwn(valueMaps, field)) {
+        if (!Object.hasOwn(valueMaps[field], item[field])) throw new AppError(`CSV ${field}에 매핑되지 않은 값이 있습니다. 설정을 확인하세요.`);
+        item[field] = valueMaps[field][item[field]];
+      }
     }
     return {...item, organizationId: profile.principal?.organizationId, allowedUserIds: [profile.principal?.userId]};
   });

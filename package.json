@@ -8,10 +8,11 @@
   "scripts": {
     "start": "node --env-file-if-exists=.env src/server.mjs",
     "dev": "node --env-file-if-exists=.env --watch src/server.mjs",
-    "test": "node --test",
+    "test": "node --test test/*.test.mjs",
     "check": "node scripts/check.mjs",
     "setup": "node scripts/setup.mjs",
     "doctor": "node --env-file-if-exists=.env scripts/doctor.mjs",
+    "doctor:browser": "node scripts/doctor-browser.mjs",
     "convert:csv": "node scripts/convert-csv.mjs",
     "automate": "node --env-file-if-exists=.env scripts/automate.mjs"
   }

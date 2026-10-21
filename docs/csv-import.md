@@ -28,12 +28,21 @@ UTF-8만 허용한다. Excel에서 **CSV UTF-8**로 저장한다. TSV는 설정�
 필수 매핑: `id`, `type`, `title`, `status`, `updatedAt`. 선택 매핑: `body`, `dueDate`, `url`, `startsAt`, `endsAt`, `effectiveFrom`, `effectiveTo`, `version`. 파일에 없는 선택 열은 매핑에서 삭제한다. 모르는 열은 가져오지 않는다.
 
 - `type`: `approval`, `notice`, `document`, `schedule`
-- `status`: `pending`, `completed`, `published`, `cancelled`
+- `status`: `pending`, `in-progress`, `completed`, `published`, `cancelled`
 - 날짜: `YYYY-MM-DD`
 - 시각: `2026-10-22T09:00:00+09:00`처럼 시간대 포함
 - 일정: `startsAt`과 그보다 늦은 `endsAt` 필요
 - 원문 주소: 설정한 `source.baseUrl`과 같은 출처의 http(s) 주소, 인증 정보 없는 URL
 
-기관이 내보내는 머리글은 `columns`에 연결할 수 있다. 유형·상태의 실제 값이 한글이면 위 값으로 변환하여 저장해야 한다. 내보내기 형식을 자동으로 추측하지 않는다. `id`는 원문 식별자를 일관되게 사용한다.
+기관이 내보내는 머리글은 `columns`에 연결할 수 있다. 유형·상태의 실제 값이 한글이면 아래처럼 프로필에 선택 항목 `valueMaps`를 추가한다. 다음 값은 설명용이며 실제 내보내기 형식과 사용자 역할을 먼저 확인한다.
+
+```json
+"valueMaps": {
+  "type": {"결재": "approval"},
+  "status": {"내 결재 대기": "pending", "상신 진행": "in-progress"}
+}
+```
+
+매핑을 지정한 필드에서 알 수 없는 값이 나오면 변환을 중단한다. `pending`은 내가 처리할 대기 문서에 사용한다. 내가 상신한 문서가 다른 사람의 결재를 기다리는 경우 `in-progress`로 보관하며 내 결재 대기로 세지 않는다. 내보내기 형식을 자동으로 추측하지 않는다. `id`는 원문 식별자를 일관되게 사용한다.
 
 출력 파일이 이미 있으면 덮어쓰지 않는다. 다음 자료는 `data/inbox/dataset-next.json`처럼 새 이름으로 변환하고 확인한 뒤 기존 `dataset.json`을 교체한다. 자동화는 전체 스냅샷을 교체하므로 결재·공지·일정·문서가 모두 필요하면 한 파일에 포함한다. 원본 파일에는 없던 본문이나 링크를 만들어 넣지 않는다.

@@ -3,7 +3,7 @@ export class AppError extends Error {
 }
 
 export const itemTypes = ['approval', 'notice', 'document', 'schedule'];
-export const statuses = ['pending', 'completed', 'published', 'cancelled'];
+export const statuses = ['pending', 'in-progress', 'completed', 'published', 'cancelled'];
 const itemKeys = ['id', 'type', 'title', 'body', 'organizationId', 'allowedUserIds', 'status', 'dueDate', 'updatedAt', 'url', 'startsAt', 'endsAt', 'effectiveFrom', 'effectiveTo', 'version', 'tags'];
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 

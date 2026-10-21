@@ -79,6 +79,7 @@ Node 내장 테스트 러너로 권한 범위, 날짜·금액 검증, 만료 문
 - [데이터 계약](docs/data-contract.md)
 - [다른 PC 설치·자동화 안내](docs/other-computers.md)
 - [CSV 변환 안내](docs/csv-import.md)
+- [브라우저 연결 진단](docs/browser-recovery.md) (`npm run doctor:browser`)
 - [실제 그룹웨어 연결 체크리스트](docs/live-integration.md)
 - [구현 로드맵](docs/roadmap.md)
 - [검증 범위와 수동 절차](docs/verification.md)

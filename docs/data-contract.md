@@ -46,7 +46,7 @@ JSON 크기는 UTF-8 기준 최대 5 MB, 레코드는 최대 3,000건이다. 정
 | principal | userId, displayName, organizationId 필수. 각 120자 이하 |
 | id | 전체 스냅샷에서 유일, 영문·숫자·`_.:-`, 100자 이하 |
 | type | `approval`, `notice`, `document`, `schedule` |
-| status | `pending`, `completed`, `published`, `cancelled` |
+| status | `pending`, `in-progress`, `completed`, `published`, `cancelled` |
 | title / body | 제목 최대 300자, 본문 최대 30,000자. 본문 생략 가능 |
 | organizationId | principal의 조직과 정확히 일치해야 결과에 포함 |
 | allowedUserIds | 최대 100개. principal.userId가 명시되어야 결과에 포함. 빈 배열은 접근 없음 |
@@ -73,3 +73,5 @@ JSON 크기는 UTF-8 기준 최대 5 MB, 레코드는 최대 3,000건이다. 정
 | `GET /api/audit` | 최근 실행 기록 최대 50개 |
 
 POST에는 `Content-Type: application/json`과 `/api/status`에서 얻은 `x-csrf-token`이 필요하다. 브리핑/검색은 `useModel: true`를 선택할 수 있다. 오류 응답은 `{error: "설명"}`과 HTTP 오류 코드다.
+
+결재의 `pending`은 현재 사용자가 처리할 대기 문서로 한정한다. 본인이 상신하여 다른 결재자가 처리 중인 문서는 `in-progress`로 구분하며 내 결재 대기 건수에서 제외한다. 원문 메뉴·필터·사용자 역할을 확인하지 못한 단순 "진행" 표시는 `pending`으로 추정하지 않는다. `completed` 역시 자료의 관점에서 처리 완료이며 기관 전체의 최종 승인으로 추정하지 않는다.
