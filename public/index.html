@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>업무 도우미 · Groupware</title><link rel="stylesheet" href="/styles.css"><script type="module" src="/app.js"></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="/" aria-label="업무 도우미 홈"><span class="brand-mark">g.</span><span>groupware<small>업무를 잇는 도우미</small></span></a>
+    <p class="nav-label">WORKSPACE</p>
+    <nav aria-label="주 메뉴">
+      <button class="nav active" data-view="briefing"><span>◫</span> 내 업무 브리핑</button>
+      <button class="nav" data-view="search"><span>⌕</span> 규정 · 서식 검색</button>
+      <button class="nav" data-view="validate"><span>✓</span> 초안 사전 점검</button>
+      <button class="nav" data-view="data"><span>⇄</span> 데이터 연결</button>
+      <button class="nav" data-view="audit"><span>≡</span> 실행 기록</button>
+    </nav>
+    <div class="sidebar-bottom"><span class="status-dot"></span> 로컬 작업 공간<p>데이터는 이 PC에서 관리됩니다.</p></div>
+  </aside>
+  <main>
+    <header class="topbar"><span id="breadcrumb">내 업무 브리핑</span><div><span id="mode" class="pill">연결 확인 중</span><span id="user-name">사용자</span></div></header>
+    <div class="content">
+      <div id="message" role="status" aria-live="polite" hidden></div>
+      <section id="intro"><p class="eyebrow" id="date-label">YOUR WORK, IN FOCUS</p><h1 id="page-title">오늘의 업무를 한눈에.</h1><p id="page-description">확인이 필요한 일과 근거를 함께 정리합니다.</p></section>
+      <div class="source-strip"><span class="status-dot"></span><strong id="source-label">데이터 확인 중</strong><span id="source-detail"></span><button id="source-link" class="text-button">데이터 관리 ↗</button></div>
+      <section id="briefing-view" class="view">
+        <div class="section-toolbar"><span class="section-caption">나의 업무 현황</span><div class="actions"><label class="model-toggle"><input type="checkbox" id="briefing-model" disabled> 로컬 AI 요약</label><button class="primary" id="refresh-briefing">브리핑 새로고침 ↻</button></div></div>
+        <div id="stats" class="stats"></div>
+        <div id="briefing-ai"></div>
+        <div class="dashboard-grid"><section class="panel"><div class="panel-title"><h2>확인이 필요한 결재</h2><span class="subtle">기한순</span></div><div id="approval-list"></div></section><section class="panel"><div class="panel-title"><h2>다가오는 일정</h2><span class="subtle">7일 이내</span></div><div id="schedule-list"></div></section></div>
+        <section class="panel notice-panel"><div class="panel-title"><h2>최근 공지</h2><span class="subtle">최대 10건</span></div><div id="notice-list"></div></section>
+        <p class="footnote" id="briefing-footnote"></p>
+      </section>
+      <section id="search-view" class="view" hidden>
+        <form id="search-form" class="panel search-box"><label for="search-query">찾고 싶은 규정이나 업무 키워드</label><div class="search-row"><input id="search-query" placeholder="예: 운영계획, 실적보고, 증빙" maxlength="300" required><button class="primary" type="submit">근거 검색</button></div><label class="model-toggle"><input type="checkbox" id="search-model" disabled> 찾은 근거를 로컬 AI로 요약</label><p class="subtle">사용자·조직 범위에 맞는 유효 문서의 제목·본문·태그에서 검색합니다.</p></form>
+        <div id="search-ai"></div><div id="search-results" aria-live="polite"><div class="empty">키워드를 입력하면 관련 문서와 근거를 보여드립니다.</div></div>
+      </section>
+      <section id="validate-view" class="view" hidden>
+        <div class="dashboard-grid"><form id="draft-form" class="panel form-panel"><h2>검토할 초안</h2><label>문서 제목<input name="title" placeholder="예: 프로그램 운영계획" maxlength="300"></label><label>목적<textarea name="purpose" rows="3" placeholder="문서의 목적과 주요 내용을 입력하세요." maxlength="10000"></textarea></label><label>사업일<input name="businessDate" type="date"></label><div class="field-grid"><label>본문 금액 (원)<input name="amount" inputmode="numeric" placeholder="1,000,000"></label><label>첨부에 적힌 금액 (원)<input name="attachmentAmount" inputmode="numeric" placeholder="1,000,000"></label></div><label>첨부 파일 이름<textarea name="attachmentNames" rows="2" placeholder="산출내역.xlsx, 운영계획.pdf" maxlength="10000"></textarea></label><button class="primary" type="submit">기본 항목 점검</button><p class="subtle">입력값만 검사합니다. 파일 내용·기관 규정·결재선은 별도 확인이 필요합니다.</p></form><section class="panel" id="draft-results" aria-live="polite"><div class="empty">초안을 입력하면 누락과 금액 불일치를 확인합니다.<br>저장하거나 상신하지 않습니다.</div></section></div>
+      </section>
+      <section id="data-view" class="view" hidden>
+        <div class="dashboard-grid"><section class="panel form-panel"><p class="eyebrow">DATA SOURCE</p><h2>내 데이터로 시작하기</h2><p>권한 내에서 내보낸 자료를 지정된 JSON 형식으로 가져오세요. 현재 데이터 전체가 새 파일로 교체됩니다.</p><label for="import-file">JSON 파일 (최대 5 MB)<input id="import-file" type="file" accept="application/json,.json"></label><label class="confirm-line"><input id="confirm-import" type="checkbox">현재 데이터를 선택한 파일로 교체합니다.</label><button id="import-button" class="primary">데이터 가져오기</button><button id="download-example" class="secondary">합성 예제 JSON 받기 ↓</button><p class="subtle">인증 쿠키·토큰·서명 키가 포함된 파일이나 HAR은 가져오지 마세요.</p></section><section class="panel form-panel"><h2>연결 상태</h2><dl id="connection-details"></dl><div class="callout">실제 그룹웨어 연결은 아직 준비 중입니다. 가져온 자료의 권한 정보는 파일 작성자가 확인해야 하며, 서버에서 재검증한 권한이 아닙니다.</div><label class="confirm-line"><input id="confirm-reset" type="checkbox">현재 데이터를 합성 예제로 교체합니다.</label><button id="reset-demo" class="secondary">예제 데이터로 돌아가기</button></section></div>
+      </section>
+      <section id="audit-view" class="view" hidden><section class="panel"><div class="panel-title"><h2>최근 실행</h2><button id="refresh-audit" class="secondary">새로고침</button></div><p class="subtle">작업 종류·시각·결과만 기록합니다. 검색어·본문·인증 정보는 기록하지 않습니다.</p><div id="audit-list"></div></section></section>
+    </div>
+    <footer><span>GROUPWARE ASSISTANT</span><span>근거를 확인하고, 다음 업무로.</span></footer>
+  </main>
+</body>
+</html>
