@@ -16,5 +16,7 @@ jobs:
         with:
           node-version: '24'
       - run: npm ci
+      - run: npm run setup
+      - run: npm run doctor
       - run: npm run check
       - run: npm test

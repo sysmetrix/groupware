@@ -8,6 +8,7 @@ import {createDemoDataset} from './demo.mjs';
 import {createStore} from './store.mjs';
 import {runTask} from './tasks.mjs';
 import {summarize, validateModelConfig} from './model.mjs';
+import {createAutomation} from './automation.mjs';
 
 const publicDir = fileURLToPath(new URL('../public/', import.meta.url));
 const assets = {'/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/styles.css': ['styles.css', 'text/css; charset=utf-8']};
@@ -21,8 +22,9 @@ async function jsonBody(req) {
 }
 const send = (res, status, value) => { res.writeHead(status, {'content-type': 'application/json; charset=utf-8'}); res.end(JSON.stringify(value)); };
 
-export async function createApp({dataDir = path.resolve('data'), model = {model: '', baseUrl: 'http://127.0.0.1:11434'}} = {}) {
+export async function createApp({dataDir = path.resolve('data'), configFile = path.resolve('config/automation.json'), root = process.cwd(), model = {model: '', baseUrl: 'http://127.0.0.1:11434'}} = {}) {
   const store = await createStore(dataDir), modelConfig = validateModelConfig(model), csrf = randomBytes(32).toString('hex');
+  const automation = await createAutomation({store, dataDir, configFile, root});
   let activeRuns = 0;
   const server = http.createServer(async (req, res) => {
     res.setHeader('cache-control', 'no-store');
@@ -50,6 +52,11 @@ export async function createApp({dataDir = path.resolve('data'), model = {model:
         send(res, 200, {csrf, revision, source: dataset.source, principal: dataset.principal, visibleCount: visibleItems(dataset).length, liveConnected: false, capabilities: {briefing: true, search: true, validate: true, mutations: false, model: modelConfig.enabled}, model: modelConfig.enabled ? modelConfig.model : null}); return;
       }
       if (req.method === 'GET' && url.pathname === '/api/example') { send(res, 200, createDemoDataset()); return; }
+      if (req.method === 'GET' && url.pathname === '/api/automation') { send(res, 200, automation.status()); return; }
+      if (req.method === 'GET' && url.pathname === '/api/report') { send(res, 200, automation.latest()); return; }
+      if (req.method === 'POST' && url.pathname === '/api/automation/run') {
+        await jsonBody(req); const result = await automation.run({forceReport: true}); send(res, result.outcome === 'failed' ? 422 : 200, result); return;
+      }
       if (req.method === 'GET' && url.pathname === '/api/audit') { send(res, 200, {events: await store.history()}); return; }
       if (req.method === 'POST' && url.pathname === '/api/import') {
         const result = await store.replace(await jsonBody(req)); send(res, 200, result); return;
@@ -81,13 +88,16 @@ export async function createApp({dataDir = path.resolve('data'), model = {model:
   });
   server.requestTimeout = 60000;
   server.headersTimeout = 10000;
+  server.on('listening', () => automation.start());
+  server.on('close', () => automation.stop());
   return server;
 }
 
 if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {
   const port = Number(process.env.PORT || 3210);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('PORT는 1~65535 사이 정수여야 합니다.');
-  const server = await createApp({dataDir: path.resolve(process.env.DATA_DIR || 'data'), model: {model: process.env.OLLAMA_MODEL || '', baseUrl: process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434'}});
+  const server = await createApp({dataDir: path.resolve(process.env.DATA_DIR || 'data'), configFile: path.resolve(process.env.AUTOMATION_CONFIG || 'config/automation.json'), model: {model: process.env.OLLAMA_MODEL || '', baseUrl: process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434'}});
   server.listen(port, '127.0.0.1', () => console.log(`Groupware Assistant: http://127.0.0.1:${port} (그룹웨어 실시간 연동 없음)`));
   server.on('error', error => { console.error(`서버를 시작할 수 없습니다: ${error.code || 'unknown'}`); process.exitCode = 1; });
+  for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { server.close(); server.closeIdleConnections(); });
 }

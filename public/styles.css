@@ -311,6 +311,9 @@ input[type=checkbox] {
   padding:23px;
   min-width:0
 }
+#data-view > .panel {
+  margin-bottom:22px
+}
 .panel-title {
   display:flex;
   justify-content:space-between;

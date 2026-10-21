@@ -7,10 +7,12 @@ import {once} from 'node:events';
 import http from 'node:http';
 import {createApp} from '../src/server.mjs';
 import {createDemoDataset} from '../src/demo.mjs';
+import {atomicJson, defaultAutomation} from '../src/automation.mjs';
 
 async function fixture(t, options = {}) {
   const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'groupware-test-'));
-  const server = await createApp({dataDir, ...options}); server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  if (options.prepare) await options.prepare(dataDir);
+  const server = await createApp({dataDir, configFile: path.join(dataDir, 'automation.json'), ...options}); server.listen(0, '127.0.0.1'); await once(server, 'listening');
   t.after(async () => { const closed = new Promise(resolve => server.close(resolve)); server.closeAllConnections(); await closed; await fs.rm(dataDir, {recursive: true, force: true}); });
   const base = `http://127.0.0.1:${server.address().port}`;
   const status = await (await fetch(base + '/api/status')).json();
@@ -95,4 +97,27 @@ test('oversized import fails before reading an unbounded body', async t => {
   const f = await fixture(t);
   const response = await fetch(f.base + '/api/import', {method: 'POST', headers: {'content-type': 'application/json', 'x-csrf-token': f.status.csrf}, body: JSON.stringify({padding: 'x'.repeat(5 * 1024 * 1024)})});
   assert.equal(response.status, 413);
+});
+
+test('HTTP automation reports disabled configuration without claiming live access', async t => {
+  const f = await fixture(t);
+  const status = await (await fetch(f.base + '/api/automation')).json(); assert.equal(status.enabled, false);
+  assert.equal((await fetch(f.base + '/api/report')).status, 404);
+  assert.equal((await f.post('/api/automation/run', {})).status, 400);
+  assert.equal((await f.post('/api/automation/run', {}, {'x-csrf-token': ''})).status, 403);
+});
+
+test('HTTP automation imports a local export, serves a scoped report, and rejects broken updates', async t => {
+  const dataset = createDemoDataset(); dataset.source.kind = 'manual-export';
+  const f = await fixture(t, {prepare: async directory => {
+    await atomicJson(path.join(directory, 'input.json'), dataset);
+    await atomicJson(path.join(directory, 'automation.json'), {...defaultAutomation, enabled: true, inputFile: path.join(directory, 'input.json'), briefingTime: '00:00', expectedPrincipal: {userId: dataset.principal.userId, organizationId: dataset.principal.organizationId}});
+  }});
+  const run = await f.post('/api/automation/run', {}); assert.equal(run.status, 200); assert.equal((await run.json()).reportAvailable, true);
+  const report = await (await fetch(f.base + '/api/report')).json(); assert.equal(report.briefing.counts.pending, 2);
+  assert.equal(JSON.stringify(report).includes('hidden-doc'), false);
+  await fs.writeFile(path.join(f.dataDir, 'input.json'), '{');
+  const failed = await f.post('/api/automation/run', {}); assert.equal(failed.status, 422); assert.equal((await failed.json()).reportAvailable, false);
+  assert.equal((await fetch(f.base + '/api/report')).status, 404);
+  assert.equal((await (await fetch(f.base + '/api/status')).json()).liveConnected, false);
 });

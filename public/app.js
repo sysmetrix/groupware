@@ -6,7 +6,7 @@ function element(tag, text, className) { const node = document.createElement(tag
 function message(text, error = false) { $('message').textContent = text; $('message').className = error ? 'error' : ''; $('message').hidden = !text; }
 async function api(path, body) {
   const response = await fetch(path, body === undefined ? {} : {method: 'POST', headers: {'content-type': 'application/json', 'x-csrf-token': status?.csrf || ''}, body: JSON.stringify(body)});
-  const data = await response.json(); if (!response.ok) throw new Error(data.error || '요청에 실패했습니다.'); return data;
+  const data = await response.json(); if (!response.ok) throw new Error(data.error || data.message || '요청에 실패했습니다.'); return data;
 }
 async function operation(button, action) {
   if (busy) return; busy = true; const original = button?.textContent;
@@ -24,6 +24,13 @@ async function refreshStatus() {
   for (const id of ['briefing-model', 'search-model']) { $(id).disabled = !status.capabilities.model; if (!status.capabilities.model) $(id).checked = false; }
   const details = [['자료 종류', status.source.kind === 'demo' ? '합성 예제 (실제 업무 자료 아님)' : '수동 가져오기'], ['기준 시각', formatTime(status.source.exportedAt)], ['현재 범위', `${status.principal.organizationId} / ${status.principal.userId}`], ['그룹웨어', '실시간 미연결'], ['AI 요약', status.model || '미설정 · 근거 조회와 규칙 검사 사용 가능'], ['변경 작업', '상신 · 승인 · 발송 기능 없음']];
   $('connection-details').replaceChildren(...details.flatMap(([key, value]) => [element('dt', key), element('dd', value)]));
+  await refreshAutomation();
+}
+async function refreshAutomation() {
+  const state = await api('/api/automation');
+  const fields = [['파일 자동화', state.enabled ? '사용 중' : '미설정'], ['정기 브리핑', `${state.briefingTime} (한국 시간)`], ['확인 간격', `${state.intervalSeconds}초`], ['최근 결과', state.message], ['마지막 성공', state.lastSuccessAt ? formatTime(state.lastSuccessAt) : '없음'], ['오늘의 보고서', state.reportAvailable ? formatTime(state.reportGeneratedAt) : '현재 자료에 맞는 보고서 없음']];
+  $('automation-details').replaceChildren(...fields.flatMap(([key, value]) => [element('dt', key), element('dd', value)]));
+  $('run-automation').disabled = !state.enabled; $('download-report').disabled = !state.reportAvailable;
 }
 function sourceLink(item) {
   if (!item.url) return element('span', '원문 링크 없음', 'subtle');
@@ -51,6 +58,7 @@ function renderAi(id, ai, references) {
   $(id).append(box);
 }
 async function briefing() {
+  await refreshStatus();
   const result = await api('/api/run', {task: 'briefing', useModel: $('briefing-model').checked});
   const cards = [['결재 대기', result.counts.pending, '검토가 필요한 문서', '◫'], ['기한 경과', result.counts.overdue, '원문 상태를 확인하세요', '◷'], ['다가오는 일정', result.counts.schedules, '오늘부터 7일 이내', '▦'], ['최근 공지', result.counts.notices, '가져온 자료 기준', '≋']];
   $('stats').replaceChildren(...cards.map(([label, count, note, icon]) => { const card = element('article', undefined, 'stat'); card.append(element('span', label, 'stat-label'), element('span', icon, 'stat-icon'), element('strong', String(count)), element('small', note)); return card; }));
@@ -62,8 +70,8 @@ async function briefing() {
 }
 async function audit() {
   const {events} = await api('/api/audit');
-  const names = {'task.briefing': '업무 브리핑', 'task.search': '문서 검색', 'task.validate': '초안 점검', 'dataset.replace': '데이터 교체'};
-  const outcomes = {started: '시작', completed: '완료', partial: '일부 완료'};
+  const names = {'task.briefing': '업무 브리핑', 'task.search': '문서 검색', 'task.validate': '초안 점검', 'dataset.replace': '데이터 교체', 'automation.briefing': '정기 브리핑 생성', 'automation.sync': '자동 자료 확인'};
+  const outcomes = {started: '시작', completed: '완료', partial: '일부 완료', failed: '실패'};
   $('audit-list').replaceChildren(...(events.length ? events.map(event => { const row = element('div', undefined, 'audit-row'); row.append(element('span', names[event.action] || event.action), element('span', formatTime(event.at)), element('span', outcomes[event.outcome] || event.outcome, 'tag')); return row; }) : [element('div', '아직 실행 기록이 없습니다.', 'empty')]));
 }
 function switchView(view) {
@@ -77,6 +85,15 @@ for (const node of document.querySelectorAll('[data-view]')) node.addEventListen
 $('source-link').addEventListener('click', () => switchView('data'));
 $('refresh-briefing').addEventListener('click', event => operation(event.currentTarget, briefing));
 $('refresh-audit').addEventListener('click', event => operation(event.currentTarget, audit));
+$('refresh-automation').addEventListener('click', event => operation(event.currentTarget, refreshAutomation));
+$('run-automation').addEventListener('click', event => operation(event.currentTarget, async () => {
+  try { await api('/api/automation/run', {}); await changedData(); message('내보낸 자료로 브리핑을 생성했습니다.'); }
+  finally { await refreshAutomation(); }
+}));
+$('download-report').addEventListener('click', event => operation(event.currentTarget, async () => {
+  const report = await api('/api/report'), blob = new Blob([JSON.stringify(report, null, 2)], {type: 'application/json'}), url = URL.createObjectURL(blob), link = element('a');
+  link.href = url; link.download = 'groupware-briefing.json'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+}));
 $('search-form').addEventListener('submit', event => {
   event.preventDefault(); operation(event.submitter, async () => {
     const result = await api('/api/run', {task: 'search', query: $('search-query').value, useModel: $('search-model').checked});
@@ -113,3 +130,10 @@ $('download-example').addEventListener('click', event => operation(event.current
 }));
 $('date-label').textContent = new Intl.DateTimeFormat('ko-KR', {timeZone: 'Asia/Seoul', year: 'numeric', month: 'long', day: 'numeric', weekday: 'long'}).format(new Date());
 await operation(null, async () => { await refreshStatus(); await briefing(); });
+setInterval(() => {
+  if (busy || document.hidden) return;
+  void operation(null, async () => {
+    const revision = status?.revision; await refreshStatus();
+    if (revision !== status.revision) { await changedData(); message('새로 가져온 자료가 반영되었습니다.'); }
+  });
+}, 30000);
