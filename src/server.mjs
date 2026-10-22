@@ -13,7 +13,7 @@ import {createLibrary, documentFilename, documentLimit, linkLibraryResults} from
 import {createRuntimeStatus} from './runtime-status.mjs';
 
 const publicDir = fileURLToPath(new URL('../public/', import.meta.url));
-const assets = {'/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/styles.css': ['styles.css', 'text/css; charset=utf-8']};
+const assets = {'/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/styles.css': ['styles.css', 'text/css; charset=utf-8'], '/favicon.svg': ['favicon.svg', 'image/svg+xml'], '/favicon.ico': ['favicon.ico', 'image/x-icon']};
 const maximumBody = 5 * 1024 * 1024;
 async function jsonBody(req) {
   if (req.headers['content-type']?.split(';')[0] !== 'application/json') throw new AppError('Content-Type: application/json이 필요합니다.', 415);

@@ -59,6 +59,7 @@ public sealed class ControlWindow : Form {
     public ControlWindow(string root) {
         client = new ServiceClient(root);
         Text = "로컬 AI · 업무 도우미 실행 관리자";
+        Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         ClientSize = new Size(780, 620); MinimumSize = new Size(720, 640);
         Font = new Font("맑은 고딕", 10F); BackColor = Color.FromArgb(244, 247, 245);
         StartPosition = FormStartPosition.CenterScreen; AutoScaleMode = AutoScaleMode.Dpi;
