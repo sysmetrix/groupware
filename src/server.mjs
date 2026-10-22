@@ -10,6 +10,7 @@ import {runTask} from './tasks.mjs';
 import {summarize, validateModelConfig} from './model.mjs';
 import {createAutomation} from './automation.mjs';
 import {createLibrary, documentFilename, documentLimit, linkLibraryResults} from './library.mjs';
+import {createRuntimeStatus} from './runtime-status.mjs';
 
 const publicDir = fileURLToPath(new URL('../public/', import.meta.url));
 const assets = {'/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/styles.css': ['styles.css', 'text/css; charset=utf-8']};
@@ -38,6 +39,7 @@ export async function createApp({dataDir = path.resolve('data'), configFile = pa
   const store = await createStore(dataDir), modelConfig = validateModelConfig(model), csrf = randomBytes(32).toString('hex');
   const automation = await createAutomation({store, dataDir, configFile, root});
   const library = await createLibrary(path.join(dataDir, 'library'));
+  const runtimeStatus = createRuntimeStatus(modelConfig);
   let activeRuns = 0, uploading = false;
   const server = http.createServer(async (req, res) => {
     res.setHeader('cache-control', 'no-store');
@@ -65,6 +67,7 @@ export async function createApp({dataDir = path.resolve('data'), configFile = pa
         send(res, 200, {csrf, revision, source: dataset.source, principal: dataset.principal, visibleCount: visibleItems(dataset).length, liveConnected: false, capabilities: {briefing: true, search: true, validate: true, mutations: false, model: modelConfig.enabled}, model: modelConfig.enabled ? modelConfig.model : null}); return;
       }
       if (req.method === 'GET' && url.pathname === '/api/example') { send(res, 200, createDemoDataset()); return; }
+      if (req.method === 'GET' && url.pathname === '/api/runtime') { send(res, 200, {application: 'running', model: await runtimeStatus()}); return; }
       if (req.method === 'GET' && url.pathname === '/api/documents') { send(res, 200, library.list()); return; }
       const preview = /^\/api\/documents\/(local-[a-f0-9-]{36})\/text$/.exec(url.pathname);
       if (req.method === 'GET' && preview) { send(res, 200, library.preview(preview[1], Number(url.searchParams.get('offset') || 0))); return; }

@@ -34,6 +34,21 @@ async function refreshStatus() {
   const details = [['자료 종류', status.source.kind === 'demo' ? '합성 예제 (실제 업무 자료 아님)' : '수동 가져오기'], ['기준 시각', formatTime(status.source.exportedAt)], ['현재 범위', `${status.principal.organizationId} / ${status.principal.userId}`], ['그룹웨어', '실시간 미연결'], ['AI 요약', status.model || '미설정 · 근거 조회와 규칙 검사 사용 가능'], ['변경 작업', '상신 · 승인 · 발송 기능 없음']];
   $('connection-details').replaceChildren(...details.flatMap(([key, value]) => [element('dt', key), element('dd', value)]));
   await refreshAutomation();
+  await refreshRuntime();
+}
+async function refreshRuntime() {
+  const {model} = await api('/api/runtime');
+  const service = {running: '실행 중', unavailable: '접속 불가 · 종료 또는 오류', 'not-configured': '미설정'};
+  const fields = [['업무 도우미 서버', '실행 중 · 이 화면에 응답함'], ['로컬 모델 서버', service[model.service]], ['설정한 모델', model.model || '없음'],
+    ['모델 파일', model.installed === null ? '확인 못함' : model.installed ? '설치됨' : '설정한 이름의 모델 없음'],
+    ['메모리 로딩', model.loaded === null ? '확인 못함' : model.loaded ? '모델 로딩됨' : '로딩 안 됨 · 요청 시 로딩'],
+    ['GPU 메모리', model.gpuBytes === null ? '확인 못함' : `${(model.gpuBytes / 1024 ** 3).toFixed(2)} GiB`], ['확인 시각', formatTime(model.checkedAt)]];
+  $('runtime-details').replaceChildren(...fields.flatMap(([key, value]) => [element('dt', key), element('dd', value)]));
+  const available = model.service === 'running' && model.installed === true;
+  for (const id of ['briefing-model', 'search-model']) {
+    $(id).disabled = !available; if (!available) $(id).checked = false;
+    $(id).title = available ? '로컬 모델에 검색 근거를 전달해 요약합니다.' : '데이터 연결에서 로컬 모델 실행 상태를 확인하세요.';
+  }
 }
 async function refreshAutomation() {
   const state = await api('/api/automation');
@@ -234,6 +249,7 @@ $('document-form').addEventListener('submit', event => {
   });
 });
 $('refresh-library').addEventListener('click', event => operation(event.currentTarget, refreshLibrary));
+$('refresh-runtime').addEventListener('click', event => operation(event.currentTarget, refreshRuntime));
 $('preview-more').addEventListener('click', event => operation(event.currentTarget, async () => { if (previewNext) await showPreview(previewNext.id, previewNext.offset); }));
 $('search-library').addEventListener('click', () => { if (busy) return; $('search-scope').value = 'library'; switchView('search'); $('search-query').focus(); });
 $('search-scope').addEventListener('change', () => { $('search-ai').replaceChildren(); $('search-results').replaceChildren(element('div', '선택한 자료에서 다시 검색하세요.', 'empty')); renderSource(); });

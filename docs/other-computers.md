@@ -20,6 +20,8 @@ Windows에서는 clone 후 `powershell -NoProfile -File scripts/install.ps1`로 
 
 브라우저에서 `http://127.0.0.1:3210`을 연다. 그룹웨어 자료를 가져오기 전에는 **내 문서** 화면이 열린다. PDF·XLSX·HWPX를 선택해 바로 넣을 수 있다. [내 문서 사용 안내](document-library.md)를 따른다. `npm run setup`은 기존 `.env`와 설정 파일을 덮어쓰지 않는다. 포트는 `.env`의 `PORT`로 바꿀 수 있다.
 
+백그라운드 서버를 명시적으로 관리하려면 [실행·종료 안내](runtime-control.md)의 Windows 관리 명령을 사용한다. 기존 터미널 서버를 종료한 후 `npm run services:start`로 시작하면 `npm run services:stop`으로 해당 앱·모델 서버와 후손을 종료할 수 있다. 모델이 없는 PC는 `powershell -NoProfile -File scripts/windows-services.ps1 -Action Start -Service App`으로 앱만 시작한다. 앱 화면의 실행 상태 조회는 모델을 새로 로딩하지 않는다.
+
 ## 내 자료와 정기 브리핑 연결
 
 1. 본인이 열람할 수 있는 자료만 내보낸다. JSON은 [데이터 계약](data-contract.md), CSV는 [변환 안내](csv-import.md)를 따른다. Excel은 CSV UTF-8로 저장할 수 있다. PDF/XLSX/HWPX의 텍스트 검색은 선택형 [첨부 추출 CLI](attachments.md)를 설치한다. 구형 HWP와 OCR은 미지원이다.

@@ -14,14 +14,35 @@ export function documentFilename(value) {
 const emptyLibrary = () => ({schemaVersion: 1,
   source: {kind: 'manual-export', label: '직접 넣은 내 문서', exportedAt: new Date().toISOString(), baseUrl: ''},
   principal: {userId: 'local-library', displayName: '이 PC의 문서', organizationId: 'local-library'}, items: []});
+const uuidPattern = '[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}';
+const localIdPattern = new RegExp('^local-' + uuidPattern + '$');
+const ownedFilePattern = new RegExp('^(?:local-|upload-)' + uuidPattern + '\\.(?:pdf|xlsx|hwpx)$');
 
 // A separate store keeps a scheduled groupware import from replacing personal documents.
 export async function createLibrary(directory, {extract = extractAttachment} = {}) {
   const store = await createStore(directory, {initialDataset: emptyLibrary()});
+  const initial = store.snapshot().dataset;
+  // The shared store accepts groupware datasets too. Reject incompatible library
+  // records before deriving paths or treating any originals as abandoned.
+  if (initial.items.length > 50 || initial.items.some(item => !localIdPattern.test(item.id)
+    || item.type !== 'document' || item.attachments?.length !== 1 || item.attachments[0].id !== 'original')) {
+    throw new Error('저장된 문서 목록이 손상되었습니다. dataset.json을 확인하세요.');
+  }
   const files = path.join(directory, 'files');
   await fs.mkdir(files, {recursive: true, mode: 0o700});
   let busy = false;
   const filePath = item => path.join(files, item.id + '.' + item.attachments[0].format);
+  async function cleanOrphans() {
+    const retained = new Set(store.snapshot().dataset.items.map(item => path.basename(filePath(item))));
+    for (const entry of await fs.readdir(files, {withFileTypes: true})) {
+      if ((entry.isFile() || entry.isSymbolicLink()) && ownedFilePattern.test(entry.name) && !retained.has(entry.name)) {
+        await fs.rm(path.join(files, entry.name), {force: true});
+      }
+    }
+  }
+  // Recover uploads interrupted before publication and deletions interrupted
+  // after publication. Unknown files are not library-owned and are left alone.
+  await cleanOrphans();
   function list() {
     const {dataset, revision} = store.snapshot();
     return {revision, documents: dataset.items.map(item => ({id: item.id, title: item.title, updatedAt: item.updatedAt,
@@ -46,6 +67,7 @@ export async function createLibrary(directory, {extract = extractAttachment} = {
       busy = true;
       let temporary, destination, committed = false;
       try {
+        await cleanOrphans();
         const {dataset, revision} = store.snapshot();
         const digest = createHash('sha256').update(bytes).digest('hex');
         const duplicate = dataset.items.find(item => item.attachments[0].sha256 === digest);
@@ -88,17 +110,52 @@ export async function createLibrary(directory, {extract = extractAttachment} = {
         if (revision !== expectedRevision) throw new AppError('문서 목록이 변경되었습니다. 다시 확인하세요.', 409);
         const item = dataset.items.find(item => item.id === id);
         if (!item) throw new AppError('문서를 찾을 수 없습니다.', 404);
+        const previous = structuredClone(dataset);
         dataset.items = dataset.items.filter(item => item.id !== id);
         dataset.source.exportedAt = new Date().toISOString();
-        await store.replace(dataset, {expectedRevision});
-        await fs.rm(filePath(item), {force: true});
+        try {
+          await store.replace(dataset, {expectedRevision});
+        } finally {
+          // replace can throw after committing (completion audit failure).
+          // Only remove the original if the index actually stopped retaining it.
+          const current = store.snapshot();
+          if (!current.dataset.items.some(item => item.id === id)) {
+            try { await fs.rm(filePath(item), {force: true}); }
+            catch (error) {
+              // A locked/unremovable original must remain discoverable and
+              // retryable. If rollback itself fails, startup sweeps the orphan.
+              await store.replace(previous, {expectedRevision: current.revision});
+              throw error;
+            }
+          }
+        }
         return list();
       } finally { busy = false; }
     },
     async original(id) {
       const item = store.snapshot().dataset.items.find(item => item.id === id);
       if (!item) throw new AppError('문서를 찾을 수 없습니다.', 404);
-      const content = await fs.readFile(filePath(item));
+      const changed = () => new AppError('원본 파일이 변경되었습니다. 다시 가져오세요.', 409);
+      let handle, content;
+      try {
+        handle = await fs.open(filePath(item), 'r');
+        const stat = await handle.stat();
+        if (!stat.isFile() || stat.size < 1 || stat.size > documentLimit) throw changed();
+        // Read from the same handle into a fixed buffer, including one sentinel
+        // byte. A file growing after stat cannot trigger an unbounded read.
+        const buffer = Buffer.alloc(stat.size + 1);
+        let length = 0;
+        while (length < buffer.length) {
+          const {bytesRead} = await handle.read(buffer, length, buffer.length - length, length);
+          if (!bytesRead) break;
+          length += bytesRead;
+        }
+        if (length !== stat.size) throw changed();
+        content = buffer.subarray(0, length);
+      } catch (error) {
+        if (error.code === 'ENOENT' || error.code === 'EISDIR') throw changed();
+        throw error;
+      } finally { await handle?.close(); }
       if (createHash('sha256').update(content).digest('hex') !== item.attachments[0].sha256) throw new AppError('원본 파일이 변경되었습니다. 다시 가져오세요.', 409);
       return {content, filename: item.attachments[0].filename};
     },

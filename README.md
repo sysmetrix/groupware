@@ -24,6 +24,8 @@ npm start
 
 **다른 컴퓨터에서는 [다른 PC 설치·자동화 안내](docs/other-computers.md)를 따라 설치하세요.** 각 PC가 자신의 설정과 내보낸 자료를 사용합니다. GitHub는 코드와 문서를 동기화하며 로그인 세션이나 업무자료를 동기화하지 않습니다.
 
+Windows 백그라운드 실행은 `npm run services:status`, `npm run services:start`, `npm run services:stop`으로 관리합니다. 이 명령이 직접 시작한 프로세스만 종료하며, 기존 터미널·작업 스케줄러로 시작한 서버는 인수하지 않습니다. [실행·종료 안내](docs/runtime-control.md)를 참고하세요. 앱의 **데이터 연결 → 이 PC의 실행 상태**는 모델 설정·서버 실행·GPU 메모리 로딩을 구분합니다.
+
 ## 구현된 기능
 
 | 기능 | 현재 동작 |
@@ -95,6 +97,8 @@ Node 내장 테스트 러너로 권한 범위, 날짜·금액 검증, 만료 문
 - [브라우저 연결 진단](docs/browser-recovery.md) (`npm run doctor:browser`)
 - [실제 그룹웨어 연결 체크리스트](docs/live-integration.md)
 - [구현 로드맵](docs/roadmap.md)
+- [병렬·순차 작업표](docs/work-sequence.md)
+- [브라우저 오류 재현 기록](docs/browser-bug-reproduction.md)
 - [검증 범위와 수동 절차](docs/verification.md)
 
 실제 연동에는 권한이 있는 세션에서 메뉴·조회·오류 흐름과 데이터 계약을 확인하는 과정이 먼저 필요합니다. 공급사가 지원하는 공식 연동을 우선 검토하고, 검증하지 않은 내부 경로는 실행 코드에 하드코딩하지 않습니다.

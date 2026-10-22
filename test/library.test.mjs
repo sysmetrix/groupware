@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {createHash} from 'node:crypto';
-import {createLibrary} from '../src/library.mjs';
+import {createHash, randomUUID} from 'node:crypto';
+import {createLibrary, documentLimit} from '../src/library.mjs';
 import {runTask} from '../src/tasks.mjs';
 
 async function fixture(t, extract) {
@@ -54,4 +54,155 @@ test('concurrent extraction is rejected and tampered original is never downloade
   release(); const result = await pending;
   await fs.writeFile(path.join(dir, 'files', result.id + '.xlsx'), 'tampered');
   await assert.rejects(library.original(result.id), error => error.status === 409);
+});
+
+test('failed original deletion restores the persistent entry and can be retried', async t => {
+  const {library, dir} = await fixture(t);
+  const added = await library.add('locked.xlsx', Buffer.from('locked'));
+  const original = path.join(dir, 'files', added.id + '.xlsx');
+  const rm = fs.rm;
+  let fail = true;
+  t.mock.method(fs, 'rm', async (file, options) => {
+    if (file === original && fail) { fail = false; throw new Error('synthetic delete failure'); }
+    return rm(file, options);
+  });
+  await assert.rejects(library.remove(added.id, added.revision), /delete failure/);
+  assert.equal(library.list().documents[0].id, added.id);
+  assert.equal((await library.original(added.id)).content.toString(), 'locked');
+  const restarted = await createLibrary(dir);
+  assert.equal(restarted.list().documents[0].id, added.id);
+  await library.remove(added.id, library.list().revision);
+  assert.deepEqual(await fs.readdir(path.join(dir, 'files')), []);
+});
+
+test('completion audit failure retains a published upload but cleans a committed deletion', async t => {
+  const {library, dir} = await fixture(t);
+  const appendFile = fs.appendFile;
+  t.mock.method(fs, 'appendFile', async (file, data, options) => {
+    if (file === path.join(dir, 'audit.jsonl') && JSON.parse(data).outcome === 'completed') {
+      throw new Error('synthetic completion audit failure');
+    }
+    return appendFile(file, data, options);
+  });
+  await assert.rejects(library.add('audit.xlsx', Buffer.from('audit')), /completion audit failure/);
+  const {documents, revision} = library.list();
+  assert.equal(documents.length, 1);
+  assert.equal((await library.original(documents[0].id)).content.toString(), 'audit');
+  assert.equal((await createLibrary(dir)).list().documents.length, 1);
+  await assert.rejects(library.remove(documents[0].id, revision), /completion audit failure/);
+  assert.equal(library.list().documents.length, 0);
+  assert.deepEqual(await fs.readdir(path.join(dir, 'files')), []);
+  assert.equal((await createLibrary(dir)).list().documents.length, 0);
+});
+
+test('audit failure before publication retains a deletion target and cleans an unpublished upload', async t => {
+  const {library, dir} = await fixture(t);
+  const added = await library.add('retained.xlsx', Buffer.from('retained'));
+  const appendFile = fs.appendFile;
+  t.mock.method(fs, 'appendFile', async (file, ...args) => {
+    if (file === path.join(dir, 'audit.jsonl')) throw new Error('synthetic audit failure');
+    return appendFile(file, ...args);
+  });
+  await assert.rejects(library.remove(added.id, added.revision), /audit failure/);
+  await assert.rejects(library.add('unpublished.xlsx', Buffer.from('unpublished')), /audit failure/);
+  assert.equal(library.list().revision, added.revision);
+  assert.deepEqual(await fs.readdir(path.join(dir, 'files')), [added.id + '.xlsx']);
+  assert.equal((await library.original(added.id)).content.toString(), 'retained');
+});
+
+test('startup recovers abandoned uploads and originals without deleting retained or unknown files', async t => {
+  const {library, dir} = await fixture(t);
+  const added = await library.add('retained.xlsx', Buffer.from('retained'));
+  const files = path.join(dir, 'files');
+  for (const name of ['upload-' + randomUUID() + '.pdf', 'local-' + randomUUID() + '.xlsx', 'notes.txt']) {
+    await fs.writeFile(path.join(files, name), 'abandoned');
+  }
+  const restarted = await createLibrary(dir);
+  assert.deepEqual((await fs.readdir(files)).sort(), [added.id + '.xlsx', 'notes.txt'].sort());
+  assert.equal((await restarted.original(added.id)).content.toString(), 'retained');
+});
+
+test('failed cleanup after failed rollback is recovered before the next upload', async t => {
+  const {library, dir} = await fixture(t);
+  const added = await library.add('orphan.xlsx', Buffer.from('orphan'));
+  const original = path.join(dir, 'files', added.id + '.xlsx');
+  const rm = fs.rm, appendFile = fs.appendFile;
+  let failed = false;
+  const removeMock = t.mock.method(fs, 'rm', async (file, options) => {
+    if (file === original && !failed) { failed = true; throw new Error('synthetic delete failure'); }
+    return rm(file, options);
+  });
+  const auditMock = t.mock.method(fs, 'appendFile', async (file, ...args) => {
+    if (file === path.join(dir, 'audit.jsonl') && failed) throw new Error('synthetic rollback failure');
+    return appendFile(file, ...args);
+  });
+  await assert.rejects(library.remove(added.id, added.revision), /rollback failure/);
+  assert.equal(library.list().documents.length, 0);
+  await fs.access(original);
+  removeMock.mock.restore(); auditMock.mock.restore();
+  await library.add('next.xlsx', Buffer.from('next'));
+  await assert.rejects(fs.access(original), {code: 'ENOENT'});
+});
+
+test('original reads reject oversized and missing files', async t => {
+  const {library, dir} = await fixture(t);
+  const added = await library.add('bounded.xlsx', Buffer.from('bounded'));
+  const original = path.join(dir, 'files', added.id + '.xlsx');
+  await fs.truncate(original, documentLimit + 1);
+  await assert.rejects(library.original(added.id), error => error.status === 409);
+  await fs.rm(original);
+  await assert.rejects(library.original(added.id), error => error.status === 409);
+});
+
+test('original reads remain bounded if the file grows after stat, including partial reads', async t => {
+  const {library, dir} = await fixture(t);
+  const added = await library.add('growing.xlsx', Buffer.from('x'));
+  const original = path.join(dir, 'files', added.id + '.xlsx');
+  const open = fs.open;
+  let totalRead = 0, closed = false;
+  t.mock.method(fs, 'open', async (file, ...args) => {
+    const handle = await open(file, ...args);
+    if (file !== original) return handle;
+    return {
+      async stat() {
+        const stat = await handle.stat();
+        await fs.truncate(original, documentLimit * 2);
+        return stat;
+      },
+      async read(buffer, offset, length, position) {
+        const result = await handle.read(buffer, offset, Math.min(length, 1), position);
+        totalRead += result.bytesRead;
+        return result;
+      },
+      async close() { closed = true; await handle.close(); },
+    };
+  });
+  await assert.rejects(library.original(added.id), error => error.status === 409);
+  assert.equal(totalRead, 2);
+  assert.equal(closed, true);
+});
+
+test('persistent library-specific corruption is rejected before orphan cleanup', async t => {
+  const {library, dir} = await fixture(t);
+  await library.add('retained.xlsx', Buffer.from('retained'));
+  const baseline = library.snapshot().dataset;
+  const orphan = path.join(dir, 'files', 'local-' + randomUUID() + '.xlsx');
+  await fs.writeFile(orphan, 'preserve during corruption');
+  for (const change of [
+    item => { delete item.attachments; },
+    item => { item.attachments = []; },
+    item => { item.id = 'unsafe:windows'; },
+    item => { item.attachments[0].id = 'other'; },
+  ]) {
+    const dataset = structuredClone(baseline);
+    change(dataset.items[0]);
+    const serialized = JSON.stringify(dataset);
+    await fs.writeFile(path.join(dir, 'dataset.json'), serialized);
+    await assert.rejects(createLibrary(dir), /손상/);
+    assert.equal(await fs.readFile(path.join(dir, 'dataset.json'), 'utf8'), serialized);
+    await fs.access(orphan);
+  }
+  await fs.writeFile(path.join(dir, 'dataset.json'), '{invalid');
+  await assert.rejects(createLibrary(dir), /손상/);
+  await fs.access(orphan);
 });

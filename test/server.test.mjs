@@ -23,6 +23,9 @@ async function fixture(t, options = {}) {
 test('HTTP status, assets, briefing and audit form a usable workflow', async t => {
   const f = await fixture(t);
   assert.equal(f.status.liveConnected, false); assert.equal(f.status.capabilities.mutations, false);
+  const runtime = await (await fetch(f.base + '/api/runtime')).json();
+  assert.equal(runtime.application, 'running'); assert.equal(runtime.model.service, 'not-configured');
+  assert.equal(runtime.model.loaded, null);
   for (const asset of ['/', '/app.js', '/styles.css']) { const r = await fetch(f.base + asset); assert.equal(r.status, 200); assert.match(r.headers.get('content-security-policy'), /frame-ancestors 'none'/); }
   const r = await f.post('/api/run', {task: 'briefing'}); assert.equal(r.status, 200);
   const body = await r.json(); assert.equal(body.counts.pending, 2); assert.equal(body.references.some(x => x.id === 'hidden-doc'), false);
