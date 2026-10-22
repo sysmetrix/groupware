@@ -28,6 +28,8 @@ Windows 백그라운드 실행은 `npm run services:status`, `npm run services:s
 
 **버튼으로 실행·종료하려면** `npm run setup:control`을 실행하세요. 바탕화면에 **Groupware AI Control** 바로가기가 생성됩니다. [프로그램 사용법](docs/control-panel.md)
 
+**설치 확인은** `npm run verify:pc`로 실행하세요. 기존 업무자료와 별도인 합성 환경을 검사하고 `data/verification/pc-*/report.html`에 결과와 조치 사항을 남깁니다. AI 미설정은 SKIP, 설정한 모델의 연결·설치 실패는 FAIL로 구분합니다. 실제 그룹웨어 연결이나 다른 PC의 검증을 대신하지 않습니다.
+
 ## 구현된 기능
 
 | 기능 | 현재 동작 |

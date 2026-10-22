@@ -13,10 +13,15 @@ npm ci
 npm run setup
 npm run setup:documents
 npm run doctor
+npm run setup:control
 npm start
 ```
 
-Windows에서는 clone 후 `powershell -NoProfile -File scripts/install.ps1`로 설치·설정·진단을 묶어서 실행할 수도 있다. 조직 정책에서 스크립트 실행을 막으면 위의 npm 명령을 사용한다. 실행 정책을 우회하거나 영구 변경할 필요가 없다.
+Windows에서는 clone 후 `powershell -NoProfile -File scripts/install.ps1`로 설치·설정·진단과 실행 관리자 설치를 묶어서 실행할 수도 있다. Windows의 .NET Framework C# 컴파일러로 `data/control-panel/GroupwareControl.exe`를 만들고 현재 사용자 바탕화면에 **Groupware AI Control** 바로가기를 만든다. 컴파일러와 바탕화면 쓰기 권한이 필요하며 관리자 권한은 요구하지 않는다. 기존 `.env`, 설정과 업무자료는 유지한다. 조직 정책에서 스크립트 실행을 막으면 허용된 npm 명령으로 웹 앱을 설치하고 담당자에게 실행 관리자 설치 정책을 확인한다. `npm run setup:control`도 PowerShell 스크립트를 사용한다. 실행 정책을 우회하거나 영구 변경할 필요가 없다.
+
+설치 후 바로가기를 열고 **업무 도우미 → 시작**을 누르면 터미널 없이 앱을 실행할 수 있다. 이 경우 위의 `npm start`는 생략한다. 로컬 AI는 [모델 설치 안내](local-model.md)에 따라 별도로 준비한다. 실행 관리자 설치만으로 모델이나 서버를 자동 실행하지 않는다. 버튼과 종료 동작은 [실행 관리자 안내](control-panel.md)를 따른다. 재설치할 때는 먼저 관리자의 **창만 닫기**로 창을 닫는다.
+
+별도 검증용 복제본은 설치·업데이트 스크립트에 `-NoShortcut`을 붙여 기존 바탕화면 바로가기를 유지할 수 있다. 실행 파일 빌드는 수행한다.
 
 브라우저에서 `http://127.0.0.1:3210`을 연다. 그룹웨어 자료를 가져오기 전에는 **내 문서** 화면이 열린다. PDF·XLSX·HWPX를 선택해 바로 넣을 수 있다. [내 문서 사용 안내](document-library.md)를 따른다. `npm run setup`은 기존 `.env`와 설정 파일을 덮어쓰지 않는다. 포트는 `.env`의 `PORT`로 바꿀 수 있다.
 
@@ -67,15 +72,23 @@ powershell -NoProfile -File scripts/windows-autostart.ps1 -Remove
 
 서버를 수동 실행할 때는 기존 서버를 먼저 종료한다. 같은 데이터 폴더에 여러 서버를 실행하지 않는다. 임시 작업 등록·주체·로그온 트리거와 작업 스케줄러를 통한 실제 서버 시작은 확인했다. 실제 Windows 로그인 시점 동작은 대상 PC에서 확인해야 한다. `powershell -NoProfile -File scripts/windows-verify-autostart.ps1`는 분리된 합성 자료로 임시 작업을 등록·실행·제거하며 실제 로그아웃은 하지 않는다.
 
-## GitHub에서 업데이트
+## 설치 결과를 HTML로 확인
 
-서버를 종료하고 프로젝트 폴더에서 실행한다.
+설치 후 `npm run verify:pc`를 실행한다. 현재 PC의 Node·설정·프로젝트 Python·Windows 실행 파일·아이콘·로컬 모델 설치 상태를 확인하고, 별도 합성 자료 폴더와 임의 포트에서 화면 파일·브리핑·검색·감사 흐름을 검사한다. 기존 업무자료나 실행 중인 앱을 교체하지 않는다. `data/verification/pc-*/report.html`과 JSON에 결과가 저장되며 실패한 항목이 있으면 종료 코드 1을 반환한다. AI 미설정은 SKIP, 설정된 모델에 연결할 수 없거나 설치되지 않았으면 FAIL이다.
+
+이 검사는 실제 그룹웨어 로그인·기관 표본 정확도·GUI 조작·LLM 추론을 증명하지 않는다. AI 합성 추론은 `npm run doctor:model -- --probe`로 별도 확인한다. 2026-10-23에는 같은 PC의 한글·공백 경로에 GitHub 저장소를 새로 복제해 89개 Node·9개 Python 테스트와 실행 파일 빌드를 통과했다. 실제 다른 물리 PC의 확인 결과는 아직 없다. 대상 PC에서 위 명령과 실행 관리자 시작·종료·로그인 시 실행 검증을 수행해야 한다.
+
+## GitHub에서 업데이트 실행
+
+진행 중인 업로드·저장을 마친 뒤 서버를 종료하고 실행 관리자의 **창만 닫기**로 관리 창도 닫는다. 별도 터미널에서 실행한 서버는 원래 터미널에서 종료한다. 프로젝트 폴더에서 실행한다.
 
 ```powershell
 powershell -NoProfile -File scripts/update.ps1
 ```
 
-이 스크립트는 로컬 코드 변경이 있으면 멈추고 현재 추적 브랜치를 fast-forward로만 업데이트한다. 설정과 자료는 Git에서 제외되어 보존된다. npm 설치와 테스트 후 서버를 다시 시작한다.
+이 스크립트는 실행 관리자 파일이 사용 중이면 Git·npm 작업 전에 멈추고 창을 닫으라는 오류를 표시한다. 로컬 코드 변경이나 추적되지 않은 파일이 있어도 멈추며 현재 추적 브랜치를 fast-forward로만 업데이트한다. 설정과 자료는 Git에서 제외되어 보존된다. npm 설치·문서 도구 설정·검사·테스트가 성공하면 실행 관리자를 다시 컴파일하고 바탕화면 바로가기도 갱신한다. 서버나 실행 관리자를 강제로 종료하거나 자동 재시작하지 않는다. 완료 후 바로가기를 다시 열고 서버를 수동으로 시작한다.
+
+업데이트 중 관리 창을 다시 열지 않는다. 파일 잠금 오류가 나면 **창만 닫기**로 닫고 `scripts/update.ps1`을 다시 실행한다. 창이 이미 닫혔으면 실행 파일 권한이나 다른 프로그램의 파일 잠금을 확인한다. 코드 업데이트 후 실행 관리자 빌드 또는 바로가기 생성만 실패한 경우 오류를 해결한 뒤 `powershell -NoProfile -File scripts/install-control-panel.ps1`로 마무리할 수 있다. 컴파일러가 없거나 바탕화면에 쓸 수 없는 경우도 오류에 표시된다.
 
 다른 OS에서도 다음 명령을 사용할 수 있다. 작업 내용이 있는 경우 먼저 commit하거나 별도로 보관한다.
 

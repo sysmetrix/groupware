@@ -27,3 +27,5 @@ jobs:
       - run: python -m pip install -r requirements-attachments.txt
       - run: npm test
       - run: npm run test:attachments
+      - run: npm run setup:documents
+      - run: npm run verify:pc
