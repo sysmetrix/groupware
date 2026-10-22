@@ -62,7 +62,7 @@ powershell -NoProfile -File scripts/windows-autostart.ps1
 powershell -NoProfile -File scripts/windows-autostart.ps1 -Remove
 ```
 
-서버를 수동 실행할 때는 기존 서버를 먼저 종료한다. 같은 데이터 폴더에 여러 서버를 실행하지 않는다. 이 스크립트의 구문 검사는 수행했지만 실제 Windows 로그인 트리거 동작은 대상 PC에서 확인해야 한다.
+서버를 수동 실행할 때는 기존 서버를 먼저 종료한다. 같은 데이터 폴더에 여러 서버를 실행하지 않는다. 임시 작업 등록·주체·로그온 트리거와 작업 스케줄러를 통한 실제 서버 시작은 확인했다. 실제 Windows 로그인 시점 동작은 대상 PC에서 확인해야 한다. `powershell -NoProfile -File scripts/windows-verify-autostart.ps1`는 분리된 합성 자료로 임시 작업을 등록·실행·제거하며 실제 로그아웃은 하지 않는다.
 
 ## GitHub에서 업데이트
 
@@ -95,6 +95,8 @@ npm start
 
 ## 문제 해결
 
+- 페이지 단위 자료: [수집 계약](sync-contract.md)에 따라 `npm run sync:pages`로 전체 검증 후 JSON을 만든다. 실제 API에서 페이지를 받는 어댑터는 별도다.
+- 로컬 AI 확인: `npm run doctor:model`. 모델이 준비된 경우에만 `npm run doctor:model -- --probe`로 합성 근거 추론을 검사한다. 자동 설치·다운로드는 하지 않는다.
 - 포트 사용 중: 이미 켜진 서버를 종료하거나 `.env`의 `PORT`를 변경하고 해당 주소로 접속한다.
 - 자동화 미설정: `enabled`, 사용자·조직 값을 확인한 뒤 서버를 다시 시작한다.
 - 파일 대기: `inputFile`의 경로와 파일 존재 여부를 확인한다.

@@ -59,4 +59,4 @@ listSchedules(range, cursor) -> records with timezone and cancellation state
 4. [Graph의 429 처리](https://learn.microsoft.com/en-us/graph/throttling)를 참고해 지원 계약에 있는 Retry-After를 우선한다. 계약에 없는 헤더나 오류 의미는 추측하지 않는다. 401/403·계정 변경·브라우저 제어 해제는 일시 오류 재시도로 숨기지 않는다.
 5. 결과 유실 후 쓰기를 재시도하려면 공급사가 보장하는 중복 방지 키 또는 원문 상태 조회가 필요하다. 현재 로컬 해시 중복 검사는 서버의 중복 상신 방지를 보장하지 않는다.
 
-합성 커넥터의 향후 완료 기준: 빈 중간 페이지·마지막 페이지 실패·중복 페이지·동기화 토큰 무효·권한 회수·응답 유실을 재현하고 부분 게시/누락/중복 변경이 없는지 확인한다. 이 커넥터와 테스트는 아직 구현하지 않았다. 비교 근거와 우선순위는 [HTML 레퍼런스 분석](reference-review.html)에 있다.
+후속 구현에서 [정규화 페이지 수집 기반](sync-contract.md)과 합성 테스트 9개를 추가했다. 빈 중간 페이지·누락/중복·체크포인트 불일치·권한 회수·삭제·출력 실패를 검증하고 CLI로 전체 JSON을 게시한다. 실제 제품 커넥터, 서버 토큰 만료·HTTP 오류·변경 응답 유실 처리는 아직 미구현이다. 공급사 공개 근태 연동 문서와 ONE AI 안내를 검토했지만 조회 API 계약은 확보하지 못했다. [후속 검증](followup-verification.md)과 [HTML 분석](reference-review.html)을 참고한다.

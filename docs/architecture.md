@@ -33,6 +33,7 @@ Node.js 표준 라이브러리만 사용한다. UI는 프레임워크 없는 Jav
 | `src/server.mjs` | loopback 바인딩, 요청 출처/CSRF/크기 검사, 작업 실행 |
 | `src/automation.mjs` | 입력 파일 확인, 대상 사용자·조직 및 신선도 검사, KST 정기 보고서 |
 | `src/recovery.mjs` | 오류 분류, 안전한 복구 안내, 일시적 오류의 대기 간격 계산 |
+| `src/sync.mjs` | 정규화 페이지 완전성 검사, 전체·증분 병합, 삭제·권한 회수 반영 |
 | `src/csv.mjs` | UTF-8 CSV/TSV 파싱, 명시적 열 매핑과 데이터 계약 변환 |
 | `scripts/` | 설치·진단·CSV 변환·수동 자동화 실행·Windows 업데이트와 로그인 실행 등록 |
 
@@ -55,6 +56,8 @@ Node.js 표준 라이브러리만 사용한다. UI는 프레임워크 없는 Jav
 9. GitHub에는 코드를 공유하고 PC별 설정·실제 자료·보고서는 제외한다. 서버는 단일 PC·단일 프로세스로 실행하며 공유 드라이브 동시 쓰기를 지원하지 않는다.
 
 ## 확장 방향
+
+정규화된 페이지 수집 기반은 후속 구현했다. `scripts/sync-pages.mjs`가 로컬 페이지 묶음을 검증하고 완성된 JSON을 게시한 뒤 수집 상태를 저장한다. 실제 제품의 인증·API 어댑터는 아니다. [수집 계약](sync-contract.md)에 전체/증분 의미, 잠금과 두 파일 커밋의 한계를 정리했다.
 
 2026-10-22에 Microsoft Graph, Power Automate, Temporal, n8n, OWASP의 공식 문서 7종을 비교했다. [HTML 분석](reference-review.html)에 출처·적용 판단·미구현 범위를 연결했다. 워크플로 엔진 의존성은 추가하지 않았다.
 

@@ -34,6 +34,7 @@ npm start
 | 파일 자동화 | 설정된 JSON 확인, 사용자·조직·자료 시각 검증, 변경 감지, 정기 브리핑 JSON 생성 |
 | 장애 복구 | 오류별 복구 안내, 일시적 파일 오류의 재확인 간격 조절, 재시작 후 보고서 재검증, 오래된 자료 덮어쓰기 차단 |
 | CSV 변환 | UTF-8 CSV/TSV와 열 매핑을 검증된 데이터 계약으로 변환 |
+| 페이지 묶음 처리 | 정규화된 로컬 전체·증분 페이지 검증, 삭제·권한 회수 반영. 실제 API 수집은 별도 |
 | 다른 PC 사용 | 설정 생성·환경 진단, Windows 설치/업데이트/로그인 시 실행 스크립트 |
 | 실행 기록 | 작업·시각·결과·건수, 자동화 실행 ID와 오류 코드. 검색어·본문·인증 값은 기록하지 않음 |
 | 선택형 AI 요약 | 로컬 Ollama에 검증된 조회 결과를 전달하고 출처 ID를 확인. 오류 시 근거 조회 결과 유지 |
@@ -72,12 +73,14 @@ npm test
 
 Node 내장 테스트 러너로 권한 범위, 날짜·금액 검증, 만료 문서 제외, 모델 출처 검증, HTTP 요청 경계, 데이터 저장과 감사 기록을 검사합니다. GitHub Actions는 Node 24에서 Ubuntu/Windows를 실행합니다.
 
-브라우저 시각 검증은 도구의 URL 판별 오류로 완료하지 못했습니다. 릴리스 전 [수동 검증 절차](docs/verification.md)를 수행하세요.
+브라우저에서 검색·초안 금액 대조·일부 키보드 동작과 화면 폭별 가로 넘침을 확인했습니다. 스크린샷·다운로드 이벤트 오류와 후속 제어 해제로 전체 시각·E2E 검증은 완료하지 못했습니다. [후속 검증 기록](docs/followup-verification.md)과 [남은 절차](docs/verification.md)를 참고하세요.
 
 ## 문서와 다음 단계
 
 - [자동화 레퍼런스 비교·고도화 보고서 (HTML)](docs/reference-review.html) — 공식 문서 7종, 적용 결과와 다음 검증 기준. 내려받아 브라우저에서 열 수 있습니다.
 - [오류 코드와 복구 절차](docs/automation-recovery.md)
+- [페이지 수집 계약과 실행 방법](docs/sync-contract.md) (`npm run demo:sync`, `npm run sync:pages`)
+- [남은 작업의 후속 검증](docs/followup-verification.md) — Windows 작업 실행, 브라우저, 공식 연동·내장 AI 비교
 - [아키텍처와 분석 방법](docs/architecture.md)
 - [데이터 계약](docs/data-contract.md)
 - [다른 PC 설치·자동화 안내](docs/other-computers.md)

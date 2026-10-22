@@ -14,6 +14,9 @@
     "doctor": "node --env-file-if-exists=.env scripts/doctor.mjs",
     "doctor:browser": "node scripts/doctor-browser.mjs",
     "convert:csv": "node scripts/convert-csv.mjs",
-    "automate": "node --env-file-if-exists=.env scripts/automate.mjs"
+    "automate": "node --env-file-if-exists=.env scripts/automate.mjs",
+    "sync:pages": "node scripts/sync-pages.mjs",
+    "demo:sync": "node scripts/create-sync-example.mjs",
+    "doctor:model": "node --env-file-if-exists=.env scripts/doctor-model.mjs"
   }
 }
