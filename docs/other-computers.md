@@ -4,20 +4,21 @@
 
 ## 처음 설치
 
-Git과 Node.js 24 이상을 설치하고 터미널을 다시 연다. 공개 저장소를 내려받아 실행하는 데 GitHub 로그인은 필요하지 않다. 코드 변경을 push할 때만 해당 PC에서 GitHub 인증을 설정한다.
+Git, Node.js 24 이상과 Python 3.10 이상(검증 버전 3.14)을 설치하고 터미널을 다시 연다. 공개 저장소를 내려받아 실행하는 데 GitHub 로그인은 필요하지 않다. 코드 변경을 push할 때만 해당 PC에서 GitHub 인증을 설정한다.
 
 ```powershell
 git clone --branch codex/groupware-assistant-mvp https://github.com/sysmetrix/groupware.git
 cd groupware
 npm ci
 npm run setup
+npm run setup:documents
 npm run doctor
 npm start
 ```
 
 Windows에서는 clone 후 `powershell -NoProfile -File scripts/install.ps1`로 설치·설정·진단을 묶어서 실행할 수도 있다. 조직 정책에서 스크립트 실행을 막으면 위의 npm 명령을 사용한다. 실행 정책을 우회하거나 영구 변경할 필요가 없다.
 
-브라우저에서 `http://127.0.0.1:3210`을 연다. 첫 화면은 합성 예제다. `npm run setup`은 기존 `.env`와 설정 파일을 덮어쓰지 않는다. 포트는 `.env`의 `PORT`로 바꿀 수 있다.
+브라우저에서 `http://127.0.0.1:3210`을 연다. 그룹웨어 자료를 가져오기 전에는 **내 문서** 화면이 열린다. PDF·XLSX·HWPX를 선택해 바로 넣을 수 있다. [내 문서 사용 안내](document-library.md)를 따른다. `npm run setup`은 기존 `.env`와 설정 파일을 덮어쓰지 않는다. 포트는 `.env`의 `PORT`로 바꿀 수 있다.
 
 ## 내 자료와 정기 브리핑 연결
 

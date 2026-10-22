@@ -2,15 +2,15 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {createHash, randomUUID} from 'node:crypto';
 import {createDemoDataset} from './demo.mjs';
-import {validateDataset} from './schema.mjs';
+import {AppError, validateDataset} from './schema.mjs';
 
-export async function createStore(directory) {
+export async function createStore(directory, {initialDataset = createDemoDataset()} = {}) {
   await fs.mkdir(directory, {recursive: true, mode: 0o700});
   const file = path.join(directory, 'dataset.json');
   const auditFile = path.join(directory, 'audit.jsonl');
   let dataset, revision = 0;
   try { dataset = validateDataset(JSON.parse(await fs.readFile(file, 'utf8'))); }
-  catch (error) { if (error.code !== 'ENOENT') throw new Error('저장된 데이터가 손상되었거나 형식이 맞지 않습니다. data/dataset.json을 확인하세요.'); dataset = createDemoDataset(); }
+  catch (error) { if (error.code !== 'ENOENT') throw new Error('저장된 데이터가 손상되었거나 형식이 맞지 않습니다. data/dataset.json을 확인하세요.'); dataset = validateDataset(initialDataset); }
   let queue = Promise.resolve();
   const serialize = action => { const operation = queue.then(action); queue = operation.catch(() => {}); return operation; };
   async function atomicWrite(destination, content) {
@@ -27,7 +27,8 @@ export async function createStore(directory) {
   }
   return {
     snapshot: () => ({dataset: structuredClone(dataset), revision}),
-    replace: value => serialize(async () => {
+    replace: (value, {expectedRevision} = {}) => serialize(async () => {
+      if (expectedRevision !== undefined && revision !== expectedRevision) throw new AppError('자료가 변경되었습니다. 다시 확인하세요.', 409);
       const next = validateDataset(value);
       // Persist an attempt before writing, then a completion. A failed completion never yields a success response.
       await log({action: 'dataset.replace', outcome: 'started', count: next.items.length});

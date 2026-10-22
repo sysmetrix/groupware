@@ -9,6 +9,7 @@ import {createStore} from './store.mjs';
 import {runTask} from './tasks.mjs';
 import {summarize, validateModelConfig} from './model.mjs';
 import {createAutomation} from './automation.mjs';
+import {createLibrary, documentFilename, documentLimit, linkLibraryResults} from './library.mjs';
 
 const publicDir = fileURLToPath(new URL('../public/', import.meta.url));
 const assets = {'/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/styles.css': ['styles.css', 'text/css; charset=utf-8']};
@@ -21,11 +22,23 @@ async function jsonBody(req) {
   try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { throw new AppError('올바른 JSON 파일 또는 요청이 필요합니다.'); }
 }
 const send = (res, status, value) => { res.writeHead(status, {'content-type': 'application/json; charset=utf-8'}); res.end(JSON.stringify(value)); };
+async function documentBody(req) {
+  if (req.headers['content-type'] !== 'application/octet-stream') throw new AppError('문서 업로드 형식을 확인하세요.', 415);
+  if (Number(req.headers['content-length']) > documentLimit) throw new AppError('문서는 20 MB 이하여야 합니다.', 413);
+  const chunks = []; let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > documentLimit) throw new AppError('문서는 20 MB 이하여야 합니다.', 413);
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
 
 export async function createApp({dataDir = path.resolve('data'), configFile = path.resolve('config/automation.json'), root = process.cwd(), model = {model: '', baseUrl: 'http://127.0.0.1:11434'}} = {}) {
   const store = await createStore(dataDir), modelConfig = validateModelConfig(model), csrf = randomBytes(32).toString('hex');
   const automation = await createAutomation({store, dataDir, configFile, root});
-  let activeRuns = 0;
+  const library = await createLibrary(path.join(dataDir, 'library'));
+  let activeRuns = 0, uploading = false;
   const server = http.createServer(async (req, res) => {
     res.setHeader('cache-control', 'no-store');
     res.setHeader('x-content-type-options', 'nosniff');
@@ -52,6 +65,31 @@ export async function createApp({dataDir = path.resolve('data'), configFile = pa
         send(res, 200, {csrf, revision, source: dataset.source, principal: dataset.principal, visibleCount: visibleItems(dataset).length, liveConnected: false, capabilities: {briefing: true, search: true, validate: true, mutations: false, model: modelConfig.enabled}, model: modelConfig.enabled ? modelConfig.model : null}); return;
       }
       if (req.method === 'GET' && url.pathname === '/api/example') { send(res, 200, createDemoDataset()); return; }
+      if (req.method === 'GET' && url.pathname === '/api/documents') { send(res, 200, library.list()); return; }
+      const preview = /^\/api\/documents\/(local-[a-f0-9-]{36})\/text$/.exec(url.pathname);
+      if (req.method === 'GET' && preview) { send(res, 200, library.preview(preview[1], Number(url.searchParams.get('offset') || 0))); return; }
+      const original = /^\/api\/documents\/(local-[a-f0-9-]{36})\/file$/.exec(url.pathname);
+      if (req.method === 'GET' && original) {
+        const {content, filename} = await library.original(original[1]);
+        res.writeHead(200, {'content-type': 'application/octet-stream', 'content-disposition': `attachment; filename="document.${filename.split('.').at(-1).toLowerCase()}"; filename*=UTF-8''${encodeURIComponent(filename).replaceAll("'", '%27')}`, 'content-length': content.length});
+        res.end(content); return;
+      }
+      if (req.method === 'POST' && url.pathname === '/api/documents/upload') {
+        if (uploading) throw new AppError('문서 처리 중입니다. 완료 후 다시 시도하세요.', 429);
+        uploading = true;
+        try {
+          let filename;
+          try { filename = decodeURIComponent(req.headers['x-document-name'] || ''); } catch { throw new AppError('파일 이름 인코딩을 확인하세요.'); }
+          filename = documentFilename(filename);
+          const result = await library.add(filename, await documentBody(req));
+          await store.audit({action: 'library.import', outcome: 'completed', count: result.documents.length});
+          send(res, 200, result); return;
+        } finally { uploading = false; }
+      }
+      if (req.method === 'POST' && url.pathname === '/api/documents/remove') {
+        const input = object(await jsonBody(req), 'remove', ['id', 'expectedRevision']);
+        send(res, 200, await library.remove(input.id, input.expectedRevision)); return;
+      }
       if (req.method === 'GET' && url.pathname === '/api/automation') { send(res, 200, automation.status()); return; }
       if (req.method === 'GET' && url.pathname === '/api/report') { send(res, 200, automation.latest()); return; }
       if (req.method === 'POST' && url.pathname === '/api/automation/run') {
@@ -68,17 +106,20 @@ export async function createApp({dataDir = path.resolve('data'), configFile = pa
         if (activeRuns >= 2) throw new AppError('진행 중인 작업이 있습니다. 잠시 뒤 다시 시도하세요.', 429);
         activeRuns += 1;
         try {
-          const input = object(await jsonBody(req), 'request'), snapshot = store.snapshot();
+          const {scope = 'dataset', ...input} = object(await jsonBody(req), 'request');
+          if (!['dataset', 'library'].includes(scope) || (scope === 'library' && !['search', 'validate'].includes(input.task))) throw new AppError('검색·점검 자료 범위를 확인하세요.');
+          const taskStore = scope === 'library' ? library : store, snapshot = taskStore.snapshot();
           if (input.expectedRevision !== undefined && (!Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 0)) throw new AppError('자료 버전 번호를 확인하세요.');
           if (input.attachmentEvidence !== undefined && input.expectedRevision === undefined) throw new AppError('첨부 선택 시점의 자료 버전이 필요합니다.');
           if (input.expectedRevision !== undefined && input.expectedRevision !== snapshot.revision) throw new AppError('자료가 변경되었습니다. 다시 검색해 선택하세요.', 409);
           const result = runTask(snapshot.dataset, input);
-          result.datasetRevision = snapshot.revision; result.source = snapshot.dataset.source;
+          result.datasetRevision = snapshot.revision; result.source = snapshot.dataset.source; result.scope = scope;
           if (input.useModel) {
             try { result.ai = await summarize(result, modelConfig); result.trace.push({tool: 'model.summarize', status: 'completed'}); }
             catch { result.ai = {mode: 'unavailable', claims: [], message: 'AI 요약을 제공하지 못했습니다. 모델 설정·연결·응답을 확인하세요. 아래의 근거와 규칙 검사 결과는 그대로 사용할 수 있습니다.'}; result.trace.push({tool: 'model.summarize', status: 'failed'}); }
           }
-          if (snapshot.revision !== store.snapshot().revision) throw new AppError('작업 중 데이터가 변경되었습니다. 새 데이터로 다시 실행하세요.', 409);
+          if (snapshot.revision !== taskStore.snapshot().revision) throw new AppError('작업 중 데이터가 변경되었습니다. 새 데이터로 다시 실행하세요.', 409);
+          if (scope === 'library') linkLibraryResults(result);
           await store.audit({action: `task.${input.task}`, outcome: result.ai?.mode === 'unavailable' ? 'partial' : 'completed', count: result.references.length});
           send(res, 200, result); return;
         } finally { activeRuns -= 1; }

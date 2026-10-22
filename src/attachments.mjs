@@ -1,6 +1,8 @@
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {fileURLToPath} from 'node:url';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import {AppError, object, validateDataset, visibleItems} from './schema.mjs';
 
 const execute = promisify(execFile);
@@ -11,7 +13,11 @@ const messages = {
   ENCRYPTED: '암호화된 첨부는 처리하지 않습니다. 열람 가능한 내보내기 파일을 준비하세요.',
   NO_TEXT: '추출할 텍스트가 없습니다. 스캔 PDF에는 별도 OCR이 필요할 수 있습니다.',
 };
-export async function extractAttachment(file, {python = process.env.ATTACHMENT_PYTHON || 'python'} = {}) {
+export async function extractAttachment(file, {python, root = fileURLToPath(new URL('../', import.meta.url))} = {}) {
+  if (!python) {
+    const bundled = path.join(root, '.venv-attachments', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
+    python = process.env.ATTACHMENT_PYTHON || (await fs.access(bundled).then(() => bundled, () => 'python'));
+  }
   try {
     const {stdout} = await execute(python, [extractor, file], {timeout: 30000, maxBuffer: 5 * 1024 * 1024, windowsHide: true, encoding: 'utf8'});
     return JSON.parse(stdout);

@@ -11,6 +11,7 @@
     "test": "node --test test/*.test.mjs",
     "check": "node scripts/check.mjs",
     "setup": "node scripts/setup.mjs",
+    "setup:documents": "node scripts/setup-documents.mjs",
     "doctor": "node --env-file-if-exists=.env scripts/doctor.mjs",
     "doctor:browser": "node scripts/doctor-browser.mjs",
     "convert:csv": "node scripts/convert-csv.mjs",

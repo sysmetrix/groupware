@@ -9,6 +9,7 @@
     <a class="brand" href="/" aria-label="업무 도우미 홈"><span class="brand-mark">g.</span><span>groupware<small>업무를 잇는 도우미</small></span></a>
     <p class="nav-label">WORKSPACE</p>
     <nav aria-label="주 메뉴">
+      <button class="nav" data-view="documents"><span>▤</span> 내 문서</button>
       <button class="nav active" data-view="briefing"><span>◫</span> 내 업무 브리핑</button>
       <button class="nav" data-view="search"><span>⌕</span> 규정 · 서식 검색</button>
       <button class="nav" data-view="validate"><span>✓</span> 초안 사전 점검</button>
@@ -23,7 +24,19 @@
       <div id="message" role="status" aria-live="polite" hidden></div>
       <section id="intro"><p class="eyebrow" id="date-label">YOUR WORK, IN FOCUS</p><h1 id="page-title">오늘의 업무를 한눈에.</h1><p id="page-description">확인이 필요한 일과 근거를 함께 정리합니다.</p></section>
       <div class="source-strip"><span class="status-dot"></span><strong id="source-label">데이터 확인 중</strong><span id="source-detail"></span><button id="source-link" class="text-button">데이터 관리 ↗</button></div>
+      <section id="documents-view" class="view" hidden>
+        <form id="document-form" class="panel form-panel">
+          <h2>실제 문서로 시작하세요</h2>
+          <p>규정·운영계획·산출내역 파일을 넣으면 본문을 추출해 검색하고, 페이지·셀·문단 위치와 원본을 함께 확인할 수 있습니다.</p>
+          <label for="document-file">PDF · XLSX · HWPX (파일당 최대 20 MB)<input id="document-file" type="file" accept=".pdf,.xlsx,.hwpx" required></label>
+          <button class="primary" type="submit">문서 넣기 · 내용 추출</button>
+          <p>원본과 추출 내용은 이 PC에 저장됩니다. 스캔 PDF와 구형 HWP는 지원하지 않습니다. 직접 넣은 문서는 기관의 현행 규정 여부를 확인한 자료가 아닙니다.</p>
+        </form>
+        <section class="panel library-panel"><div class="panel-title"><h2 id="library-title">내 문서</h2><div class="actions"><button class="secondary" id="refresh-library">목록 새로고침</button><button class="primary" id="search-library">내 문서 검색 →</button></div></div><div id="library-list" aria-live="polite"></div></section>
+        <section class="panel library-panel" id="document-preview" hidden aria-live="polite"><h2 id="preview-title"></h2><p id="preview-info" class="subtle"></p><div id="preview-text"></div><button id="preview-more" class="secondary" hidden>다음 내용 보기</button></section>
+      </section>
       <section id="briefing-view" class="view">
+        <div id="demo-notice" class="callout" hidden><strong>아래 숫자와 문서는 합성 예제입니다.</strong> 실제 결재·일정은 아직 연결되지 않았습니다. <button class="secondary" data-view="documents">실제 문서 넣기</button></div>
         <div class="section-toolbar"><span class="section-caption">나의 업무 현황</span><div class="actions"><label class="model-toggle"><input type="checkbox" id="briefing-model" disabled> 로컬 AI 요약</label><button class="primary" id="refresh-briefing">브리핑 새로고침 ↻</button></div></div>
         <div id="stats" class="stats"></div>
         <div id="briefing-ai"></div>
@@ -32,6 +45,7 @@
         <p class="footnote" id="briefing-footnote"></p>
       </section>
       <section id="search-view" class="view" hidden>
+        <div class="panel search-box"><label for="search-scope">검색할 자료</label><select id="search-scope"><option value="library">직접 넣은 내 문서</option value="dataset">가져온 그룹웨어 자료 / 합성 예제</option></select><p class="subtle" id="search-scope-note"></p></div>
         <form id="search-form" class="panel search-box"><label for="search-query">찾고 싶은 규정이나 업무 키워드</label><div class="search-row"><input id="search-query" placeholder="예: 운영계획, 실적보고, 증빙" maxlength="300" required><button class="primary" type="submit">근거 검색</button></div><label class="model-toggle"><input type="checkbox" id="search-model" disabled> 찾은 근거를 로컬 AI로 요약</label><p class="subtle">사용자·조직 범위에 맞는 유효 문서의 제목·본문·태그와 가져온 첨부 텍스트에서 검색합니다.</p></form>
         <div id="search-ai"></div><div id="search-results" aria-live="polite"><div class="empty">키워드를 입력하면 관련 문서와 근거를 보여드립니다.</div></div>
       </section>

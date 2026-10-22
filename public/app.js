@@ -1,11 +1,13 @@
 const $ = id => document.getElementById(id);
 let status, busy = false, currentView = 'briefing';
 let selectedAmount = null;
+let libraryState = {revision: 0, documents: []}, previewNext = null;
 function clearAmountEvidence() {
   selectedAmount = null; $('amount-evidence').hidden = true; $('confirm-evidence-amount').checked = false;
   document.querySelector('[name="attachmentAmount"]').disabled = false;
 }
 const labels = {briefing: ['내 업무 브리핑', '오늘의 업무를 한눈에.', '확인이 필요한 일과 근거를 함께 정리합니다.'], search: ['규정 · 서식 검색', '답변보다 먼저, 근거.', '유효한 문서에서 필요한 내용을 찾아 원문과 함께 확인하세요.'], validate: ['초안 사전 점검', '제출 전에 한 번 더.', '필수 입력과 날짜, 본문·첨부 입력 금액의 일치를 확인합니다.'], data: ['데이터 연결', '업무 자료를 연결하세요.', '합성 예제로 시작하고, 권한 내 자료를 가져와 검증하세요.'], audit: ['실행 기록', '무엇을 확인했는지 남깁니다.', '작업의 시각과 결과를 되짚어볼 수 있습니다.']};
+labels.documents = ['내 문서', '내 자료에서 바로 찾으세요.', '파일을 넣고 내용을 확인한 뒤, 필요한 키워드로 검색하세요.'];
 const formatTime = value => new Intl.DateTimeFormat('ko-KR', {timeZone: 'Asia/Seoul', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false}).format(new Date(value));
 function element(tag, text, className) { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (className) node.className = className; return node; }
 function message(text, error = false) { $('message').textContent = text; $('message').className = error ? 'error' : ''; $('message').hidden = !text; }
@@ -26,6 +28,8 @@ async function refreshStatus() {
   $('user-name').textContent = status.principal.displayName;
   $('source-label').textContent = status.source.label;
   $('source-detail').textContent = `실시간 미연결 · 열람 범위 ${status.visibleCount}건 · ${formatTime(status.source.exportedAt)} 기준`;
+  $('demo-notice').hidden = status.source.kind !== 'demo';
+  renderSource();
   for (const id of ['briefing-model', 'search-model']) { $(id).disabled = !status.capabilities.model; if (!status.capabilities.model) $(id).checked = false; }
   const details = [['자료 종류', status.source.kind === 'demo' ? '합성 예제 (실제 업무 자료 아님)' : '수동 가져오기'], ['기준 시각', formatTime(status.source.exportedAt)], ['현재 범위', `${status.principal.organizationId} / ${status.principal.userId}`], ['그룹웨어', '실시간 미연결'], ['AI 요약', status.model || '미설정 · 근거 조회와 규칙 검사 사용 가능'], ['변경 작업', '상신 · 승인 · 발송 기능 없음']];
   $('connection-details').replaceChildren(...details.flatMap(([key, value]) => [element('dt', key), element('dd', value)]));
@@ -42,7 +46,7 @@ async function refreshAutomation() {
 }
 function sourceLink(item) {
   if (!item.url) return element('span', '원문 링크 없음', 'subtle');
-  const link = element('a', '원문 확인 ↗', 'source-link'); link.href = item.url; link.target = '_blank'; link.rel = 'noopener noreferrer'; return link;
+  const link = element('a', item.url.startsWith('/api/documents/') ? '보관한 원본 받기 ↓' : '원문 확인 ↗', 'source-link'); link.href = item.url; link.target = '_blank'; link.rel = 'noopener noreferrer'; return link;
 }
 function attachmentMeta(item, target) {
   if (!item.attachment) return;
@@ -94,7 +98,9 @@ function switchView(view) {
   for (const node of document.querySelectorAll('.view')) node.hidden = node.id !== view + '-view';
   for (const node of document.querySelectorAll('.nav')) { node.classList.toggle('active', node.dataset.view === view); if (node.dataset.view === view) node.setAttribute('aria-current', 'page'); else node.removeAttribute('aria-current'); }
   const [crumb, title, description] = labels[view]; $('breadcrumb').textContent = crumb; $('page-title').textContent = title; $('page-description').textContent = description;
+  renderSource();
   message(''); if (view === 'audit') operation(null, audit);
+  if (view === 'briefing') operation(null, briefing);
 }
 for (const node of document.querySelectorAll('[data-view]')) node.addEventListener('click', () => switchView(node.dataset.view));
 $('source-link').addEventListener('click', () => switchView('data'));
@@ -111,14 +117,14 @@ $('download-report').addEventListener('click', event => operation(event.currentT
 }));
 $('search-form').addEventListener('submit', event => {
   event.preventDefault(); operation(event.submitter, async () => {
-    const result = await api('/api/run', {task: 'search', query: $('search-query').value, useModel: $('search-model').checked});
+    const result = await api('/api/run', {task: 'search', scope: $('search-scope').value, query: $('search-query').value, useModel: $('search-model').checked});
     $('search-results').replaceChildren(element('p', result.message, 'subtle'), ...result.hits.map(item => {
       const box = element('section', undefined, 'panel result-card'); box.append(record(item, 'document'));
       if (item.selection) {
         const choose = element('button', '초안 금액 대조에 선택', 'secondary'); choose.type = 'button';
         choose.addEventListener('click', () => {
           if (busy) return;
-          selectedAmount = {selection: item.selection, revision: result.datasetRevision};
+          selectedAmount = {selection: item.selection, revision: result.datasetRevision, scope: result.scope};
           $('amount-evidence-label').textContent = `${item.title} · ${item.locationLabel} · ${item.version}`;
           $('amount-evidence-value').textContent = `선택 값 ${item.amountCandidate.toLocaleString('ko-KR')}원 · 원문에서 금액의 의미를 확인하세요.`;
           $('amount-evidence').hidden = false; $('confirm-evidence-amount').checked = false;
@@ -136,7 +142,7 @@ $('draft-form').addEventListener('submit', event => {
   event.preventDefault(); operation(event.submitter, async () => {
     if (selectedAmount && !$('confirm-evidence-amount').checked) throw new Error('선택한 숫자가 대조할 원 단위 금액인지 확인하세요.');
     const request = {task: 'validate', draft: Object.fromEntries(new FormData(event.target))};
-    if (selectedAmount) { request.attachmentEvidence = {...selectedAmount.selection, confirmed: true}; request.expectedRevision = selectedAmount.revision; }
+    if (selectedAmount) { request.attachmentEvidence = {...selectedAmount.selection, confirmed: true}; request.expectedRevision = selectedAmount.revision; request.scope = selectedAmount.scope; }
     const result = await api('/api/run', request);
     const box = $('draft-results'); box.replaceChildren(element('h2', '점검 결과'), element('p', result.passed ? '기본 오류 없음 · 추가 확인 필요' : '입력 항목을 확인하세요', 'result-status' + (result.passed ? '' : ' failed')));
     for (const finding of result.findings) box.append(element('div', `${finding.level === 'error' ? '확인 필요' : '미확인'} · ${finding.message}`, 'check-item ' + finding.level));
@@ -165,12 +171,80 @@ $('download-example').addEventListener('click', event => operation(event.current
   const data = await api('/api/example'), blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'}), url = URL.createObjectURL(blob), link = element('a');
   link.href = url; link.download = 'groupware-example.json'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }));
+function renderSource() {
+  if (!status) return;
+  const personal = currentView === 'documents' || (currentView === 'search' && $('search-scope').value === 'library') || (currentView === 'validate' && selectedAmount?.scope === 'library');
+  $('source-label').textContent = personal ? '직접 넣은 내 문서' : status.source.label;
+  $('source-detail').textContent = personal ? `이 PC에 ${libraryState.documents.length}개 보관 · 그룹웨어 자동 수집 미연결` : `${status.source.kind === 'demo' ? '실제 업무가 아닌 예제' : '가져온 자료'} · ${status.visibleCount}건 · ${formatTime(status.source.exportedAt)} 기준 · 실시간 미연결`;
+  $('mode').textContent = personal ? '내 문서' : status.source.kind === 'demo' ? '합성 예제' : '가져온 데이터';
+  $('search-scope-note').textContent = $('search-scope').value === 'library' ? `직접 넣은 문서 ${libraryState.documents.length}개에서 검색합니다. 기관의 현행 규정 여부는 원문에서 확인하세요.` : status.source.kind === 'demo' ? '이 범위에는 합성 예제만 있습니다. 실제 업무 질문에 사용할 수 없습니다.' : '가져온 그룹웨어 자료의 문서와 첨부에서 검색합니다.';
+}
+function clearLibraryResults() {
+  clearAmountEvidence();
+  $('document-preview').hidden = true; previewNext = null;
+  $('search-ai').replaceChildren();
+  $('search-results').replaceChildren(element('div', '문서 목록이 변경되었습니다. 다시 검색하세요.', 'empty'));
+  $('draft-results').replaceChildren(element('div', '자료가 변경되었습니다. 초안을 다시 점검하세요.', 'empty'));
+}
+async function refreshLibrary() {
+  const next = await api('/api/documents');
+  if (libraryState.revision !== next.revision) clearLibraryResults();
+  libraryState = next;
+  $('library-title').textContent = `내 문서 ${next.documents.length}개`;
+  $('library-list').replaceChildren(...(next.documents.length ? next.documents.map(doc => {
+    const row = element('article', undefined, 'record');
+    row.append(element('h3', doc.filename, 'record-title'), element('p', `${doc.format.toUpperCase()} · 추출 단위 ${doc.units}개 · ${formatTime(doc.updatedAt)}에 넣음`, 'subtle'));
+    const warnings = element('div', undefined, 'record-meta'); attachmentMeta({attachment: doc, locationLabel: ''}, warnings); row.append(warnings);
+    const actions = element('div', undefined, 'library-actions'), preview = element('button', '추출 내용 보기', 'secondary');
+    preview.addEventListener('click', () => operation(preview, () => showPreview(doc.id)));
+    const agree = element('label'), check = element('input'); check.type = 'checkbox'; agree.append(check, document.createTextNode('이 PC의 보관본 삭제'));
+    const remove = element('button', '삭제', 'secondary');
+    remove.addEventListener('click', () => operation(remove, async () => {
+      if (!check.checked) throw new Error('보관본 삭제 확인란을 선택하세요. 원래 파일은 변경하지 않습니다.');
+      await api('/api/documents/remove', {id: doc.id, expectedRevision: libraryState.revision});
+      await refreshLibrary(); message('이 PC의 보관본과 검색 내용을 삭제했습니다.');
+    }));
+    actions.append(preview, sourceLink(doc), agree, remove); row.append(actions); return row;
+  }) : [element('div', '아직 넣은 문서가 없습니다. 위에서 실제 파일을 선택하세요. 예제는 이 목록에 포함되지 않습니다.', 'empty')]));
+  renderSource();
+}
+async function showPreview(id, offset = 0) {
+  const preview = await api(`/api/documents/${encodeURIComponent(id)}/text?offset=${offset}`);
+  $('document-preview').hidden = false;
+  $('preview-title').textContent = preview.title;
+  $('preview-info').textContent = `추출 단위 ${offset + 1}–${offset + preview.units.length} / ${preview.total} · 원본의 표·서식과 대조하세요.`;
+  $('preview-text').replaceChildren(...preview.units.map(unit => {
+    const label = preview.format === 'pdf' ? `${unit.location.page}쪽` : preview.format === 'xlsx' ? `${unit.location.sheet} · ${unit.location.cell}` : `구역 ${unit.location.section} · 문단 ${unit.location.paragraph}`;
+    const row = element('article', undefined, 'record'); row.append(element('h3', label, 'record-title'), element('p', unit.text, 'record-body')); return row;
+  }));
+  previewNext = preview.nextOffset === null ? null : {id, offset: preview.nextOffset};
+  $('preview-more').hidden = !previewNext;
+  $('document-preview').scrollIntoView({block: 'start'});
+}
+$('document-form').addEventListener('submit', event => {
+  event.preventDefault(); operation(event.submitter, async () => {
+    const file = $('document-file').files[0];
+    if (!file || !/\.(pdf|xlsx|hwpx)$/i.test(file.name)) throw new Error('PDF·XLSX·HWPX 파일을 선택하세요.');
+    if (!file.size || file.size > 20 * 1024 * 1024) throw new Error('문서는 0바이트보다 크고 20 MB 이하여야 합니다.');
+    const response = await fetch('/api/documents/upload', {method: 'POST', headers: {'content-type': 'application/octet-stream', 'x-csrf-token': status.csrf, 'x-document-name': encodeURIComponent(file.name)}, body: file});
+    const result = await response.json(); if (!response.ok) throw new Error(result.error || '문서를 가져오지 못했습니다.');
+    await refreshLibrary(); await showPreview(result.id);
+    $('document-file').value = ''; $('search-scope').value = 'library';
+    message(result.duplicate ? '이미 보관한 파일입니다. 기존 문서 내용을 표시합니다.' : '문서를 가져왔습니다. 추출 내용을 확인하고 「내 문서 검색」에서 파일 속 키워드를 검색하세요.');
+  });
+});
+$('refresh-library').addEventListener('click', event => operation(event.currentTarget, refreshLibrary));
+$('preview-more').addEventListener('click', event => operation(event.currentTarget, async () => { if (previewNext) await showPreview(previewNext.id, previewNext.offset); }));
+$('search-library').addEventListener('click', () => { if (busy) return; $('search-scope').value = 'library'; switchView('search'); $('search-query').focus(); });
+$('search-scope').addEventListener('change', () => { $('search-ai').replaceChildren(); $('search-results').replaceChildren(element('div', '선택한 자료에서 다시 검색하세요.', 'empty')); renderSource(); });
 $('date-label').textContent = new Intl.DateTimeFormat('ko-KR', {timeZone: 'Asia/Seoul', year: 'numeric', month: 'long', day: 'numeric', weekday: 'long'}).format(new Date());
-await operation(null, async () => { await refreshStatus(); await briefing(); });
+await operation(null, async () => { await refreshStatus(); await refreshLibrary(); if (status.source.kind !== 'demo') await briefing(); });
+if (status?.source.kind === 'demo') switchView('documents');
 setInterval(() => {
   if (busy || document.hidden) return;
   void operation(null, async () => {
     const revision = status?.revision; await refreshStatus();
+    await refreshLibrary();
     if (revision !== status.revision) { await changedData(); message('새로 가져온 자료가 반영되었습니다.'); }
   });
 }, 30000);

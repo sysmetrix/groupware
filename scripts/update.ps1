@@ -11,6 +11,8 @@ if ($LASTEXITCODE -ne 0) { throw 'GitHub fetch failed.' }
 if ($LASTEXITCODE -ne 0) { throw 'Update requires review: branch histories diverged.' }
 & npm.cmd ci
 if ($LASTEXITCODE -ne 0) { throw 'npm ci failed.' }
+& npm.cmd run setup:documents
+if ($LASTEXITCODE -ne 0) { throw 'Document setup failed. Install Python 3.14 and try again.' }
 & npm.cmd run check
 if ($LASTEXITCODE -ne 0) { throw 'Syntax checks failed.' }
 & npm.cmd test
