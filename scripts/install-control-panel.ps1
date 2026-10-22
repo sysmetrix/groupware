@@ -8,7 +8,7 @@ if (-not (Test-Path -LiteralPath $compiler)) { throw '.NET Framework C# compiler
 $output = Join-Path $projectRoot 'data/control-panel'
 New-Item -ItemType Directory -Path $output -Force | Out-Null
 $exe = Join-Path $output 'GroupwareControl.exe'
-& $compiler /nologo /target:winexe /codepage:65001 /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll /reference:System.Core.dll "/win32icon:$(Join-Path $projectRoot 'desktop/assets/groupware-control.ico')" "/out:$exe" (Join-Path $projectRoot 'desktop/GroupwareControl.cs')
+& $compiler /nologo /target:winexe /codepage:65001 /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll /reference:System.Core.dll "/win32icon:$(Join-Path $projectRoot 'desktop/assets/groupware-control.ico')" "/win32manifest:$(Join-Path $projectRoot 'desktop/app.manifest')" "/out:$exe" (Join-Path $projectRoot 'desktop/GroupwareControl.cs') (Join-Path $projectRoot 'desktop/ModernControls.cs')
 if ($LASTEXITCODE -ne 0) { throw 'Build failed. Close the control panel before rebuilding.' }
 if (-not $NoShortcut) {
     $desktop = [Environment]::GetFolderPath('DesktopDirectory')

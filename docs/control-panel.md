@@ -2,6 +2,10 @@
 
 바탕화면의 **Groupware AI Control**을 더블클릭한다. 콘솔 창 없이 실행된다.
 
+화면은 로컬 AI와 업무 도우미를 두 개의 카드로 나누고, 실행 상태를 색상과 문구로 함께 표시한다. 상단의 **업무 도우미 열기**는 앱이 실행 중일 때 활성화되며, 이미 실행 중인 서비스의 시작 버튼은 비활성화된다. 하단에서 전체 실행·종료와 창 닫기를 구분한다. 실행 기록에는 명령 결과와 오류가 표시된다. 키보드 Tab으로 버튼을 이동하고 Enter/Space로 실행할 수 있다.
+
+2026-10-23 디자인 갱신: [Microsoft Fluent 2의 elevation](https://fluent2.microsoft.design/elevation/), [색상](https://fluent2.microsoft.design/color), [Windows 표면 계층](https://learn.microsoft.com/en-us/windows/apps/design/signature-experiences/layering)을 참고했다. 둥근 표면·얇은 윤곽선·여백·상태별 색상을 자체 WinForms 컨트롤로 구현했으며 별도 UI 런타임 설치는 필요하지 않다. Windows DPI 인식과 기본 창 이동·크기 변경·최소화 동작을 유지한다.
+
 녹색 전원 표시와 금색 AI 별을 조합한 아이콘을 실행 파일·창·바탕화면 바로가기와 웹 파비콘에 사용한다. Windows 아이콘은 16–256px의 7개 크기를 포함한다. 디자인 원본은 `public/favicon.svg`, Windows 생성 스크립트는 `scripts/build-control-icon.ps1`이다. 디자인 수정 시 둘의 도형을 맞춘 뒤 생성 스크립트와 설치 스크립트를 차례로 실행한다.
 
 - **모두 시작**: 로컬 Ollama와 업무 도우미를 시작한다. 이미 관리 실행 중인 서비스는 유지한다.
