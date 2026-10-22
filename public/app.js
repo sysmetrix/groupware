@@ -1,5 +1,10 @@
 const $ = id => document.getElementById(id);
 let status, busy = false, currentView = 'briefing';
+let selectedAmount = null;
+function clearAmountEvidence() {
+  selectedAmount = null; $('amount-evidence').hidden = true; $('confirm-evidence-amount').checked = false;
+  document.querySelector('[name="attachmentAmount"]').disabled = false;
+}
 const labels = {briefing: ['내 업무 브리핑', '오늘의 업무를 한눈에.', '확인이 필요한 일과 근거를 함께 정리합니다.'], search: ['규정 · 서식 검색', '답변보다 먼저, 근거.', '유효한 문서에서 필요한 내용을 찾아 원문과 함께 확인하세요.'], validate: ['초안 사전 점검', '제출 전에 한 번 더.', '필수 입력과 날짜, 본문·첨부 입력 금액의 일치를 확인합니다.'], data: ['데이터 연결', '업무 자료를 연결하세요.', '합성 예제로 시작하고, 권한 내 자료를 가져와 검증하세요.'], audit: ['실행 기록', '무엇을 확인했는지 남깁니다.', '작업의 시각과 결과를 되짚어볼 수 있습니다.']};
 const formatTime = value => new Intl.DateTimeFormat('ko-KR', {timeZone: 'Asia/Seoul', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false}).format(new Date(value));
 function element(tag, text, className) { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (className) node.className = className; return node; }
@@ -107,23 +112,45 @@ $('download-report').addEventListener('click', event => operation(event.currentT
 $('search-form').addEventListener('submit', event => {
   event.preventDefault(); operation(event.submitter, async () => {
     const result = await api('/api/run', {task: 'search', query: $('search-query').value, useModel: $('search-model').checked});
-    $('search-results').replaceChildren(element('p', result.message, 'subtle'), ...result.hits.map(item => { const box = element('section', undefined, 'panel result-card'); box.append(record(item, 'document')); return box; }));
+    $('search-results').replaceChildren(element('p', result.message, 'subtle'), ...result.hits.map(item => {
+      const box = element('section', undefined, 'panel result-card'); box.append(record(item, 'document'));
+      if (item.selection) {
+        const choose = element('button', '초안 금액 대조에 선택', 'secondary'); choose.type = 'button';
+        choose.addEventListener('click', () => {
+          if (busy) return;
+          selectedAmount = {selection: item.selection, revision: result.datasetRevision};
+          $('amount-evidence-label').textContent = `${item.title} · ${item.locationLabel} · ${item.version}`;
+          $('amount-evidence-value').textContent = `선택 값 ${item.amountCandidate.toLocaleString('ko-KR')}원 · 원문에서 금액의 의미를 확인하세요.`;
+          $('amount-evidence').hidden = false; $('confirm-evidence-amount').checked = false;
+          document.querySelector('[name="attachmentAmount"]').disabled = true;
+          switchView('validate');
+        });
+        box.append(choose);
+      }
+      return box;
+    }));
     renderAi('search-ai', result.ai, result.references);
   });
 });
 $('draft-form').addEventListener('submit', event => {
   event.preventDefault(); operation(event.submitter, async () => {
-    const result = await api('/api/run', {task: 'validate', draft: Object.fromEntries(new FormData(event.target))});
+    if (selectedAmount && !$('confirm-evidence-amount').checked) throw new Error('선택한 숫자가 대조할 원 단위 금액인지 확인하세요.');
+    const request = {task: 'validate', draft: Object.fromEntries(new FormData(event.target))};
+    if (selectedAmount) { request.attachmentEvidence = {...selectedAmount.selection, confirmed: true}; request.expectedRevision = selectedAmount.revision; }
+    const result = await api('/api/run', request);
     const box = $('draft-results'); box.replaceChildren(element('h2', '점검 결과'), element('p', result.passed ? '기본 오류 없음 · 추가 확인 필요' : '입력 항목을 확인하세요', 'result-status' + (result.passed ? '' : ' failed')));
     for (const finding of result.findings) box.append(element('div', `${finding.level === 'error' ? '확인 필요' : '미확인'} · ${finding.message}`, 'check-item ' + finding.level));
     if (!result.findings.length) box.append(element('p', '입력된 기본 항목과 금액 대조를 통과했습니다.', 'subtle'));
     for (const note of result.limitations) box.append(element('p', note, 'subtle'));
+    for (const ref of result.references) box.append(record(ref, 'document'));
   });
 });
 async function changedData() {
+  clearAmountEvidence();
   await refreshStatus(); $('search-ai').replaceChildren(); $('search-results').replaceChildren(element('div', '데이터가 변경되었습니다. 다시 검색하세요.', 'empty')); $('draft-results').replaceChildren(element('div', '초안을 입력해 다시 점검하세요.', 'empty'));
   await briefing();
 }
+$('clear-amount-evidence').addEventListener('click', clearAmountEvidence);
 $('import-button').addEventListener('click', event => operation(event.currentTarget, async () => {
   if (!$('confirm-import').checked) throw new Error('현재 데이터 교체 확인란을 선택하세요.');
   const file = $('import-file').files[0]; if (!file) throw new Error('JSON 파일을 선택하세요.'); if (file.size > 5 * 1024 * 1024) throw new Error('파일은 5 MB 이하여야 합니다.');

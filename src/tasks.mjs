@@ -1,4 +1,5 @@
 import {AppError, date, effectiveDocument, kstDate, object, string, visibleItems} from './schema.mjs';
+import {attachmentMoney} from './money.mjs';
 
 const reference = item => ({id: item.id, title: item.title, type: item.type, status: item.status, url: item.url, updatedAt: item.updatedAt, version: item.version, ...(item.attachment ? {documentId: item.documentId, attachment: item.attachment, locationLabel: item.locationLabel} : {})});
 const locationLabel = (format, location) => format === 'pdf' ? `PDF ${location.page}쪽` : format === 'xlsx' ? `${location.sheet} · ${location.cell}` : `구역 ${location.section} · 문단 ${location.paragraph}`;
@@ -34,10 +35,12 @@ export function searchDocuments(dataset, query, now = new Date()) {
         const text = unit.text.normalize('NFKC').toLowerCase();
         const score = terms.reduce((sum, term) => sum + (text.includes(term) ? 1 : 0), 0);
         const first = terms.map(term => text.indexOf(term)).filter(pos => pos >= 0).sort((a, b) => a - b)[0] ?? 0;
+        const amount = attachmentMoney(unit.text);
         return {...reference(item), id: `attachment#${encodeURIComponent(item.id)}#${encodeURIComponent(attachment.id)}#${encodeURIComponent(unit.id)}`, documentId: item.id,
           title: `${item.title} · ${attachment.filename}`, score, excerpt: unit.text.slice(Math.max(0, first - 60), Math.max(0, first - 60) + 650),
           locationLabel: locationLabel(attachment.format, unit.location),
-          attachment: {id: attachment.id, filename: attachment.filename, format: attachment.format, sha256: attachment.sha256, location: unit.location, warnings: attachment.warnings}};
+          attachment: {id: attachment.id, filename: attachment.filename, format: attachment.format, sha256: attachment.sha256, location: unit.location, warnings: attachment.warnings},
+          ...(amount !== null ? {amountCandidate: amount, selection: {documentId: item.id, attachmentId: attachment.id, unitId: unit.id, version: item.version, updatedAt: item.updatedAt, sha256: attachment.sha256}} : {})};
       }));
       return [documentHit, ...attachments];
     }).filter(item => item.score > 0).sort((a, b) => b.score - a.score || b.updatedAt.localeCompare(a.updatedAt)).slice(0, 8);
@@ -76,12 +79,33 @@ export function validateDraft(input) {
 }
 
 export function runTask(dataset, request, now = new Date()) {
-  object(request, 'request', ['task', 'query', 'draft', 'useModel']);
+  object(request, 'request', ['task', 'query', 'draft', 'useModel', 'attachmentEvidence', 'expectedRevision']);
+  if (request.attachmentEvidence !== undefined && request.task !== 'validate') throw new AppError('첨부 금액 근거는 초안 점검에서만 사용합니다.');
   if (request.useModel !== undefined && typeof request.useModel !== 'boolean') throw new AppError('useModel은 boolean이어야 합니다.');
   let result;
   if (request.task === 'briefing') result = buildBriefing(dataset, now);
   else if (request.task === 'search') result = searchDocuments(dataset, request.query, now);
-  else if (request.task === 'validate') result = validateDraft(request.draft);
+  else if (request.task === 'validate') {
+    if (request.attachmentEvidence === undefined) result = validateDraft(request.draft);
+    else {
+      const selected = object(request.attachmentEvidence, 'attachmentEvidence', ['documentId', 'attachmentId', 'unitId', 'version', 'updatedAt', 'sha256', 'confirmed']);
+      if (selected.confirmed !== true) throw new AppError('선택한 숫자가 대조할 원 단위 금액인지 확인하세요.');
+      for (const key of ['documentId', 'attachmentId', 'unitId', 'version', 'updatedAt', 'sha256']) string(selected[key], key, 100);
+      const doc = visibleItems(dataset).find(x => x.id === selected.documentId && x.type === 'document' && effectiveDocument(x, kstDate(now)));
+      const att = doc?.attachments?.find(x => x.id === selected.attachmentId);
+      const unit = att?.units.find(x => x.id === selected.unitId);
+      if (!unit || doc.version !== selected.version || doc.updatedAt !== selected.updatedAt || att.sha256 !== selected.sha256 || att.documentVersion !== doc.version || att.documentUpdatedAt !== doc.updatedAt) throw new AppError('첨부 근거가 변경되었거나 접근할 수 없습니다. 다시 검색해 선택하세요.', 409);
+      const amount = attachmentMoney(unit.text);
+      if (amount === null) throw new AppError('선택한 근거는 단일 정수 금액으로 해석할 수 없습니다.');
+      // Reject unknown draft fields before replacing the user-entered comparison value.
+      validateDraft(request.draft);
+      result = validateDraft({...request.draft, attachmentAmount: String(amount)});
+      result.checked = result.checked.map(x => x === '입력 금액 대조' ? '선택한 첨부 추출값과 본문 금액 대조' : x);
+      result.limitations[0] = '가져온 첨부의 선택 단위와 비교합니다. 원본 파일의 최신성·합계·통화·숫자의 업무 의미는 별도 확인하세요.';
+      result.evidenceAmount = amount;
+      result.references = [{...reference(doc), id: `attachment#${encodeURIComponent(doc.id)}#${encodeURIComponent(att.id)}#${encodeURIComponent(unit.id)}`, documentId: doc.id, title: `${doc.title} · ${att.filename}`, excerpt: unit.text, locationLabel: locationLabel(att.format, unit.location), attachment: {id: att.id, filename: att.filename, format: att.format, sha256: att.sha256, location: unit.location, warnings: att.warnings}}];
+    }
+  }
   else throw new AppError('지원하는 작업은 briefing, search, validate입니다.');
   return {...result, trace: [{tool: 'scope.filter', status: 'completed'}, {tool: request.task === 'briefing' ? 'work.briefing' : request.task === 'search' ? 'documents.search' : 'draft.validate', status: 'completed'}]};
 }

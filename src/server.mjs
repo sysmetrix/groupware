@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {randomBytes, timingSafeEqual} from 'node:crypto';
-import {AppError, visibleItems} from './schema.mjs';
+import {AppError, object, visibleItems} from './schema.mjs';
 import {createDemoDataset} from './demo.mjs';
 import {createStore} from './store.mjs';
 import {runTask} from './tasks.mjs';
@@ -68,7 +68,10 @@ export async function createApp({dataDir = path.resolve('data'), configFile = pa
         if (activeRuns >= 2) throw new AppError('진행 중인 작업이 있습니다. 잠시 뒤 다시 시도하세요.', 429);
         activeRuns += 1;
         try {
-          const input = await jsonBody(req), snapshot = store.snapshot();
+          const input = object(await jsonBody(req), 'request'), snapshot = store.snapshot();
+          if (input.expectedRevision !== undefined && (!Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 0)) throw new AppError('자료 버전 번호를 확인하세요.');
+          if (input.attachmentEvidence !== undefined && input.expectedRevision === undefined) throw new AppError('첨부 선택 시점의 자료 버전이 필요합니다.');
+          if (input.expectedRevision !== undefined && input.expectedRevision !== snapshot.revision) throw new AppError('자료가 변경되었습니다. 다시 검색해 선택하세요.', 409);
           const result = runTask(snapshot.dataset, input);
           result.datasetRevision = snapshot.revision; result.source = snapshot.dataset.source;
           if (input.useModel) {

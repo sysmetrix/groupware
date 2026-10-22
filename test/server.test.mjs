@@ -8,6 +8,7 @@ import http from 'node:http';
 import {createApp} from '../src/server.mjs';
 import {createDemoDataset} from '../src/demo.mjs';
 import {atomicJson, defaultAutomation} from '../src/automation.mjs';
+import {bindExtraction} from '../src/attachments.mjs';
 
 async function fixture(t, options = {}) {
   const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'groupware-test-'));
@@ -48,6 +49,25 @@ test('audit omits queries and draft bodies', async t => {
   await f.post('/api/run', {task: 'search', query: 'private-query-marker'});
   await f.post('/api/run', {task: 'validate', draft: {title: 'private-draft-marker'}});
   const log = await fs.readFile(path.join(f.dataDir, 'audit.jsonl'), 'utf8'); assert.equal(log.includes('private-'), false);
+});
+
+test('HTTP attachment selection requires current revision and does not audit amounts or text', async t => {
+  const f = await fixture(t), now = new Date();
+  const dataset = bindExtraction(createDemoDataset(now), 'doc-001', 'test-amount', {schemaVersion: 1, filename: 'synthetic.xlsx', format: 'xlsx', sha256: 'c'.repeat(64), warnings: ['XLSX_RAW_CELL_VALUES'], units: [{id: 'B2', location: {sheet: 'amount-test', cell: 'B2'}, text: '987654321'}]}, now);
+  await f.post('/api/import', dataset);
+  const result = await (await f.post('/api/run', {task: 'search', query: '987654321'})).json();
+  const selection = result.hits.find(x => x.selection).selection;
+  const request = {task: 'validate', draft: {title: 'fixture', purpose: 'fixture', businessDate: '2026-10-23', amount: '900', attachmentNames: 'synthetic.xlsx'}, attachmentEvidence: {...selection, confirmed: true}};
+  assert.equal((await f.post('/api/run', request)).status, 400);
+  request.expectedRevision = result.datasetRevision;
+  const checked = await (await f.post('/api/run', request)).json();
+  assert.equal(checked.evidenceAmount, 987654321); assert.equal(checked.references.length, 1);
+  await f.post('/api/import', dataset);
+  assert.equal((await f.post('/api/run', request)).status, 409);
+  request.expectedRevision += 1; request.attachmentEvidence.confirmed = false;
+  assert.equal((await f.post('/api/run', request)).status, 400);
+  assert.equal((await fs.readFile(path.join(f.dataDir, 'audit.jsonl'), 'utf8')).includes('987654321'), false);
+  assert.equal((await f.post('/api/run', null)).status, 400);
 });
 test('AI unavailability returns evidence and a partial audit outcome', async t => {
   const f = await fixture(t);

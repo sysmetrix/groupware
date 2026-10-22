@@ -45,4 +45,6 @@
 
 실제 그룹웨어 연동의 권한·페이지 완전성·문서 버전·조회 부작용은 `live-integration.md`를 따라 검증한다. 로컬 스냅샷 파일의 ACL 값은 서버 권한 검증의 대체 수단이 아니다.
 
-다른 PC 설치·업데이트 스크립트는 기존 설정을 보존한다. Windows 임시 작업 등록·주체·로그온 트리거·Start-ScheduledTask로 실제 서버 실행·HTTP 응답·제거까지 검증했다. 실제 로그아웃/로그인은 수행하지 않았다. `scripts/windows-verify-autostart.ps1`로 대상 PC에서 재현할 수 있다. 로컬 모델은 미설정이며 `npm run doctor:model`로 확인한다. 실제 그룹웨어 커넥터는 미구현이다. [브라우저 진단](browser-recovery.md)과 [수집 계약](sync-contract.md)을 참고한다.
+다른 PC 설치·업데이트 스크립트는 기존 설정을 보존한다. Windows 임시 작업 등록·주체·로그온 트리거·Start-ScheduledTask로 실제 서버 실행·HTTP 응답·제거까지 검증했다. 실제 로그아웃/로그인은 수행하지 않았다. `scripts/windows-verify-autostart.ps1`로 대상 PC에서 재현할 수 있다. 2026-10-23 로컬 모델 설치·합성 추론과 평가 3종을 통과했다. [모델 검증](local-model.md)을 참고한다. 실제 그룹웨어 커넥터는 미구현이다. [브라우저 진단](browser-recovery.md)과 [수집 계약](sync-contract.md)을 참고한다.
+
+2026-10-23 추가 구현판: Node 73개·Python 9개 통과. 첨부 금액 대조의 서버 재조회, 입력값 위조·권한·버전·자료 교체 검사를 포함한다. 실제 모델 평가는 CI와 분리된 합성 사례 3종이다.
