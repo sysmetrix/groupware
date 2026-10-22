@@ -19,9 +19,12 @@ flowchart LR
   Inbox --> Scheduler[사용자·조직·시각 검사 / 정기 확인]
   Scheduler --> Store
   Scheduler --> Report[당일 브리핑 보고서]
+  Attachment[로컬 PDF / XLSX / HWPX] --> Extract[선택형 Python 추출 CLI]
+  Extract --> Bind[문서 ACL·버전·갱신 시각 연결]
+  Bind --> Inbox
 ```
 
-Node.js 표준 라이브러리만 사용한다. UI는 프레임워크 없는 JavaScript와 CSS로 구성했다. 외부 CDN·폰트·텔레메트리를 로드하지 않는다. 동적 텍스트는 `textContent`로 표시하며 모델 응답의 HTML/Markdown을 실행하지 않는다.
+기본 앱은 Node.js 표준 라이브러리만 사용한다. 선택형 첨부 CLI는 Python·pypdf로 추출하고 검색 단위를 JSON에 저장한다. UI는 프레임워크 없는 JavaScript와 CSS로 구성했다. 외부 CDN·폰트·텔레메트리를 로드하지 않는다. 동적 텍스트는 `textContent`로 표시하며 모델 응답의 HTML/Markdown을 실행하지 않는다.
 
 | 파일 | 책임 |
 |---|---|
@@ -35,6 +38,8 @@ Node.js 표준 라이브러리만 사용한다. UI는 프레임워크 없는 Jav
 | `src/recovery.mjs` | 오류 분류, 안전한 복구 안내, 일시적 오류의 대기 간격 계산 |
 | `src/sync.mjs` | 정규화 페이지 완전성 검사, 전체·증분 병합, 삭제·권한 회수 반영 |
 | `src/csv.mjs` | UTF-8 CSV/TSV 파싱, 명시적 열 매핑과 데이터 계약 변환 |
+| `src/attachments.mjs` | 시간 제한을 둔 Python 실행, 원문 버전·갱신 시각에 추출 결과 연결 |
+| `scripts/extract-attachment.py` | PDF 페이지·XLSX 셀·HWPX 구역/문단의 로컬 텍스트 추출 |
 | `scripts/` | 설치·진단·CSV 변환·수동 자동화 실행·Windows 업데이트와 로그인 실행 등록 |
 
 ## 적용한 REA 방법론
@@ -56,6 +61,8 @@ Node.js 표준 라이브러리만 사용한다. UI는 프레임워크 없는 Jav
 9. GitHub에는 코드를 공유하고 PC별 설정·실제 자료·보고서는 제외한다. 서버는 단일 PC·단일 프로세스로 실행하며 공유 드라이브 동시 쓰기를 지원하지 않는다.
 
 ## 확장 방향
+
+로컬 [첨부 추출과 검색](attachments.md)은 별도 영속 인덱스 없이 스냅샷에 포함한다. 부모의 삭제·권한 회수 입력이 반영되면 첨부 검색 근거도 제거된다. 파일 해시는 식별자이며 입력 메타데이터의 진위나 서버 권한을 증명하지 않는다. 문서에 기록된 버전/갱신 시각과 첨부 메타데이터가 달라지면 재추출이 필요하다.
 
 정규화된 페이지 수집 기반은 후속 구현했다. `scripts/sync-pages.mjs`가 로컬 페이지 묶음을 검증하고 완성된 JSON을 게시한 뒤 수집 상태를 저장한다. 실제 제품의 인증·API 어댑터는 아니다. [수집 계약](sync-contract.md)에 전체/증분 의미, 잠금과 두 파일 커밋의 한계를 정리했다.
 

@@ -21,7 +21,7 @@ Windows에서는 clone 후 `powershell -NoProfile -File scripts/install.ps1`로 
 
 ## 내 자료와 정기 브리핑 연결
 
-1. 본인이 열람할 수 있는 자료만 내보낸다. JSON은 [데이터 계약](data-contract.md), CSV는 [변환 안내](csv-import.md)를 따른다. Excel은 CSV UTF-8로 저장할 수 있으나 PDF/HWP/XLSX 직접 추출은 지원하지 않는다.
+1. 본인이 열람할 수 있는 자료만 내보낸다. JSON은 [데이터 계약](data-contract.md), CSV는 [변환 안내](csv-import.md)를 따른다. Excel은 CSV UTF-8로 저장할 수 있다. PDF/XLSX/HWPX의 텍스트 검색은 선택형 [첨부 추출 CLI](attachments.md)를 설치한다. 구형 HWP와 OCR은 미지원이다.
 2. 검증한 전체 스냅샷을 `data/inbox/dataset.json`에 둔다. 네 종류의 자료를 함께 사용하려면 한 스냅샷의 `items`에 모두 포함해야 한다. 새 파일은 **전체 교체**이며 증분 합치기가 아니다. 자동화가 켜진 상태에서는 UI로 가져온 다른 자료가 다음 확인에서 입력 파일로 교체된다.
 3. `config/automation.json`을 다음 형태로 수정한다. 사용자·조직 식별자는 JSON의 `principal`과 정확히 같아야 한다. 아래 값은 예시다.
 

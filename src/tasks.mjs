@@ -1,6 +1,7 @@
 import {AppError, date, effectiveDocument, kstDate, object, string, visibleItems} from './schema.mjs';
 
-const reference = item => ({id: item.id, title: item.title, type: item.type, status: item.status, url: item.url, updatedAt: item.updatedAt, version: item.version});
+const reference = item => ({id: item.id, title: item.title, type: item.type, status: item.status, url: item.url, updatedAt: item.updatedAt, version: item.version, ...(item.attachment ? {documentId: item.documentId, attachment: item.attachment, locationLabel: item.locationLabel} : {})});
+const locationLabel = (format, location) => format === 'pdf' ? `PDF ${location.page}쪽` : format === 'xlsx' ? `${location.sheet} · ${location.cell}` : `구역 ${location.section} · 문단 ${location.paragraph}`;
 export function buildBriefing(dataset, now = new Date()) {
   const today = kstDate(now), visible = visibleItems(dataset);
   const endDate = new Date(Date.parse(today + 'T00:00:00Z') + 7 * 86400_000).toISOString().slice(0, 10);
@@ -21,16 +22,26 @@ export function searchDocuments(dataset, query, now = new Date()) {
   const terms = [...new Set(query.normalize('NFKC').toLowerCase().match(/[\p{L}\p{N}]+/gu) || [])];
   if (!terms.length) throw new AppError('검색할 단어를 입력하세요.');
   const hits = visibleItems(dataset).filter(item => item.type === 'document' && effectiveDocument(item, kstDate(now)))
-    .map(item => {
+    .flatMap(item => {
       const title = item.title.normalize('NFKC').toLowerCase();
       const body = item.body.normalize('NFKC').toLowerCase();
       const tags = item.tags.join(' ').normalize('NFKC').toLowerCase();
       const score = terms.reduce((sum, term) => sum + (title.includes(term) ? 5 : 0) + (tags.includes(term) ? 3 : 0) + (body.includes(term) ? 1 : 0), 0);
       const first = terms.map(term => body.indexOf(term)).filter(pos => pos >= 0).sort((a, b) => a - b)[0] ?? 0;
       // Use original text as evidence, never manufacture an answer when matching fails.
-      return {...reference(item), score, excerpt: item.body.slice(Math.max(0, first - 60), Math.max(0, first - 60) + 650), effectiveFrom: item.effectiveFrom, effectiveTo: item.effectiveTo};
+      const documentHit = {...reference(item), score, excerpt: item.body.slice(Math.max(0, first - 60), Math.max(0, first - 60) + 650), effectiveFrom: item.effectiveFrom, effectiveTo: item.effectiveTo};
+      const attachments = (item.attachments || []).flatMap(attachment => attachment.units.map(unit => {
+        const text = unit.text.normalize('NFKC').toLowerCase();
+        const score = terms.reduce((sum, term) => sum + (text.includes(term) ? 1 : 0), 0);
+        const first = terms.map(term => text.indexOf(term)).filter(pos => pos >= 0).sort((a, b) => a - b)[0] ?? 0;
+        return {...reference(item), id: `attachment#${encodeURIComponent(item.id)}#${encodeURIComponent(attachment.id)}#${encodeURIComponent(unit.id)}`, documentId: item.id,
+          title: `${item.title} · ${attachment.filename}`, score, excerpt: unit.text.slice(Math.max(0, first - 60), Math.max(0, first - 60) + 650),
+          locationLabel: locationLabel(attachment.format, unit.location),
+          attachment: {id: attachment.id, filename: attachment.filename, format: attachment.format, sha256: attachment.sha256, location: unit.location, warnings: attachment.warnings}};
+      }));
+      return [documentHit, ...attachments];
     }).filter(item => item.score > 0).sort((a, b) => b.score - a.score || b.updatedAt.localeCompare(a.updatedAt)).slice(0, 8);
-  return {task: 'search', query, observedAt: now.toISOString(), hits, references: hits.map(reference), message: hits.length ? `${hits.length}개의 유효한 문서에서 검색어와 일치하는 근거를 찾았습니다.` : '접근 가능한 유효 문서에서 일치하는 근거를 찾지 못했습니다.'};
+  return {task: 'search', query, observedAt: now.toISOString(), hits, references: hits.map(reference), message: hits.length ? `유효한 문서·첨부에서 검색어와 일치하는 근거 ${hits.length}건을 찾았습니다.` : '접근 가능한 유효 문서에서 일치하는 근거를 찾지 못했습니다.'};
 }
 
 export function validateDraft(input) {

@@ -4,7 +4,7 @@ export class AppError extends Error {
 
 export const itemTypes = ['approval', 'notice', 'document', 'schedule'];
 export const statuses = ['pending', 'in-progress', 'completed', 'published', 'cancelled'];
-const itemKeys = ['id', 'type', 'title', 'body', 'organizationId', 'allowedUserIds', 'status', 'dueDate', 'updatedAt', 'url', 'startsAt', 'endsAt', 'effectiveFrom', 'effectiveTo', 'version', 'tags'];
+const itemKeys = ['id', 'type', 'title', 'body', 'organizationId', 'allowedUserIds', 'status', 'dueDate', 'updatedAt', 'url', 'startsAt', 'endsAt', 'effectiveFrom', 'effectiveTo', 'version', 'tags', 'attachments'];
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 
 export function object(value, name, keys) {
@@ -48,6 +48,41 @@ function sourceUrl(value, baseUrl) {
   return url.href;
 }
 
+const attachmentWarnings = ['PDF_LAYOUT_NOT_PRESERVED', 'PDF_TEXTLESS_PAGES', 'XLSX_RAW_CELL_VALUES', 'XLSX_HIDDEN_SHEETS_SKIPPED', 'XLSX_FORMULAS_NOT_EVALUATED', 'HWPX_LAYOUT_NOT_PRESERVED'];
+function validateAttachments(values, parent) {
+  if (parent.type !== 'document' || !parent.version || !Array.isArray(values) || values.length > 10) throw new AppError('첨부 근거는 버전이 있는 document에 최대 10개까지 연결합니다.');
+  const seen = new Set(); let total = 0;
+  return values.map(value => {
+    object(value, 'attachment', ['id', 'filename', 'format', 'sha256', 'documentVersion', 'documentUpdatedAt', 'extractedAt', 'warnings', 'units']);
+    const id = string(value.id, 'attachment.id', 100), filename = string(value.filename, 'filename', 200);
+    if (!/^[a-zA-Z0-9_.:-]+$/.test(id) || seen.has(id) || /[\\/\x00-\x1f]/.test(filename)) throw new AppError('첨부 ID 중복 또는 파일 이름 형식을 확인하세요.');
+    seen.add(id);
+    if (!['pdf', 'xlsx', 'hwpx'].includes(value.format) || !filename.toLowerCase().endsWith('.' + value.format) || !/^[a-f0-9]{64}$/.test(value.sha256)) throw new AppError('첨부 형식과 SHA-256을 확인하세요.');
+    const documentUpdatedAt = timestamp(value.documentUpdatedAt, 'documentUpdatedAt');
+    if (value.documentVersion !== parent.version || documentUpdatedAt !== parent.updatedAt) throw new AppError('첨부 근거의 문서 버전·시각이 현재 원문과 다릅니다. 다시 추출하세요.');
+    if (!Array.isArray(value.warnings) || value.warnings.some(x => !attachmentWarnings.includes(x)) || value.warnings.length > 6) throw new AppError('첨부 추출 경고 형식을 확인하세요.');
+    if (!Array.isArray(value.units) || !value.units.length || value.units.length > 1000) throw new AppError('첨부 추출 단위는 1~1,000개입니다.');
+    const unitIds = new Set();
+    const units = value.units.map(unit => {
+      object(unit, 'attachment unit', ['id', 'location', 'text']);
+      const unitId = string(unit.id, 'unit.id', 100), text = string(unit.text, 'unit.text', 30000);
+      if (!/^[a-zA-Z0-9_.:-]+$/.test(unitId) || unitIds.has(unitId)) throw new AppError('첨부 추출 단위 ID가 중복되거나 형식이 잘못됐습니다.');
+      unitIds.add(unitId); total += text.length;
+      if (total > 300000) throw new AppError('문서별 첨부 텍스트는 최대 300,000자입니다.');
+      const keys = value.format === 'pdf' ? ['page'] : value.format === 'xlsx' ? ['sheet', 'cell'] : ['section', 'paragraph'];
+      object(unit.location, 'location', keys);
+      const location = {};
+      for (const key of keys) {
+        if (key === 'sheet') location[key] = string(unit.location[key], key, 100);
+        else if (key === 'cell') { if (!/^[A-Z]{1,3}[1-9][0-9]{0,6}$/.test(unit.location[key])) throw new AppError('셀 위치를 확인하세요.'); location[key] = unit.location[key]; }
+        else { if (!Number.isInteger(unit.location[key]) || unit.location[key] < 1 || unit.location[key] > 10000) throw new AppError('페이지·문단 위치를 확인하세요.'); location[key] = unit.location[key]; }
+      }
+      return {id: unitId, location, text};
+    });
+    return {id, filename, format: value.format, sha256: value.sha256, documentVersion: parent.version, documentUpdatedAt, extractedAt: timestamp(value.extractedAt, 'extractedAt'), warnings: [...new Set(value.warnings)], units};
+  });
+}
+
 export function validateDataset(value) {
   object(value, 'dataset', ['schemaVersion', 'source', 'principal', 'items']);
   if (value.schemaVersion !== 1) throw new AppError('schemaVersion은 1이어야 합니다.');
@@ -82,6 +117,7 @@ export function validateDataset(value) {
     };
     if (result.effectiveFrom && result.effectiveTo && result.effectiveFrom > result.effectiveTo) throw new AppError('문서의 유효 기간이 뒤바뀌었습니다.');
     if (result.type === 'schedule' && (!result.startsAt || !result.endsAt || result.startsAt >= result.endsAt)) throw new AppError('일정에는 시작보다 늦은 종료 시각이 필요합니다.');
+    if (item.attachments !== undefined) result.attachments = validateAttachments(item.attachments, result);
     return result;
   });
   return {schemaVersion: 1, source, principal, items};

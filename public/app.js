@@ -39,6 +39,12 @@ function sourceLink(item) {
   if (!item.url) return element('span', '원문 링크 없음', 'subtle');
   const link = element('a', '원문 확인 ↗', 'source-link'); link.href = item.url; link.target = '_blank'; link.rel = 'noopener noreferrer'; return link;
 }
+function attachmentMeta(item, target) {
+  if (!item.attachment) return;
+  target.append(element('span', item.locationLabel));
+  const labels = {PDF_LAYOUT_NOT_PRESERVED: '표·읽기 순서 확인 필요', PDF_TEXTLESS_PAGES: '텍스트 없는 페이지 제외', XLSX_RAW_CELL_VALUES: '셀 원시값 · 날짜·서식 확인 필요', XLSX_FORMULAS_NOT_EVALUATED: '수식 계산 안 함', XLSX_HIDDEN_SHEETS_SKIPPED: '숨긴 시트 제외', HWPX_LAYOUT_NOT_PRESERVED: 'XML 문단 위치 · 실제 쪽 번호 아님'};
+  for (const warning of item.attachment.warnings) target.append(element('span', labels[warning] || warning, 'subtle'));
+}
 function record(item, kind) {
   const box = element('article', undefined, 'record'); box.append(element('h3', item.title, 'record-title'), element('p', item.excerpt, 'record-body'));
   const meta = element('div', undefined, 'record-meta');
@@ -46,6 +52,7 @@ function record(item, kind) {
   if (item.dueDate) meta.append(element('span', `기한 ${item.dueDate}`));
   if (item.startsAt) meta.append(element('span', `${formatTime(item.startsAt)} – ${formatTime(item.endsAt)}`));
   if (item.version) meta.append(element('span', item.version));
+  attachmentMeta(item, meta);
   meta.append(sourceLink(item)); box.append(meta); return box;
 }
 function fillList(id, items, kind, empty) { $(id).replaceChildren(...(items.length ? items.map(item => record(item, kind)) : [element('div', empty, 'empty')])); }
@@ -55,7 +62,7 @@ function renderAi(id, ai, references) {
   for (const claim of ai.claims) {
     box.append(element('p', claim.text));
     const cite = element('div', undefined, 'record-meta');
-    for (const sourceId of claim.sourceIds) { const ref = references.find(x => x.id === sourceId); if (ref) { cite.append(element('span', ref.title), sourceLink(ref)); } }
+    for (const sourceId of claim.sourceIds) { const ref = references.find(x => x.id === sourceId); if (ref) { cite.append(element('span', ref.title), sourceLink(ref)); attachmentMeta(ref, cite); } }
     box.append(cite);
   }
   $(id).append(box);
