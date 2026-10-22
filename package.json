@@ -13,6 +13,7 @@
     "setup": "node scripts/setup.mjs",
     "setup:documents": "node scripts/setup-documents.mjs",
     "services:status": "powershell -NoProfile -File scripts/windows-services.ps1 -Action Status",
+    "setup:control": "powershell -NoProfile -File scripts/install-control-panel.ps1",
     "services:start": "powershell -NoProfile -File scripts/windows-services.ps1 -Action Start",
     "services:stop": "powershell -NoProfile -File scripts/windows-services.ps1 -Action Stop",
     "doctor": "node --env-file-if-exists=.env scripts/doctor.mjs",

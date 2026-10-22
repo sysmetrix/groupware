@@ -26,6 +26,8 @@ npm start
 
 Windows 백그라운드 실행은 `npm run services:status`, `npm run services:start`, `npm run services:stop`으로 관리합니다. 이 명령이 직접 시작한 프로세스만 종료하며, 기존 터미널·작업 스케줄러로 시작한 서버는 인수하지 않습니다. [실행·종료 안내](docs/runtime-control.md)를 참고하세요. 앱의 **데이터 연결 → 이 PC의 실행 상태**는 모델 설정·서버 실행·GPU 메모리 로딩을 구분합니다.
 
+**버튼으로 실행·종료하려면** `npm run setup:control`을 실행하세요. 바탕화면에 **Groupware AI Control** 바로가기가 생성됩니다. [프로그램 사용법](docs/control-panel.md)
+
 ## 구현된 기능
 
 | 기능 | 현재 동작 |

@@ -19,6 +19,8 @@ jobs:
       - run: npm run setup
       - run: npm run doctor
       - run: npm run check
+      - if: runner.os == 'Windows'
+        run: powershell -NoProfile -File scripts/install-control-panel.ps1 -NoShortcut
       - uses: actions/setup-python@v6
         with:
           python-version: '3.14'
