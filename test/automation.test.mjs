@@ -30,7 +30,84 @@ test('automation imports, filters report evidence, deduplicates and survives res
   await f.automation.run(); assert.equal(f.store.snapshot().revision, 1);
   assert.equal(await fs.readFile(path.join(f.args.dataDir, 'reports/latest.json'), 'utf8'), first);
   const restarted = await createAutomation({...f.args, store: await createStore(f.args.dataDir)});
+  assert.equal(restarted.status().reportAvailable, false);
+  assert.throws(() => restarted.latest(), /보고서/);
   await restarted.run(); assert.deepEqual(restarted.latest(), f.automation.latest());
+});
+
+test('restart cannot expose a saved report when the current input is missing', async t => {
+  const f = await fixture(t); await f.automation.run(); await fs.unlink(f.inputFile);
+  const restarted = await createAutomation({...f.args, store: await createStore(f.args.dataDir)});
+  const state = await restarted.run();
+  assert.equal(state.errorCode, 'INPUT_MISSING'); assert.equal(state.reportAvailable, false);
+  assert.throws(() => restarted.latest(), /보고서/);
+});
+
+test('older but fresh export cannot replace persisted newer data and a corrected file recovers', async t => {
+  const f = await fixture(t); await f.automation.run();
+  const current = f.store.snapshot();
+  f.dataset.source.exportedAt = '2026-10-21T23:00:00Z'; await atomicJson(f.inputFile, f.dataset);
+  const restoredStore = await createStore(f.args.dataDir);
+  const restarted = await createAutomation({...f.args, store: restoredStore});
+  const state = await restarted.run();
+  assert.equal(state.errorCode, 'SOURCE_ROLLBACK'); assert.equal(state.retryable, false);
+  assert.deepEqual(restoredStore.snapshot().dataset, current.dataset);
+  await restarted.run();
+  const failures = (await restoredStore.history()).filter(x => x.action === 'automation.sync');
+  assert.equal(failures.length, 1); assert.equal(failures[0].errorCode, 'SOURCE_ROLLBACK'); assert.match(failures[0].runId, /^[a-f0-9-]{36}$/);
+  await atomicJson(f.inputFile, current.dataset);
+  const recovered = await restarted.run();
+  assert.equal(recovered.reportAvailable, true); assert.equal(recovered.consecutiveFailures, 0);
+  assert.equal(recovered.errorCode, null); assert.equal(recovered.retryDelaySeconds, 60);
+});
+
+async function untilScheduled(queue) {
+  for (let i = 0; i < 200 && !queue.length; i++) await new Promise(resolve => setTimeout(resolve, 5));
+  assert.equal(queue.length, 1, 'one next check must be scheduled');
+}
+
+test('scheduler waits for each run, backs off on transient IO, then returns to normal after recovery', async t => {
+  const f = await fixture(t), queue = [];
+  let failures = 2;
+  const store = {...f.store, replace: async data => {
+    if (failures-- > 0) throw Object.assign(new Error('private path'), {code: 'EBUSY'});
+    return f.store.replace(data);
+  }};
+  const timers = {setTimeout: (callback, delay) => { const entry = {callback, delay}; queue.push(entry); return entry; }, clearTimeout: entry => { const at = queue.indexOf(entry); if (at >= 0) queue.splice(at, 1); }};
+  const automation = await createAutomation({...f.args, store, timers}); t.after(() => automation.stop());
+  automation.start(); automation.start();
+  await untilScheduled(queue); assert.equal(queue[0].delay, 120000);
+  assert.equal(automation.status().errorCode, 'IO_TEMPORARY'); assert.equal(automation.status().reportAvailable, false);
+  await queue.shift().callback(); assert.equal(queue[0].delay, 240000);
+  await queue.shift().callback(); assert.equal(queue[0].delay, 60000);
+  assert.equal(automation.status().consecutiveFailures, 0); assert.equal(automation.status().reportAvailable, true);
+  automation.stop(); assert.equal(queue.length, 0); assert.equal(automation.status().nextCheckAt, null);
+});
+
+test('stop and restart while a run is in flight create only one next timer', async t => {
+  const f = await fixture(t), queue = [];
+  let entered, release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const inside = new Promise(resolve => { entered = resolve; });
+  const store = {...f.store, replace: async data => { entered(); await gate; return f.store.replace(data); }};
+  const timers = {setTimeout: (callback, delay) => { const entry = {callback, delay}; queue.push(entry); return entry; }, clearTimeout: () => { queue.length = 0; }};
+  const automation = await createAutomation({...f.args, store, timers}); t.after(() => automation.stop());
+  automation.start(); await inside; assert.equal(queue.length, 0);
+  automation.stop(); automation.start(); release();
+  await untilScheduled(queue); assert.equal(f.store.snapshot().revision, 1);
+  automation.stop(); assert.equal(queue.length, 0);
+});
+
+test('a report whose completion audit failed is withheld and retried on the next run', async t => {
+  const f = await fixture(t); let fail = true;
+  const store = {...f.store, audit: async event => {
+    if (event.action === 'automation.briefing' && fail) { fail = false; throw Object.assign(new Error('private'), {code: 'EBUSY'}); }
+    return f.store.audit(event);
+  }};
+  const automation = await createAutomation({...f.args, store});
+  assert.equal((await automation.run()).reportAvailable, false);
+  assert.equal((await automation.run()).reportAvailable, true);
+  assert.equal((await f.store.history()).filter(x => x.action === 'automation.briefing').length, 1);
 });
 test('changed data is processed after the daily deadline and invalidates an earlier report', async t => {
   const f = await fixture(t); await f.automation.run();
@@ -38,6 +115,13 @@ test('changed data is processed after the daily deadline and invalidates an earl
   await f.automation.run(); assert.equal(f.automation.latest().briefing.counts.pending, 1);
   await f.store.replace(createDemoDataset());
   assert.equal(f.automation.status().reportAvailable, false); assert.throws(() => f.automation.latest(), /보고서/);
+  const concurrent = await createAutomation({...f.args, store: {...f.store, audit: async event => {
+    await f.store.audit(event);
+    if (event.action === 'automation.briefing') await f.store.replace(createDemoDataset());
+  }}});
+  const result = await concurrent.run({forceReport: true});
+  assert.equal(result.errorCode, 'SNAPSHOT_CHANGED'); assert.equal(result.reportAvailable, false);
+  assert.equal(result.retryable, true);
 });
 test('missing, malformed, stale, future and wrong-principal input preserve the last dataset', async t => {
   const f = await fixture(t); await f.automation.run(); const revision = f.store.snapshot().revision;

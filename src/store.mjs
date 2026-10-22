@@ -20,6 +20,8 @@ export async function createStore(directory) {
   }
   async function log(event) {
     const record = {id: randomUUID(), at: new Date().toISOString(), action: event.action, outcome: event.outcome, count: event.count ?? null};
+    if (typeof event.runId === 'string' && /^[a-f0-9-]{36}$/.test(event.runId)) record.runId = event.runId;
+    if (typeof event.errorCode === 'string' && /^[A-Z_]{1,40}$/.test(event.errorCode)) record.errorCode = event.errorCode;
     // Deliberately omit queries, document bodies, principal identifiers, and credentials.
     await fs.appendFile(auditFile, JSON.stringify(record) + '\n', {mode: 0o600});
   }

@@ -28,3 +28,13 @@ test('snapshot mutation cannot change the store', async t => {
   const store = await createStore(await directory(t)), snapshot = store.snapshot(); snapshot.dataset.items.length = 0;
   assert.ok(store.snapshot().dataset.items.length > 0);
 });
+
+test('audit keeps a run identifier and error code but drops raw errors and input content', async t => {
+  const store = await createStore(await directory(t));
+  await store.audit({action: 'automation.sync', outcome: 'failed', runId: '11111111-2222-4333-8444-555555555555', errorCode: 'IO_TEMPORARY', message: 'secret', body: 'secret', stack: 'secret'});
+  const [entry] = await store.history();
+  assert.equal(entry.runId, '11111111-2222-4333-8444-555555555555'); assert.equal(entry.errorCode, 'IO_TEMPORARY');
+  assert.equal(JSON.stringify(entry).includes('secret'), false);
+  await store.audit({action: 'automation.sync', outcome: 'failed', runId: 'secret', errorCode: 'private path'});
+  const [invalid] = await store.history(); assert.equal(invalid.runId, undefined); assert.equal(invalid.errorCode, undefined);
+});

@@ -29,6 +29,9 @@ async function refreshStatus() {
 async function refreshAutomation() {
   const state = await api('/api/automation');
   const fields = [['파일 자동화', state.enabled ? '사용 중' : '미설정'], ['정기 브리핑', `${state.briefingTime} (한국 시간)`], ['확인 간격', `${state.intervalSeconds}초`], ['최근 결과', state.message], ['마지막 성공', state.lastSuccessAt ? formatTime(state.lastSuccessAt) : '없음'], ['오늘의 보고서', state.reportAvailable ? formatTime(state.reportGeneratedAt) : '현재 자료에 맞는 보고서 없음']];
+  if (state.recoveryAction) fields.push(['필요한 조치', state.recoveryAction]);
+  if (state.consecutiveFailures) fields.push(['연속 실패', `${state.consecutiveFailures}회`]);
+  if (state.nextCheckAt) fields.push(['다음 확인', formatTime(state.nextCheckAt)]);
   $('automation-details').replaceChildren(...fields.flatMap(([key, value]) => [element('dt', key), element('dd', value)]));
   $('run-automation').disabled = !state.enabled; $('download-report').disabled = !state.reportAvailable;
 }
