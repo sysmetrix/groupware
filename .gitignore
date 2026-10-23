@@ -1,0 +1,14 @@
+node_modules/
+.venv-attachments/
+__pycache__/
+.env
+.env.*
+!.env.example
+data/
+config/
+analysis/
+coverage/
+*.log
+*.har
+*.saz
+.DS_Store

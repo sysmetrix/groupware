@@ -1,0 +1,31 @@
+{
+  "name": "groupware-assistant",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Local-first, evidence-grounded groupware assistant",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/server.mjs",
+    "dev": "node --env-file-if-exists=.env --watch src/server.mjs",
+    "test": "node --test test/*.test.mjs",
+    "check": "node scripts/check.mjs",
+    "setup": "node scripts/setup.mjs",
+    "setup:documents": "node scripts/setup-documents.mjs",
+    "services:status": "powershell -NoProfile -File scripts/windows-services.ps1 -Action Status",
+    "setup:control": "powershell -NoProfile -File scripts/install-control-panel.ps1",
+    "verify:pc": "node --env-file-if-exists=.env scripts/verify-pc.mjs",
+    "services:start": "powershell -NoProfile -File scripts/windows-services.ps1 -Action Start",
+    "services:stop": "powershell -NoProfile -File scripts/windows-services.ps1 -Action Stop",
+    "doctor": "node --env-file-if-exists=.env scripts/doctor.mjs",
+    "doctor:browser": "node scripts/doctor-browser.mjs",
+    "convert:csv": "node scripts/convert-csv.mjs",
+    "automate": "node --env-file-if-exists=.env scripts/automate.mjs",
+    "sync:pages": "node scripts/sync-pages.mjs",
+    "demo:sync": "node scripts/create-sync-example.mjs",
+    "doctor:model": "node --env-file-if-exists=.env scripts/doctor-model.mjs",
+    "evaluate:model": "node --env-file-if-exists=.env scripts/evaluate-model.mjs",
+    "attach:extract": "node --env-file-if-exists=.env scripts/attach-extract.mjs",
+    "test:attachments": "python -m unittest discover -s test -p \"*_test.py\""
+  }
+}
