@@ -37,4 +37,5 @@ try {
 } catch {
     throw "Code was updated, but control panel installation failed. Close Groupware AI Control, resolve the error below, then run powershell -NoProfile -File scripts/install-control-panel.ps1 to finish. The Windows .NET Framework C# compiler and a writable Desktop folder are required. Details: $($_.Exception.Message)"
 }
-Write-Host 'Updated, including Groupware AI Control and its desktop shortcut. Restart the application manually to use the new code. Local settings and data were preserved.'
+if ($NoShortcut) { Write-Host 'Updated, including Groupware AI Control; desktop shortcut unchanged (-NoShortcut). Restart manually to use the new code. Local settings and data were preserved.' }
+else { Write-Host 'Updated, including Groupware AI Control and its desktop shortcut. Restart the application manually to use the new code. Local settings and data were preserved.' }

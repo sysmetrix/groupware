@@ -17,13 +17,60 @@ public sealed class ServiceState {
 
 public sealed class ServiceClient {
     readonly string root;
+    public string ConfigurationError { get; private set; }
+    public sealed class RuntimePorts {
+        public int appPort { get; set; }
+        public int ollamaPort { get; set; }
+    }
     public ServiceClient(string directory) { root = directory; }
+    async Task<RuntimePorts> ReadConfiguration() {
+        const string message = "설정 확인 필요 · 앱/모델 포트, 로컬 주소, Node.js 설치를 확인하세요.";
+        try {
+            var start = new ProcessStartInfo {
+                FileName = "node.exe", Arguments = "\"" + Path.Combine(root, "desktop", "runtime-config.mjs") + "\"",
+                WorkingDirectory = root, UseShellExecute = false, CreateNoWindow = true,
+                RedirectStandardOutput = true, RedirectStandardError = true
+            };
+            using (var process = Process.Start(start)) {
+                var output = process.StandardOutput.ReadToEndAsync();
+                var errors = process.StandardError.ReadToEndAsync();
+                if (!await Task.Run(() => process.WaitForExit(10000))) {
+                    try { process.Kill(); } catch { }
+                    throw new Exception();
+                }
+                await errors; // Never expose raw environment/parser diagnostics.
+                if (process.ExitCode != 0) throw new Exception();
+                var ports = new JavaScriptSerializer().Deserialize<RuntimePorts>(await output);
+                if (ports == null || ports.appPort < 1 || ports.appPort > 65535 || ports.ollamaPort < 1 || ports.ollamaPort > 65535 || ports.appPort == ports.ollamaPort) throw new Exception();
+                ConfigurationError = null;
+                return ports;
+            }
+        } catch { ConfigurationError = message; throw new Exception(message); }
+    }
     public async Task<string> Run(string action, string service) {
         if (!new[] { "Status", "Start", "Stop" }.Contains(action) || !new[] { "All", "App", "Ollama" }.Contains(service)) throw new ArgumentException("Invalid service action");
+        var ports = new RuntimePorts { appPort = 3210, ollamaPort = 11434 };
+        // Stopping uses the script's verified ownership records, even when a
+        // subsequently edited configuration is invalid or Node is unavailable.
+        if (action != "Stop") {
+            try { ports = await ReadConfiguration(); }
+            catch { if (action != "Status") throw; }
+        }
+        if (action == "Start") {
+            var current = new JavaScriptSerializer().Deserialize<ServiceState[]>(await RunCommand("Status", "All", ports));
+            if (current == null || current.Length != 2 || current.Count(x => x.service == "App") != 1 || current.Count(x => x.service == "Ollama") != 1) throw new Exception("서비스 상태를 확인할 수 없어 시작하지 않았습니다.");
+            foreach (var state in current) {
+                int configured = state.service == "App" ? ports.appPort : ports.ollamaPort;
+                if (state.owned && state.port != configured) throw new Exception("실행 중인 " + state.service + "의 포트가 설정과 다릅니다. 관리 서버를 종료한 뒤 다시 시작하세요.");
+            }
+        }
+        return await RunCommand(action, service, ports);
+    }
+    async Task<string> RunCommand(string action, string service, RuntimePorts ports) {
         var script = Path.Combine(root, "scripts", "windows-services.ps1");
         string directory = Path.Combine(root, "data", "control-panel"); Directory.CreateDirectory(directory);
         string outputFile = Path.Combine(directory, "command-" + Guid.NewGuid().ToString("N") + ".txt");
-        string command = "$ErrorActionPreference='Stop'; try { & '" + script.Replace("'", "''") + "' -Action " + action + " -Service " + service + " 2>&1 | Out-File -Encoding utf8 -LiteralPath '" + outputFile.Replace("'", "''") + "'; exit 0 } catch { $_ | Out-File -Encoding utf8 -LiteralPath '" + outputFile.Replace("'", "''") + "'; exit 1 }";
+        string command = "$ErrorActionPreference='Stop'; try { & '" + script.Replace("'", "''") + "' -Action " + action + " -Service " + service + " -AppPort " + ports.appPort + " -OllamaPort " + ports.ollamaPort + " 2>&1 | Out-File -Encoding utf8 -LiteralPath '" + outputFile.Replace("'", "''") + "'; exit 0 } catch { $_ | Out-File -Encoding utf8 -LiteralPath '" + outputFile.Replace("'", "''") + "'; exit 1 }";
         var start = new ProcessStartInfo {
             FileName = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), @"WindowsPowerShell\v1.0\powershell.exe"),
             Arguments = "-NoProfile -NonInteractive -EncodedCommand " + Convert.ToBase64String(Encoding.Unicode.GetBytes(command)),
@@ -167,6 +214,7 @@ public sealed class ControlWindow : Form {
             appStop.Enabled = states.Any(x => x.service == "App" && x.owned);
             modelStart.Enabled = states.Any(x => x.service == "Ollama" && (x.status == "stopped" || x.status == "stale-or-stopped"));
             appStart.Enabled = states.Any(x => x.service == "App" && (x.status == "stopped" || x.status == "stale-or-stopped"));
+            if (client.ConfigurationError != null) modelStart.Enabled = appStart.Enabled = false;
             allStart.Enabled = modelStart.Enabled || appStart.Enabled;
             allStop.Enabled = modelStop.Enabled || appStop.Enabled;
             open.Enabled = states.Any(x => x.service == "App" && x.status == "running-owned");
@@ -197,7 +245,7 @@ public sealed class ControlWindow : Form {
     }
     public async Task RefreshState() {
         if (busy) return; SetBusy(true);
-        try { await ReadState(); notice.Text = "15초마다 실행 상태를 자동으로 확인합니다."; }
+        try { await ReadState(); notice.Text = client.ConfigurationError ?? "15초마다 실행 상태를 자동으로 확인합니다."; }
         catch (Exception error) { states = new ServiceState[0]; summary.Text = "상태 확인 필요"; modelState.Text = appState.Text = "상태 확인 실패"; modelState.ForeColor = appState.ForeColor = Color.FromArgb(139, 91, 29); modelState.BackColor = appState.BackColor = Color.FromArgb(255, 245, 224); notice.Text = "실행 상태를 확인하지 못했습니다. 아래 내용을 확인하세요."; Append(error.Message); }
         finally { SetBusy(false); }
     }

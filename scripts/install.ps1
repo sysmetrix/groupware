@@ -31,4 +31,5 @@ try {
 } catch {
     throw "Control panel installation failed. Close Groupware AI Control, resolve the error below, then rerun scripts/install.ps1. The Windows .NET Framework C# compiler and a writable Desktop folder are required. Details: $($_.Exception.Message)"
 }
-Write-Host 'Ready. Open the Groupware AI Control desktop shortcut to start the application, or run npm start and open http://127.0.0.1:3210. Local settings and data were preserved.'
+if ($NoShortcut) { Write-Host 'Ready. Control panel built; desktop shortcut unchanged (-NoShortcut). Run data/control-panel/GroupwareControl.exe or npm start. Local settings and data were preserved.' }
+else { Write-Host 'Ready. Open the Groupware AI Control desktop shortcut or run npm start. Use the configured local app port. Local settings and data were preserved.' }

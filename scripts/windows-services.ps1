@@ -21,7 +21,15 @@ function Get-StatePath([string]$Name) { Join-Path $stateDir ($Name.ToLowerInvari
 function Read-State([string]$Name) {
     $path = Get-StatePath $Name
     if (Test-Path -LiteralPath $path) {
-        $record = Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json
+        # Writers publish by atomic replacement. Keep the opened snapshot readable
+        # while allowing that replacement; Get-Content can deny it on Windows.
+        $sharing = [IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete
+        $stream = [IO.File]::Open($path, [IO.FileMode]::Open, [IO.FileAccess]::Read, $sharing)
+        try {
+            $reader = [IO.StreamReader]::new($stream, [Text.Encoding]::UTF8)
+            try { $record = $reader.ReadToEnd() | ConvertFrom-Json }
+            finally { $reader.Dispose() }
+        } finally { $stream.Dispose() }
         if ($record.version -ne 1 -or $record.root -ne $projectRoot -or $record.service -ne $Name -or
             $record.launchId -notmatch '^[a-f0-9]{32}$') { throw "Invalid ownership record: $path. Refusing control." }
         return $record
