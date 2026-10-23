@@ -147,8 +147,14 @@ $('download-report').addEventListener('click', event => operation(event.currentT
 }));
 $('search-form').addEventListener('submit', event => {
   event.preventDefault(); operation(event.submitter, async () => {
+    $('search-ai').replaceChildren();
+    if ($('search-scope').value === 'library' && !libraryState.documents.length) {
+      $('search-results').replaceChildren(element('div', '검색할 내 문서가 0개입니다. 위에서 가져온 그룹웨어 자료로 전환하거나 파일을 넣어주세요.', 'empty'));
+      renderSearchScope(); return;
+    }
     const result = await api('/api/run', {task: 'search', scope: $('search-scope').value, query: $('search-query').value, useModel: $('search-model').checked});
-    $('search-results').replaceChildren(element('p', result.message, 'subtle'), ...result.hits.map(item => {
+    const resultMessage = result.hits.length ? `선택한 자료에서 검색 결과 ${result.hits.length}건을 찾았습니다.` : result.scope === 'dataset' ? '가져온 자료에서 일치하는 결과가 없습니다. 그룹웨어 전체를 검색한 결과가 아닙니다. 수집하지 않은 문서·첨부는 원 사이트에서 확인해야 합니다.' : '직접 넣은 문서의 추출 텍스트에서 일치하는 결과가 없습니다.';
+    $('search-results').replaceChildren(element('p', resultMessage, 'subtle'), ...result.hits.map(item => {
       const box = element('section', undefined, 'panel result-card'); box.append(record(item, 'document'));
       if (item.selection) {
         const choose = element('button', '초안 금액 대조에 선택', 'secondary'); choose.type = 'button';
@@ -165,7 +171,7 @@ $('search-form').addEventListener('submit', event => {
       }
       return box;
     }));
-    renderAi('search-ai', result.ai, result.references);
+    if (result.hits.length) renderAi('search-ai', result.ai, result.references);
   });
 });
 $('draft-form').addEventListener('submit', event => {
@@ -209,6 +215,22 @@ function renderSource() {
   $('source-detail').textContent = personal ? `이 PC에 ${libraryState.documents.length}개 보관 · 그룹웨어 자동 수집 미연결` : `${status.source.kind === 'demo' ? '실제 업무가 아닌 예제' : status.source.kind === 'browser-snapshot' ? '로그인 화면 조회 사본' : '가져온 자료'} · ${status.visibleCount}건 · ${formatTime(status.source.exportedAt)} 기준 · 상시 자동 수집 미연결`;
   $('mode').textContent = personal ? '내 문서' : status.source.kind === 'demo' ? '합성 예제' : status.source.kind === 'browser-snapshot' ? '실제 조회 자료' : '가져온 데이터';
   $('search-scope-note').textContent = $('search-scope').value === 'library' ? `직접 넣은 문서 ${libraryState.documents.length}개에서 검색합니다. 기관의 현행 규정 여부는 원문에서 확인하세요.` : status.source.kind === 'demo' ? '이 범위에는 합성 예제만 있습니다. 실제 업무 질문에 사용할 수 없습니다.' : '가져온 그룹웨어 자료의 문서와 첨부에서 검색합니다.';
+  renderSearchScope();
+}
+function renderSearchScope() {
+  const counts = status?.searchCounts || {documents:0, notices:0};
+  const total = counts.documents + counts.notices;
+  const personal = $('search-scope').value === 'library';
+  $('search-scope').options[0].textContent = `직접 넣은 내 문서 · ${libraryState.documents.length}개`;
+  $('search-scope').options[1].textContent = status.source.kind === 'demo' ? '합성 예제 · 실제 업무자료 아님' : `가져온 그룹웨어 자료 · 문서 ${counts.documents}건 / 공지 ${counts.notices}건`;
+  const empty = personal && !libraryState.documents.length;
+  $('search-scope-warning').hidden = !empty;
+  $('search-scope-warning-text').textContent = `현재 선택한 내 문서에는 파일이 없습니다. ${status.source.kind !== 'demo' && total ? `가져온 그룹웨어 자료에는 문서 ${counts.documents}건·공지 ${counts.notices}건이 있습니다.` : '검색할 실제 파일을 먼저 넣어주세요.'}`;
+  $('search-imported').hidden = status.source.kind === 'demo' || !total;
+  if (!personal && status.source.kind !== 'demo') {
+    const scope = status.source.coverage?.filter(entry => ['document','notice'].includes(entry.type)).map(entry => entry.query).join(' ');
+    $('search-scope-note').textContent = `문서 ${counts.documents}건·공지 ${counts.notices}건의 저장된 자료만 검색합니다. 그룹웨어 전체 검색은 아직 연결되지 않았습니다. ${scope || ''}`;
+  }
 }
 function clearLibraryResults() {
   clearAmountEvidence();
@@ -269,6 +291,7 @@ $('refresh-runtime').addEventListener('click', event => operation(event.currentT
 $('preview-more').addEventListener('click', event => operation(event.currentTarget, async () => { if (previewNext) await showPreview(previewNext.id, previewNext.offset); }));
 $('search-library').addEventListener('click', () => { if (busy) return; $('search-scope').value = 'library'; switchView('search'); $('search-query').focus(); });
 $('search-scope').addEventListener('change', () => { $('search-ai').replaceChildren(); $('search-results').replaceChildren(element('div', '선택한 자료에서 다시 검색하세요.', 'empty')); renderSource(); });
+$('search-imported').addEventListener('click', () => { if (busy) return; $('search-scope').value = 'dataset'; $('search-ai').replaceChildren(); $('search-results').replaceChildren(element('div', '가져온 그룹웨어 자료로 전환했습니다. 입력한 키워드로 검색하세요.', 'empty')); renderSource(); $('search-query').focus(); });
 $('date-label').textContent = new Intl.DateTimeFormat('ko-KR', {timeZone: 'Asia/Seoul', year: 'numeric', month: 'long', day: 'numeric', weekday: 'long'}).format(new Date());
 await operation(null, async () => { await refreshStatus(); await refreshLibrary(); if (status.source.kind !== 'demo') { if (!libraryState.documents.length) $('search-scope').value = 'dataset'; await briefing(); } });
 if (status?.source.kind === 'demo') switchView('documents');

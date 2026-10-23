@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {randomBytes, timingSafeEqual} from 'node:crypto';
-import {AppError, object, visibleItems} from './schema.mjs';
+import {AppError, object, visibleItems, effectiveDocument, kstDate} from './schema.mjs';
 import {createDemoDataset} from './demo.mjs';
 import {createStore} from './store.mjs';
 import {runTask} from './tasks.mjs';
@@ -64,7 +64,9 @@ export async function createApp({dataDir = path.resolve('data'), configFile = pa
       }
       if (req.method === 'GET' && url.pathname === '/api/status') {
         const {dataset, revision} = store.snapshot();
-        send(res, 200, {csrf, revision, source: dataset.source, principal: dataset.principal, visibleCount: visibleItems(dataset).length, liveConnected: false, capabilities: {briefing: true, search: true, validate: true, mutations: false, model: modelConfig.enabled}, model: modelConfig.enabled ? modelConfig.model : null}); return;
+        const searchable = visibleItems(dataset).filter(item => ['document', 'notice'].includes(item.type) && effectiveDocument(item, kstDate()));
+        const searchCounts = {documents: searchable.filter(item => item.type === 'document').length, notices: searchable.filter(item => item.type === 'notice').length};
+        send(res, 200, {csrf, revision, source: dataset.source, principal: dataset.principal, visibleCount: visibleItems(dataset).length, searchCounts, liveConnected: false, capabilities: {briefing: true, search: true, validate: true, mutations: false, model: modelConfig.enabled}, model: modelConfig.enabled ? modelConfig.model : null}); return;
       }
       if (req.method === 'GET' && url.pathname === '/api/example') { send(res, 200, createDemoDataset()); return; }
       if (req.method === 'GET' && url.pathname === '/api/runtime') { send(res, 200, {application: 'running', model: await runtimeStatus()}); return; }

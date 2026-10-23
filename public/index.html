@@ -49,6 +49,7 @@
       </section>
       <section id="search-view" class="view" hidden>
         <div class="panel search-box"><label for="search-scope">검색할 자료</label><select id="search-scope"><option value="library">직접 넣은 내 문서</option><option value="dataset">가져온 그룹웨어 자료 / 합성 예제</option></select><p class="subtle" id="search-scope-note"></p></div>
+        <section id="search-scope-warning" class="callout" role="status" hidden><p id="search-scope-warning-text"></p><div class="actions"><button id="search-imported" class="primary" type="button">가져온 그룹웨어 자료 검색</button><button class="secondary" data-view="documents" type="button">내 문서에 파일 넣기</button></div></section>
         <form id="search-form" class="panel search-box"><label for="search-query">찾고 싶은 규정이나 업무 키워드</label><div class="search-row"><input id="search-query" placeholder="예: 운영계획, 실적보고, 증빙" maxlength="300" required><button class="primary" type="submit">근거 검색</button></div><label class="model-toggle"><input type="checkbox" id="search-model" disabled> 찾은 근거를 로컬 AI로 요약</label><p class="subtle">사용자·조직 범위에 맞는 유효 문서의 제목·본문·태그와 가져온 첨부 텍스트에서 검색합니다.</p></form>
         <div id="search-ai"></div><div id="search-results" aria-live="polite"><div class="empty">키워드를 입력하면 관련 문서와 근거를 보여드립니다.</div></div>
       </section>

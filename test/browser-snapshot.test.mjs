@@ -64,4 +64,5 @@ test('HTTP import exposes the captured scope but never claims a persistent live 
   const result=await (await fetch(base+'/api/status')).json();
   assert.equal(result.liveConnected,false); assert.equal(result.source.kind,'browser-snapshot'); assert.equal(result.visibleCount,1);
   assert.equal(result.source.coverage[2].state,'partial');
+  assert.deepEqual(result.searchCounts,{documents:0,notices:1});
 });
