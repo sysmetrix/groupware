@@ -86,8 +86,8 @@ function validateAttachments(values, parent) {
 export function validateDataset(value) {
   object(value, 'dataset', ['schemaVersion', 'source', 'principal', 'items']);
   if (value.schemaVersion !== 1) throw new AppError('schemaVersion은 1이어야 합니다.');
-  object(value.source, 'source', ['kind', 'label', 'exportedAt', 'baseUrl']);
-  if (!['demo', 'manual-export'].includes(value.source.kind)) throw new AppError('source.kind는 demo 또는 manual-export여야 합니다.');
+  object(value.source, 'source', ['kind', 'label', 'exportedAt', 'baseUrl', 'coverage']);
+  if (!['demo', 'manual-export', 'browser-snapshot'].includes(value.source.kind)) throw new AppError('지원하지 않는 자료 출처입니다.');
   const source = {kind: value.source.kind, label: string(value.source.label, 'source.label'), exportedAt: timestamp(value.source.exportedAt, 'source.exportedAt'), baseUrl: ''};
   if (value.source.baseUrl) {
     let url;
@@ -120,6 +120,22 @@ export function validateDataset(value) {
     if (item.attachments !== undefined) result.attachments = validateAttachments(item.attachments, result);
     return result;
   });
+  if (source.kind === 'browser-snapshot') {
+    if (!source.baseUrl || !Array.isArray(value.source.coverage) || value.source.coverage.length !== itemTypes.length) throw new AppError('브라우저 자료에는 유형별 조회 범위가 필요합니다.');
+    const covered = new Set();
+    source.coverage = value.source.coverage.map(entry => {
+      object(entry, 'coverage', ['type', 'state', 'query', 'collected', 'total', 'url']);
+      if (!itemTypes.includes(entry.type) || covered.has(entry.type) || !['complete', 'partial', 'unobserved'].includes(entry.state)) throw new AppError('조회 범위의 유형·상태를 확인하세요.');
+      covered.add(entry.type);
+      const count = items.filter(item => item.type === entry.type).length;
+      if (!Number.isSafeInteger(entry.collected) || entry.collected !== count || (entry.total !== null && (!Number.isSafeInteger(entry.total) || entry.total < count))) throw new AppError('조회 범위와 자료 건수가 일치하지 않습니다.');
+      if (entry.state === 'complete' && entry.total !== count) throw new AppError('전체 조회는 합계와 수집 건수가 같아야 합니다.');
+      if (entry.state === 'unobserved' && (count !== 0 || entry.total !== null)) throw new AppError('미조회 범위를 빈 조회 결과로 표시할 수 없습니다.');
+      const url = sourceUrl(entry.url, source.baseUrl);
+      if (entry.state !== 'unobserved' && !url) throw new AppError('조회 화면 주소가 필요합니다.');
+      return {type: entry.type, state: entry.state, query: string(entry.query, 'coverage.query', 1000), collected: count, total: entry.total, url};
+    });
+  } else if (value.source.coverage !== undefined) throw new AppError('조회 범위는 browser-snapshot 자료에서만 사용합니다.');
   return {schemaVersion: 1, source, principal, items};
 }
 

@@ -8,6 +8,20 @@ function clearAmountEvidence() {
 }
 const labels = {briefing: ['내 업무 브리핑', '오늘의 업무를 한눈에.', '확인이 필요한 일과 근거를 함께 정리합니다.'], search: ['규정 · 서식 검색', '답변보다 먼저, 근거.', '유효한 문서에서 필요한 내용을 찾아 원문과 함께 확인하세요.'], validate: ['초안 사전 점검', '제출 전에 한 번 더.', '필수 입력과 날짜, 본문·첨부 입력 금액의 일치를 확인합니다.'], data: ['데이터 연결', '업무 자료를 연결하세요.', '합성 예제로 시작하고, 권한 내 자료를 가져와 검증하세요.'], audit: ['실행 기록', '무엇을 확인했는지 남깁니다.', '작업의 시각과 결과를 되짚어볼 수 있습니다.']};
 labels.documents = ['내 문서', '내 자료에서 바로 찾으세요.', '파일을 넣고 내용을 확인한 뒤, 필요한 키워드로 검색하세요.'];
+labels.search = ['문서 · 공지 검색', '답변보다 먼저, 근거.', '가져온 공지·문서에서 필요한 내용을 찾아 확인하세요.'];
+function renderBrowserCoverage(personal = false) {
+  const coverage = status.source.coverage;
+  $('browser-coverage').hidden = personal || !coverage;
+  if (!coverage) return;
+  const names = {approval:'결재', schedule:'일정', notice:'공지', document:'문서'};
+  const states = {complete:'해당 범위 확인', partial:'일부 수집', unobserved:'미조회'};
+  $('browser-coverage-list').replaceChildren(...coverage.map(entry => {
+    const row = element('div', undefined, 'record');
+    row.append(element('strong', `${names[entry.type]} · ${states[entry.state]} · ${entry.collected}건${entry.total === null ? '' : ` / 조회 합계 ${entry.total}건`}`), element('p', entry.query, 'subtle'));
+    if (entry.url) row.append(sourceLink({url:entry.url,urlKind:'collection'}));
+    return row;
+  }));
+}
 const formatTime = value => new Intl.DateTimeFormat('ko-KR', {timeZone: 'Asia/Seoul', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false}).format(new Date(value));
 function element(tag, text, className) { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (className) node.className = className; return node; }
 function message(text, error = false) { $('message').textContent = text; $('message').className = error ? 'error' : ''; $('message').hidden = !text; }
@@ -31,7 +45,7 @@ async function refreshStatus() {
   $('demo-notice').hidden = status.source.kind !== 'demo';
   renderSource();
   for (const id of ['briefing-model', 'search-model']) { $(id).disabled = !status.capabilities.model; if (!status.capabilities.model) $(id).checked = false; }
-  const details = [['자료 종류', status.source.kind === 'demo' ? '합성 예제 (실제 업무 자료 아님)' : '수동 가져오기'], ['기준 시각', formatTime(status.source.exportedAt)], ['현재 범위', `${status.principal.organizationId} / ${status.principal.userId}`], ['그룹웨어', '실시간 미연결'], ['AI 요약', status.model || '미설정 · 근거 조회와 규칙 검사 사용 가능'], ['변경 작업', '상신 · 승인 · 발송 기능 없음']];
+  const details = [['자료 종류', status.source.kind === 'demo' ? '합성 예제 (실제 업무 자료 아님)' : status.source.kind === 'browser-snapshot' ? '로그인 화면 조회 사본' : '수동 가져오기'], ['기준 시각', formatTime(status.source.exportedAt)], ['현재 범위', `${status.principal.organizationId} / ${status.principal.userId}`], ['그룹웨어', '상시 자동 수집 미연결'], ['AI 요약', status.model || '미설정 · 근거 조회와 규칙 검사 사용 가능'], ['변경 작업', '상신 · 승인 · 발송 기능 없음']];
   $('connection-details').replaceChildren(...details.flatMap(([key, value]) => [element('dt', key), element('dd', value)]));
   await refreshAutomation();
   await refreshRuntime();
@@ -61,7 +75,7 @@ async function refreshAutomation() {
 }
 function sourceLink(item) {
   if (!item.url) return element('span', '원문 링크 없음', 'subtle');
-  const link = element('a', item.url.startsWith('/api/documents/') ? '보관한 원본 받기 ↓' : '원문 확인 ↗', 'source-link'); link.href = item.url; link.target = '_blank'; link.rel = 'noopener noreferrer'; return link;
+  const link = element('a', item.url.startsWith('/api/documents/') ? '보관한 원본 받기 ↓' : item.urlKind === 'collection' ? '그룹웨어 조회 화면 ↗' : '원문 확인 ↗', 'source-link'); link.href = item.url; link.target = '_blank'; link.rel = 'noopener noreferrer'; return link;
 }
 function attachmentMeta(item, target) {
   if (!item.attachment) return;
@@ -94,10 +108,11 @@ function renderAi(id, ai, references) {
 async function briefing() {
   await refreshStatus();
   const result = await api('/api/run', {task: 'briefing', useModel: $('briefing-model').checked});
+  const coverage = Object.fromEntries((result.source.coverage || []).map(x => [x.type, x]));
   const cards = [['결재 대기', result.counts.pending, '검토가 필요한 문서', '◫'], ['기한 경과', result.counts.overdue, '원문 상태를 확인하세요', '◷'], ['다가오는 일정', result.counts.schedules, '오늘부터 7일 이내', '▦'], ['최근 공지', result.counts.notices, '가져온 자료 기준', '≋']];
-  $('stats').replaceChildren(...cards.map(([label, count, note, icon]) => { const card = element('article', undefined, 'stat'); card.append(element('span', label, 'stat-label'), element('span', icon, 'stat-icon'), element('strong', String(count)), element('small', note)); return card; }));
-  fillList('approval-list', result.approvals, 'approval', '가져온 자료에 대기 중인 결재가 없습니다.');
-  fillList('schedule-list', result.schedules, 'schedule', '7일 이내 남은 일정이 없습니다.');
+  $('stats').replaceChildren(...cards.map(([label, count, note, icon], index) => { const scope = coverage[['approval','approval','schedule','notice'][index]]; const card = element('article', undefined, 'stat'); card.append(element('span', label, 'stat-label'), element('span', icon, 'stat-icon'), element('strong', scope?.state === 'unobserved' ? '—' : String(count)), element('small', scope ? scope.state === 'unobserved' ? '이 범위는 조회하지 않았습니다' : '위에 명시한 조회 범위 기준' : note)); return card; }));
+  fillList('approval-list', result.approvals, 'approval', coverage.approval?.state === 'unobserved' ? '결재 대기 목록은 아직 조회하지 않았습니다.' : '가져온 자료에 대기 중인 결재가 없습니다.');
+  fillList('schedule-list', result.schedules, 'schedule', coverage.schedule?.state === 'unobserved' ? '일정은 아직 조회하지 않았습니다.' : '가져온 자료의 조회 범위에서 7일 이내 남은 일정이 없습니다.');
   fillList('notice-list', result.notices, 'notice', '가져온 자료에 공지가 없습니다.');
   renderAi('briefing-ai', result.ai, result.references);
   $('briefing-footnote').textContent = `${formatTime(result.observedAt)} 정리 · 자료 기준 ${formatTime(result.source.exportedAt)} · 가져오지 않은 업무는 포함되지 않습니다. 원문에서 최신 상태를 확인하세요.`;
@@ -189,9 +204,10 @@ $('download-example').addEventListener('click', event => operation(event.current
 function renderSource() {
   if (!status) return;
   const personal = currentView === 'documents' || (currentView === 'search' && $('search-scope').value === 'library') || (currentView === 'validate' && selectedAmount?.scope === 'library');
+  renderBrowserCoverage(personal);
   $('source-label').textContent = personal ? '직접 넣은 내 문서' : status.source.label;
-  $('source-detail').textContent = personal ? `이 PC에 ${libraryState.documents.length}개 보관 · 그룹웨어 자동 수집 미연결` : `${status.source.kind === 'demo' ? '실제 업무가 아닌 예제' : '가져온 자료'} · ${status.visibleCount}건 · ${formatTime(status.source.exportedAt)} 기준 · 실시간 미연결`;
-  $('mode').textContent = personal ? '내 문서' : status.source.kind === 'demo' ? '합성 예제' : '가져온 데이터';
+  $('source-detail').textContent = personal ? `이 PC에 ${libraryState.documents.length}개 보관 · 그룹웨어 자동 수집 미연결` : `${status.source.kind === 'demo' ? '실제 업무가 아닌 예제' : status.source.kind === 'browser-snapshot' ? '로그인 화면 조회 사본' : '가져온 자료'} · ${status.visibleCount}건 · ${formatTime(status.source.exportedAt)} 기준 · 상시 자동 수집 미연결`;
+  $('mode').textContent = personal ? '내 문서' : status.source.kind === 'demo' ? '합성 예제' : status.source.kind === 'browser-snapshot' ? '실제 조회 자료' : '가져온 데이터';
   $('search-scope-note').textContent = $('search-scope').value === 'library' ? `직접 넣은 문서 ${libraryState.documents.length}개에서 검색합니다. 기관의 현행 규정 여부는 원문에서 확인하세요.` : status.source.kind === 'demo' ? '이 범위에는 합성 예제만 있습니다. 실제 업무 질문에 사용할 수 없습니다.' : '가져온 그룹웨어 자료의 문서와 첨부에서 검색합니다.';
 }
 function clearLibraryResults() {
@@ -254,7 +270,7 @@ $('preview-more').addEventListener('click', event => operation(event.currentTarg
 $('search-library').addEventListener('click', () => { if (busy) return; $('search-scope').value = 'library'; switchView('search'); $('search-query').focus(); });
 $('search-scope').addEventListener('change', () => { $('search-ai').replaceChildren(); $('search-results').replaceChildren(element('div', '선택한 자료에서 다시 검색하세요.', 'empty')); renderSource(); });
 $('date-label').textContent = new Intl.DateTimeFormat('ko-KR', {timeZone: 'Asia/Seoul', year: 'numeric', month: 'long', day: 'numeric', weekday: 'long'}).format(new Date());
-await operation(null, async () => { await refreshStatus(); await refreshLibrary(); if (status.source.kind !== 'demo') await briefing(); });
+await operation(null, async () => { await refreshStatus(); await refreshLibrary(); if (status.source.kind !== 'demo') { if (!libraryState.documents.length) $('search-scope').value = 'dataset'; await briefing(); } });
 if (status?.source.kind === 'demo') switchView('documents');
 setInterval(() => {
   if (busy || document.hidden) return;

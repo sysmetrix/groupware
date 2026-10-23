@@ -1,7 +1,7 @@
 import {AppError, date, effectiveDocument, kstDate, object, string, visibleItems} from './schema.mjs';
 import {attachmentMoney} from './money.mjs';
 
-const reference = item => ({id: item.id, title: item.title, type: item.type, status: item.status, url: item.url, updatedAt: item.updatedAt, version: item.version, ...(item.attachment ? {documentId: item.documentId, attachment: item.attachment, locationLabel: item.locationLabel} : {})});
+const reference = item => ({id: item.id, title: item.title, type: item.type, status: item.status, url: item.url, updatedAt: item.updatedAt, version: item.version, ...(item.urlKind === 'collection' || item.tags?.includes('조회화면링크') ? {urlKind: 'collection'} : {}), ...(item.attachment ? {documentId: item.documentId, attachment: item.attachment, locationLabel: item.locationLabel} : {})});
 const locationLabel = (format, location) => format === 'pdf' ? `PDF ${location.page}쪽` : format === 'xlsx' ? `${location.sheet} · ${location.cell}` : `구역 ${location.section} · 문단 ${location.paragraph}`;
 export function buildBriefing(dataset, now = new Date()) {
   const today = kstDate(now), visible = visibleItems(dataset);
@@ -22,7 +22,7 @@ export function searchDocuments(dataset, query, now = new Date()) {
   query = string(query, '검색어', 300);
   const terms = [...new Set(query.normalize('NFKC').toLowerCase().match(/[\p{L}\p{N}]+/gu) || [])];
   if (!terms.length) throw new AppError('검색할 단어를 입력하세요.');
-  const hits = visibleItems(dataset).filter(item => item.type === 'document' && effectiveDocument(item, kstDate(now)))
+  const hits = visibleItems(dataset).filter(item => ['document', 'notice'].includes(item.type) && effectiveDocument(item, kstDate(now)))
     .flatMap(item => {
       const title = item.title.normalize('NFKC').toLowerCase();
       const body = item.body.normalize('NFKC').toLowerCase();

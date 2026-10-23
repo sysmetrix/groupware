@@ -700,3 +700,7 @@ footer {
     grid-template-columns:1fr
   }
 }
+/* Keep scope evidence accessible without pushing the actual work below it. */
+#browser-coverage { margin-bottom: 22px; }
+#browser-coverage summary { cursor: pointer; font-weight: 600; padding: 10px 0; }
+#browser-coverage-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
