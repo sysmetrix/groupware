@@ -252,9 +252,12 @@ ${mailFilesBox(m)}
     if (!S.sel) S.sel = {type: 'frame', title: title || '그룹웨어 화면', url};
     S.pane.url = url; S.pane.extract = null;
     // Full groupware screens (근태신청, 메일함, 결재작성) need width: open the pane wide.
-    if (/ecm001A07|SynapDocViewServer/.test(decodeURIComponent(url))) { S.pane.expanded = true; }
-    else if (!/#\/?popup\?/.test(url)) { S.pane.expanded = true; toast('그룹웨어 전체 화면이라 처리 창을 넓게 열었습니다. 왼쪽 메뉴나 "목록 보기"로 돌아갑니다.'); }
-    else S.pane.expanded = false;
+    // Full screens, viewers, and new draft compose popups require full wide view
+    if (/ecm001A07|SynapDocViewServer/.test(decodeURIComponent(url)) || /MicroModuleCode=ea.*(?:tiKeyCode|draft)/.test(url) || !/#\/?popup\?/.test(url)) {
+      S.pane.expanded = true;
+    } else {
+      S.pane.expanded = false;
+    }
     renderPane();
   }
   // Would opening this item record a read/열람 in the groupware?
@@ -501,10 +504,37 @@ ${budgetSnippet}
       }
     }
 
-    // 5. Inject HWP body HTML
+    // 5. Inject HWP Title & Body via HwpCtrl API (PutFieldText) + DOM Fallback
     let injected = false;
+    try {
+      const hwpFrame = d.querySelector('#formCtrl_1, iframe[src*="hwpBuild"]');
+      const hwpWin = hwpFrame?.contentWindow;
+      const ctrl = hwpWin?.HwpCtrl;
+      if (ctrl && typeof ctrl.PutFieldText === 'function') {
+        ctrl.PutFieldText('doc_name', titleText);
+        ctrl.PutFieldText('_F_CONTENTS_', bodyHtml.replace(/<p>/gi, '').replace(/<\/p>/gi, '\n').replace(/&nbsp;/g, ' ').replace(/<br>/gi, '\n').replace(/<b>(.*?)<\/b>/gi, '$1'));
+        injected = true;
+      }
+    } catch (e) {}
+
+    // Also update the title in the left list card ("기안문서 1")
+    try {
+      const cardTitle = d.querySelector('.docuList .title, .docuTitle, #docuList_1, .subTitle');
+      if (cardTitle) cardTitle.innerText = titleText;
+      const leftInps = Array.from(d.querySelectorAll('input[placeholder*="제목"]'));
+      for (const inp of leftInps) {
+        try {
+          const setter = Object.getOwnPropertyDescriptor(f.contentWindow.HTMLInputElement.prototype, 'value')?.set;
+          if (setter) setter.call(inp, titleText);
+          else inp.value = titleText;
+          inp.dispatchEvent(new Event('input', {bubbles: true}));
+          inp.dispatchEvent(new Event('change', {bubbles: true}));
+        } catch {}
+      }
+    } catch {}
+
     const walk = (doc) => {
-      if (!doc) return;
+      if (!doc || injected) return;
       const hwp = doc.querySelector('#hwpEditorBoardContent') || doc.body;
       if (hwp && (hwp.isContentEditable || doc.designMode === 'on')) {
         hwp.innerHTML = bodyHtml;

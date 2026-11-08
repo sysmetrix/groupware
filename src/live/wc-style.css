@@ -116,7 +116,12 @@ svg text{font-family:inherit}svg .hit{cursor:pointer}svg .hit:hover{opacity:.75}
 .legend{display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:13px;color:var(--muted);margin:8px 0}
 .legend span{display:inline-flex;align-items:center;gap:6px}.legend i{width:12px;height:12px;border-radius:3px;display:inline-block;border:1px solid rgba(0,0,0,.06)}
 /* pane */
-.ph{border-bottom:1px solid var(--line);overflow:auto;flex:0 1 auto;max-height:58%}.ph.min{max-height:none;flex:1 1 auto}
+.ph{border-bottom:1px solid var(--line);overflow:auto;flex:0 0 auto;max-height:160px}.ph.min{max-height:none;flex:1 1 auto}
+.wc.expanded .ph .in{display:none}
+.wc.expanded .ph{border-bottom:1px solid var(--line)}
+.wc.expanded .ph .top{padding:6px 14px;background:var(--head);color:#fff}
+.wc.expanded .ph .top .btn{color:#fff;border-color:rgba(255,255,255,.25)}
+.wc.expanded .ph .top .btn:hover{background:rgba(255,255,255,.15)}
 .ph .top{position:sticky;top:0;background:var(--card);z-index:2;display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line)}
 .ph .top .sp{flex:1}
 .ph .in{padding:14px 16px}
