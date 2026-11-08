@@ -60,7 +60,9 @@
 <label class="srch" title="통합검색 또는 명령 (Ctrl+K)">${ic('search')}<input id="gsearch" placeholder="메일·문서·사람 검색 또는 명령" autocomplete="off" aria-label="통합검색"><kbd>Ctrl K</kbd></label>
 <span class="sp"></span>
 <button class="stat" id="meta" data-act="refresh" title="지금 다시 읽기 (R)"></button>
+<button class="hb primary" data-act="openCmd" title="AI 업무 지시창 (자연어로 기안·회신·신청 자동화)">${ic('star')}AI 지시</button>
 <button class="hb" data-act="menuNew" title="새 메일·새 기안·근태신청">${ic('plus')}새로 만들기</button>
+<button class="hb icon" data-act="openHistory" title="자동화 작업 내역 및 검증 로그" aria-label="작업 내역">${ic('clock')}</button>
 <button class="hb icon" data-act="menuBell" id="bell" title="새로 들어온 항목" aria-label="알림">${ic('bell')}</button>
 <button class="hb" data-act="help" title="사용법·단축키 (?)">${ic('help')}도움말</button>
 <button class="hb back" data-act="close" title="업무센터를 접고 원래 그룹웨어 화면으로 (화면 위 가운데 '업무센터' 버튼이나 Alt+G로 다시 열기)">${ic('back')}그룹웨어로 돌아가기</button></header>

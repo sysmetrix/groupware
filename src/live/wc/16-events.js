@@ -33,6 +33,11 @@
       case 'coach': startCoach(); break;
       case 'coachNext': coachNext(); break;
       case 'coachEnd': endCoach(); break;
+      case 'openCmd': openCommandConsole(); break;
+      case 'openHistory': openActionHistory(); break;
+      case 'submitCmd': { const q = ($('#cmdPrompt') || {}).value; executeCommandWorkflow(q); break; }
+      case 'runPreset': { const pr = COMMAND_PRESETS.find(x => x.id === el.dataset.id); if (pr) executeCommandWorkflow(pr.query); break; }
+      case 'clearHistory': store.del('actionHistory'); openActionHistory(); toast('작업 내역을 비웠습니다.'); break;
       case 'mailToDraft': mailToDraft(el.dataset.uid); break;
       case 'quickDraft': autoStartDraft(el.dataset.t); break;
       case 'autoFillMail': autoFillMail(v); break;

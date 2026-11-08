@@ -35,7 +35,8 @@
     if (!typing && (e.key === 'Enter' || e.key === ' ') && t.dataset && t.dataset.act && t.tagName !== 'BUTTON' && t.tagName !== 'A' || (!typing && (e.key === 'Enter' || e.key === ' ') && t.tagName === 'A' && !t.href)) { e.preventDefault(); t.click(); return; }
     if (typing) {
       if (e.key !== 'Enter') return;
-      if (t.id === 'gsearch') { const v = t.value.trim(); if (v) { S.search.kw = v; runSearch(); } }
+      if (t.id === 'cmdPrompt') { e.preventDefault(); executeCommandWorkflow(t.value); return; }
+      if (t.id === 'gsearch') { e.preventDefault(); const v = t.value.trim(); if (v) { openCommandConsole(v); } return; }
       else if (t.id === 'sq') { S.search.kw = t.value.trim(); runSearch(); }
       else if (t.id === 'mailq') runMailSearch(t.value.trim());
       else if (t.id === 'tdTitle') addTodoFromInput();
