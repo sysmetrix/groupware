@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
-import {analyze, nextState, renderHtml, renderMarkdown, toDataset, extractDeadline, extractAllDeadlines, attendanceAnomalies, recommendRouting, weeklyReport, toCsv} from '../src/live/briefing.mjs';
+import {cleanTitle, fmtDays, analyze, nextState, renderHtml, renderMarkdown, toDataset, extractDeadline, extractAllDeadlines, attendanceAnomalies, recommendRouting, weeklyReport, toCsv} from '../src/live/briefing.mjs';
 import {validateDataset} from '../src/schema.mjs';
 import {buildReport} from '../scripts/live-report.mjs';
 
@@ -98,7 +98,7 @@ test('rendered HTML escapes groupware text and keeps sections', () => {
   const html = renderHtml(analyze(fixture(), null, NOW));
   assert.ok(!html.includes('<script>alert(1)</script>'));
   assert.ok(html.includes('&lt;script&gt;'));
-  for (const s of ['오늘 할 일', '전자결재·문서유통', '예산 집행', '제목에서 찾은 기한']) assert.ok(html.includes(s), s);
+  for (const s of ['내 처리할 일', '전자결재·문서유통', '예산 집행', '제목에서 찾은 기한']) assert.ok(html.includes(s), s);
   const md = renderMarkdown(analyze(fixture(), null, NOW));
   assert.match(md, /결재·문서유통 처리 필요: \*\*2건\*\*/);
 });
@@ -322,4 +322,61 @@ test('relevance: department work and shared material go to reference, self mail 
   for (const x of a.actions.filter(x => ['deptWaiting', 'distWaiting', 'notice', 'viewing'].includes(x.base))) { assert.equal(x.scope, 'ref', x.key); assert.notEqual(x.priority, 'high'); }
   const b = analyze(raw, null, NOW, {roles: {deptReceiver: true, distributor: true}});
   for (const x of b.actions.filter(x => ['deptWaiting', 'distWaiting'].includes(x.base))) assert.equal(x.scope, 'mine', x.key);
+});
+
+const mailRec = (uid, subject, extra = {}) => ({uid, box: 'INBOX', subject, from: '동료', fromEmail: 'p@x.kr', date: '2026-11-03 10:00:00', seen: true, answered: false, forwarded: false, attach: false, preview: '', ...extra});
+test('state contract: answered/unanswered deadline mails with leave-advanced deadlines', () => {
+  const raw = fixture();
+  raw.data.leave.upcoming = [{start: '20261109', end: '20261109', kind: '대체휴가', days: 1, title: '대체휴가', approved: true}];
+  raw.data.mail.inbox.records.push(
+    mailRec('a1', '시간외근무 작성 요청(~11/9)', {answered: true}),
+    mailRec('a2', '자료 작성 요청(~11/9 16:00)'),
+    mailRec('a3', '의견 제출 요청(~11/10)'),
+    mailRec('a4', '검토 요청(~11/20)', {date: '2026-11-08 10:00:00'}));
+  const a = analyze(raw, null, NOW);
+  const by = u => a.actions.find(x => x.ref && x.ref.uid === u);
+  assert.equal(by('a1').state, 'confirm'); assert.notEqual(by('a1').priority, 'high');
+  assert.match(by('a1').headline, /11-06\(금\)까지였음 · 답장함/);
+  assert.equal(by('a2').state, 'overdue'); assert.equal(by('a2').priority, 'high');
+  assert.equal(by('a3').state, 'urgent');
+  assert.equal(by('a4').state, 'todo');
+  for (const x of a.actions) { assert.ok(x.headline && x.headline.length <= 40, x.key); assert.ok(Array.isArray(x.facts) && x.facts.length <= 4); if (x.scope === 'ref') assert.equal(x.state, 'info'); }
+  const order = {overdue: 0, urgent: 1, todo: 2, check: 3, confirm: 4, info: 5};
+  for (let i = 1; i < a.actions.length; i++) assert.ok(order[a.actions[i - 1].state] <= order[a.actions[i].state]);
+  const mine = a.actions.filter(x => x.scope !== 'ref');
+  assert.equal(a.summary.mine.total, mine.length);
+  assert.equal(a.summary.ref, a.actions.length - mine.length);
+  assert.equal(a.summary.mine.urgent, mine.filter(x => ['overdue', 'urgent'].includes(x.state)).length);
+  assert.equal(Object.values(a.summary.mine.byArea).reduce((p, q) => p + q, 0), mine.filter(x => ['결재', '메일', '기한', '근태', '공지'].includes(x.area)).length);
+});
+
+test('attendance items are checks without guesses in the headline; today workday flag', () => {
+  const raw = fixture();
+  raw.data.attendance.days = [
+    {date: '20261101', workType: '근무일대체', result: '정상근무', holiday: true},
+    {date: '20261102', result: '결근', status: '대기', holiday: false, applied: false},
+    {date: '20261106', result: '미인정', status: '대기', item: '관내출장', holiday: false, applied: true},
+  ];
+  const a = analyze(raw, null, NOW);
+  const d2 = a.actions.find(x => x.key === 'att:20261102'), d6 = a.actions.find(x => x.key === 'att:20261106');
+  assert.equal(d2.state, 'check'); assert.match(d2.headline, /출근 기록 없음/); assert.ok(!/수 있음/.test(d2.headline));
+  assert.ok(d2.facts.some(f => /11-01 휴일근무\(근무일대체\)와 짝일 수 있음/.test(f)));
+  assert.equal(d6.headline, '근태신청 결재가 끝났는지 확인');
+  assert.deepEqual(a.today, {date: '2026-11-09', isWorkday: true});
+  assert.equal(analyze(raw, null, new Date('2026-11-08T03:00:00Z')).today.isWorkday, false);
+});
+
+test('titles are cleaned and reports carry no ms or raw decimals', () => {
+  assert.equal(cleanTitle('?2026년  연합캠프\u0007 추천'), '2026년 연합캠프 추천');
+  assert.equal(fmtDays(6.59375), '6일 4시간 45분');
+  const raw = fixture();
+  raw.data.leave.remaining = 6.59375; raw.data.leave.granted = 38.15625; raw.data.leave.used = 31.5625;
+  raw.data.approval.lists.pending.docs[0].title = '?급한 결재';
+  const a = analyze(raw, null, NOW);
+  assert.ok(a.actions.some(x => x.title === '급한 결재'));
+  for (const text of [renderHtml(a), renderMarkdown(a)]) {
+    assert.ok(!/\d+ms\b/.test(text), 'no ms');
+    assert.ok(!text.includes('6.59375') && !text.includes('38.15625'));
+    assert.ok(text.includes(`내 처리할 일 ${a.summary.mine.total}건`));
+  }
 });

@@ -15,6 +15,11 @@ const dayNumber = iso => Math.floor(Date.parse(iso + 'T00:00:00Z') / 86400000);
 export const dday = (isoDate, now = new Date()) => dayNumber(isoDate) - dayNumber(kstNow(now).date);
 const fmtYmd = s => (s && /^\d{8}/.test(s)) ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}` : (s || '');
 const fmtYmdHm = s => (s && /^\d{12}/.test(s)) ? `${fmtYmd(s)} ${s.slice(8, 10)}:${s.slice(10, 12)}` : fmtYmd(s);
+export const cleanTitle = s => String(s ?? '').replace(/[\u0000-\u001f\u007f\ufffd]/g, ' ').replace(/^[\s?？\ufffd]+/, '').replace(/\s+/g, ' ').trim();
+// 6.59375 -> "6일 4시간 45분" (1일 = 8시간)
+export const fmtDays = v => { if (v === null || v === undefined || v === '') return '-'; const n = Number(v); if (!Number.isFinite(n)) return String(v); const d = Math.trunc(n); const m = Math.round((n - d) * 480); const h = Math.floor(m / 60), mi = m % 60; return [`${d}일`, h ? `${h}시간` : '', mi ? `${mi}분` : ''].filter(Boolean).join(' '); };
+const WD = '일월화수목금토';
+const mdw = iso => `${iso.slice(5)}(${WD[new Date(iso + 'T00:00:00Z').getUTCDay()]})`;
 const won = n => Number(n || 0).toLocaleString('ko-KR');
 const hm = min => min === null || min === undefined ? '-' : `${Math.floor(min / 60)}시간${min % 60 ? ` ${min % 60}분` : ''}`;
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
@@ -243,6 +248,49 @@ function scoreAction(a, now) {
 const SHARE_WORDS = /공유|드립니다|드려요|보내드|송부|전달드|참고|안내드/;
 const ASK_WORDS = /요청|회신|제출|검토|작성|부탁|바랍니다|주시기|주세요|의견|취합|협조|확인\s*(부탁|요망|바랍|해\s*주)|마감|기한|까지/;
 // Who handles department-level work. Default: not me (the dept 문서담당 does it) unless the settings say so.
+const STATE_ORDER = {overdue: 0, urgent: 1, todo: 2, check: 3, confirm: 4, info: 5};
+const STATE_PRI = {overdue: 'high', urgent: 'high', todo: 'medium', check: 'medium', confirm: 'medium', info: 'low'};
+// State-based judgement (state wins over score): what is it, and what should I do?
+function judge(a, now) {
+  const lc = a.leaveConflict;
+  const effDate = lc ? lc.before : a.deadline && a.deadline.date;
+  const left = effDate ? dday(effDate, now) : null;
+  const facts = [];
+  const sender = a.from || a.sender || '';
+  if (sender) facts.push(sender);
+  if (a.docNo) facts.push(a.docNo);
+  if (a.attachN) facts.push(a.type === 'doc' ? `첨부 ${a.attachN}` : '첨부 있음');
+  let state = 'todo', headline = '';
+  const dueTxt = effDate ? `${mdw(effDate)}까지` : '';
+  if (a.scope === 'ref') {
+    state = 'info';
+    headline = {mailShared: `자료 확인${a.attachN ? ` (첨부 ${a.attachN}개)` : ''}`, deptWaiting: '부서 접수 대기(문서담당 처리)', distWaiting: '배부 대기(배부 담당 처리)', sendWaiting: '발송 대기(기안자 처리)', viewing: '열람 문서 읽기', notice: '공지 읽기', leave: '예정된 휴가'}[a.base] || '참고';
+  } else if (a.type === 'attendance') {
+    state = 'check';
+    const x = a.att || {};
+    const absent = /결근|미출근/.test(x.result || '');
+    if (x.applied || (/미인정/.test(x.result || '') && x.item)) headline = '근태신청 결재가 끝났는지 확인';
+    else if (absent) headline = `출근 기록 없음 · 근태 상태 '${x.result}${x.status ? `(${x.status})` : ''}'`;
+    else headline = `근태 '${x.result}' 확인`;
+    if (x.item) facts.push(x.item);
+    if (x.status) facts.push(`상태 ${x.status}`);
+    if (x.nearSwap) facts.push(`${fmtYmd(x.nearSwap).slice(5)} 휴일근무(근무일대체)와 짝일 수 있음`);
+  } else if (a.base === 'mailAnswered' || a.base === 'conflictAnswered') {
+    state = 'confirm';
+    headline = effDate ? `${dueTxt}${left < 0 ? '였음' : ''} · 답장함 → 제출 끝났는지 확인` : '답장함 → 제출 끝났는지 확인';
+  } else if (a.type === 'mail' || a.type === 'conflict') {
+    if (left !== null && left < 0) { state = 'overdue'; headline = `${dueTxt} 제출했어야 함 · 지금 처리`; }
+    else if (left !== null && left <= 1) { state = 'urgent'; headline = `${left === 0 ? '오늘' : '내일'}(${mdw(effDate)}) 마감 · 회신·제출`; }
+    else if (left !== null) headline = `${dueTxt} 회신·제출`;
+    else headline = {mailReplyIn: '내 요청에 온 회신 확인', mailReply: '답장이 필요한지 확인', mailUnreadAsk: '요청 메일 읽고 처리'}[a.base] || '메일 읽기';
+  } else if (a.type === 'doc') {
+    if (a.base === 'pending' || a.base === 'rejected') { state = 'urgent'; headline = a.base === 'pending' ? '결재하기' : '반려된 내 문서 고쳐 다시 올리기'; }
+    else { headline = {deptWaiting: '부서 접수 처리', distWaiting: '배부 처리', sendWaiting: '발송 처리', viewing: '열람 문서 읽기'}[a.base] || '문서 확인'; state = left !== null && left < 0 ? 'overdue' : left !== null && left <= 1 ? 'urgent' : 'todo'; }
+    if (effDate) facts.push(`기한 ${mdw(effDate)}`);
+  } else if (a.type === 'notice') headline = '공지 읽기';
+  else if (a.type === 'leave') { state = 'info'; headline = '예정된 휴가'; }
+  return {state, headline: headline.slice(0, 40), facts: facts.filter(Boolean).slice(0, 4)};
+}
 export const DEFAULT_ROLES = {deptReceiver: false, distributor: false, sender: false};
 export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6, roles = DEFAULT_ROLES} = {}) {
   const d = raw?.data || {};
@@ -264,7 +312,7 @@ export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6, roles 
     if (!deadlines.some(x => x.title === title && x.date === info.date)) deadlines.push({date: info.date, time: info.time, dday: left, title, source, url, key});
     return {...info, dday: left};
   };
-  const push = a => { const ex = actions.find(x => x.key === a.key); if (ex) { if ((BASE[a.base] ?? 0) > (BASE[ex.base] ?? 0)) Object.assign(ex, a); return; } actions.push(a); };
+  const push = a => { a.title = cleanTitle(a.title) || '(제목 없음)'; const ex = actions.find(x => x.key === a.key); if (ex) { if ((BASE[a.base] ?? 0) > (BASE[ex.base] ?? 0)) Object.assign(ex, a); return; } actions.push(a); };
 
   // Approval / document flow
   const lists = d.approval?.lists || {};
@@ -275,7 +323,7 @@ export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6, roles 
     for (const doc of l.docs) {
       const k = `doc:${key}:${doc.docId}`;
       const deadline = addDeadline(doc.title, l.label, doc.url || docLink(raw, l), k);
-      push({key: k, type: 'doc', base: key, ref: {kind: key, docId: doc.docId}, drafter: doc.drafter || '', toEmp: doc.toEmp || '', area: '결재', kind: l.label, title: doc.title, detail: [verb, doc.sender || doc.drafter, doc.docNo, doc.attachments ? `첨부 ${doc.attachments}` : ''].filter(Boolean).join(' · '), when: doc.date, waitDays: ageDays(doc.date, now), bizWait: bizDays(doc.date, now), deadline, url: doc.url || docLink(raw, l), listUrl: l.url, isNew: hasPrev && !prevDocs.has(`${key}:${doc.docId}`)});
+      push({key: k, type: 'doc', base: key, ref: {kind: key, docId: doc.docId}, drafter: doc.drafter || '', toEmp: doc.toEmp || '', sender: doc.sender || doc.sendOrg || doc.drafter || '', docNo: doc.docNo || '', attachN: doc.attachments || 0, area: '결재', kind: l.label, title: doc.title, detail: [verb, doc.sender || doc.drafter, doc.docNo, doc.attachments ? `첨부 ${doc.attachments}` : ''].filter(Boolean).join(' · '), when: doc.date, waitDays: ageDays(doc.date, now), bizWait: bizDays(doc.date, now), deadline, url: doc.url || docLink(raw, l), listUrl: l.url, isNew: hasPrev && !prevDocs.has(`${key}:${doc.docId}`)});
     }
   };
   docAction('pending', '내 결재 차례');
@@ -303,7 +351,7 @@ export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6, roles 
     // "Re:/FW:" mails are replies to a request (often my own): not my deadline.
     const isReplyMail = /^\s*(re|fw|fwd|회신|답장|전달)\s*[:：]/i.test(m.subject || '');
     if (isReplyMail) {
-      if (!m.seen && !NOISE_WORDS.test(m.subject)) push({key: k, type: 'mail', base: 'mailReplyIn', ref: {box: m.box, uid: m.uid}, area: '메일', kind: '내 요청에 온 회신', title: m.subject, detail: `${m.from} · 안 읽음`, when: m.date, url: d.mail.url, isNew: hasPrev && !prevMail.has(`${m.box}:${m.uid}`)});
+      if (!m.seen && !NOISE_WORDS.test(m.subject)) push({key: k, type: 'mail', base: 'mailReplyIn', from: m.from, ref: {box: m.box, uid: m.uid}, area: '메일', kind: '내 요청에 온 회신', title: m.subject, detail: `${m.from} · 안 읽음`, when: m.date, url: d.mail.url, isNew: hasPrev && !prevMail.has(`${m.box}:${m.uid}`)});
       continue;
     }
     const dl = ageDays(m.date, now) <= 30 ? addDeadline(m.subject, '메일', d.mail?.url, k, m.preview) : null;
@@ -314,7 +362,7 @@ export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6, roles 
     const replyCheck = recentAction.includes(m) && asks && !shareOnly;
     if (!unread && !hasDeadline && !replyCheck) {
       // Material handed over to me: keep as reference (attachments are often what I need).
-      if (shareOnly && ageDays(m.date, now) <= 7) push({key: k, type: 'mail', base: 'mailShared', ref: {box: m.box, uid: m.uid}, area: '메일', kind: '받은 자료', title: m.subject || '(제목 없음)', detail: `${m.from} · 읽음${m.attach || /첨부/.test(m.preview || '') ? ' · 첨부' : ''}`, when: m.date, url: d.mail.url, scope: 'ref', refReason: '자료를 공유한 메일(할 일 요청 없음)', isNew: false});
+      if (shareOnly && ageDays(m.date, now) <= 7) push({key: k, type: 'mail', base: 'mailShared', from: m.from, attachN: (m.attach || /첨부/.test(m.preview || '')) ? (Number((String(m.preview || '').match(/첨부\s*(\d+)\s*개/) || [])[1]) || 1) : 0, ref: {box: m.box, uid: m.uid}, area: '메일', kind: '받은 자료', title: m.subject || '(제목 없음)', detail: `${m.from} · 읽음${m.attach || /첨부/.test(m.preview || '') ? ' · 첨부' : ''}`, when: m.date, url: d.mail.url, scope: 'ref', refReason: '자료를 공유한 메일(할 일 요청 없음)', isNew: false});
       continue;
     }
     const replied = m.answered || m.forwarded;
@@ -322,7 +370,7 @@ export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6, roles 
     const base = hasDeadline ? (replied ? 'mailAnswered' : 'mailDeadline') : unread ? (ACTION_WORDS.test(m.subject) ? 'mailUnreadAsk' : m.box === 'INBOX' ? 'mailUnread' : 'mailOther') : 'mailReply';
     const kind = hasDeadline ? (replied ? '기한 메일 · 제출까지 끝났는지 확인' : '기한 있는 메일') : unread ? (m.box === 'INBOX' ? '안 읽은 메일' : `안 읽은 메일(${m.box})`) : '답장했는지 확인';
     const flags = [m.seen ? '읽음' : '안 읽음', m.answered ? '답장함' : '', m.forwarded ? '전달함' : '', m.attach ? '첨부' : ''].filter(Boolean).join(' · ');
-    push({key: k, type: 'mail', base, ref: {box: m.box, uid: m.uid}, area: '메일', kind, title: m.subject || '(제목 없음)', detail: `${m.from} · ${flags}`, when: m.date, deadline: dl, url: d.mail.url, isNew: hasPrev && !prevMail.has(`${m.box}:${m.uid}`)});
+    push({key: k, type: 'mail', base, from: m.from, attachN: m.attach ? 1 : 0, ref: {box: m.box, uid: m.uid}, area: '메일', kind, title: m.subject || '(제목 없음)', detail: `${m.from} · ${flags}`, when: m.date, deadline: dl, url: d.mail.url, isNew: hasPrev && !prevMail.has(`${m.box}:${m.uid}`)});
   }
   const newMails = hasPrev ? uniqueMails.filter(m => !prevMail.has(`${m.box}:${m.uid}`)) : [];
 
@@ -359,7 +407,7 @@ export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6, roles 
 
   // Attendance (cross-checked with approved leave and 근무일대체)
   const anomalies = attendanceAnomalies(d.attendance?.days || [], {now, leaves: d.leave?.history || upcoming});
-  for (const x of anomalies) push({key: `att:${x.date}`, type: 'attendance', base: x.priority === 'high' ? 'attHigh' : 'attMedium', ref: {date: x.date}, area: '근태', kind: '근태 확인 필요', title: `${fmtYmd(x.date)} 출결 '${x.result}'${x.status ? ` (${x.status})` : ''}${x.item ? ` · ${x.item}` : ''}`, detail: x.advice, when: fmtYmd(x.date), url: d.attendance?.requestUrl || d.attendance?.url, listUrl: d.attendance?.url, isNew: false});
+  for (const x of anomalies) push({key: `att:${x.date}`, type: 'attendance', base: x.priority === 'high' ? 'attHigh' : 'attMedium', att: x, ref: {date: x.date}, area: '근태', kind: '근태 확인 필요', title: `${fmtYmd(x.date)} 출결 '${x.result}'${x.status ? ` (${x.status})` : ''}${x.item ? ` · ${x.item}` : ''}`, detail: x.advice, when: fmtYmd(x.date), url: d.attendance?.requestUrl || d.attendance?.url, listUrl: d.attendance?.url, isNew: false});
 
   // Score -> level. Only the top `maxHigh` can be 긴급 so that red stays meaningful.
   // Is this mine to do, or just something I can see? (참고 = 나와 직접 관련 적음)
@@ -377,12 +425,25 @@ export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6, roles 
   }
   for (const a of actions) { const {score, why} = scoreAction(a, now); a.score = a.scope === 'ref' ? Math.min(score, 39) : score; a.why = why; }
   actions.sort((a, b) => (a.scope === 'ref') - (b.scope === 'ref') || b.score - a.score || String(a.when).localeCompare(String(b.when)));
+  for (const a of actions) Object.assign(a, judge(a, now));
+  actions.sort((a, b) => STATE_ORDER[a.state] - STATE_ORDER[b.state] || b.score - a.score || String(a.when).localeCompare(String(b.when)));
   let highs = 0;
   for (const a of actions) {
-    let level = a.score >= 70 ? 'high' : a.score >= 40 ? 'medium' : 'low';
-    if (level === 'high' && ++highs > maxHigh) level = 'medium';
+    let level = STATE_PRI[a.state];
+    if (level === 'high' && a.state === 'urgent' && ++highs > maxHigh) level = 'medium'; // safety net; overdue is never demoted
     a.priority = level;
   }
+  const mineActs = actions.filter(a => a.scope !== 'ref');
+  const cnt = st => mineActs.filter(a => st.includes(a.state)).length;
+  const mine = {total: mineActs.length, urgent: cnt(['overdue', 'urgent']), todo: cnt(['todo']), check: cnt(['check']), confirm: cnt(['confirm']),
+    byArea: Object.fromEntries(['결재', '메일', '기한', '근태', '공지'].map(ar => [ar, mineActs.filter(a => a.area === ar).length]))};
+  const todayInfo = (() => {
+    const k = kstNow(now), d8 = k.date.replace(/-/g, '');
+    const wd = new Date(k.date + 'T00:00:00Z').getUTCDay();
+    const row = (d.attendance?.days || []).find(r => r && r.date === d8);
+    const hol = (d.schedule?.holidays || []).some(h => String(h.date || '').replace(/-/g, '').slice(0, 8) === d8);
+    return {date: k.date, isWorkday: !(wd === 0 || wd === 6 || hol || (row && (row.holiday || /휴일/.test(row.result || ''))))};
+  })();
   deadlines.sort((a, b) => a.date.localeCompare(b.date));
 
   // Budget with change since previous run
@@ -405,9 +466,9 @@ export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6, roles 
       inProgressSubmitted: inProgress.length, rejectedSubmitted: rejected.length,
       mailUnread: unreadMails.length, inboxTotal: d.mail?.inbox?.total ?? null, noticeUnread: d.notice?.unread ?? unreadNotices.length,
       leaveRemaining: d.leave?.remaining ?? null, upcomingEvents: d.schedule?.events?.length ?? null,
-      high: actions.filter(a => a.priority === 'high').length, total: actions.length,
+      high: actions.filter(a => a.priority === 'high').length, total: actions.length, mine, ref: actions.length - mineActs.length,
     },
-    actions, deadlines,
+    actions, deadlines, today: todayInfo,
     newSince: hasPrev ? {since: prev.at, mails: newMails.length, notices: newNotices.length, docs: actions.filter(a => a.area === '결재' && a.isNew).length} : null,
     anomalies,
     approval: {counts: d.approval?.counts || [], lists, inProgress},
@@ -432,37 +493,40 @@ export function nextState(raw, prev = null) {
 const kstText = iso => { if (!iso) return '-'; const k = kstNow(new Date(iso)); return `${k.date} ${pad(k.hh)}:${pad(k.mm)}`; };
 const ddayText = n => n === 0 ? 'D-day' : n > 0 ? `D-${n}` : `D+${-n}`;
 const PRI_LABEL = {high: '긴급', medium: '보통', low: '참고'};
+export const STATE_LABEL = {overdue: '기한 지남', urgent: '급함', todo: '할 일', check: '확인 필요', confirm: '끝났는지 확인', info: '참고'};
 
 export function renderMarkdown(a) {
   const s = a.summary;
   const lines = [];
   lines.push(`# 그룹웨어 업무 브리핑 (${kstText(a.collectedAt)} KST 기준)`);
   lines.push('');
-  lines.push(`${a.principal.name || ''} · ${a.principal.deptName || ''} · 수집 ${a.durationMs}ms · 읽기 전용`);
+  lines.push(`${a.principal.name || ''} · ${a.principal.deptName || ''} · 읽기 전용`, '', `**내 처리할 일 ${s.mine?.total ?? 0}건** (급함 ${s.mine?.urgent ?? 0} · 할 일 ${s.mine?.todo ?? 0} · 확인 ${(s.mine?.check ?? 0) + (s.mine?.confirm ?? 0)}) · 참고 ${s.ref ?? 0}건`);
   if (a.sessionExpired) lines.push('', '> 로그인 세션이 만료되어 일부 자료를 읽지 못했습니다. 다시 로그인 후 실행하세요.');
   if (a.failed.length) lines.push('', `> 실패한 모듈: ${a.failed.map(f => `${f.name}(${f.error})`).join(', ')}`);
   lines.push('', '## 한눈에 보기', '');
   lines.push(`- 결재·문서유통 처리 필요: **${s.approvalAction}건** (결재대기 ${s.pending ?? '-'}, 부서접수대기 ${s.deptWaiting ?? '-'}, 배부대기 ${s.distWaiting ?? '-'}) · 발송대기 ${s.sendWaiting ?? '-'}`);
   lines.push(`- 내 상신문서 진행 중 ${s.inProgressSubmitted}건, 반려/회수 ${s.rejectedSubmitted}건 · 임시보관 ${s.drafts ?? '-'}건 · 미열람 열람문서 ${s.viewingUnread ?? '-'}건`);
-  lines.push(`- 안 읽은 메일 ${s.mailUnread}건 · 안 읽은 공지 ${s.noticeUnread ?? '-'}건 · 남은 연차 ${s.leaveRemaining ?? '-'}일`);
+  lines.push(`- 안 읽은 메일 ${s.mailUnread}건 · 안 읽은 공지 ${s.noticeUnread ?? '-'}건 · 남은 연차 ${fmtDays(s.leaveRemaining)}`);
   if (a.newSince) lines.push(`- 지난 실행(${kstText(a.newSince.since)}) 이후 새 메일 ${a.newSince.mails}건, 새 공지 ${a.newSince.notices}건, 새 결재·문서 ${a.newSince.docs}건`);
-  lines.push('', '## 오늘 할 일', '');
-  if (!a.actions.length) lines.push('- 처리할 항목이 없습니다.');
-  for (const x of a.actions.slice(0, 40)) lines.push(`- [${PRI_LABEL[x.priority]}] ${x.isNew ? '(새) ' : ''}${x.area}/${x.kind}: ${x.title} (${x.detail}, ${x.when})`);
+  lines.push('', `## 내 처리할 일 ${s.mine?.total ?? 0}건`, '');
+  const mineL = a.actions.filter(x => x.scope !== 'ref'), refL = a.actions.filter(x => x.scope === 'ref');
+  if (!mineL.length) lines.push('- 지금 내가 처리할 일이 없습니다.');
+  for (const x of mineL.slice(0, 40)) lines.push(`- [${STATE_LABEL[x.state]}] ${x.isNew ? '(새) ' : ''}${x.title} — ${x.headline}${x.facts.length ? ` (${x.facts.join(', ')})` : ''}`);
+  if (refL.length) { lines.push('', `## 참고 ${refL.length}건`, ''); for (const x of refL.slice(0, 30)) lines.push(`- ${x.title} — ${x.headline}`); }
   if (a.deadlines.length) {
     lines.push('', '## 제목에서 찾은 기한', '');
     for (const x of a.deadlines) lines.push(`- ${x.date} (${ddayText(x.dday)}) ${x.title} [${x.source}]`);
   }
   for (const p of a.budget.projects) {
-    lines.push('', `## 예산 ${p.project} ${p.label}${p.filter ? ` · ${p.filter}` : ''} (${p.period || ''}, 연간 경과율 ${a.budget.elapsedPct}%)`, '');
+    lines.push('', `## 예산 ${p.label || p.project}${p.filter ? ` · ${p.filter}` : ''} (${p.period || ''}, 연간 경과율 ${a.budget.elapsedPct}%)`, '');
     if (p.error) { lines.push(`- 조회 실패: ${p.message}`); continue; }
     lines.push('| 과목 | 예산 | 집행 | 잔액 | 집행률 |', '|---|---:|---:|---:|---:|');
     for (const r of p.rows) lines.push(`| ${r.level} ${r.name} | ${won(r.budget)} | ${won(r.executed)}${r.executedDelta ? ` (+${won(r.executedDelta)})` : ''} | ${won(r.balance)} | ${r.rate}% |`);
     if (p.total) lines.push(`| **${p.project} 프로젝트 전체** | ${won(p.total.budget)} | ${won(p.total.executed)} | ${won(p.total.balance)} | ${p.total.rate}% |`);
   }
-  if (a.leave) lines.push('', '## 연차', '', `- ${a.leave.year}년 부여 ${a.leave.granted} · 사용 ${a.leave.used} · 잔여 **${a.leave.remaining}**`, ...(a.leave.upcoming || []).map(u => `- 예정: ${fmtYmd(u.start)} ${u.kind} ${u.days}일 (${u.approved ? '결재완료' : '진행 중'})`));
+  if (a.leave) lines.push('', '## 연차', '', `- ${a.leave.year}년 부여 ${fmtDays(a.leave.granted)} · 사용 ${fmtDays(a.leave.used)} · 잔여 **${fmtDays(a.leave.remaining)}**`, ...(a.leave.upcoming || []).map(u => `- 예정: ${fmtYmd(u.start)} ${u.kind} ${u.days}일 (${u.approved ? '결재완료' : '진행 중'})`));
   if (a.attendance) lines.push('', '## 근무시간', '', `- 이번 달 인정 ${hm(a.attendance.month.recognizedMin)} · 초과 ${hm(a.attendance.month.overtimeMin)} · 오늘 출근 ${a.attendance.today.come || '기록 없음'}`);
-  lines.push('', `---`, `수집기 v${a.collector} · 생성 ${kstText(a.generatedAt)} KST · 메일·문서를 열지 않는 목록 조회만 사용해 읽음 상태는 바뀌지 않습니다.`);
+  lines.push('', `---`, `생성 ${kstText(a.generatedAt)} KST · 메일·문서를 열지 않는 목록 조회만 사용해 읽음 상태는 바뀌지 않습니다.`);
   return lines.join('\n') + '\n';
 }
 
@@ -470,7 +534,8 @@ export function renderHtml(a) {
   const s = a.summary;
   const card = (label, value, sub = '', tone = '') => `<div class="card ${tone}"><div class="label">${esc(label)}</div><div class="value">${esc(value ?? '-')}</div><div class="sub">${esc(sub)}</div></div>`;
   const link = (url, text) => url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(text)}</a>` : esc(text);
-  const actionRows = a.actions.slice(0, 60).map(x => `<tr class="p-${x.priority}"><td><span class="pill ${x.priority}">${PRI_LABEL[x.priority]}</span>${x.isNew ? '<span class="pill new">새</span>' : ''}</td><td>${esc(x.area)}<div class="muted">${esc(x.kind)}</div></td><td>${link(x.url, x.title)}<div class="muted">${esc(x.detail)}</div></td><td class="nowrap">${esc(x.when)}</td></tr>`).join('');
+  const actionRows = a.actions.filter(x => x.scope !== 'ref').slice(0, 60).map(x => `<tr class="p-${x.priority}"><td><span class="pill ${x.priority}">${STATE_LABEL[x.state]}</span>${x.isNew ? '<span class="pill new">새</span>' : ''}</td><td>${esc(x.area)}<div class="muted">${esc(x.kind)}</div></td><td>${link(x.url, x.title)}<div><b>${esc(x.headline)}</b></div><div class="muted">${esc(x.facts.join(' · '))}</div></td><td class="nowrap">${esc(x.when)}</td></tr>`).join('');
+  const refRows = a.actions.filter(x => x.scope === 'ref').slice(0, 40).map(x => `<tr><td>${link(x.url, x.title)}<div class="muted">${esc(x.headline)}</div></td><td class="nowrap">${esc(x.when)}</td></tr>`).join('');
   const deadlineRows = a.deadlines.map(x => `<tr><td class="nowrap"><b>${esc(x.date)}</b></td><td><span class="pill ${x.dday <= 3 ? 'high' : x.dday <= 7 ? 'medium' : 'low'}">${ddayText(x.dday)}</span></td><td>${link(x.url, x.title)}</td><td>${esc(x.source)}</td></tr>`).join('');
   const countRows = (a.approval.counts || []).map(c => `<tr><td>${esc(c.name)}</td><td class="num">${c.count}</td><td class="num muted">${c.total ?? ''}</td></tr>`).join('');
   const listBlock = (key) => {
@@ -482,10 +547,10 @@ export function renderHtml(a) {
   };
   const mailRows = a.mail.recent.map(m => `<tr class="${m.seen ? '' : 'unread'}"><td>${m.seen ? '' : '<span class="pill high">안읽음</span>'}${esc(m.subject)}${m.attach ? ' <span class="muted">첨부</span>' : ''}<div class="muted">${esc(m.preview.slice(0, 90))}</div></td><td>${esc(m.from)}</td><td class="nowrap">${esc(m.date)}</td></tr>`).join('');
   const noticeRows = a.notice.recent.map(n => `<tr class="${n.read ? '' : 'unread'}"><td>${n.read ? '' : '<span class="pill medium">안읽음</span>'}${n.reserved ? '<span class="pill low">예약</span>' : ''}${esc(n.title)}</td><td>${esc(n.dept)} ${esc(n.writer)}</td><td class="nowrap">${esc(n.date.slice(0, 16))}</td></tr>`).join('');
-  const budgetBlocks = a.budget.projects.map(p => p.error ? `<p class="warn">${esc(p.project)} 조회 실패: ${esc(p.message)}</p>` : `<h3>${esc(p.project)} ${esc(p.label)}${p.filter ? ` · ${esc(p.filter)}` : ''} <span class="muted">${esc(p.period)} · 연간 경과율 ${a.budget.elapsedPct}%</span></h3><table><tr><th>과목</th><th class="num">예산</th><th class="num">집행</th><th class="num">잔액</th><th class="num">집행률</th></tr>${p.rows.map(r => `<tr class="lv-${esc(r.level)}"><td>${esc(r.level)} ${esc(r.name)}</td><td class="num">${won(r.budget)}</td><td class="num">${won(r.executed)}${r.executedDelta ? `<div class="delta">+${won(r.executedDelta)}</div>` : ''}</td><td class="num">${won(r.balance)}</td><td class="num"><div class="bar"><i style="width:${Math.min(100, r.rate)}%"></i></div>${r.rate}%</td></tr>`).join('')}${p.total ? `<tr class="total"><td>${esc(p.project)} 프로젝트 전체</td><td class="num">${won(p.total.budget)}</td><td class="num">${won(p.total.executed)}</td><td class="num">${won(p.total.balance)}</td><td class="num">${p.total.rate}%</td></tr>` : ''}</table>`).join('');
+  const budgetBlocks = a.budget.projects.map(p => p.error ? `<p class="warn">${esc(p.project)} 조회 실패: ${esc(p.message)}</p>` : `<h3>${esc(p.label || p.project)}${p.filter ? ` · ${esc(p.filter)}` : ''} <span class="muted">${esc(p.period)} · 연간 경과율 ${a.budget.elapsedPct}%</span></h3><table><tr><th>과목</th><th class="num">예산</th><th class="num">집행</th><th class="num">잔액</th><th class="num">집행률</th></tr>${p.rows.map(r => `<tr class="lv-${esc(r.level)}"><td>${esc(r.level)} ${esc(r.name)}</td><td class="num">${won(r.budget)}</td><td class="num">${won(r.executed)}${r.executedDelta ? `<div class="delta">+${won(r.executedDelta)}</div>` : ''}</td><td class="num">${won(r.balance)}</td><td class="num"><div class="bar"><i style="width:${Math.min(100, r.rate)}%"></i></div>${r.rate}%</td></tr>`).join('')}${p.total ? `<tr class="total"><td>${esc(p.project)} 프로젝트 전체</td><td class="num">${won(p.total.budget)}</td><td class="num">${won(p.total.executed)}</td><td class="num">${won(p.total.balance)}</td><td class="num">${p.total.rate}%</td></tr>` : ''}</table>`).join('');
   const lv = a.leave, at = a.attendance, sc = a.schedule;
   const events = sc?.events?.length ? `<ul>${sc.events.map(e => `<li>${esc(fmtYmdHm(e.start))} ${esc(e.title)} <span class="muted">${esc(e.calendar)}${e.place ? ' · ' + esc(e.place) : ''}</span></li>`).join('')}</ul>` : `<p class="muted">${esc(fmtYmd(sc?.start))} ~ ${esc(fmtYmd(sc?.end))} 그룹웨어 캘린더 일정 없음</p>`;
-  const status = a.status.map(x => `<span class="pill ${x.ok ? 'ok' : 'high'}">${esc(x.name)} ${x.ok ? x.ms + 'ms' : esc(x.error)}</span>`).join(' ');
+  const status = a.status.map(x => `<span class="pill ${x.ok ? 'ok' : 'high'}">${esc(x.name)} ${x.ok ? '정상' : '읽지 못함'}</span>`).join(' ');
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>그룹웨어 업무 브리핑 ${esc(kstText(a.collectedAt))}</title><style>
 :root{--bg:#f6f7f9;--fg:#1d2330;--muted:#6b7280;--line:#e3e6eb;--card:#fff;--hi:#d93025;--md:#e37400;--lo:#5f6368;--ok:#188038;--accent:#1a73e8}
 @media print{body{background:#fff}main{max-width:none;padding:0}a{color:inherit}}
@@ -498,18 +563,18 @@ table{width:100%;border-collapse:collapse;background:var(--card);border:1px soli
 tr.unread td:first-child{font-weight:600}tr.total td{font-weight:700}tr.lv-항 td,tr.lv-관 td{font-weight:600}.bar{height:5px;background:var(--line);border-radius:3px;margin-bottom:2px}.bar i{display:block;height:100%;background:var(--accent);border-radius:3px}.delta{color:var(--md);font-size:11.5px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:760px){.grid2{grid-template-columns:1fr}}footer{margin-top:30px;color:var(--muted);font-size:12px}
 </style></head><body><main>
-<h1>그룹웨어 업무 브리핑</h1><div class="muted">${esc(kstText(a.collectedAt))} KST 기준 · ${esc(a.principal.name)} ${esc(a.principal.duty || '')} · ${esc(a.principal.deptName)} · 수집 ${a.durationMs}ms · 읽기 전용</div>
+<h1>그룹웨어 업무 브리핑</h1><div class="muted">${esc(kstText(a.collectedAt))} KST 기준 · ${esc(a.principal.name)} ${esc(a.principal.duty || '')} · ${esc(a.principal.deptName)} · 읽기 전용</div>
 ${a.sessionExpired ? '<p class="warn"><b>로그인 세션이 만료되어 일부 자료를 읽지 못했습니다.</b> 그룹웨어에 다시 로그인한 뒤 실행하세요.</p>' : ''}${a.failed.length ? `<p class="warn">실패한 모듈: ${a.failed.map(f => esc(`${f.name}(${f.message || f.error})`)).join(', ')}</p>` : ''}
-<div class="cards">${card('결재·접수·배부 처리', s.approvalAction + '건', `결재대기 ${s.pending ?? '-'} · 부서접수 ${s.deptWaiting ?? '-'} · 배부 ${s.distWaiting ?? '-'}`, s.approvalAction ? 'alert' : '')}${card('발송 대기', (s.sendWaiting ?? '-') + '건', '문서유통 > 발송함')}${card('내 상신 진행', s.inProgressSubmitted + '건', `반려/회수 ${s.rejectedSubmitted} · 임시보관 ${s.drafts ?? '-'}`, s.rejectedSubmitted ? 'alert' : '')}${card('안 읽은 메일', s.mailUnread + '건', `받은메일함 전체 ${s.inboxTotal ?? '-'}`, s.mailUnread ? 'alert' : '')}${card('안 읽은 공지', (s.noticeUnread ?? '-') + '건', `미열람 열람문서 ${s.viewingUnread ?? '-'}`)}${card('남은 연차', (s.leaveRemaining ?? '-') + '일', lv ? `부여 ${lv.granted} · 사용 ${lv.used}` : '')}</div>
+<div class="cards">${card('결재·접수·배부 처리', s.approvalAction + '건', `결재대기 ${s.pending ?? '-'} · 부서접수 ${s.deptWaiting ?? '-'} · 배부 ${s.distWaiting ?? '-'}`, s.approvalAction ? 'alert' : '')}${card('발송 대기', (s.sendWaiting ?? '-') + '건', '문서유통 > 발송함')}${card('내 상신 진행', s.inProgressSubmitted + '건', `반려/회수 ${s.rejectedSubmitted} · 임시보관 ${s.drafts ?? '-'}`, s.rejectedSubmitted ? 'alert' : '')}${card('안 읽은 메일', s.mailUnread + '건', `받은메일함 전체 ${s.inboxTotal ?? '-'}`, s.mailUnread ? 'alert' : '')}${card('안 읽은 공지', (s.noticeUnread ?? '-') + '건', `미열람 열람문서 ${s.viewingUnread ?? '-'}`)}${card('남은 연차', fmtDays(s.leaveRemaining), lv ? `부여 ${fmtDays(lv.granted)} · 사용 ${fmtDays(lv.used)}` : '')}</div>
 ${a.newSince ? `<p class="muted">지난 실행(${esc(kstText(a.newSince.since))}) 이후: 새 메일 ${a.newSince.mails}건 · 새 공지 ${a.newSince.notices}건 · 새 결재·문서 ${a.newSince.docs}건</p>` : ''}
-<h2>오늘 할 일 <span class="muted">${a.actions.length}건 · 긴급 → 보통 → 참고 순</span></h2>${a.actions.length ? `<table><tr><th>구분</th><th>영역</th><th>내용</th><th>일시</th></tr>${actionRows}</table>` : '<p class="muted">처리할 항목이 없습니다.</p>'}
+<h2>내 처리할 일 ${s.mine.total}건 <span class="muted">급함 ${s.mine.urgent} · 할 일 ${s.mine.todo} · 확인 ${s.mine.check + s.mine.confirm} · 참고 ${s.ref}건</span></h2>${actionRows ? `<table><tr><th>상태</th><th>영역</th><th>내용</th><th>일시</th></tr>${actionRows}</table>` : '<p class="muted">지금 내가 처리할 일이 없습니다.</p>'}${refRows ? `<h3>참고 ${s.ref}건 <span class="muted">나와 직접 관련 적은 항목</span></h3><table><tr><th>제목</th><th>일시</th></tr>${refRows}</table>` : ''}
 ${a.deadlines.length ? `<h2>제목에서 찾은 기한</h2><table><tr><th>날짜</th><th></th><th>제목</th><th>출처</th></tr>${deadlineRows}</table><p class="muted">제목의 "~11.20.", "11월 20일까지" 같은 표현을 자동으로 읽은 값입니다. 본문 기한은 원문에서 확인하세요.</p>` : ''}
 <h2>전자결재·문서유통</h2><div class="grid2"><div>${listBlock('pending')}${listBlock('deptWaiting')}${listBlock('distWaiting')}${listBlock('sendWaiting')}</div><div><h3>메뉴별 건수</h3><table><tr><th>메뉴</th><th class="num">건수</th><th class="num">전체</th></tr>${countRows}</table>${listBlock('submitted')}</div></div>
 <h2>메일 ${link(a.mail.url, '받은메일함 열기')}</h2><p class="muted">${a.mail.boxes.filter(b => b.unseen).map(b => `${esc(b.name)} 안읽음 ${b.unseen}`).join(' · ') || '안 읽은 메일함 없음'} (스팸함 포함)</p><table><tr><th>제목 (최근 15통)</th><th>보낸 사람</th><th>받은 시각</th></tr>${mailRows}</table>
 <h2>공지사항 ${link(a.notice.url, '게시판 열기')}</h2><table><tr><th>제목 (최근 10건)</th><th>작성</th><th>등록</th></tr>${noticeRows}</table>
 <h2>예산 집행 ${link(a.budget.url, '예실대비현황 열기')}</h2>${budgetBlocks || '<p class="muted">설정된 예산 조회 대상이 없습니다.</p>'}
-<h2>일정·근태</h2><div class="grid2"><div><h3>${link(sc?.url, '그룹웨어 일정')} <span class="muted">향후 ${sc ? dday(fmtYmd(sc.end)) : '-'}일</span></h3>${events}${sc?.holidays?.length ? `<p class="muted">휴일: ${sc.holidays.map(h => esc(fmtYmd(h.date) + ' ' + h.title)).join(', ')}</p>` : ''}</div><div><h3>${link(lv?.url, '연차')}</h3>${lv ? `<p>${esc(lv.year)}년 부여 <b>${lv.granted}</b> · 사용 <b>${lv.used}</b> · 잔여 <b>${lv.remaining}</b>일</p>${lv.upcoming.length ? `<ul>${lv.upcoming.map(u => `<li>${esc(fmtYmd(u.start))}${u.end !== u.start ? '~' + esc(fmtYmd(u.end)) : ''} ${esc(u.kind)} ${u.days}일 <span class="muted">${u.approved ? '결재완료' : '진행 중'}</span></li>`).join('')}</ul>` : '<p class="muted">예정된 휴가 없음</p>'}` : '<p class="muted">미조회</p>'}<h3>${link(at?.url, '근무시간')}</h3>${at ? `<p>이번 달 인정 ${hm(at.month.recognizedMin)} · 기본 ${hm(at.month.basicMin)} · 초과 ${hm(at.month.overtimeMin)}<br>오늘(${esc(fmtYmd(at.today.date))}) 출근 ${esc(at.today.come || '기록 없음')} · 퇴근 ${esc(at.today.leave || '기록 없음')}</p>` : '<p class="muted">미조회</p>'}</div></div>
-<footer>수집 상태: ${status}<br>수집기 v${esc(a.collector)} · 생성 ${esc(kstText(a.generatedAt))} KST. 메일·문서·게시글을 열지 않는 목록 조회 API만 사용하므로 읽음 상태와 조회수는 바뀌지 않습니다. 금액·건수는 수집 시점 관찰값입니다.</footer>
+<h2>일정·근태</h2><div class="grid2"><div><h3>${link(sc?.url, '그룹웨어 일정')} <span class="muted">향후 ${sc ? dday(fmtYmd(sc.end)) : '-'}일</span></h3>${events}${sc?.holidays?.length ? `<p class="muted">휴일: ${sc.holidays.map(h => esc(fmtYmd(h.date) + ' ' + h.title)).join(', ')}</p>` : ''}</div><div><h3>${link(lv?.url, '연차')}</h3>${lv ? `<p>${esc(lv.year)}년 부여 <b>${fmtDays(lv.granted)}</b> · 사용 <b>${fmtDays(lv.used)}</b> · 잔여 <b>${fmtDays(lv.remaining)}</b></p>${lv.upcoming.length ? `<ul>${lv.upcoming.map(u => `<li>${esc(fmtYmd(u.start))}${u.end !== u.start ? '~' + esc(fmtYmd(u.end)) : ''} ${esc(u.kind)} ${u.days}일 <span class="muted">${u.approved ? '결재완료' : '진행 중'}</span></li>`).join('')}</ul>` : '<p class="muted">예정된 휴가 없음</p>'}` : '<p class="muted">미조회</p>'}<h3>${link(at?.url, '근무시간')}</h3>${at ? `<p>이번 달 인정 ${hm(at.month.recognizedMin)} · 기본 ${hm(at.month.basicMin)} · 초과 ${hm(at.month.overtimeMin)}<br>오늘(${esc(fmtYmd(at.today.date))}) 출근 ${esc(at.today.come || '기록 없음')} · 퇴근 ${esc(at.today.leave || '기록 없음')}</p>` : '<p class="muted">미조회</p>'}</div></div>
+<footer>자료 상태: ${status}<br>생성 ${esc(kstText(a.generatedAt))} KST. 메일·문서·게시글을 열지 않는 목록 조회 API만 사용하므로 읽음 상태와 조회수는 바뀌지 않습니다. 금액·건수는 수집 시점 관찰값입니다.</footer>
 </main></body></html>`;
 }
 
