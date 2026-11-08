@@ -490,6 +490,7 @@ test('org pattern: plan skeleton reuses the labels and reference line of the clo
   const m = buildPatternModel([{id: '1', docNo: 'X-1', title: '2026년『시험 사업』 운영계획', form: '일반기안문', binder: 'ESG 경영', date: '2026-10-22', body: PLAN_BODY}]);
   const s = buildPlanSkeleton(m, {title: '2026년『시험 사업 2차』 운영계획'});
   assert.equal(s.lines[0], '1. 가나부-1613(2026. 3. 4.)호와 관련입니다.');
+  assert.equal(s.lines[1], '2. 2026년『시험 사업 2차』를 다음과 같이 운영하고자 합니다.');
   assert.equal(s.lines[2], '  가. 사 업 명: ');
   assert.equal(s.lines[s.lines.length - 1], '붙임  운영계획서 1부.  끝.');
 });

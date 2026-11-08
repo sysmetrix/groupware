@@ -741,6 +741,6 @@ export function buildPlanSkeleton(model, {title = ''} = {}) {
     const m = lines[i].match(/^ {2}(?:[가-하]|\d{1,2})\.\s+([^:：]+[:：])/);
     if (m) items.push(`  ${'가나다라마바사아자차카타파하'[n++]}. ${m[1].trim()} `);
   }
-  const out = [refLine || '1. 전략경영실-    (    .  .  .)호와 관련입니다.', kind === '참가' ? `2. ${name}에 참가하고자 합니다.` : `2. ${name}을(를) 다음과 같이 운영하고자 합니다.`, ...items, '', `붙임  ${kind === '참가' ? '안내문' : '운영계획서'} 1부.  끝.`];
+  const out = [refLine || '1. 전략경영실-    (    .  .  .)호와 관련입니다.', kind === '참가' ? `2. ${name}에 참가하고자 합니다.` : `2. ${name}${(() => { const k = [...name].reverse().find(ch => /[가-힣]/.test(ch)); return k && (k.charCodeAt(0) - 0xAC00) % 28 === 0 ? '를' : '을'; })()} 다음과 같이 운영하고자 합니다.`, ...items, '', `붙임  ${kind === '참가' ? '안내문' : '운영계획서'} 1부.  끝.`];
   return {lines: out, text: out.join('\r\n'), basis: best.e.title};
 }
