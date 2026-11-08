@@ -49,6 +49,13 @@
       }
       case 'openResultPicker': openResultPlanPicker(); break;
       case 'openPay': openPaymentHub(); break;
+    case 'openData': openDataCenter(); break;
+    case 'openDiag': openDiag(); break;
+    case 'govDel': govDel(el.dataset.k); break;
+    case 'govExportAudit': govExportAudit(); break;
+    case 'govCopyDiag': copyText(diagText(diagChecks())); toast('진단 보고서를 복사했습니다.'); break;
+    case 'govUpdate': govUpdate(); break;
+    case 'govAck': govAck(); break;
     case 'payPickBase': payForm(el.dataset.id); break;
     case 'payRun': payRun(); break;
     case 'goodsPickPlan': goodsPickPlan(); break;

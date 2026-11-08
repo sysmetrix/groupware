@@ -439,7 +439,7 @@ test('safe draft links: interlocked forms (36, 40, 1007, 1012) route to safe mod
   assert.ok(stdUrl.includes('tiKeyCode=mg_20160303185413307'), 'general form opens direct draft popup');
 });
 // ---- 기안 패턴(조직 서식 학습) ----
-import {patternTokens, buildPatternModel, predictDraftMeta, formatRunRef, planToResultTitle, buildResultBody, textWidthPt, buildPlanSkeleton, moneyKo, buildPaymentProposalBody, pendingPayments} from '../src/live/briefing.mjs';
+import {patternTokens, buildPatternModel, predictDraftMeta, formatRunRef, planToResultTitle, buildResultBody, textWidthPt, buildPlanSkeleton, moneyKo, buildPaymentProposalBody, pendingPayments, sha256Hex, chainAudit, verifyAudit, normalizePolicy, featureAllowed, purgeExpired, compareVersions, maskSensitive} from '../src/live/briefing.mjs';
 
 const PLAN_BODY = ['1. 가나부-1613(2026. 3. 4.)호와 관련입니다.', '2. 2026년『시험 사업』을 다음과 같이 운영하고자 합니다.', '  가. 사 업 명: 2026년『시험 사업』', '  나. 운영일정: 2026. 11. 1.(일) 14:00~16:30', '  다. 운영장소: 시험센터 2층', '  라. 참가인원: 연 40명(실 40명) ※ 선착순 접수', '  마. 주요내용: 아주 긴 설명이 이어지는 항목입니다 아주 긴 설명이 이어지는 항목입니다 아주 긴 설명이 이어지는 항목입니다 아주 긴 설명이 이어지는 항목입니다', '  바. 소요예산: 비예산', '', '붙임  운영계획서 1부.  끝.'].join('\r\n');
 
@@ -520,4 +520,25 @@ test('payment pattern: money in korean, proposal body from a past proposal, pend
   assert.equal(p[0].expenseTitle, '2026년 병 현수막 제작비 지급');
   assert.equal(p[0].expenseForm, '지출결의서(기안미포함)(A10)');
   assert.equal(p[1].expenseTitle, '2026년 을 회의비 지급');
+});
+
+test('governance: audit hash chain detects tampering, policy normalization, retention, versions', () => {
+  assert.equal(sha256Hex('abc'), 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+  assert.equal(sha256Hex(''), 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
+  let list = [];
+  for (let i = 0; i < 4; i++) list = [chainAudit(list, {id: 'a' + i, at: i, command: 'c', type: '기안', target: 't', summary: 's' + i, steps: ['x'], verified: true}), ...list];
+  assert.equal(verifyAudit(list).ok, true);
+  const tam = JSON.parse(JSON.stringify(list)); tam[2].summary = '바꿈';
+  assert.equal(verifyAudit(tam).ok, false);
+  const cut = list.filter((_, i) => i !== 1);
+  assert.equal(verifyAudit(cut).ok, false);
+  assert.equal(verifyAudit(list.slice(0, 3)).ok, true);
+  const pol = normalizePolicy({enabled: true, features: {recorder: false, bogus: false}, retentionDays: 9999, recorderPlayConfirm: false});
+  assert.equal(pol.features.recorder, false); assert.equal(pol.features.draftPay, true); assert.equal(pol.retentionDays, 365); assert.equal(pol.recorderPlayConfirm, true);
+  assert.equal(featureAllowed({enabled: false}, 'briefing'), false); assert.equal(featureAllowed(null, 'recorder'), true);
+  const now = 100 * 86400000;
+  const r = purgeExpired({v: 1, at: now, docs: {a: {learnedAt: now - 95 * 86400000}, b: {learnedAt: now - 10 * 86400000}, c: {}}}, now, 90);
+  assert.deepEqual(Object.keys(r.patterns.docs).sort(), ['b', 'c']); assert.equal(r.removed, 1);
+  assert.equal(compareVersions('4.10.0', '4.9.0'), 1); assert.equal(compareVersions('4.9.0', '4.9'), 0);
+  assert.ok(!/a@b|1234-5678|202030/.test(maskSensitive('a@b.com 010-1234-5678 empSeq: 202030')));
 });

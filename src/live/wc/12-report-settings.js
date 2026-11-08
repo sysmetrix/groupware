@@ -35,6 +35,7 @@ ${S.weekly ? `<h2>주간 업무 실적 초안 <span class="saved on" id="wkSaved
 </div>
 <h2>이 PC에 저장된 자료</h2>
 <div class="set"><div class="si"><b>저장 내용</b><div>숨기기·미루기 표시, 내 할 일, 설정, 최근 처리 기록(최대 40일)과 배부 추천용 이력(12시간 보관)이 이 브라우저에만 저장됩니다. 현재 약 ${usedKB}KB. 로그인 정보는 저장하지 않습니다. 여러 사람이 쓰는 PC라면 다 쓴 뒤 지워 주세요.<div class="acts"><button class="btn sm" data-act="resetDone">숨기기·미루기 초기화</button><button class="btn sm" data-act="resetRouting">추천 이력 지우기</button><button class="btn sm danger" data-act="resetAll">업무센터 자료 모두 지우기</button></div></div></div>
+<div class="si"><b>관리·진단</b><div>저장된 자료 확인·삭제, 감사 기록 무결성, 환경 진단을 볼 수 있습니다.<div class="acts"><button class="btn sm" data-act="openData">데이터 관리</button><button class="btn sm" data-act="openDiag">진단</button></div></div></div>
 <div class="si"><b>설치</b><div>${hasMini ? '이 브라우저에 설치되어 있습니다. 그룹웨어 화면 위 가운데 "업무센터" 버튼이나 Alt+G로 엽니다.' : '설치 북마크로 한 번 실행하면 이 브라우저에 저장됩니다.'}<details style="margin-top:6px"><summary class="muted" style="cursor:pointer">버전 정보</summary><div class="muted">업무센터 ${VERSION} · 수집기 ${esc(GW.version)} · 조회 전용 연결 ${GW.readOnlyEndpoints().length}개${S.errors && S.errors.length ? ` · 최근 오류 ${S.errors.length}건 <button class="btn sm" data-act="copyErrors">오류 기록 복사</button>` : ''}</div></details></div></div></div>`;
   }
   function saveSettingField(el) {

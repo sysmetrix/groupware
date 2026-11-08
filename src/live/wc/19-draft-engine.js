@@ -6,7 +6,7 @@
   const PAT_KEY = 'patterns';
   const wait = ms => new Promise(r => setTimeout(r, ms));
   const patLoad = () => { const p = store.get(PAT_KEY, null); return p && p.docs ? p : {v: 1, docs: {}}; };
-  const patSaveDoc = doc => { try { const p = patLoad(); p.docs[doc.id] = doc; p.at = Date.now(); store.set(PAT_KEY, p); } catch (e) { logError('patSaveDoc', e.message); } };
+  const patSaveDoc = doc => { try { const p = patLoad(); p.docs[doc.id] = {...doc, learnedAt: Date.now()}; p.at = Date.now(); store.set(PAT_KEY, p); } catch (e) { logError('patSaveDoc', e.message); } };
   const patModel = () => R.buildPatternModel(Object.values(patLoad().docs));
   const HR_FORMS = /^(36|40|43|1012|1021)$/;
   let learning = null;
@@ -95,6 +95,7 @@
   }
 
   async function openResultPlanPicker() {
+    if (gated('draftResult')) return;
     closeOverlay();
     S.paletteOpen = true;
     $('#overlay').innerHTML = `
@@ -367,6 +368,7 @@
 
   // ---------- 운영/참가 계획서: 같은 사업의 과거 계획서 서식을 이어받아 뼈대 작성 ----------
   async function startPlanDraft() {
+    if (gated('draftPlan')) return;
     const name = (prompt('계획서 사업명을 입력하세요.\n예) 2026년『OOO』 운영계획  /  2026년 OOO 참가계획') || '').trim();
     if (!name) return;
     const title = /계획(\(안\))?$/.test(name) ? name : `${name} 운영계획`;
@@ -387,6 +389,7 @@
   const won0 = n => (n ? n.toLocaleString('en-US') + '원' : '-');
 
   async function openPaymentHub() {
+    if (gated('draftPay')) return;
     closeOverlay();
     S.paletteOpen = true;
     const shell = body => `<div class="modal" data-act="closeOverlay"><div class="dlg" data-stop="1" style="width:min(760px,95vw);padding:22px 24px;max-height:88vh;overflow:auto" role="dialog" aria-label="지급 문서"><button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button>${body}</div></div>`;
@@ -446,6 +449,7 @@
 
   // ---------- 물품매입 품의 (계획서를 참조문서로 지정) ----------
   function goodsPickPlan() {
+    if (gated('draftGoods')) return;
     const plans = planDocs().slice(0, 14);
     $('#overlay').innerHTML = `<div class="modal" data-act="closeOverlay"><div class="dlg" data-stop="1" style="width:min(700px,95vw);padding:22px 24px;max-height:86vh;overflow:auto" role="dialog" aria-label="물품매입 품의 계획서 선택">
       <button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button>

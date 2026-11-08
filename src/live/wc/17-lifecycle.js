@@ -16,13 +16,17 @@
   };
   window.addEventListener('popstate', onPop);
   function open() {
+    if (!POLICY.enabled) { toast('관리자 설정으로 업무센터가 꺼져 있습니다.' + (POLICY.message ? ' ' + POLICY.message : '')); return; }
+    govPurge();
     tipBubble.style.display = 'none';
     S.open = true; host.style.display = 'block'; fab.style.display = 'none'; prevTitle = document.title;
     armBack();
     applyLook(); render();
     if (document.activeElement && document.activeElement !== document.body) { try { document.activeElement.blur(); } catch {} }
     if (!S.a || !S.lastRefresh || Date.now() - S.lastRefresh.getTime() > 60_000) refresh();
-    if (!S.settings.tourDone) setTimeout(() => startCoach(), 900);
+    const noticed = showNoticeIfNeeded();
+    if (!noticed && !S.settings.tourDone) setTimeout(() => startCoach(), 900);
+    checkUpdate(false).then(i => { if (i && i.latest && R.compareVersions(i.latest, VERSION) > 0 && !S.updToast) { S.updToast = true; toast(`새 버전 ${i.latest} 이 있습니다. 관리자에게 알려 주세요.`); } }).catch(() => {});
   }
   function close() { if (backArmed) { backArmed = false; try { history.back(); } catch {} } S.open = false; host.style.display = 'none'; fab.style.display = 'block';
     if (!S.settings.fabTipShown || (S.settings.fabTipCount || 0) < 3) { S.settings.fabTipCount = (S.settings.fabTipCount || 0) + 1; S.settings.fabTipShown = true; saveLocal(); tipBubble.style.display = 'block'; clearTimeout(tipTimer); tipTimer = setTimeout(() => { tipBubble.style.display = 'none'; }, 6000); } document.title = prevTitle; closeOverlay(); }

@@ -74,9 +74,10 @@
       verified: record.verified !== false,
       details: record.details || ''
     };
-    list.unshift(entry);
+    const chained = R.chainAudit(list, entry);
+    list.unshift(chained);
     store.set('actionHistory', list.slice(0, 50));
-    return entry;
+    return chained;
   }
 
   // ---------- Command Presets ----------
@@ -93,6 +94,7 @@
 
   // Open Command Console Dialog
   function openCommandConsole(initialQuery = '') {
+    if (gated('aiConsole')) return;
     closeOverlay();
     S.paletteOpen = true;
     const presetsHtml = COMMAND_PRESETS.map((p) => `

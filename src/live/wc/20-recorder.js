@@ -225,6 +225,7 @@
     bar.innerHTML = `<span>● 기록 중 · ${recorder.count()}단계</span><button class="btn sm" data-act="recStop" style="height:28px">■ 정지·저장</button>`;
   }
   function recStart() {
+    if (gated('recorder')) return;
     const d = recFrameDocNow();
     if (!d) { toast('먼저 기록할 그룹웨어 화면을 처리 창에 열어 주세요 (예: 새로 만들기 → 양식 열기, 또는 항목의 “원래 화면 열기”).'); return; }
     closeOverlay();
@@ -249,6 +250,7 @@
     openRecorder();
   }
   function openRecorder() {
+    if (gated('recorder')) return;
     closeOverlay();
     S.paletteOpen = true;
     const ms = macroLoad();
@@ -289,6 +291,7 @@
     catch (e) { toast('가져오지 못했습니다: ' + e.message); }
   }
   async function recPlay(i, mode) {
+    if (gated('recorder')) return;
     const m = macroLoad()[i];
     if (!m) return;
     if (!recFrameDocNow()) { toast('재생할 그룹웨어 화면을 처리 창에 먼저 열어 주세요.'); return; }
