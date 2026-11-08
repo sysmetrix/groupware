@@ -20,7 +20,7 @@
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
   const READ_ONLY = new Set([
-    '/mail/mail000A01', '/mail/mail000A03', '/mail/mail003A01',
+    '/mail/mail000A01', '/mail/mail000A03', '/mail/mail003A01', '/mail/mail002A01',
     '/ea/api/getMenuCountInfo', '/ea/ea036A02', '/ea/ea025A04', '/ea/ea023A02', '/ea/ea027A02',
     '/ea/ea038A09', '/ea/ea038A15',
     '/board/APIHandler/ViewBoardArtList', '/board/APIHandler/getBoardReadCnt',
@@ -419,6 +419,27 @@
     return {project, bgtCd, year: y, rows, sum: num(d && d.unitAmSum), checkSum: rows.reduce((s, r) => s + r.amount, 0)};
   }
 
+  // Mail detail: attachments, big-file links and the groupware read-view URL.
+  // WARNING: the groupware marks a mail as read when its detail is fetched, so this refuses
+  // unread mails unless the caller explicitly accepts that (after asking the user).
+  async function mailDetail({uid, seen, allowMarkRead = false} = {}) {
+    if (!uid) throw new GwError('BAD_ARG', 'uid가 필요합니다.');
+    if (seen !== true && !allowMarkRead) throw new GwError('WOULD_MARK_READ', '안 읽은 메일은 상세를 열면 읽음으로 바뀝니다.');
+    const d = await call('/mail/mail002A01', {uid: String(uid)});
+    const mime = d.mime || {}, dm = d.decodeMime || {};
+    const html = String(mime.body?.html || '');
+    const dec = s => s.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+    const bigFiles = [...html.matchAll(/<a[^>]+href="([^"]*mail002A31[^"]*)"[^>]*>([\s\S]*?)<\/a>/g)].map(x => {
+      const label = dec(x[2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
+      const m = label.match(/^(.*?)\s*\(([\d.,]+\s*[KMG]?B)\)\s*$/i);
+      return {name: m ? m[1] : label, size: m ? m[2] : '', href: dec(x[1])};
+    }).filter(f => /^https:\/\/[a-z0-9.-]+\.amaranth10\.co\.kr\//i.test(f.href));
+    const bigUntil = (html.replace(/<[^>]+>/g, ' ').match(/다운로드 기간\s*:\s*[\d-]+\s*~\s*([\d-]+)/) || [])[1] || '';
+    const files = arr(mime.fileList).map(f => ({name: str(f.originalFileName, 200) + (f.fileExtsn && !String(f.originalFileName || '').toLowerCase().endsWith('.' + String(f.fileExtsn).toLowerCase()) ? '.' + f.fileExtsn : ''), size: num(f.fileSize), ext: str(f.fileExtsn, 10)}));
+    const plain = String(mime.body?.plain || '').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+    return {uid: String(uid), subject: str(dm.subject, 300), from: dec(str(dm.from, 200)), to: dec(str(dm.to, 2000)), cc: dec(str(dm.cc, 2000)), date: str(dm.date, 20),
+      readUrl: str(dm.url, 500), files, bigFiles, bigUntil, text: mask(plain, 4000), wasUnread: seen !== true};
+  }
   async function routingHistory({days = 180, size = 500} = {}) {
     const ctx = context();
     const now = new Date();
@@ -538,7 +559,7 @@
   }
 
   window.BWYFGW = Object.freeze({
-    version: VERSION, collect, call, search, budgetProject, budgetLedger, budgetMonthly, attendanceDays, routingHistory, submittedRange, approvalPage, docPreview, frequentForms, findReply,
+    version: VERSION, collect, call, search, budgetProject, budgetLedger, budgetMonthly, attendanceDays, routingHistory, submittedRange, approvalPage, docPreview, frequentForms, findReply, mailDetail,
     context: () => { const c = context(); return {name: c.name, deptName: c.deptName, compName: c.compName, duty: c.duty, position: c.position}; },
     readOnlyEndpoints: () => [...READ_ONLY], routes: ROUTES, links: LINKS, searchLabels: SEARCH_LABELS, defaults: DEFAULTS,
   });

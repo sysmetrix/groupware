@@ -9,7 +9,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '3.2.0';
+  const VERSION = '3.3.0';
   let api = null;
   const lazy = {
     version: VERSION,
@@ -124,6 +124,7 @@ header button.meta{background:none;border:0;color:inherit;font:inherit;font-size
 .row input[type=checkbox]{opacity:.25}.row:hover input[type=checkbox],.row input[type=checkbox]:checked{opacity:1}
 .row .qa{display:flex!important}.row .qa .ex{display:none}.row:hover .qa .ex{display:inline-flex}
 .pback{margin-right:auto}
+.refbox{margin-top:10px;border-top:1px dashed var(--line)}.refbox>summary{padding:10px;cursor:pointer;list-style:revert}.refbox .row{opacity:.85}
 header .crumb:empty{display:none}
 header .hb.gw{background:rgba(255,255,255,.22);font-weight:600}
 header .badge{font-size:calc(var(--fs)*.78);background:rgba(255,255,255,.14);border-radius:999px;padding:2px 9px;white-space:nowrap}
@@ -236,7 +237,7 @@ kbd{font:11px monospace;border:1px solid var(--line);border-bottom-width:2px;bor
   function ingest(raw) {
     const prev = store.get('state', null);
     const usablePrev = prev && prev.at && Date.parse(prev.at) < Date.parse(raw.collectedAt) ? prev : null;
-    const a = R.analyze(raw, usablePrev);
+    const a = R.analyze(raw, usablePrev, new Date(), {roles: S.settings.roles});
     applyUrgentWords(a);
     const fresh = a.actions.filter(x => x.isNew);
     for (const x of fresh) { S.newKeys.add(x.key); S.activity.push({at: Date.now(), key: x.key, title: x.title, kind: x.kind, area: x.area, priority: x.priority}); }
@@ -257,12 +258,38 @@ kbd{font:11px monospace;border:1px solid var(--line);border-bottom-width:2px;bor
     saveLocal();
     notifyNew(fresh.filter(x => x.priority === 'high'));
   }
+  // ----- 내 일 / 참고 구분 (user rules on top of the analyzer's defaults) -----
+  const RULE_KIND = {deptWaiting: '부서 접수 대기', distWaiting: '배부 대기', sendWaiting: '발송 대기', viewing: '열람문서', notice: '공지', mailShared: '받은 자료 메일', mailUnread: '안 읽은 메일', mailReply: '답장 확인 메일', leave: '휴가 안내'};
+  function senderOf(x) {
+    if (x.type === 'mail') { const m = findMail(x.ref.box, x.ref.uid); return m ? m.from : ''; }
+    if (x.type === 'doc') { const d = findDoc(x.ref.kind, x.ref.docId); return d ? (d.sendOrg || d.sender || d.drafter || '') : ''; }
+    if (x.type === 'notice') return (x.detail || '').split(' ')[0] || '';
+    return '';
+  }
+  const rel = () => { const r = S.settings.rel = S.settings.rel || {}; r.mute = r.mute || []; r.mine = r.mine || []; return r; };
+  const ruleMatch = (r, x) => r.t === 'key' ? x.key === r.v : r.t === 'kind' ? x.base === r.v : r.t === 'sender' ? senderOf(x) === r.v : false;
+  function applyRelevance(a) {
+    const r = rel();
+    a.muted = a.actions.filter(x => r.mute.some(q => ruleMatch(q, x)));
+    a.actions = a.actions.filter(x => !a.muted.includes(x));
+    for (const x of a.actions) if (x.scope === 'ref' && r.mine.some(q => ruleMatch(q, x))) { x.scope = 'mine'; x.refReason = ''; x.why = [...(x.why || []), '내 일로 지정']; }
+    a.actions.sort((p, q) => (p.scope === 'ref') - (q.scope === 'ref') || q.score - p.score);
+  }
+  function reanalyze() { const a = R.analyze(S.raw, store.get('state', null), new Date(), {roles: S.settings.roles}); applyUrgentWords(a); S.a = a; }
+  function addRule(list, t, v, label) {
+    const r = rel();
+    pushUndo('관련성 규칙');
+    r[list] = r[list].filter(q => !(q.t === t && q.v === v));
+    r[list].push({t, v, label, at: Date.now()});
+    saveLocal(); if (S.raw) reanalyze(); closeOverlay(); render();
+  }
   function applyUrgentWords(a) {
+    applyRelevance(a);
     const words = (S.settings.urgentWords || []).filter(Boolean);
     if (!words.length) return;
     const re = new RegExp(words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'));
     for (const x of a.actions) if (re.test(x.title)) { x.score += 30; x.why = [...(x.why || []), '내 긴급 키워드']; if (x.priority !== 'high') x.priority = x.score >= 70 ? 'high' : 'medium'; }
-    a.actions.sort((p, q) => q.score - p.score);
+    a.actions.sort((p, q) => (p.scope === 'ref') - (q.scope === 'ref') || q.score - p.score);
   }
   function notifyNew(items) {
     if (!items.length) return;
@@ -430,7 +457,7 @@ kbd{font:11px monospace;border:1px solid var(--line);border-bottom-width:2px;bor
     const s = S.a && S.a.summary, u = S.a ? S.a.unknown : {};
     const all = visibleActions();
     const counts = {
-      today: all.length, approval: u.approval ? '?' : s ? s.approvalAction + (s.sendWaiting || 0) : '', mail: u.mail ? '?' : s ? s.mailUnread : '',
+      today: all.filter(x => x.scope !== 'ref').length, approval: u.approval ? '?' : s ? s.approvalAction + (s.sendWaiting || 0) : '', mail: u.mail ? '?' : s ? s.mailUnread : '',
       attendance: S.a ? S.a.anomalies.length : '', board: (S.a ? S.a.actions.filter(x => (S.plan[x.key] || x.priority !== 'low' || isHidden(x.key)) && bucketOfAction(x) !== 'done').length : 0) + S.todos.filter(t => bucketOfTodo(t) !== 'done').length, calendar: S.a ? S.a.deadlines.filter(x => x.dday >= 0 && x.dday <= 7).length : '',
     };
     const hot = {today: all.some(x => x.priority === 'high'), approval: s && s.approvalAction > 0, attendance: S.a && S.a.anomalies.length > 0, calendar: S.a && S.a.deadlines.some(x => x.dday >= 0 && x.dday <= 2)};
@@ -454,7 +481,7 @@ kbd{font:11px monospace;border:1px solid var(--line);border-bottom-width:2px;bor
   // ----- 오늘 할 일 (dashboard + queue) -----
   function vToday() {
     const s = S.a.summary, u = S.a.unknown;
-    const vis = visibleActions();
+    const vis = visibleActions().filter(x => x.scope !== 'ref');
     const tile = (label, v, sub, act, data, hot, unk) => `<div class="tile ${hot ? 'hot' : ''} ${unk ? 'unk' : ''}" data-act="${act}" data-v="${esc(data || '')}" title="누르면 아래 목록을 이 기준으로 거릅니다">${'<div class="l">' + esc(label) + '</div><div class="v">' + (unk ? '확인 불가' : esc(v)) + '</div><div class="s">' + esc(unk ? '자료를 읽지 못함' : sub) + '</div>'}</div>`;
     const dl7 = S.a.deadlines.filter(x => x.dday >= 0 && x.dday <= 7);
     const high = vis.filter(x => x.priority === 'high').length;
@@ -483,10 +510,13 @@ ${showCharts() ? `<div class="charts">${chartFlow()}${chartDeadlines()}${chartBu
 <p class="muted">숨기기·미루기는 이 화면에서만 감추는 개인 표시입니다. 그룹웨어에서 처리해야 목록에서 완전히 사라집니다. 숨긴 항목이 그룹웨어에 계속 남아 있으면 하루 뒤 다시 보여 드립니다.</p>`;
   }
   const queueRows = () => {
-    const q = queue();
-    if (!q.length) return `<div class="row"><div></div><div></div><div class="muted">${S.a.failed.length ? '일부 자료를 읽지 못해 목록이 비어 있을 수 있습니다.' : S.filter.showHidden ? '숨기거나 미룬 항목이 없습니다.' : '처리할 항목이 없습니다.'}</div><div></div></div>`;
-    return q.map(x => actionRow(x)).join('');
+    const all = queue();
+    const q = all.filter(x => x.scope !== 'ref'), refs = all.filter(x => x.scope === 'ref');
+    const refBox = refs.length ? `<details class="refbox" ${S.refOpen ? 'open' : ''} data-act="refToggle"><summary><b>참고 ${refs.length}건</b> <span class="muted">나와 직접 관련 적은 항목 (부서 접수·배부, 다른 사람 발송, 공지·열람, 받은 자료)</span></summary>${refs.map(x => actionRow(x)).join('')}</details>` : '';
+    if (!q.length) return `<div class="row"><div></div><div></div><div class="muted">${S.a.failed.length ? '일부 자료를 읽지 못해 목록이 비어 있을 수 있습니다.' : S.filter.showHidden ? '숨긴 항목이 없습니다.' : '지금 내가 처리할 일이 없습니다.'}</div><div></div></div>${refBox}`;
+    return q.map(x => actionRow(x)).join('') + refBox;
   };
+
   function actionRow(x) {
     const dl = x.deadline && x.deadline.date ? `<span class="pill ${x.deadline.dday <= 1 ? 'solid' : x.deadline.dday <= 3 ? 'high' : 'medium'}">${esc(x.deadline.date.slice(5))}${x.deadline.time ? ' ' + esc(x.deadline.time) : ''} ${ddayText(x.deadline.dday)}</span>` : '';
     const stale = isHidden(x.key) && Date.now() - S.hidden[x.key] > 86400_000;
@@ -494,9 +524,9 @@ ${showCharts() ? `<div class="charts">${chartFlow()}${chartDeadlines()}${chartBu
     return `<div class="row ${S.sel && S.sel.key === x.key ? 'sel' : ''} ${isHidden(x.key) || isSnoozed(x.key) ? 'hid' : ''} ${S.multi.has(x.key) ? 'multi' : ''}" data-act="selAction" data-k="${esc(x.key)}">
 <div><input type="checkbox" data-act="multi" data-k="${esc(x.key)}" ${S.multi.has(x.key) ? 'checked' : ''} title="여러 개 선택(Shift로 범위)"></div>
 <div><span class="pill ${x.priority}" title="${esc(['점수 ' + x.score, ...(x.why || [])].join(' · '))}">${PRI[x.priority]}</span>${S.newKeys.has(x.key) ? '<br><span class="pill new">새</span>' : ''}</div>
-<div><div class="t">${esc(x.title)}</div><div class="d">${x.leaveConflict ? `<span class="pill ${x.leaveConflict.answered ? 'medium' : 'solid'}" title="마감일이 내 휴가일입니다">⚠ 휴가일 마감 · ${esc(x.leaveConflict.before.slice(5))}까지${x.leaveConflict.passed ? '(지남)' : ''}</span>` : ''}${dl}${plan}${stale ? '<span class="pill high">숨겼지만 아직 남음</span>' : ''}${esc(x.area)} · ${esc(x.kind)} · ${esc(x.detail)}</div></div>
+<div><div class="t">${esc(x.title)}</div><div class="d">${x.leaveConflict ? `<span class="pill ${x.leaveConflict.answered ? 'medium' : 'solid'}" title="마감일이 내 휴가일입니다">⚠ 휴가일 마감 · ${esc(x.leaveConflict.before.slice(5))}까지${x.leaveConflict.passed ? '(지남)' : ''}</span>` : ''}${dl}${plan}${stale ? '<span class="pill high">숨겼지만 아직 남음</span>' : ''}${esc(x.area)} · ${esc(x.kind)} · ${esc(x.detail)}${x.scope === 'ref' && x.refReason ? `<br><span class="muted">참고인 이유: ${esc(x.refReason)}</span>` : ''}</div></div>
 <div class="w">${esc(String(x.when).slice(5, 16))}${isSnoozed(x.key) ? '<br>미룸' : ''}${isHidden(x.key) ? '<br>숨김' : ''}</div>
-<div class="qa"><button class="btn sm primary" data-act="quickOpen" data-k="${esc(x.key)}" title="그룹웨어 원래 화면으로 열기 (Enter)">열기</button><button class="btn sm ex" data-act="quickHide" data-k="${esc(x.key)}" title="이 화면에서 숨기기 (X)">숨기기</button><button class="btn sm" data-act="quickSnooze" data-k="${esc(x.key)}" title="내일 오전 8시까지 (S)">내일</button><button class="btn sm" data-act="quickTodo" data-k="${esc(x.key)}" title="할 일 보드에 추가 (T)">할 일</button></div></div>`;
+<div class="qa"><button class="btn sm primary" data-act="quickOpen" data-k="${esc(x.key)}" title="그룹웨어 원래 화면으로 열기 (Enter)">열기</button>${x.scope === 'ref' ? `<button class="btn sm" data-act="relMenu" data-l="mine" data-k="${esc(x.key)}" title="이 항목을 내 처리할 일로 옮기기">내 일로</button>` : `<button class="btn sm ex" data-act="relMenu" data-l="mute" data-k="${esc(x.key)}" title="나와 상관없는 항목이면 다시 보이지 않게">상관없음</button>`}<button class="btn sm ex" data-act="quickHide" data-k="${esc(x.key)}" title="이 화면에서 숨기기 (X)">숨기기</button><button class="btn sm" data-act="quickSnooze" data-k="${esc(x.key)}" title="내일 오전 8시까지 (S)">내일</button><button class="btn sm" data-act="quickTodo" data-k="${esc(x.key)}" title="할 일 보드에 추가 (T)">할 일</button></div></div>`;
   }
   const batchBar = () => S.multi.size ? `<div class="batch"><b>${S.multi.size}건 선택</b><button class="btn sm" data-act="batchFocus">선택 항목 연속 처리</button><button class="btn sm" data-act="batchHide">숨기기</button><button class="btn sm" data-act="batchSnooze">내일로 미루기</button><button class="btn sm" data-act="batchTodo">할 일로</button><button class="btn sm" data-act="batchCsv">CSV</button><button class="btn sm" data-act="batchClear">선택 해제</button></div>` : '';
   const refreshQueue = () => { const l = $('#qlist'); if (l) l.innerHTML = queueRows(); const b = $('#batch'); if (b) b.innerHTML = batchBar(); renderNav(); renderHead(); };
@@ -875,6 +905,7 @@ ${S.weekly ? `<h3>주간 업무 실적 초안 <button class="btn sm primary" dat
 <tr><td>새 긴급 항목 알림</td><td><label><input type="checkbox" id="setNotify" ${st.notify ? 'checked' : ''}> 바탕화면 알림 보내기</label> <span class="muted">${'Notification' in window ? '권한: ' + Notification.permission : '이 브라우저는 알림을 지원하지 않습니다'}</span></td></tr>
 <tr><td>글자 크기·테마</td><td><select class="f" id="setFs">${[['s', '작게'], ['m', '보통'], ['l', '크게'], ['xl', '아주 크게']].map(([v, n]) => `<option value="${v}" ${st.fontSize === v ? 'selected' : ''}>${n}</option>`).join('')}</select> <select class="f" id="setTheme"><option value="light" ${st.theme === 'light' ? 'selected' : ''}>밝게</option><option value="dark" ${st.theme === 'dark' ? 'selected' : ''}>어둡게</option></select> <label><input type="checkbox" id="setBeginner" ${st.beginner ? 'checked' : ''}> 쉬운 안내 보기(단축키 대신 설명)</label></td></tr>
 <tr><td>예산 조회 대상</td><td><div id="budgetRows">${st.budget.map((b, i) => `<div class="bar"><input class="f" data-b="project" data-i="${i}" value="${esc(b.project)}" placeholder="프로젝트 코드" style="width:110px"><input class="f" data-b="filter" data-i="${i}" value="${esc(b.filter || '')}" placeholder="항·목 코드(선택)" style="width:130px"><input class="f" data-b="label" data-i="${i}" value="${esc(b.label || '')}" placeholder="이름" style="flex:1"><button class="btn sm warn" data-act="budgetRowDel" data-i="${i}">삭제</button></div>`).join('')}</div><button class="btn sm" data-act="budgetRowAdd">+ 대상 추가</button></td></tr>
+<tr><td>내 업무 범위</td><td><label><input type="checkbox" id="roleDept" ${st.roles?.deptReceiver ? 'checked' : ''}> 부서 접수는 내 업무</label> &nbsp; <label><input type="checkbox" id="roleDist" ${st.roles?.distributor ? 'checked' : ''}> 문서 배부는 내 업무</label> &nbsp; <label><input type="checkbox" id="roleSend" ${st.roles?.sender ? 'checked' : ''}> 다른 사람 문서 발송도 내 업무</label><div class="muted">체크하지 않은 종류는 “참고”로 내려 처리할 일에서 빠집니다. (최근 180일 부서 접수 담당 기준 내 처리 비중은 작음)</div>${(() => { const r = rel(); const li = (l, name) => r[l].length ? `<div style="margin-top:6px"><b>${name}</b> ${r[l].map((q, i) => `<span class="chip">${esc(q.label || q.v)} <a data-act="delRule" data-l="${l}" data-i="${i}" title="지우기" style="cursor:pointer">✕</a></span>`).join(' ')}</div>` : ''; return li('mute', '뺀 항목:') + li('mine', '내 일로 지정:'); })()}</td></tr>
 <tr><td>내 긴급 키워드</td><td><input class="f" id="setWords" style="width:100%" value="${esc((st.urgentWords || []).join(', '))}" placeholder="쉼표로 구분 (예: 행정사무감사, 시의회, 감사)"><div class="muted">제목에 이 단어가 있으면 점수를 크게 올립니다.</div></td></tr>
 <tr><td>받은메일 읽는 수</td><td><select class="f" id="setMail">${[50, 100, 200].map(n => `<option ${Number(st.mailCount) === n ? 'selected' : ''}>${n}</option>`).join('')}</select></td></tr>
 <tr><td>정리</td><td><button class="btn sm" data-act="resetDone">숨기기·미루기·보드 계획 초기화</button> <button class="btn sm" data-act="resetRouting">추천 이력 지우기</button> <button class="btn sm" data-act="tourAgain">처음 안내 다시 보기</button> <button class="btn sm warn" data-act="resetAll">업무센터 자료 모두 지우기</button></td></tr>
@@ -995,12 +1026,41 @@ ${S.weekly ? `<h3>주간 업무 실적 초안 <button class="btn sm primary" dat
     const title = d.title || (action && action.title) || '';
     return {title, url, body: `${why || ''}<div class="kv"><b>구분</b><span>${esc((S.a.approval.lists[kind] || {}).label || kind)}</span><b>문서번호</b><span>${esc(d.docNo || '-')}</span><b>보낸 곳</b><span>${esc(d.sender || '-')}</span><b>기안·담당</b><span>${esc([d.drafterDept, d.drafter, d.toEmp].filter(Boolean).join(' ') || '-')}</span><b>상태</b><span>${esc(d.status || '-')}</span><b>일시</b><span>${esc(d.date || '-')}</span><b>첨부</b><span>${d.attachments || 0}개</span>${action && action.deadline ? `<b>기한</b><span>${esc(action.deadline.date)}${action.deadline.time ? ' ' + esc(action.deadline.time) : ''} (${ddayText(action.deadline.dday)})</span>` : ''}</div>${recBox}${warn}${actsFor(url, {key: action ? action.key : `doc:${kind}:${d.docId}`, q: relatedQ(title), title, unread: d.unread})}${pvBox}<div class="box" id="extract">${extractHtml()}</div>`};
   }
+  // Attachments: read once for mails already read (no state change); unread mails need consent.
+  async function loadMailDetail(m, allowMarkRead = false) {
+    S.mailDet = S.mailDet || {}; S.mailDetBusy = S.mailDetBusy || {};
+    if (S.mailDetBusy[m.uid]) return;
+    S.mailDetBusy[m.uid] = 1;
+    try {
+      const r = await GW.mailDetail({uid: m.uid, seen: m.seen === true, allowMarkRead});
+      S.mailDet[m.uid] = r;
+      if (allowMarkRead) m.seen = true;
+    } catch (e) { S.mailDet[m.uid] = {error: e.message}; }
+    delete S.mailDetBusy[m.uid];
+    if (S.sel && (S.sel.uid === m.uid || (S.sel.key || '').endsWith(':' + m.uid))) renderPane();
+  }
+  function mailFilesBox(m) {
+    S.mailDet = S.mailDet || {};
+    const c = S.mailDet[m.uid];
+    if (!c) {
+      if (m.seen) { setTimeout(() => loadMailDetail(m), 0); return '<div class="box"><b>첨부파일</b> <span class="spin"></span> 확인 중…</div>'; }
+      return `<div class="box warn"><b>첨부파일·원문</b> 아직 안 읽은 메일입니다. 불러오면 그룹웨어에 읽음으로 표시됩니다. <button class="btn sm primary" data-act="mailDetail" data-uid="${esc(m.uid)}" data-box="${esc(m.box)}">첨부·원문 불러오기</button></div>`;
+    }
+    if (c.error) return `<div class="box warn"><b>첨부파일</b> 불러오지 못했습니다: ${esc(c.error)} <button class="btn sm" data-act="openUrl" data-url="${esc(S.a.mail.url)}" data-title="받은메일함">메일함에서 열기</button></div>`;
+    const kb = n => n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
+    const read = c.readUrl ? `<button class="btn sm primary" data-act="openUrl" data-url="${esc(c.readUrl)}" data-title="메일 원문: ${esc(m.subject)}">메일 원문 열기(첨부 받기)</button>` : '';
+    const rows = [
+      ...c.files.map(f => `<li><b>${esc(f.name)}</b> <span class="muted">${kb(f.size)}</span> ${c.readUrl ? `<button class="btn sm" data-act="openUrl" data-url="${esc(c.readUrl)}" data-title="메일 원문: ${esc(m.subject)}" title="메일 원문 화면에서 파일 이름을 누르면 받아집니다">원문에서 받기</button>` : ''}</li>`),
+      ...c.bigFiles.map(f => `<li><b>${esc(f.name)}</b> <span class="muted">${esc(f.size)} · 대용량${c.bigUntil ? ` · ${esc(c.bigUntil)}까지` : ''}</span> <a class="btn sm primary" href="${esc(f.href)}" target="_blank" rel="noopener">내려받기</a></li>`),
+    ];
+    return `<div class="box"><b>첨부파일 ${rows.length}개</b>${rows.length ? `<ul style="margin:6px 0 6px 18px;padding:0;line-height:1.9">${rows.join('')}</ul>` : ' <span class="muted">없음</span>'}<div class="acts">${read}</div>${c.files.length ? '<div class="muted">일반 첨부는 원문 화면에서 파일 옆 내려받기(↓) 아이콘 → “PC저장”을 누르세요.</div>' : ''}${c.to ? `<div class="muted" style="margin-top:4px">받는 사람: ${esc(c.to.replace(/<[^>]+>/g, '').slice(0, 160))}${c.to.length > 160 ? '…' : ''}</div>` : ''}</div>`;
+  }
   function mailPane(m, action, why) {
     if (!m) return {title: action ? action.title : '메일', url: S.a.mail.url, body: actsFor(S.a.mail.url, {key: action && action.key, title: '받은메일함'})};
     const dl = R.extractAllDeadlines(m.subject + ' ' + m.preview).filter(x => x.dday >= -1);
     const ur = m.seen ? '' : 'data-unread="1" data-what="메일"';
     const reply = `<button class="btn primary" data-act="openUrl" data-url="${esc(GW.links.compose('re', m))}" data-title="답장: ${esc(m.subject)}" ${ur}>답장 쓰기</button><button class="btn" data-act="openUrl" data-url="${esc(GW.links.compose('reall', m))}" data-title="전체 답장: ${esc(m.subject)}" ${ur}>전체 답장</button><button class="btn" data-act="openUrl" data-url="${esc(GW.links.compose('fw', m))}" data-title="전달: ${esc(m.subject)}" ${ur}>전달</button><button class="btn" data-act="openUrl" data-url="${esc(S.a.mail.url)}" data-title="받은메일함">메일함에서 원문</button>`;
-    return {title: m.subject || '(제목 없음)', url: S.a.mail.url, body: `${why || ''}<div class="kv"><b>보낸 사람</b><span>${esc(m.from)} &lt;${esc(m.fromEmail)}&gt;</span><b>받은 시각</b><span>${esc(m.date)}</span><b>메일함</b><span>${esc(m.box)}</span><b>상태</b><span>${m.seen ? '읽음' : '안 읽음'}${m.answered ? ' · 답장함' : ''}${m.forwarded ? ' · 전달함' : ''}${m.attach ? ' · 첨부' : ''}</span></div><div class="box">${esc(m.preview) || '<span class="muted">미리보기 없음</span>'}</div>${dl.length ? `<div class="box tip"><b>찾은 기한</b> ${dl.map(d => `<span class="pill ${d.dday <= 1 ? 'solid' : 'medium'}">${esc(d.date.slice(5))}${d.time ? ' ' + esc(d.time) : ''} ${ddayText(d.dday)}</span>`).join('')}</div>` : ''}<div class="acts">${reply}</div>${actsFor('', {key: action ? action.key : `mail:${m.box}:${m.uid}`, q: relatedQ(m.subject)})}<div class="muted">답장 쓰기 창은 받는 사람·제목이 채워진 채 열리고, 보내기를 눌러야 발송됩니다. 작성 중인 내용은 그룹웨어 메일 설정(기본 3분)에 따라 임시보관함에 자동 저장될 수 있습니다. ${m.seen ? '' : '안 읽은 메일은 답장 창을 열 때 읽음으로 바뀔 수 있어 먼저 묻습니다.'}</div>`};
+    return {title: m.subject || '(제목 없음)', url: S.a.mail.url, body: `${why || ''}<div class="kv"><b>보낸 사람</b><span>${esc(m.from)} &lt;${esc(m.fromEmail)}&gt;</span><b>받은 시각</b><span>${esc(m.date)}</span><b>메일함</b><span>${esc(m.box)}</span><b>상태</b><span>${m.seen ? '읽음' : '안 읽음'}${m.answered ? ' · 답장함' : ''}${m.forwarded ? ' · 전달함' : ''}${m.attach ? ' · 첨부' : ''}</span></div><div class="box">${esc(m.preview) || '<span class="muted">미리보기 없음</span>'}</div>${mailFilesBox(m)}${dl.length ? `<div class="box tip"><b>찾은 기한</b> ${dl.map(d => `<span class="pill ${d.dday <= 1 ? 'solid' : 'medium'}">${esc(d.date.slice(5))}${d.time ? ' ' + esc(d.time) : ''} ${ddayText(d.dday)}</span>`).join('')}</div>` : ''}<div class="acts">${reply}</div>${actsFor('', {key: action ? action.key : `mail:${m.box}:${m.uid}`, q: relatedQ(m.subject)})}<div class="muted">답장 쓰기 창은 받는 사람·제목이 채워진 채 열리고, 보내기를 눌러야 발송됩니다. 작성 중인 내용은 그룹웨어 메일 설정(기본 3분)에 따라 임시보관함에 자동 저장될 수 있습니다. ${m.seen ? '' : '안 읽은 메일은 답장 창을 열 때 읽음으로 바뀔 수 있어 먼저 묻습니다.'}</div>`};
   }
   function searchPane(it) {
     if (!it) return {title: '검색 결과를 찾을 수 없습니다', url: '', body: ''};
@@ -1082,7 +1142,7 @@ ${S.weekly ? `<h3>주간 업무 실적 초안 <button class="btn sm primary" dat
 
   // ---------- 연속 처리 모드 ----------
   function startFocus(keys) {
-    const list = (keys && keys.length ? keys : queue().filter(x => ['doc', 'mail', 'attendance', 'conflict', 'notice'].includes(x.type)).map(x => x.key));
+    const list = (keys && keys.length ? keys : queue().filter(x => x.scope !== 'ref' && ['doc', 'mail', 'attendance', 'conflict', 'notice'].includes(x.type)).map(x => x.key));
     if (!list.length) { toast('처리할 항목이 없습니다.'); return; }
     if (!leavePane()) return;
     S.focus = {keys: list, i: 0, results: {}, busy: false};
@@ -1151,7 +1211,7 @@ ${S.weekly ? `<h3>주간 업무 실적 초안 <button class="btn sm primary" dat
     const f = S.focus;
     const cnt = r => f.keys.filter(k => f.results[k] === r).length;
     S.focus = null; S.pane.url = ''; S.sel = null; S.pane.dirty = false;
-    if (S.raw) { const a = R.analyze(S.raw, store.get('state', null)); applyUrgentWords(a); S.a = a; }
+    if (S.raw) reanalyze();
     render();
     toast(`연속 처리 끝: 그룹웨어에서 처리 확인 ${cnt('done')}건${cnt('manual') ? ` · 직접 확인 ${cnt('manual')}건` : ''}${cnt('remain') ? ` · 아직 남음 ${cnt('remain')}건` : ''}${cnt('hadReply') ? ` · 이전 답장만 ${cnt('hadReply')}건` : ''}${cnt('unsent') ? ` · 답장 못 찾음 ${cnt('unsent')}건` : ''}${cnt('skip') ? ` · 건너뜀 ${cnt('skip')}건` : ''}.`);
     refresh({silent: true});
@@ -1236,6 +1296,13 @@ ${S.weekly ? `<h3>주간 업무 실적 초안 <button class="btn sm primary" dat
       const list = await loadForms();
       const fl = $('#formList');
       if (fl) fl.innerHTML = (list || []).slice(0, 10).map(f => `<div class="mi" data-act="openUrl" data-url="${esc(f.url)}" data-title="새 기안: ${esc(f.name)}">📝 ${esc(f.name)} <span class="muted">${f.count ? `${f.count}번 사용` : '추천'}</span></div>`).join('') || '<div class="mi muted">양식이 없습니다.</div>';
+    } else if (which.startsWith('mute:') || which.startsWith('mine:')) {
+      const list = which.slice(0, 4), key = which.slice(5);
+      const x = S.a.actions.find(a => a.key === key);
+      if (!x) { closeOverlay(); return; }
+      const who = senderOf(x), kindName = RULE_KIND[x.base] || x.kind;
+      const head = list === 'mute' ? '나와 상관없음: 목록에서 빼기 (설정에서 되돌릴 수 있음)' : '내 처리할 일로 옮기기';
+      $('#overlay').innerHTML = `<div class="menu" data-stop="1" style="right:auto;left:50%;top:30%;transform:translateX(-50%);min-width:360px"><div class="mh">${head}</div><div class="mi" data-act="relAdd" data-l="${list}" data-t="key" data-v="${esc(key)}" data-label="${esc(x.title.slice(0, 40))}">이 항목만 <span class="muted">${esc(x.title.slice(0, 28))}</span></div>${who ? `<div class="mi" data-act="relAdd" data-l="${list}" data-t="sender" data-v="${esc(who)}" data-label="보낸 곳: ${esc(who)}">보낸 곳이 ‘${esc(who)}’인 항목 모두</div>` : ''}${RULE_KIND[x.base] ? `<div class="mi" data-act="relAdd" data-l="${list}" data-t="kind" data-v="${esc(x.base)}" data-label="종류: ${esc(kindName)}">‘${esc(kindName)}’ 종류 모두</div>` : ''}<div class="mi muted" data-act="closeOverlay">취소</div></div>`;
     } else if (which === 'view') {
       const fsName = {s: '작게', m: '보통', l: '크게', xl: '아주 크게'};
       $('#overlay').innerHTML = `<div class="menu" data-stop="1"><div class="mh">글자 크기: ${fsName[S.settings.fontSize] || '보통'}</div><div class="mi" data-act="fsUp">가+ 글자 크게</div><div class="mi" data-act="fsDown">가− 글자 작게</div><div class="mi" data-act="theme">${S.settings.theme === 'dark' ? '밝은 테마로' : '어두운 테마로'}</div><div class="mi" data-act="help">? 사용법·용어·단축키</div><div class="mi" data-act="openPalette">Ctrl+K 명령 찾기</div><div class="mi" data-act="view" data-v="settings">설정</div></div>`;
@@ -1285,6 +1352,16 @@ ${S.weekly ? `<h3>주간 업무 실적 초안 <button class="btn sm primary" dat
       case 'relogin': if (!S.pane.dirty || confirm('처리 창에 입력 중인 내용이 있습니다. 그룹웨어를 새로 고치면 사라집니다. 계속할까요?')) location.reload(); break;
       case 'close': if (leavePane()) close(); break;
       case 'home': goHome(); break;
+      case 'relMenu': e.stopPropagation(); openMenu(`${el.dataset.l}:${el.dataset.k}`); break;
+      case 'relAdd': {
+        if (el.dataset.l === 'mine' && el.dataset.t === 'kind' && ['deptWaiting', 'distWaiting', 'sendWaiting'].includes(el.dataset.v)) { const ro = S.settings.roles = {...(S.settings.roles || {})}; ro[{deptWaiting: 'deptReceiver', distWaiting: 'distributor', sendWaiting: 'sender'}[el.dataset.v]] = true; saveLocal(); reanalyze(); closeOverlay(); render(); toast('설정의 “내 업무 범위”에 반영했습니다.'); break; }
+        addRule(el.dataset.l, el.dataset.t, el.dataset.v, el.dataset.label);
+        toast(el.dataset.l === 'mute' ? '목록에서 뺐습니다. Ctrl+Z 또는 설정에서 되돌릴 수 있습니다.' : '내 처리할 일로 옮겼습니다.');
+        break;
+      }
+      case 'delRule': { const r = rel(); r[el.dataset.l].splice(Number(el.dataset.i), 1); saveLocal(); if (S.raw) reanalyze(); render(); break; }
+      case 'refToggle': S.refOpen = !el.open; break;
+      case 'mailDetail': { const m = findMail(el.dataset.box, el.dataset.uid); if (m && confirm('이 메일을 불러오면 그룹웨어에 읽음으로 표시됩니다. 불러올까요?')) loadMailDetail(m, true); break; }
       case 'crumbView': if (S.focus) { stopFocus(); break; } if (!leavePane()) break; S.sel = null; S.pane.url = ''; S.pane.expanded = false; render(); break;
       case 'toggleCharts': S.settings.showCharts = !showCharts(); saveLocal(); renderMain(); break;
       case 'searchExample': S.search.kw = el.dataset.v; runSearch(); break;
@@ -1400,6 +1477,7 @@ ${S.weekly ? `<h3>주간 업무 실적 초안 <button class="btn sm primary" dat
         if (!st.budget.length) st.budget = DEFAULT_SETTINGS.budget;
         st.urgentWords = $('#setWords').value.split(',').map(w => w.trim()).filter(Boolean);
         st.mailCount = Number($('#setMail').value);
+        st.roles = {deptReceiver: $('#roleDept').checked, distributor: $('#roleDist').checked, sender: $('#roleSend').checked};
         saveLocal(); schedule(); applyLook(); toast('설정을 저장했습니다.'); S.budget.table = null; refresh(); break;
       }
       case 'resetDone': pushUndo('표시 초기화'); S.hidden = {}; S.snooze = {}; S.plan = {}; saveLocal(); render(); toastUndo('숨기기·미루기·보드 계획을 지웠습니다.'); break;
