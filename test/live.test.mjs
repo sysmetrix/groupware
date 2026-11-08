@@ -439,7 +439,7 @@ test('safe draft links: interlocked forms (36, 40, 1007, 1012) route to safe mod
   assert.ok(stdUrl.includes('tiKeyCode=mg_20160303185413307'), 'general form opens direct draft popup');
 });
 // ---- 기안 패턴(조직 서식 학습) ----
-import {patternTokens, buildPatternModel, predictDraftMeta, formatRunRef, planToResultTitle, buildResultBody, textWidthPt, buildPlanSkeleton} from '../src/live/briefing.mjs';
+import {patternTokens, buildPatternModel, predictDraftMeta, formatRunRef, planToResultTitle, buildResultBody, textWidthPt, buildPlanSkeleton, moneyKo, buildPaymentProposalBody, pendingPayments} from '../src/live/briefing.mjs';
 
 const PLAN_BODY = ['1. 가나부-1613(2026. 3. 4.)호와 관련입니다.', '2. 2026년『시험 사업』을 다음과 같이 운영하고자 합니다.', '  가. 사 업 명: 2026년『시험 사업』', '  나. 운영일정: 2026. 11. 1.(일) 14:00~16:30', '  다. 운영장소: 시험센터 2층', '  라. 참가인원: 연 40명(실 40명) ※ 선착순 접수', '  마. 주요내용: 아주 긴 설명이 이어지는 항목입니다 아주 긴 설명이 이어지는 항목입니다 아주 긴 설명이 이어지는 항목입니다 아주 긴 설명이 이어지는 항목입니다', '  바. 소요예산: 비예산', '', '붙임  운영계획서 1부.  끝.'].join('\r\n');
 
@@ -493,4 +493,31 @@ test('org pattern: plan skeleton reuses the labels and reference line of the clo
   assert.equal(s.lines[1], '2. 2026년『시험 사업 2차』를 다음과 같이 운영하고자 합니다.');
   assert.equal(s.lines[2], '  가. 사 업 명: ');
   assert.equal(s.lines[s.lines.length - 1], '붙임  운영계획서 1부.  끝.');
+});
+
+test('payment pattern: money in korean, proposal body from a past proposal, pending expense docs', () => {
+  assert.equal(moneyKo(200000), '금200,000원(금이십만원)');
+  assert.equal(moneyKo(1300000), '금1,300,000원(금일백삼십만원)');
+  assert.equal(moneyKo(463000), '금463,000원(금사십육만삼천원)');
+  assert.equal(moneyKo(150000), '금150,000원(금일십오만원)');
+  assert.equal(moneyKo(60000), '금60,000원(금육만원)');
+  assert.equal(moneyKo(10000), '금10,000원(금일만원)');
+  assert.equal(moneyKo(1234567), '금1,234,567원(금일백이십삼만사천오백육십칠원)');
+  const base = ['1. 가나부-1(2026. 3. 4.)호와 관련입니다.', '2. 2026년 옛사업 회의비 지급을 다음과 같이 건의합니다.', '  가. 지급예정금액: 금900,000원(금구십만원)', '  나. 지급계획', '', '  다. 결제방법: 카드결제', '  라. 예산과목: 정책)가 단위)나 세부)다 편성목)경비 통계목)회의비 부기)다 회의비(자).  끝.'].join('\r\n');
+  const b = buildPaymentProposalBody(base, {ref: '가나부-9(2026. 10. 3.)', title: '2026년 새사업 회의비 지급 건의', amount: 450000});
+  assert.equal(b.lines[0], '1. 가나부-9(2026. 10. 3.)호와 관련입니다.');
+  assert.equal(b.lines[1], '2. 2026년 새사업 회의비 지급을 다음과 같이 건의합니다.');
+  assert.equal(b.lines[2], '  가. 지급예정금액: 금450,000원(금사십오만원)');
+  assert.equal(b.lines[b.lines.length - 1], base.split('\r\n').pop());
+  const docs = [
+    {id: '1', docNo: 'A-1', title: '2026년 갑 회의비 지급 건의', form: '일반기안문', binder: 'X', date: '2026-03-01'},
+    {id: '2', docNo: 'A-2', title: '2026년 을 회의비 지급 건의', form: '일반기안문', binder: 'X', date: '2026-04-01'},
+    {id: '3', docNo: 'A-3', title: '2026년 갑 회의비 지급', form: '지출결의서(기안포함)(A10)', binder: 'X', refs: ['A-1(2026. 3. 1., "2026년 갑 회의비 지급 건의")']},
+    {id: '4', docNo: 'A-4', title: '2026년 병 현수막 제작', form: '물품매입(수리제조)품의 및 요구서', binder: 'X', date: '2026-05-01'},
+  ];
+  const p = pendingPayments(docs);
+  assert.deepEqual(p.map(x => x.docNo), ['A-4', 'A-2']);
+  assert.equal(p[0].expenseTitle, '2026년 병 현수막 제작비 지급');
+  assert.equal(p[0].expenseForm, '지출결의서(기안미포함)(A10)');
+  assert.equal(p[1].expenseTitle, '2026년 을 회의비 지급');
 });

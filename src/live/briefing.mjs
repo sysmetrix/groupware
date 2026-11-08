@@ -744,3 +744,57 @@ export function buildPlanSkeleton(model, {title = ''} = {}) {
   const out = [refLine || '1. 전략경영실-    (    .  .  .)호와 관련입니다.', kind === '참가' ? `2. ${name}에 참가하고자 합니다.` : `2. ${name}${(() => { const k = [...name].reverse().find(ch => /[가-힣]/.test(ch)); return k && (k.charCodeAt(0) - 0xAC00) % 28 === 0 ? '를' : '을'; })()} 다음과 같이 운영하고자 합니다.`, ...items, '', `붙임  ${kind === '참가' ? '안내문' : '운영계획서'} 1부.  끝.`];
   return {lines: out, text: out.join('\r\n'), basis: best.e.title};
 }
+
+// ---------------------------------------------------------------------------
+// 지급 문서 패턴: 계획서 -> 지급 건의(일반기안문) -> 지출결의서(기안포함)  /  계획서 -> 물품매입품의서 -> 지출결의서(기안미포함)
+// ---------------------------------------------------------------------------
+// 금액 -> "금200,000원(금이십만원)". 실제 문서처럼 십·백·천 앞의 '일'을 생략하지 않는다(일십오만, 일백삼십만).
+export function moneyKo(n) {
+  const v = Math.round(Number(n));
+  if (!Number.isFinite(v) || v <= 0) return '';
+  const dig = '영일이삼사오육칠팔구', small = ['', '십', '백', '천'], big = ['', '만', '억', '조'];
+  const groups = [];
+  for (let x = v; x > 0; x = Math.floor(x / 10000)) groups.push(x % 10000);
+  let out = '';
+  groups.forEach((g, gi) => {
+    if (!g) return;
+    let s = '';
+    String(g).padStart(4, '0').split('').forEach((c, i) => { const d = Number(c); if (d) s += dig[d] + small[3 - i]; });
+    out = s + big[gi] + out;
+  });
+  return `금${v.toLocaleString('en-US')}원(금${out}원)`;
+}
+export function parseWon(s) { const m = String(s || '').replace(/[,\s원]/g, '').match(/\d+/); return m ? Number(m[0]) : 0; }
+const isProposal = d => /지급\s*건의$/.test(String(d.title || '').trim()) && /^일반기안문/.test(d.form || '일반기안문');
+const isExpense = d => /지출결의/.test(d.form || '');
+const isPurchase = d => /물품매입|구입과지출/.test(d.form || '');
+export function listProposals(docs = []) { return docs.filter(d => d && d.binder && !/^접수문서/.test(d.binder) && isProposal(d)).sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))); }
+export function proposalAmount(d) { const m = String(d.body || '').match(/(?:지급|지출)예정금액:\s*금([\d,]+)원/); return m ? parseWon(m[1]) : 0; }
+// 지급 건의 본문: 같은 사업·비목의 과거 건의를 틀로 삼아 근거 문서·사업명·금액만 바꾼다(결제방법·예산과목·붙임은 그대로 이어받음).
+export function buildPaymentProposalBody(baseBody = '', {ref = '', title = '', amount = 0} = {}) {
+  const src = String(baseBody).split(/\r?\n/);
+  const tail = src.findIndex(l => /^ {2}가\.\s/.test(l));
+  if (tail < 0) return null;
+  const subject = String(title).replace(/\s*지급\s*건의$/, '').trim();
+  const lines = [`1. ${ref}호와 관련입니다.`, `2. ${subject} 지급을 다음과 같이 건의합니다.`, ...src.slice(tail)];
+  const k = lines.findIndex(l => /^ {2}가\.\s(?:지급|지출)예정금액:/.test(l));
+  if (k >= 0 && amount) lines[k] = lines[k].replace(/:\s*.*$/, `: ${moneyKo(amount)}`);
+  const hang = lines.map(l => /^ {2}[가-하]\.\s/.test(l) && textWidthPt(l) > HANG_LIMIT_PT);
+  return {lines, text: lines.join('\r\n'), hang, notes: ['지급계획(표)에는 지급처·내역을 직접 입력하세요.']};
+}
+export function expenseTitleOf(d) {
+  const t = String(d.title || '').trim();
+  if (isProposal(d)) return t.replace(/\s*건의$/, '');
+  if (/구입$/.test(t)) return `${t}비 지급`;
+  if (/제작$/.test(t)) return `${t}비 지급`;
+  if (/임차$/.test(t)) return `${t}료 지급`;
+  return `${t} 지급`;
+}
+// 아직 지출결의서가 없는 지급 건의/물품매입품의서를 찾는다 (지출결의서의 참조문서에 문서번호가 있으면 '완료').
+export function pendingPayments(docs = []) {
+  const own = docs.filter(d => d && d.binder && !/^접수문서/.test(d.binder));
+  const used = new Set();
+  for (const e of own.filter(isExpense)) for (const r of e.refs || []) { const m = String(r).match(/^(\S+?)\(/); if (m) used.add(m[1]); }
+  const todo = own.filter(d => (isProposal(d) || (isPurchase(d) && !isExpense(d))) && !used.has(d.docNo));
+  return todo.sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).map(d => ({id: d.id, docNo: d.docNo, title: d.title, kind: isProposal(d) ? '지급 건의' : '물품매입 품의', expenseForm: isProposal(d) ? '지출결의서(기안포함)(A10)' : '지출결의서(기안미포함)(A10)', expenseTitle: expenseTitleOf(d), binder: d.binder, amount: proposalAmount(d), date: d.date, ref: formatRefDoc(d.runday || '', d.title)}));
+}

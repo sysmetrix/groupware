@@ -48,7 +48,23 @@
         break;
       }
       case 'openResultPicker': openResultPlanPicker(); break;
-      case 'selectPlanForResult': { startResultFromPlan(el.dataset.id); break; }
+      case 'openPay': openPaymentHub(); break;
+    case 'payPickBase': payForm(el.dataset.id); break;
+    case 'payRun': payRun(); break;
+    case 'goodsPickPlan': goodsPickPlan(); break;
+    case 'goodsRun': goodsRun(el.dataset.id); break;
+    case 'openRec': openRecorder(); break;
+    case 'recStart': recStart(); break;
+    case 'recStop': recStop(); break;
+    case 'recPlay': recPlay(+el.dataset.i, el.dataset.mode); break;
+    case 'recDetail': recDetail(+el.dataset.i); break;
+    case 'recVar': recVar(+el.dataset.i, +el.dataset.s); break;
+    case 'recStepDel': recStepDel(+el.dataset.i, +el.dataset.s); break;
+    case 'recDel': recDel(+el.dataset.i); break;
+    case 'recExport': recExport(+el.dataset.i); break;
+    case 'recImport': recImport(); break;
+    case 'recAbort': recAbort(); break;
+    case 'selectPlanForResult': { startResultFromPlan(el.dataset.id); break; }
       case 'quickAtt': quickAttendanceApplication(el.dataset.t); break;
       case 'autoFillMail': autoFillMail(v); break;
       case 'autoFillDraft': autoFillDraft(v); break;

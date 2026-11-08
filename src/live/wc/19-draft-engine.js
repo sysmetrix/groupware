@@ -6,7 +6,7 @@
   const PAT_KEY = 'patterns';
   const wait = ms => new Promise(r => setTimeout(r, ms));
   const patLoad = () => { const p = store.get(PAT_KEY, null); return p && p.docs ? p : {v: 1, docs: {}}; };
-  const patSaveDoc = doc => { const p = patLoad(); p.docs[doc.id] = doc; p.at = Date.now(); store.set(PAT_KEY, p); };
+  const patSaveDoc = doc => { try { const p = patLoad(); p.docs[doc.id] = doc; p.at = Date.now(); store.set(PAT_KEY, p); } catch (e) { logError('patSaveDoc', e.message); } };
   const patModel = () => R.buildPatternModel(Object.values(patLoad().docs));
   const HR_FORMS = /^(36|40|43|1012|1021)$/;
   let learning = null;
@@ -45,6 +45,7 @@
         }
       } catch {}
     } catch (e) { out.err = e.message; }
+    try { fr.src = 'about:blank'; } catch {}
     fr.remove();
     return out;
   }
@@ -144,6 +145,25 @@
   }
   const setNative = (w, el, v) => { Object.getOwnPropertyDescriptor(w.HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new w.Event('input', {bubbles: true})); el.dispatchEvent(new w.Event('change', {bubbles: true})); };
   const dlgOf = d => [...d.querySelectorAll('.obtdialog.open, ._isDialog')].pop();
+  const allDlgs = d => [...d.querySelectorAll('.obtdialog.open, ._isDialog')];
+  const waitFor = async (pred, ms = 8000, step = 150) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { let r; try { r = pred(); } catch {} if (r) return r; await wait(step); } return null; };
+  // 자동 기입 중에는 상신·결재·임시저장·보내기·삭제 같은 비가역 버튼을 코드 레벨에서 막는다
+  const DENY_BTN = /^(상신|결재|임시저장|보내기|발송|회수|삭제|기안|승인|반려|전결)$/;
+  const AUTO = {running: false, blocked: []};
+  function installGuard(win) {
+    if (win.__wcGuard) return;
+    win.__wcGuard = true;
+    const block = e => {
+      if (!AUTO.running) return;
+      const b = e.target && e.target.closest && e.target.closest('button,a,[role=button],.topBtn');
+      const t = ((b && b.innerText) || '').trim();
+      if (b && DENY_BTN.test(t)) { e.stopImmediatePropagation(); e.preventDefault(); AUTO.blocked.push(t); }
+    };
+    ['click', 'mousedown', 'mouseup', 'dblclick'].forEach(n => win.addEventListener(n, block, true));
+    const oc = win.HTMLElement.prototype.click;
+    win.HTMLElement.prototype.click = function () { if (AUTO.running && DENY_BTN.test((this.innerText || '').trim())) { AUTO.blocked.push((this.innerText || '').trim()); return; } return oc.call(this); };
+  }
+  const btnIn = (root, re) => [...root.querySelectorAll('button, [role=button]')].find(b => re.test((b.innerText || '').trim()));
 
   // 라디오는 value가 아니라 화면에 보이는 이름(공개/일반문서/내부결재...)으로 고른다
   function setRadioByLabel(d, label) {
@@ -164,10 +184,10 @@
     if (!dlg) return {ok: false, detail: '기록물철 선택창이 열리지 않았습니다'};
     const leaf = [...dlg.querySelectorAll('*')].find(el => el.children.length === 0 && (el.innerText || '').trim() === name);
     if (!leaf) { [...dlg.querySelectorAll('button')].find(b => /닫기|취소/.test(b.innerText))?.click(); return {ok: false, detail: `기록물철 “${name}”을(를) 목록에서 찾지 못했습니다`}; }
-    leaf.click();
     leaf.dispatchEvent(new f.contentWindow.MouseEvent('dblclick', {bubbles: true}));
-    await wait(800);
-    return {ok: inp.value.startsWith(name), detail: inp.value || '(비어 있음)'};
+    await waitFor(() => !dlgOf(d), 3000);
+    const val = (inp.value || '').trim();
+    return {ok: val === name || val.replace(/\(\d+년\)$/, '') === name, detail: val || '(비어 있음)'};
   }
 
   // 내 결재라인 '기본'을 그대로 적용 (임의로 결재자를 고르지 않는다)
@@ -187,19 +207,21 @@
     basic.click();
     basic.dispatchEvent(new f.contentWindow.MouseEvent('dblclick', {bubbles: true}));
     await wait(700);
-    [...d.querySelectorAll('button')].find(b => (b.innerText || '').trim() === '확인')?.click();
-    await wait(600);
-    dlg = dlgOf(d) || dlg;
-    [...dlg.querySelectorAll('button')].find(b => (b.innerText || '').trim() === '반영')?.click();
-    await wait(1200);
-    const closed = !dlgOf(d);
-    return {ok: closed, detail: closed ? '내결재라인 “기본” 반영' : '결재라인 창이 닫히지 않았습니다(수동 확인 필요)'};
+    const conf = await waitFor(() => allDlgs(d).find(x => x !== dlg && /결재자/.test(x.innerText || '')), 1500);
+    if (conf) btnIn(conf, /^확인$/)?.click();
+    await wait(500);
+    btnIn(dlg, /^반영$/)?.click();
+    const closed = !!(await waitFor(() => !dlgOf(d), 5000));
+    if (!closed) allDlgs(d).forEach(x => btnIn(x, /취소|닫기/)?.click());
+    return {ok: closed, detail: closed ? '내결재라인 “기본” 반영' : '결재라인 창을 닫지 못해 취소했습니다(직접 지정 필요)'};
   }
 
   // 참조문서: 계획서를 제목으로 검색해 선택한다 (합성 입력/마우스 이벤트)
   async function pickRefDoc(f, planTitle, docNo) {
     const d = f.contentDocument, w = f.contentWindow;
-    const open = [...d.querySelectorAll('button')].filter(b => (b.innerText || '').trim() === '선택').pop();
+    const label = [...d.querySelectorAll('*')].filter(e => e.children.length === 0 && (e.innerText || '').trim().startsWith('참조문서') && e.getBoundingClientRect().width > 0).pop();
+    let scope = label, open = null;
+    for (let i = 0; i < 4 && scope && !open; i++) { scope = scope.parentElement; open = scope && btnIn(scope, /^선택$/); }
     if (!open) return {ok: false, detail: '참조문서 선택 버튼을 찾지 못했습니다'};
     open.click();
     await wait(1800);
@@ -215,7 +237,7 @@
       found = Number((dlg.innerText.match(/총(\d+)개/) || [])[1] || 0);
       if (found) break;
     }
-    if (!found) { [...dlg.querySelectorAll('button')].find(b => /취소/.test(b.innerText))?.click(); return {ok: false, detail: '참조문서 검색 결과가 없습니다'}; }
+    if (found !== 1) { btnIn(dlg, /취소/)?.click(); return {ok: false, detail: found ? `검색 결과가 ${found}건이라 자동 선택하지 않았습니다(직접 선택)` : '참조문서 검색 결과가 없습니다'}; }
     const cv = dlg.querySelectorAll('canvas')[0];
     const r = cv.getBoundingClientRect();
     const fire = (type, x, y) => cv.dispatchEvent(new w.MouseEvent(type, {bubbles: true, cancelable: true, clientX: x, clientY: y, view: w, button: 0, buttons: type === 'mouseup' ? 0 : 1}));
@@ -252,8 +274,8 @@
       if (act.Execute(set)) shaped++;
     });
     ctrl.MoveToField('_F_CONTENTS_', true, true, true);
-    ctrl.Run('SelectAll');
-    const html = String(ctrl.GetTextFile('HTML', 'saveblock') || '');
+    let html = '';
+    try { ctrl.Run('SelectAll'); html = String(ctrl.GetTextFile('HTML', 'saveblock') || ''); } finally { try { ctrl.Run('Cancel'); } catch {} }
     const hung = (html.match(/margin-left:96\.0pt;text-align:left;text-indent:-96\.0pt;/g) || []).length;
     const text = String(ctrl.GetFieldText('_F_CONTENTS_') || '').replace(/\r?\n/g, '\n');
     const same = text === body.text.replace(/\r?\n/g, '\n');
@@ -263,10 +285,30 @@
     return {ok: same && hung === want, detail: `${body.lines.length}줄 기입${want ? ` · 내어쓰기 ${hung}/${want}` : ''}${same ? '' : ' · 본문 불일치'}`};
   }
 
+  function preflight(f, spec) {
+    const d = f.contentDocument;
+    if (!d) return '기안 화면이 열려 있지 않습니다.';
+    if (allDlgs(d).length) return '열려 있는 팝업이 있습니다. 먼저 닫은 뒤 다시 실행하세요.';
+    const ctrl = d.querySelector('iframe[src*="hwpBuild"], #formCtrl_1')?.contentWindow?.HwpCtrl;
+    if (!ctrl) return '한글 편집기가 아직 준비되지 않았습니다. 잠시 후 다시 시도하세요.';
+    const t = d.querySelector('input[placeholder="제목을 입력해주세요"]');
+    let body = ''; try { body = String(ctrl.GetFieldText('_F_CONTENTS_') || '').trim(); } catch {}
+    const typed = (t && t.value.trim() && t.value.trim() !== spec.title) || (body && !spec.body) || (f.contentWindow.__wcFilled && (t.value.trim() || body));
+    if (typed && !confirm('이미 입력한 내용이 있습니다. 자동 기입으로 덮어쓸까요?')) return '사용자가 덮어쓰기를 취소했습니다.';
+    return '';
+  }
   async function fillDraft(f, spec) {
     const d = f.contentDocument, w = f.contentWindow;
     const steps = [];
-    const run = async (name, fn) => { try { const r = await fn(); steps.push({name, ok: !!r.ok, detail: r.detail || ''}); } catch (e) { steps.push({name, ok: false, detail: e.message}); } };
+    const bad0 = preflight(f, spec);
+    if (bad0) return [{name: '사전점검', ok: false, detail: bad0}];
+    installGuard(w); AUTO.running = true; AUTO.blocked = [];
+    let halted = false;
+    const run = async (name, fn) => {
+      if (halted) { steps.push({name, ok: false, detail: '앞 단계의 팝업이 정리되지 않아 중단했습니다'}); return; }
+      try { const r = await fn(); steps.push({name, ok: !!r.ok, detail: r.detail || ''}); } catch (e) { steps.push({name, ok: false, detail: e.message}); }
+      if (allDlgs(d).length) { allDlgs(d).forEach(x => btnIn(x, /취소|닫기/)?.click()); await wait(500); if (allDlgs(d).length) halted = true; }
+    };
     await run('제목', async () => {
       const inp = d.querySelector('input[placeholder="제목을 입력해주세요"]');
       setNative(w, inp, spec.title);
@@ -283,6 +325,9 @@
     await run('결재라인', () => applyMyApprovalLine(f));
     if (spec.body) await run('본문', async () => putBody(f, spec.body));
     if (spec.ref) await run('참조문서', () => pickRefDoc(f, spec.ref.title, spec.ref.docNo));
+    AUTO.running = false;
+    w.__wcFilled = Date.now();
+    steps.push({name: '안전장치', ok: AUTO.blocked.length === 0, detail: AUTO.blocked.length ? `자동 실행 중 ${AUTO.blocked.join(', ')} 버튼 클릭을 차단했습니다(상신·저장은 하지 않았습니다)` : '상신·결재·임시저장·삭제는 실행하지 않았습니다(결재 직전에서 멈춤)'});
     return steps;
   }
 
@@ -336,22 +381,98 @@
     showDraftReport(title, steps, sk ? [`본문 뼈대: 과거 계획서 “${sk.basis}”의 서식을 이어받았습니다. 항목 값은 직접 채워 주세요.`] : ['과거 계획서가 없어 본문은 비워 두었습니다.']);
   }
 
-  // ---------- 물품매입 품의 ----------
-  async function startGoodsDraft() {
-    const name = (prompt('품의 제목을 입력하세요.\n예) 2026년「OOO」운영물품 구입') || '').trim();
-    if (!name) return;
+  // ---------- 지급 문서: 계획서 -> 지급 건의(일반기안문) -> 지출결의서 / 계획서 -> 물품매입품의서 -> 지출결의서 ----------
+  const ownDocs = () => Object.values(patLoad().docs).filter(d => d.binder && !/^접수문서/.test(d.binder));
+  const planDocs = () => ownDocs().filter(d => /계획(\(안\)|\(변경\))?$/.test(String(d.title).trim()) && !/결과/.test(d.title) && /^일반기안문/.test(d.form || '일반기안문')).sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  const won0 = n => (n ? n.toLocaleString('en-US') + '원' : '-');
+
+  async function openPaymentHub() {
     closeOverlay();
-    const meta = R.predictDraftMeta(patModel(), {title: name});
-    const f = await openDraftFrame('mg_20160313172845987', '물품매입(수리제조)품의 및 요구서', `새 기안: ${name}`);
-    if (!f) { toast('기안 화면을 열지 못했습니다.'); return; }
-    const steps = await fillDraft(f, {title: name, meta});
-    showDraftReport(name, steps, ['물품 내역·금액은 양식의 표에 직접 입력하세요.']);
+    S.paletteOpen = true;
+    const shell = body => `<div class="modal" data-act="closeOverlay"><div class="dlg" data-stop="1" style="width:min(760px,95vw);padding:22px 24px;max-height:88vh;overflow:auto" role="dialog" aria-label="지급 문서"><button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button>${body}</div></div>`;
+    $('#overlay').innerHTML = shell('<h2 style="margin:0 0 8px;font-size:18px">지급 문서</h2><div class="mi muted"><span class="spin"></span> 내 지급 문서를 분석하고 있습니다…</div>');
+    await learnPatterns({limit: 12, budgetMs: 40000, quiet: true}).catch(() => {});
+    const all = Object.values(patLoad().docs);
+    const props = R.listProposals(all).slice(0, 8);
+    const pend = R.pendingPayments(all);
+    $('#overlay').innerHTML = shell(`
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px"><div class="cmd-logo">${ic('doc')}</div><div><h2 style="margin:0;font-size:18px">지급 문서</h2><div class="muted">내가 해 온 순서: 계획서 → 지급 건의(또는 물품매입 품의) → 지출결의서. 앞 문서의 기록물철·기본항목을 이어받습니다.</div></div></div>
+      <div class="sec"><div class="sh">① 지급 건의 새로 작성 <span class="muted">(지난 건의를 틀로 사용)</span></div>
+        ${props.length ? props.map(p => `<div class="cmd-preset" role="button" tabindex="0" data-act="payPickBase" data-id="${esc(p.id)}" style="display:flex;gap:10px;align-items:flex-start"><div style="flex:1;min-width:0"><b>${esc(p.title)}</b><div class="muted" style="font-size:12px">${esc(p.docNo)} · ${esc(won0(R.proposalAmount(p)))} · 기록물철 ${esc(p.binder)}</div></div><button class="btn sm primary">이 건의처럼 작성</button></div>`).join('') : '<div class="muted">학습된 지급 건의가 없습니다.</div>'}
+      </div>
+      <div class="sec"><div class="sh">② 물품매입 품의 새로 작성</div><div class="acts"><button class="btn primary" data-act="goodsPickPlan">${ic('plus')}계획서를 고르고 작성</button></div></div>
+      <div class="sec"><div class="sh">③ 지출결의서를 올릴 차례인 문서 <span class="muted">(${pend.length}건)</span></div>
+        ${pend.length ? pend.map(p => `<div class="box" style="margin:6px 0"><b>${esc(p.title)}</b> <span class="bdg tag">${esc(p.kind)}</span><div class="muted" style="font-size:12.5px;margin:3px 0">${esc(p.docNo)} 참조 · ${esc(p.expenseForm)} · 기록물철 ${esc(p.binder)}${p.amount ? ' · ' + esc(won0(p.amount)) : ''}</div><div class="acts"><button class="btn sm" data-act="copy" data-v="${esc(p.expenseTitle)}">제목 복사</button><button class="btn sm" data-act="copy" data-v="${esc(p.ref || p.docNo)}">참조문서 복사</button>${p.amount ? `<button class="btn sm" data-act="copy" data-v="${esc(R.moneyKo(p.amount))}">금액(한글) 복사</button>` : ''}</div></div>`).join('') : '<div class="muted">지출결의서가 필요한 문서가 없습니다.</div>'}
+        <div class="acts" style="margin-top:8px"><button class="btn sm" data-act="openUrl" data-url="${esc(GW.links.route(GW.routes.draft))}" data-title="결재작성">${ic('ext')}지출결의서 양식 열기</button><button class="btn sm" data-act="openRec">${ic('play')}기록기로 지출결의 입력 기록·재생</button></div>
+        <div class="muted" style="font-size:12px;margin-top:6px">지출결의서는 회계 전표와 연동된 양식이라 자동 입력 대신 값 복사와 기록기 재생을 사용합니다(상신·결재는 하지 않습니다).</div>
+      </div>`);
   }
+
+  function payForm(baseId) {
+    const base = patLoad().docs[baseId];
+    if (!base) { toast('기준 건의를 찾지 못했습니다.'); return; }
+    S.pay = {baseId};
+    const refNo = (String((base.refs || [])[0] || '').match(/^(\S+?)\(/) || [])[1] || '';
+    const plans = planDocs();
+    $('#overlay').innerHTML = `<div class="modal" data-act="closeOverlay"><div class="dlg" data-stop="1" style="width:min(640px,95vw);padding:22px 24px" role="dialog" aria-label="지급 건의 작성">
+      <button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button>
+      <h2 style="margin:0 0 4px;font-size:18px">지급 건의 작성</h2><div class="muted" style="margin-bottom:12px">틀: ${esc(base.title)} (${esc(base.docNo)})</div>
+      <div class="kv" style="display:grid;grid-template-columns:90px minmax(0,1fr);gap:10px;align-items:center"><b>제목</b><input id="payTitle" class="cmd-inp" style="width:100%;min-width:0;box-sizing:border-box;background:transparent;color:inherit;border:1px solid var(--line2);border-radius:8px;padding:8px 10px;font-size:14px" value="${esc(base.title)}">
+      <b>금액(원)</b><input id="payAmt" class="cmd-inp" style="width:100%;min-width:0;box-sizing:border-box;background:transparent;color:inherit;border:1px solid var(--line2);border-radius:8px;padding:8px 10px;font-size:14px" value="${R.proposalAmount(base) || ''}" inputmode="numeric">
+      <b>근거 계획서</b><select id="payPlan" style="width:100%;min-width:0;box-sizing:border-box;background:transparent;color:inherit;border:1px solid var(--line2);border-radius:8px;padding:8px 10px;font-size:14px">${plans.map(p => `<option style="color:#111" value="${esc(p.id)}" ${p.docNo === refNo ? 'selected' : ''}>${esc(p.title)} (${esc(p.docNo)})</option>`).join('')}</select></div>
+      <div class="muted" style="font-size:12.5px;margin-top:6px">제목은 “… 지급 건의”로 끝나야 합니다. 결제방법·예산과목·붙임은 틀 문서의 것을 그대로 이어받습니다.</div>
+      <div class="acts" style="margin-top:14px;justify-content:flex-end"><button class="btn sm ghost" data-act="openPay">뒤로</button><button class="btn sm primary" data-act="payRun">작성 시작</button></div></div></div>`;
+  }
+
+  async function payRun() {
+    const base = S.pay && patLoad().docs[S.pay.baseId];
+    let title = ($('#payTitle') || {}).value?.trim() || '';
+    const amount = R.parseWon(($('#payAmt') || {}).value);
+    const plan = patLoad().docs[($('#payPlan') || {}).value];
+    if (!base || !plan || !title) { toast('제목과 근거 계획서를 확인하세요.'); return; }
+    if (!/지급\s*건의$/.test(title)) title += ' 지급 건의';
+    if (!amount) { toast('금액을 입력하세요.'); return; }
+    closeOverlay();
+    let src = plan;
+    if (!src.runday) { const r = await readDocPattern({id: plan.id, ti: 'mg_20160303185413307', title: plan.title, form: plan.form, docNo: plan.docNo, date: plan.date}); if (!r.err) { patSaveDoc(r); src = r; } }
+    const body = R.buildPaymentProposalBody(base.body || '', {ref: R.formatRunRef(src.runday) || plan.docNo, title, amount});
+    if (!body) { toast('틀 문서의 본문을 읽지 못했습니다. 다른 건의를 선택하세요.'); return; }
+    const meta = R.predictDraftMeta(patModel(), {title, sourceDocNo: plan.docNo, sourceTitle: plan.title});
+    const f = await openDraftFrame('mg_20160303185413307', '일반기안문', `지급 건의: ${title}`);
+    if (!f) { toast('기안 화면을 열지 못했습니다.'); return; }
+    const steps = await fillDraft(f, {title, meta, body, ref: {title: plan.title, docNo: plan.docNo}});
+    showDraftReport(title, steps, [...body.notes, `금액 ${R.moneyKo(amount)}`, '예산과목·결제방법은 틀 문서와 같은지 확인하세요.']);
+  }
+
+  // ---------- 물품매입 품의 (계획서를 참조문서로 지정) ----------
+  function goodsPickPlan() {
+    const plans = planDocs().slice(0, 14);
+    $('#overlay').innerHTML = `<div class="modal" data-act="closeOverlay"><div class="dlg" data-stop="1" style="width:min(700px,95vw);padding:22px 24px;max-height:86vh;overflow:auto" role="dialog" aria-label="물품매입 품의 계획서 선택">
+      <button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button>
+      <h2 style="margin:0 0 4px;font-size:18px">어느 사업의 물품매입 품의인가요?</h2><div class="muted" style="margin-bottom:10px">선택한 계획서의 기록물철을 쓰고, 계획서를 참조문서로 지정합니다.</div>
+      ${plans.map(p => `<div class="cmd-preset" role="button" tabindex="0" data-act="goodsRun" data-id="${esc(p.id)}"><b>${esc(p.title)}</b><div class="muted" style="font-size:12px">${esc(p.docNo)} · 기록물철 ${esc(p.binder)}</div></div>`).join('')}</div></div>`;
+  }
+  async function goodsRun(planId) {
+    const plan = patLoad().docs[planId];
+    if (!plan) return;
+    const base = String(plan.title).replace(/\s*(운영|참가)\s*계획(\(안\))?$/, '').trim();
+    const title = (prompt('물품매입 품의 제목을 확인·수정하세요.', `${base} 운영물품 구입`) || '').trim();
+    if (!title) return;
+    closeOverlay();
+    const meta = R.predictDraftMeta(patModel(), {title, sourceDocNo: plan.docNo, sourceTitle: plan.title});
+    const f = await openDraftFrame('mg_20160313172845987', '물품매입(수리제조)품의 및 요구서', `물품매입: ${title}`);
+    if (!f) { toast('기안 화면을 열지 못했습니다.'); return; }
+    const steps = await fillDraft(f, {title, meta, ref: {title: plan.title, docNo: plan.docNo}});
+    showDraftReport(title, steps, ['물품 내역·금액은 양식의 표에 직접 입력하세요.']);
+  }
+  const startGoodsDraft = goodsPickPlan;
 
   // 메뉴/콘솔/버튼에서 부르는 진입점
   function autoStartDraft(type) {
     if (type === 'result') return openResultPlanPicker();
     if (type === 'plan') return startPlanDraft();
-    return startGoodsDraft();
+    if (type === 'pay') return openPaymentHub();
+    closeOverlay();
+    return goodsPickPlan();
   }
   function autoFillDraft(type) { return autoStartDraft(type === 'oneClick' ? 'result' : type); }
