@@ -264,7 +264,8 @@ test('deadline mails: unanswered ones rise, answered ones stay low, leave-day co
   const open = a.actions.find(x => x.type === 'mail' && x.title === '자료 제출 요청(~11/12)');
   const answered = a.actions.find(x => x.ref && x.ref.uid === '7');
   assert.equal(open.kind, '기한 있는 메일');
-  assert.match(answered.kind, /답장함/);
+  assert.match(answered.kind, /제출까지/);
+  assert.match(answered.detail, /답장함/);
   assert.notEqual(answered.priority, 'high');
   assert.ok(answered.score < open.score);
   assert.ok(open.leaveConflict, 'deadline on a leave day is flagged on the item itself');

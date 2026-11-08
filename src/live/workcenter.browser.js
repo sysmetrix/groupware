@@ -9,7 +9,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '3.1.1';
+  const VERSION = '3.2.0';
   let api = null;
   const lazy = {
     version: VERSION,
@@ -93,10 +93,16 @@
   const fab = document.createElement('div');
   fab.id = 'bwyfgw-wc-fab';
   fab.style.cssText = 'position:fixed;right:18px;bottom:18px;z-index:2147483500;background:#1a73e8;color:#fff;font:600 13px "Malgun Gothic",sans-serif;padding:9px 14px;border-radius:999px;box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer;user-select:none';
-  fab.textContent = '업무센터';
+  fab.style.cssText += ';font-size:14px;padding:11px 18px';
+  fab.textContent = '⌂ 업무센터';
   fab.title = '통합 업무센터 열기 (Alt+G)';
+  // One-time bubble after closing: tells where the work center went.
+  const tipBubble = document.createElement('div');
+  tipBubble.style.cssText = 'position:fixed;right:18px;bottom:70px;z-index:2147483500;background:#202124;color:#fff;font:13px "Malgun Gothic",sans-serif;padding:9px 13px;border-radius:9px;box-shadow:0 4px 14px rgba(0,0,0,.3);display:none;max-width:280px;line-height:1.5';
+  tipBubble.textContent = '업무센터는 오른쪽 아래 "⌂ 업무센터" 버튼(또는 Alt+G)으로 다시 엽니다.';
+  let tipTimer = 0;
   fab.addEventListener('click', () => open());
-  document.body.append(host, fab);
+  document.body.append(host, fab, tipBubble);
 
   root.innerHTML = `<style>
 :host{all:initial}
@@ -107,7 +113,19 @@
 .wc.dark{--bg:#14171c;--fg:#e6e9ee;--muted:#9aa4b2;--line:#2a313b;--card:#1b2027;--soft:#20262e;--sel:#1f3350;--head:#0f1622}
 .wc.nopane{grid-template-columns:168px 1fr 0 0}.wc.expanded{grid-template-columns:168px 0 6px 1fr}.wc.expanded main{display:none}
 header{grid-column:1/5;display:flex;align-items:center;gap:8px;padding:0 12px;background:var(--head);color:#fff}
-header .ttl{font-weight:700;font-size:calc(var(--fs)*1.08);white-space:nowrap}
+header .ttl{font-weight:700;font-size:calc(var(--fs)*1.08);white-space:nowrap;display:inline-flex;align-items:center;gap:6px;background:none;border:0;color:inherit;cursor:pointer;padding:4px 8px;border-radius:8px;font-family:inherit}
+header .ttl:hover,header .ttl:focus-visible{background:rgba(255,255,255,.16);outline:none}
+header .crumb{font-size:calc(var(--fs)*.9);white-space:nowrap;display:inline-flex;gap:2px;align-items:center}
+header .crumb button{background:none;border:0;color:inherit;opacity:.9;font:inherit;cursor:pointer;padding:3px 6px;border-radius:6px}header .crumb button:hover{background:rgba(255,255,255,.16);opacity:1}
+header button.meta{background:none;border:0;color:inherit;font:inherit;font-size:calc(var(--fs)*.82);opacity:.85;cursor:pointer;padding:4px 8px;border-radius:6px;white-space:nowrap}header button.meta:hover{background:rgba(255,255,255,.16);opacity:1}
+.wc:not(.nopane) .charts{display:none}
+.chartToggle{margin:-4px 0 8px}
+@media (max-height:820px){.tile{padding:5px 10px}.tile .v{font-size:calc(var(--fs)*1.25)}.tile .s{display:none}}
+.row input[type=checkbox]{opacity:.25}.row:hover input[type=checkbox],.row input[type=checkbox]:checked{opacity:1}
+.row .qa{display:flex!important}.row .qa .ex{display:none}.row:hover .qa .ex{display:inline-flex}
+.pback{margin-right:auto}
+header .crumb:empty{display:none}
+header .hb.gw{background:rgba(255,255,255,.22);font-weight:600}
 header .badge{font-size:calc(var(--fs)*.78);background:rgba(255,255,255,.14);border-radius:999px;padding:2px 9px;white-space:nowrap}
 header input{flex:1;max-width:460px;min-width:140px;border:0;border-radius:6px;padding:7px 10px;font:inherit}
 header .meta{font-size:calc(var(--fs)*.82);opacity:.9;white-space:nowrap}header .meta.stale{color:#ffd166}
@@ -120,7 +138,7 @@ nav{grid-row:2/4;background:var(--card);border-right:1px solid var(--line);paddi
 nav a{display:flex;justify-content:space-between;align-items:center;padding:9px 14px;color:var(--fg);text-decoration:none;cursor:pointer;border-left:3px solid transparent}
 nav a:hover{background:var(--soft)}nav a.on{background:var(--sel);border-left-color:var(--accent);font-weight:700}
 nav a .n{font-size:calc(var(--fs)*.8);background:var(--soft);border:1px solid var(--line);border-radius:999px;padding:0 7px}nav a .n.hot{background:#fde3e1;color:var(--hi);border-color:#f6c7c3}
-nav .sep{height:1px;background:var(--line);margin:6px 0}nav .tip{padding:8px 14px;color:var(--muted);font-size:calc(var(--fs)*.8);line-height:1.8}
+nav .sep{height:1px;background:var(--line);margin:6px 0}nav .tip{padding:8px 14px;color:var(--muted);font-size:calc(var(--fs)*.9);line-height:1.8}
 main{overflow:auto;padding:14px 16px 40px;position:relative}
 .split{background:var(--line);cursor:col-resize}.split:hover,.split.drag{background:var(--accent)}
 aside{overflow:hidden;border-left:1px solid var(--line);background:var(--card);display:flex;flex-direction:column;min-width:0}
@@ -190,8 +208,8 @@ mark{background:#fff1a8;color:inherit}.wc.dark mark{background:#5c4d00}
 kbd{font:11px monospace;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 4px;background:var(--card);color:var(--fg)}
 .batch{position:sticky;top:0;z-index:3;background:#fff8e1;border:1px solid #f6d9a8;border-radius:9px;padding:6px 10px;margin-bottom:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}.wc.dark .batch{background:#3a3220;border-color:#5a4718}
 .term{border-bottom:1px dotted var(--muted);cursor:help}
-</style><div class="wc nopane" id="wc"><header><div class="ttl">GW 통합 업무센터</div><span class="badge" title="이 화면이 그룹웨어 자료를 읽을 때는 아무것도 바꾸지 않습니다. 오른쪽 처리 창에 열리는 그룹웨어 원래 화면의 버튼은 실제로 처리됩니다.">조회는 안전 · 처리는 원래 화면에서</span><input id="gsearch" placeholder="통합검색 또는 명령 (Ctrl+K)" autocomplete="off"><span class="meta" id="meta"></span>
-<button class="hb" data-act="menuNew" title="새 메일·새 기안·근태신청">+ 새로 만들기</button><button class="hb" data-act="focusStart" title="처리할 항목을 하나씩 차례로 처리 (F)">연속 처리</button><button class="hb" data-act="menuBell" id="bell" title="새로 들어온 항목">알림</button><button class="hb" data-act="menuView" title="글자 크기·테마·도움말">보기·도움말 ▾</button><button class="hb" data-act="refresh" title="새로고침 (R)">새로고침</button><button class="hb" data-act="close" title="닫기 (Esc)">닫기</button></header>
+</style><div class="wc nopane" id="wc"><header><button class="ttl home" data-act="home" title="처음 화면(오늘 할 일)으로 · H"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3 2 12h3v8h5v-5h4v5h5v-8h3z"/></svg> 업무센터</button><span class="crumb" id="crumb"></span><input id="gsearch" placeholder="통합검색 또는 명령 (Ctrl+K)" autocomplete="off"><button class="meta" id="meta" data-act="refresh" title="누르면 지금 다시 읽기 (R)"></button>
+<button class="hb" data-act="menuNew" title="새 메일·새 기안·근태신청">+ 새로 만들기</button><button class="hb" data-act="menuBell" id="bell" title="새로 들어온 항목">알림</button><button class="hb" data-act="menuView" title="글자 크기·테마·도움말">보기·도움말 ▾</button><button class="hb gw" data-act="close" title="업무센터를 잠시 숨기고 원래 그룹웨어 화면으로 (오른쪽 아래 ⌂ 버튼 또는 Alt+G로 다시 열기)">← 그룹웨어로 돌아가기</button></header>
 <div class="band" id="band"></div><nav id="nav"></nav><main id="main"></main><div class="split" id="split" title="끌어서 처리 창 너비 조절"></div><aside id="pane"></aside><div id="overlay"></div></div>`;
   const $ = sel => root.querySelector(sel);
   const wcEl = $('#wc');
@@ -321,6 +339,7 @@ kbd{font:11px monospace;border:1px solid var(--line);border-bottom-width:2px;bor
     const c = e.code;
     if (c === 'Slash' && e.shiftKey) { toggleHelp(); return; }
     if (c === 'Slash') { e.preventDefault(); $('#gsearch').focus(); return; }
+    if (c === 'KeyH') { goHome(); return; }
     if (c === 'KeyR') { refresh(); return; }
     if (c === 'KeyF') { startFocus(); return; }
     if (/^Digit[1-9]$/.test(c)) { const v = VIEWS[Number(c.slice(5)) - 1]; if (v) go(v.id); return; }
@@ -342,7 +361,20 @@ kbd{font:11px monospace;border:1px solid var(--line);border-bottom-width:2px;bor
     {id: 'board', label: '할 일 보드'}, {id: 'calendar', label: '일정 달력'}, {id: 'budget', label: '예산 집행'}, {id: 'attendance', label: '근태·연차'},
     {id: 'report', label: '보고서'}, {id: 'settings', label: '설정'},
   ];
+  // Charts: shown on big screens, folded on laptops unless the user chose otherwise.
+  const showCharts = () => S.settings.showCharts ?? (window.innerHeight >= 860 && window.innerWidth >= 1500);
   const go = v => { S.view = v; S.multi.clear(); S.pane.expanded = false; render(); };
+  // Home: back to a clean "오늘 할 일" (asks first if something is being typed in the pane).
+  function goHome() {
+    if (S.focus) { stopFocus(); if (S.focus) return; }
+    if (!leavePane()) return;
+    closeOverlay();
+    S.sel = null; S.pane.url = ''; S.pane.expanded = false; S.multi.clear();
+    S.filter = {...S.filter, area: 'all', level: 'all', onlyNew: false, q: '', showHidden: false};
+    S.view = 'today';
+    render();
+    const mm = $('#main'); if (mm) mm.scrollTop = 0;
+  }
   // Hidden items come back after 24h if the groupware still lists them (숨겼지만 아직 남음).
   const resurfaced = k => isHidden(k) && Date.now() - S.hidden[k] > 86400_000;
   const visibleActions = () => S.a ? S.a.actions.filter(x => S.filter.showHidden ? (isHidden(x.key) || isSnoozed(x.key)) : ((!isHidden(x.key) || resurfaced(x.key)) && !isSnoozed(x.key))) : [];
@@ -371,11 +403,16 @@ kbd{font:11px monospace;border:1px solid var(--line);border-bottom-width:2px;bor
     if (!m) return;
     const age = S.lastRefresh ? Math.floor((Date.now() - S.lastRefresh.getTime()) / 60000) : null;
     m.className = 'meta' + (age !== null && age >= 10 ? ' stale' : '');
-    m.innerHTML = S.loading ? '<span class="spin"></span> 읽는 중…' : S.lastRefresh ? `자료 ${hhmm(S.lastRefresh)}${age ? ` (${age}분 전)` : ''} · ${S.raw ? S.raw.durationMs : '-'}ms${S.settings.refreshMin ? ` · 자동 ${S.settings.refreshMin}분` : ''}` : '';
+    updCrumb();
+    m.innerHTML = S.loading ? '<span class="spin"></span> 읽는 중…' : S.lastRefresh ? `${hhmm(S.lastRefresh)} 갱신${age ? ` (${age}분 전)` : ''} ↻` : '↻ 새로고침';
     const unseen = S.activity.filter(x => x.at > S.seenActivity).length;
     $('#bell').innerHTML = `알림${unseen ? `<span class="dot">${unseen}</span>` : ''}`;
     const high = S.a ? visibleActions().filter(x => x.priority === 'high').length : 0;
-    fab.textContent = `업무센터${S.a ? ` · 긴급 ${high}` : ''}`;
+    fab.textContent = `⌂ 업무센터${S.a && high ? ` · 긴급 ${high}` : ''}`;
+  }
+  function updCrumb() {
+    const cr = $('#crumb');
+    if (cr) cr.innerHTML = S.view === 'today' && !S.sel ? '' : `› <button data-act="crumbView" title="이 메뉴 목록으로 (오른쪽 창 닫기)">${esc((VIEWS.find(v => v.id === S.view) || {}).label || '')}</button>${S.sel ? ` › <span style="opacity:.85;padding:0 6px">${S.pane.url ? '원래 화면' : '내용 보기'}</span>` : ''}`;
   }
   function renderBand() {
     const b = $('#band');
@@ -394,10 +431,10 @@ kbd{font:11px monospace;border:1px solid var(--line);border-bottom-width:2px;bor
     const all = visibleActions();
     const counts = {
       today: all.length, approval: u.approval ? '?' : s ? s.approvalAction + (s.sendWaiting || 0) : '', mail: u.mail ? '?' : s ? s.mailUnread : '',
-      attendance: S.a ? S.a.anomalies.length : '', board: S.todos.filter(t => t.status !== 'done').length, calendar: S.a ? S.a.deadlines.filter(x => x.dday >= 0 && x.dday <= 7).length : '',
+      attendance: S.a ? S.a.anomalies.length : '', board: (S.a ? S.a.actions.filter(x => (S.plan[x.key] || x.priority !== 'low' || isHidden(x.key)) && bucketOfAction(x) !== 'done').length : 0) + S.todos.filter(t => bucketOfTodo(t) !== 'done').length, calendar: S.a ? S.a.deadlines.filter(x => x.dday >= 0 && x.dday <= 7).length : '',
     };
     const hot = {today: all.some(x => x.priority === 'high'), approval: s && s.approvalAction > 0, attendance: S.a && S.a.anomalies.length > 0, calendar: S.a && S.a.deadlines.some(x => x.dday >= 0 && x.dday <= 2)};
-    const tips = S.settings.beginner ? '<div class="tip">항목을 누르면 오른쪽에 내용과 처리 화면이 열립니다.<br>"연속 처리"로 하나씩 차례로 처리하세요.<br><b>?</b> 도움말</div>'
+    const tips = S.settings.beginner ? '<div class="tip">① 목록에서 항목을 누르면 오른쪽에 내용이 나옵니다.<br>② "원래 화면 열기"로 그룹웨어 화면에서 처리합니다.<br>③ 왼쪽 위 <b>⌂ 업무센터</b> = 처음 화면, 오른쪽 위 <b>← 그룹웨어로</b> = 원래 그룹웨어.</div>'
       : `<div class="tip"><kbd>J</kbd><kbd>K</kbd> 이동 <kbd>Enter</kbd> 열기<br><kbd>X</kbd> 숨기기 <kbd>S</kbd> 미루기 <kbd>T</kbd> 할 일<br><kbd>F</kbd> 연속 처리 <kbd>/</kbd> 검색<br><kbd>Ctrl</kbd>+<kbd>K</kbd> 명령 <kbd>Ctrl</kbd>+<kbd>Z</kbd> 되돌리기<br><kbd>Alt</kbd>+<kbd>G</kbd> 열기·닫기</div>`;
     $('#nav').innerHTML = VIEWS.map((v, i) => `${i === 8 ? '<div class="sep"></div>' : ''}<a data-act="view" data-v="${v.id}" class="${S.view === v.id ? 'on' : ''}" title="${i + 1}"><span>${esc(v.label)}</span>${counts[v.id] !== undefined && counts[v.id] !== '' ? `<span class="n ${hot[v.id] ? 'hot' : ''}">${counts[v.id]}</span>` : ''}</a>`).join('') + '<div class="sep"></div>' + tips;
   }
@@ -422,7 +459,7 @@ kbd{font:11px monospace;border:1px solid var(--line);border-bottom-width:2px;bor
     const dl7 = S.a.deadlines.filter(x => x.dday >= 0 && x.dday <= 7);
     const high = vis.filter(x => x.priority === 'high').length;
     const areas = [['all', '전체'], ['결재', '결재'], ['메일', '메일'], ['기한', '기한'], ['공지', '공지'], ['근태', '근태']];
-    const levels = [['all', '모든 단계'], ['high', '긴급'], ['medium', '보통'], ['low', '참고']];
+    const levels = [['all', '전체'], ['high', '긴급'], ['medium', '보통'], ['low', '참고']];
     const cnt = a => a === 'all' ? vis.length : vis.filter(x => x.area === a).length;
     const lcnt = l => l === 'all' ? vis.length : vis.filter(x => x.priority === l).length;
     const hiddenN = S.a.actions.filter(x => isHidden(x.key) || isSnoozed(x.key)).length;
@@ -435,10 +472,11 @@ ${tile('7일 내 기한', dl7.length + '건', dl7[0] ? `${dl7[0].date.slice(5)} 
 ${tile('근태 확인', S.a.anomalies.length + '건', `잔여 연차 ${fmtDays(s.leaveRemaining)}`, 'tileArea', '근태', false, u.attendance)}
 ${tile('발송·반려', (s.sendWaiting ?? 0) + s.rejectedSubmitted + '건', `발송 대기 ${s.sendWaiting ?? '-'} · 반려 ${s.rejectedSubmitted}`, 'goApproval', 'sendWaiting', s.rejectedSubmitted > 0, u.approval)}
 </div>
-<div class="charts">${chartFlow()}${chartDeadlines()}${chartBudget()}${chartAttendance()}${chartTrend()}</div>
-<h2>처리할 일 <span class="muted">${vis.length}건 · 점수 높은 순(기한·대기일·긴급 표현)</span><button class="btn primary sm" data-act="focusStart">▶ 연속 처리 시작</button></h2>
+${S.pane.url || S.sel ? '' : `<div class="chartToggle"><button class="btn sm" data-act="toggleCharts">${showCharts() ? '그래프 접기 ▴' : '그래프 보기 ▾'}</button></div>`}
+${showCharts() ? `<div class="charts">${chartFlow()}${chartDeadlines()}${chartBudget()}${chartAttendance()}${chartTrend()}</div>` : ''}
+<h2>처리할 일 <span class="muted">${vis.length}건 · 급한 것부터</span><button class="btn primary sm" data-act="focusStart">▶ 연속 처리 시작</button></h2>
 <div class="bar">${areas.map(([a, n]) => `<span class="chip ${S.filter.area === a ? 'on' : ''}" data-act="area" data-v="${a}">${n} ${cnt(a)}</span>`).join('')}</div>
-<div class="bar">${levels.map(([l, n]) => `<span class="chip ${S.filter.level === l ? 'on' : ''}" data-act="level" data-v="${l}">${n} ${lcnt(l)}</span>`).join('')}<span class="chip ${S.filter.onlyNew ? 'on' : ''}" data-act="onlyNew">새 항목 ${newN}</span><span class="chip ${S.filter.showHidden ? 'on' : ''}" data-act="showHidden" title="이 화면에서 숨기거나 미룬 항목">숨긴·미룬 ${hiddenN}</span>
+<div class="bar">${levels.map(([l, n]) => `<span class="chip ${S.filter.level === l ? 'on' : ''}" data-act="level" data-v="${l}">${n} ${lcnt(l)}</span>`).join('')}<span class="chip ${S.filter.onlyNew ? 'on' : ''}" data-act="onlyNew">새 항목 ${newN}</span><span class="chip ${S.filter.showHidden ? 'on' : ''}" data-act="showHidden" title="이 화면에서 숨기거나 내일로 미룬 항목">숨긴 항목 ${hiddenN}</span>
 <input class="f" id="qfilter" placeholder="목록 안에서 찾기" value="${esc(S.filter.q)}" style="flex:1;min-width:120px"></div>
 <div id="batch">${batchBar()}</div>
 <div class="list" id="qlist">${queueRows()}</div>
@@ -458,7 +496,7 @@ ${tile('발송·반려', (s.sendWaiting ?? 0) + s.rejectedSubmitted + '건', `�
 <div><span class="pill ${x.priority}" title="${esc(['점수 ' + x.score, ...(x.why || [])].join(' · '))}">${PRI[x.priority]}</span>${S.newKeys.has(x.key) ? '<br><span class="pill new">새</span>' : ''}</div>
 <div><div class="t">${esc(x.title)}</div><div class="d">${x.leaveConflict ? `<span class="pill ${x.leaveConflict.answered ? 'medium' : 'solid'}" title="마감일이 내 휴가일입니다">⚠ 휴가일 마감 · ${esc(x.leaveConflict.before.slice(5))}까지${x.leaveConflict.passed ? '(지남)' : ''}</span>` : ''}${dl}${plan}${stale ? '<span class="pill high">숨겼지만 아직 남음</span>' : ''}${esc(x.area)} · ${esc(x.kind)} · ${esc(x.detail)}</div></div>
 <div class="w">${esc(String(x.when).slice(5, 16))}${isSnoozed(x.key) ? '<br>미룸' : ''}${isHidden(x.key) ? '<br>숨김' : ''}</div>
-<div class="qa"><button class="btn sm" data-act="quickOpen" data-k="${esc(x.key)}" title="처리 창에 열기">열기</button><button class="btn sm" data-act="quickHide" data-k="${esc(x.key)}" title="이 화면에서 숨기기 (X)">숨기기</button><button class="btn sm" data-act="quickSnooze" data-k="${esc(x.key)}" title="내일 오전 8시까지 (S)">내일</button><button class="btn sm" data-act="quickTodo" data-k="${esc(x.key)}" title="할 일 보드에 추가 (T)">할 일</button></div></div>`;
+<div class="qa"><button class="btn sm primary" data-act="quickOpen" data-k="${esc(x.key)}" title="그룹웨어 원래 화면으로 열기 (Enter)">열기</button><button class="btn sm ex" data-act="quickHide" data-k="${esc(x.key)}" title="이 화면에서 숨기기 (X)">숨기기</button><button class="btn sm" data-act="quickSnooze" data-k="${esc(x.key)}" title="내일 오전 8시까지 (S)">내일</button><button class="btn sm" data-act="quickTodo" data-k="${esc(x.key)}" title="할 일 보드에 추가 (T)">할 일</button></div></div>`;
   }
   const batchBar = () => S.multi.size ? `<div class="batch"><b>${S.multi.size}건 선택</b><button class="btn sm" data-act="batchFocus">선택 항목 연속 처리</button><button class="btn sm" data-act="batchHide">숨기기</button><button class="btn sm" data-act="batchSnooze">내일로 미루기</button><button class="btn sm" data-act="batchTodo">할 일로</button><button class="btn sm" data-act="batchCsv">CSV</button><button class="btn sm" data-act="batchClear">선택 해제</button></div>` : '';
   const refreshQueue = () => { const l = $('#qlist'); if (l) l.innerHTML = queueRows(); const b = $('#batch'); if (b) b.innerHTML = batchBar(); renderNav(); renderHead(); };
@@ -545,7 +583,7 @@ ${tile('발송·반려', (s.sendWaiting ?? 0) + s.rejectedSubmitted + '건', `�
 <div class="bar">${tabs.map(([k, n]) => { const c = lists[k]; const cnt = c ? (c.error ? '?' : c.total ?? c.docs.length) : '-'; return `<span class="chip ${S.apTab === k ? 'on' : ''}" data-act="apTab" data-v="${k}">${n} ${cnt}</span>`; }).join('')}</div>
 ${l && l.error ? `<p class="err">${esc(l.message)}</p>` : `<table><tr><th>제목</th><th>보낸 곳/기안</th><th>상태</th>${withRec ? `<th>${S.apTab === 'distWaiting' ? '배부 추천' : '접수 추천'} <span class="term" title="최근 180일에 처리된 비슷한 문서(제목 주제가 겹치는 문서)가 어디로 갔는지 센 값입니다. '높음'은 비슷한 문서 3건 이상 중 절반 이상이 같은 곳으로 간 경우입니다.">?</span></th>` : ''}<th>일시</th></tr>${rows || `<tr><td colspan="5" class="muted">없음</td></tr>`}</table>`}
 ${docs.length < total ? `<p><button class="btn" data-act="apMore">더 보기 (${docs.length}/${total})</button></p>` : ''}
-<h3>메뉴별 건수</h3><table><tr><th>메뉴</th><th class="num">건수</th><th class="num">전체</th></tr>${counts.map(c => `<tr><td>${esc(c.name)}</td><td class="num">${c.count}</td><td class="num muted">${c.total ?? ''}</td></tr>`).join('')}</table>`;
+<details><summary class="muted" style="cursor:pointer;margin-top:14px">그룹웨어 메뉴별 건수 보기</summary><table><tr><th>메뉴</th><th class="num">건수</th><th class="num">전체</th></tr>${counts.map(c => `<tr><td>${esc(c.name)}</td><td class="num">${c.count}</td><td class="num muted">${c.total ?? ''}</td></tr>`).join('')}</table></details>`;
   }
 
   // ----- 메일 -----
@@ -587,6 +625,7 @@ ${sr ? `<h3>"${esc(sr.keyword)}" 메일 검색 ${sr.groups.mail?.total ?? 0}건 
     const row = (t, id, pill, title, desc, when) => `<div class="row ${S.sel && S.sel.type === 'search' && S.sel.item && (S.sel.item.docId || S.sel.item.uid || S.sel.item.id || S.sel.item.fileId) === id ? 'sel' : ''}" data-act="selSearch" data-t="${t}" data-id="${esc(id)}"><div></div><div><span class="pill low">${esc(pill)}</span></div><div><div class="t">${title}</div><div class="d">${desc}</div></div><div class="w">${esc(when)}</div></div>`;
     return `<h2>통합검색</h2><div class="bar"><input class="f" id="sq" placeholder="검색어 (예: 월간업무보고, 문서번호, 사람 이름)" value="${esc(s.kw)}" style="flex:1;min-width:200px"><select class="f" id="speriod">${[['', '전체 기간'], ['1', '최근 1개월'], ['3', '최근 3개월'], ['12', '최근 1년']].map(([v, n]) => `<option value="${v}" ${s.period === v ? 'selected' : ''}>${n}</option>`).join('')}</select><button class="btn primary" data-act="doSearch">${s.busy ? '<span class="spin"></span>' : '검색'}</button></div>
 <div class="bar">${types.map(([k, n]) => `<span class="chip ${s.types.includes(k) ? 'on' : ''}" data-act="stype" data-v="${k}">${esc(n)}</span>`).join('')}</div>
+${!res ? `<div class="bar" style="margin-top:10px"><span class="muted">예시:</span>${['월간업무보고', '시간외근무', '노동이사제', '일상감사', ...(S.searchRecent || [])].filter((v, i, a) => a.indexOf(v) === i).slice(0, 8).map(k => `<span class="chip" data-act="searchExample" data-v="${esc(k)}">${esc(k)}</span>`).join('')}</div>` : ''}
 ${!res ? '<p class="muted">전자결재 문서는 본문까지, 메일은 본문 일부까지 찾습니다. 결과를 누르면 오른쪽에 본문 미리보기가 열리며, 미리보기는 열람 기록을 남기지 않습니다. 검색어는 그룹웨어 최근 검색어에 남기지 않습니다.</p>' : ''}
 ${res ? group('doc', x => row('doc', x.docId, x.form || '문서', hl(x.title, res.keyword), `${esc(x.docNo)} · ${esc(x.dept)} ${esc(x.drafter)} · ${hl(x.snippet, res.keyword)}`, ymd8(x.date))) : ''}
 ${res ? group('mail', x => row('mail', x.uid, x.box, hl(x.subject || '(제목 없음)', res.keyword), `${esc(x.from)} → ${esc(x.to)} · ${hl(x.snippet, res.keyword)}`, x.date)) : ''}
@@ -845,6 +884,7 @@ ${S.weekly ? `<h3>주간 업무 실적 초안 <button class="btn sm primary" dat
 
   // ---------- detail pane ----------
   function renderPane() {
+    updCrumb();
     const pane = $('#pane');
     const show = !!(S.sel || S.pane.url || S.focus);
     wcEl.classList.toggle('nopane', !show);
@@ -854,7 +894,7 @@ ${S.weekly ? `<h3>주간 업무 실적 초안 <button class="btn sm primary" dat
     const info = paneInfo();
     const ph = $('#ph');
     ph.className = 'ph' + (S.pane.url ? '' : ' min');
-    ph.innerHTML = `<div class="box warn" id="dirtyNote" style="display:${S.pane.dirty ? 'block' : 'none'};margin:0 0 6px">처리 창에 입력 중입니다. 보내기·저장·상신 전에 다른 항목으로 옮기면 사라질 수 있어 먼저 여쭤봅니다.</div><div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><div class="t">${esc(info.title || '')}</div><div style="display:flex;gap:4px">${S.pane.url ? `<button class="btn sm" data-act="paneExpand" title="처리 창을 넓게">${S.pane.expanded ? '목록 보기' : '크게'}</button><a class="btn sm" href="${esc(S.pane.url)}" target="_blank" title="새 창으로">새 창</a>` : ''}<button class="btn sm" data-act="closePane" title="닫기 (Esc)">✕</button></div></div><div class="body">${info.body || ''}</div>`;
+    ph.innerHTML = `<div class="box warn" id="dirtyNote" style="display:${S.pane.dirty ? 'block' : 'none'};margin:0 0 6px">처리 창에 입력 중입니다. 보내기·저장·상신 전에 다른 항목으로 옮기면 사라질 수 있어 먼저 여쭤봅니다.</div><div style="display:flex;gap:6px;margin-bottom:6px"><button class="btn sm pback" data-act="closePane" title="오른쪽 창을 닫고 목록으로 (Esc)">← 목록으로</button></div><div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><div class="t">${esc(info.title || '')}</div><div style="display:flex;gap:4px">${S.pane.url ? `<button class="btn sm" data-act="paneExpand" title="처리 창을 넓게">${S.pane.expanded ? '목록 보기' : '크게'}</button><a class="btn sm" href="${esc(S.pane.url)}" target="_blank" title="새 창으로">새 창</a>` : ''}<button class="btn sm" data-act="closePane" title="닫기 (Esc)">✕</button></div></div><div class="body">${info.body || ''}</div>`;
     const frame = $('#frame');
     if (S.pane.url !== S.pane.mounted) {
       frame.innerHTML = '';
@@ -862,7 +902,7 @@ ${S.weekly ? `<h3>주간 업무 실적 초안 <button class="btn sm primary" dat
       if (S.pane.url) { const f = document.createElement('iframe'); f.src = S.pane.url; const u = S.pane.url; f.addEventListener('load', () => { scanFrame(f, u); watchDirty(f, u); }); frame.append(f); }
       S.pane.mounted = S.pane.url;
     }
-    if (!S.pane.url && !frame.querySelector('.empty')) frame.innerHTML = `<div class="empty">${info.url ? '"처리 창에 열기"를 누르면 그룹웨어 원래 화면이 여기에 열립니다.<br>그 화면의 버튼(결재·접수·배부·발송·보내기)은 실제로 처리됩니다.' : '이 항목은 열 화면이 없습니다.'}</div>`;
+    if (!S.pane.url && !frame.querySelector('.empty')) frame.innerHTML = `<div class="empty">${info.url ? '"원래 화면 열기"를 누르면 그룹웨어 원래 화면이 여기에 열립니다.<br>그 화면의 버튼(결재·접수·배부·발송·보내기)은 실제로 처리됩니다.' : '이 항목은 열 화면이 없습니다.'}</div>`;
     $('#fbar').innerHTML = focusBar();
   }
   // Mark the pane "dirty" as soon as the user types anything in the embedded groupware screen
@@ -908,7 +948,7 @@ ${S.weekly ? `<h3>주간 업무 실적 초안 <button class="btn sm primary" dat
   };
   const relatedQ = t => String(t || '').replace(/\(.*?\)|\[.*?\]|「|」|『|』|20\d{2}년?/g, ' ').split(/\s+/).filter(w => w.length >= 2).slice(0, 3).join(' ');
   function actsFor(url, {key, q, title, unread, what, extra} = {}) {
-    return `<div class="acts">${url ? `<button class="btn primary" data-act="openUrl" data-url="${esc(url)}" data-title="${esc(title || '')}" ${unread ? `data-unread="1" data-what="${esc(what || '문서')}"` : ''}>처리 창에 열기</button>` : ''}${extra || ''}${key ? `<button class="btn" data-act="quickHide" data-k="${esc(key)}" title="이 화면에서만 숨김. 그룹웨어 상태는 그대로">숨기기</button><button class="btn" data-act="quickSnooze" data-k="${esc(key)}">내일까지 미루기</button>` : ''}<button class="btn" data-act="todoFromSel">할 일 추가</button>${q ? `<button class="btn" data-act="related" data-q="${esc(q)}">관련 문서 찾기</button>` : ''}</div>`;
+    return `<div class="acts">${url ? `<button class="btn primary" data-act="openUrl" data-url="${esc(url)}" data-title="${esc(title || '')}" ${unread ? `data-unread="1" data-what="${esc(what || '문서')}"` : ''}>원래 화면 열기</button>` : ''}${extra || ''}${key ? `<button class="btn" data-act="quickHide" data-k="${esc(key)}" title="이 화면에서만 숨김. 그룹웨어 상태는 그대로">숨기기</button><button class="btn" data-act="quickSnooze" data-k="${esc(key)}">내일까지 미루기</button>` : ''}<button class="btn" data-act="todoFromSel">할 일 추가</button>${q ? `<button class="btn" data-act="related" data-q="${esc(q)}">관련 문서 찾기</button>` : ''}</div>`;
   }
   function paneInfo() {
     const sel = S.sel;
@@ -916,7 +956,7 @@ ${S.weekly ? `<h3>주간 업무 실적 초안 <button class="btn sm primary" dat
     if (sel.type === 'action') {
       const x = selectedAction();
       if (!x) return {title: '항목이 목록에서 사라졌습니다', body: '<div class="box okb">그룹웨어에서 처리됐거나 조건이 바뀌었습니다. 새로고침 후 목록에서 다시 선택하세요.</div>'};
-      const why = `<div class="muted">${PRI[x.priority]} · 점수 ${x.score}${x.why && x.why.length ? ' · ' + esc(x.why.join(', ')) : ''}</div>`;
+      const why = `<div class="muted">${PRI[x.priority]}${S.settings.beginner ? '' : ` · 점수 ${x.score}`}${x.why && x.why.length ? ' · ' + esc(x.why.join(', ')) : ''}</div>`;
       if (x.type === 'doc') return docPane(findDoc(x.ref.kind, x.ref.docId) || {title: x.title, url: x.url, docId: x.ref.docId}, x.ref.kind, x, why);
       if (x.type === 'mail') return mailPane(findMail(x.ref.box, x.ref.uid), x, why);
       if (x.type === 'notice') return {title: x.title, url: x.url, body: `${why}<div class="kv"><b>구분</b><span>${esc(x.kind)}</span><b>작성</b><span>${esc(x.detail)}</span><b>등록</b><span>${esc(x.when)}</span></div><div class="box warn">원문을 열면 게시글이 읽음 처리되고 조회수가 올라갑니다.</div>${actsFor(x.url, {key: x.key, q: relatedQ(x.title), title: x.title, unread: true, what: '게시글'})}<div class="box" id="extract">${extractHtml()}</div>`};
@@ -1243,7 +1283,11 @@ ${S.weekly ? `<h3>주간 업무 실적 초안 <button class="btn sm primary" dat
       case 'refresh': refresh(); break;
       case 'applyRefresh': S.pendingRefresh = false; render(); break;
       case 'relogin': if (!S.pane.dirty || confirm('처리 창에 입력 중인 내용이 있습니다. 그룹웨어를 새로 고치면 사라집니다. 계속할까요?')) location.reload(); break;
-      case 'close': close(); break;
+      case 'close': if (leavePane()) close(); break;
+      case 'home': goHome(); break;
+      case 'crumbView': if (S.focus) { stopFocus(); break; } if (!leavePane()) break; S.sel = null; S.pane.url = ''; S.pane.expanded = false; render(); break;
+      case 'toggleCharts': S.settings.showCharts = !showCharts(); saveLocal(); renderMain(); break;
+      case 'searchExample': S.search.kw = el.dataset.v; runSearch(); break;
       case 'view': go(v); break;
       case 'help': toggleHelp(); break;
       case 'closeHelp': case 'closeOverlay': closeOverlay(); break;
@@ -1418,15 +1462,31 @@ ${S.weekly ? `<h3>주간 업무 실적 초안 <button class="btn sm primary" dat
 
   // ---------- lifecycle ----------
   let prevTitle = document.title;
+  // Browser Back button: step back inside the work center (pane → list → groupware) instead of leaving the page.
+  let backArmed = false;
+  const armBack = () => { if (!backArmed) { try { history.pushState({bwyfgwWc: 1}, '', location.href); backArmed = true; } catch {} } };
+  const onPop = () => {
+    if (!backArmed || !S.open) return;
+    backArmed = false;
+    if (S.helpOpen || S.paletteOpen || S.menuOpen) { closeOverlay(); armBack(); return; }
+    if (S.focus || S.pane.url || S.sel) { if (S.focus) stopFocus(); else if (leavePane()) { S.sel = null; S.pane.url = ''; S.pane.expanded = false; render(); } armBack(); return; }
+    if (S.view !== 'today') { go('today'); armBack(); return; }
+    if (S.pane.dirty && !leavePane()) { armBack(); return; }
+    close();
+  };
+  window.addEventListener('popstate', onPop);
   function open() {
+    tipBubble.style.display = 'none';
     S.open = true; host.style.display = 'block'; fab.style.display = 'none'; prevTitle = document.title;
+    armBack();
     applyLook(); render();
     if (document.activeElement && document.activeElement !== document.body) { try { document.activeElement.blur(); } catch {} }
     if (!S.a || !S.lastRefresh || Date.now() - S.lastRefresh.getTime() > 60_000) refresh();
     if (!S.settings.tourDone) setTimeout(() => toggleHelp(true), 600);
   }
-  function close() { S.open = false; host.style.display = 'none'; fab.style.display = 'block'; document.title = prevTitle; closeOverlay(); }
-  function destroy() { clearInterval(timer); document.removeEventListener('keydown', onDocKey, true); window.removeEventListener('resize', onResize); host.remove(); fab.remove(); }
+  function close() { if (backArmed) { backArmed = false; try { history.back(); } catch {} } S.open = false; host.style.display = 'none'; fab.style.display = 'block';
+    if (!S.settings.fabTipShown || (S.settings.fabTipCount || 0) < 3) { S.settings.fabTipCount = (S.settings.fabTipCount || 0) + 1; S.settings.fabTipShown = true; saveLocal(); tipBubble.style.display = 'block'; clearTimeout(tipTimer); tipTimer = setTimeout(() => { tipBubble.style.display = 'none'; }, 6000); } document.title = prevTitle; closeOverlay(); }
+  function destroy() { clearInterval(timer); document.removeEventListener('keydown', onDocKey, true); window.removeEventListener('resize', onResize); window.removeEventListener('popstate', onPop); host.remove(); fab.remove(); tipBubble.remove(); }
   schedule();
   return {open, close, destroy, refresh,
     state: () => ({booted: true, open: S.open, view: S.view, loading: S.loading, error: S.error, actions: S.a ? S.a.actions.length : 0, high: S.a ? S.a.summary.high : 0, focus: S.focus ? {i: S.focus.i, n: S.focus.keys.length} : null, lastRefresh: S.lastRefresh}),
