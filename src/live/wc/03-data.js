@@ -15,6 +15,13 @@
   }
   function logError(where, msg) { S.errors = [...(S.errors || []), {at: Date.now(), where, msg: String(msg).slice(0, 300)}].slice(-30); store.set('errors', S.errors); }
   function ingest(raw) {
+    if (raw && raw.principal && (raw.principal.empSeq || raw.principal.loginId)) {
+      const pKey = String(raw.principal.empSeq || raw.principal.loginId).replace(/[^0-9A-Za-z_-]/g, '');
+      if (switchUserStorage(pKey)) {
+        // user switched, clear current view state
+        S.sel = null; S.pane.url = ''; S.pane.expanded = false; S.multi.clear();
+      }
+    }
     const prev = store.get('state', null);
     const usablePrev = prev && prev.at && Date.parse(prev.at) < Date.parse(raw.collectedAt) ? prev : null;
     const a = R.analyze(raw, usablePrev, new Date(), {roles: S.settings.roles});

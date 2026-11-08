@@ -1,15 +1,44 @@
 // GW 통합 업무센터 · storage
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
-  // ---------- storage ----------
-  const LS = 'bwyfgw:wc:';
+  // ---------- storage (per-user isolation) ----------
+  function getUserKey() {
+    try {
+      const u = JSON.parse(sessionStorage.getItem('userInfo') || '{}');
+      const uc = u && u.ucUserInfo ? (typeof u.ucUserInfo === 'string' ? JSON.parse(u.ucUserInfo) : u.ucUserInfo) : null;
+      if (uc && (uc.empSeq || uc.loginId)) return String(uc.empSeq || uc.loginId).replace(/[^0-9A-Za-z_-]/g, '');
+    } catch {}
+    return 'default';
+  }
+  let currentKey = getUserKey();
+  const getPrefix = () => 'bwyfgw:wc:' + currentKey + ':';
+  const LS = getPrefix();
+
   const store = {
-    get(k, d) { try { const v = localStorage.getItem(LS + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
-    set(k, v) { try { localStorage.setItem(LS + k, JSON.stringify(v)); } catch {} },
-    del(k) { try { localStorage.removeItem(LS + k); } catch {} },
+    get(k, d) {
+      try {
+        const p = getPrefix();
+        let v = localStorage.getItem(p + k);
+        // Legacy migration: if per-user storage is empty, check legacy global key for 'default' or initial run
+        if (v === null && currentKey !== 'default') {
+          const old = localStorage.getItem('bwyfgw:wc:' + k);
+          if (old !== null) { v = old; localStorage.setItem(p + k, old); }
+        }
+        return v === null ? d : JSON.parse(v);
+      } catch { return d; }
+    },
+    set(k, v) { try { localStorage.setItem(getPrefix() + k, JSON.stringify(v)); } catch {} },
+    del(k) { try { localStorage.removeItem(getPrefix() + k); } catch {} },
   };
-  const DEFAULT_SETTINGS = {refreshMin: 5, notify: false, budget: [{project: 'A201', label: '젠더유스 거버넌스운영', filter: '노121'}], urgentWords: [], mailCount: 100, days: 14, fontSize: 'm', theme: 'light', paneWidth: 560, beginner: true, tourDone: false};
+  function switchUserStorage(newEmpKey) {
+    if (!newEmpKey || newEmpKey === currentKey) return false;
+    currentKey = newEmpKey;
+    reloadUserState();
+    return true;
+  }
+  const DEFAULT_SETTINGS = {refreshMin: 5, notify: false, budget: [], urgentWords: [], mailCount: 100, days: 14, fontSize: 'm', theme: 'light', paneWidth: 560, beginner: true, tourDone: false};
   const migrateTodos = list => (Array.isArray(list) ? list : []).map(t => ({id: t.id || `t${t.at || Date.now()}${Math.random().toString(36).slice(2, 6)}`, title: t.title, due: t.due || '', status: t.status || (t.done ? 'done' : 'todo'), source: t.source || '', url: t.url || '', at: t.at || Date.now()}));
   const S = {
+    userKey: currentKey,
     settings: {...DEFAULT_SETTINGS, ...store.get('settings', {})},
     hidden: store.get('hidden', store.get('done', {})), snooze: store.get('snooze', {}), plan: store.get('plan', {}),
     todos: migrateTodos(store.get('todos', [])), newKeys: new Set(store.get('newKeys', [])), activity: store.get('activity', []), seenActivity: store.get('seenActivity', 0),
@@ -24,6 +53,22 @@
     att: {month: '', rows: null, busy: false, seq: 0, day: ''}, cal: {offset: 0},
     weekly: store.get('weekly', ''), errors: store.get('errors', []), undo: [], open: false, paletteOpen: false, helpOpen: false, menuOpen: '',
   };
+  function reloadUserState() {
+    S.userKey = currentKey;
+    S.settings = {...DEFAULT_SETTINGS, ...store.get('settings', {})};
+    S.hidden = store.get('hidden', store.get('done', {}));
+    S.snooze = store.get('snooze', {});
+    S.plan = store.get('plan', {});
+    S.todos = migrateTodos(store.get('todos', []));
+    S.newKeys = new Set(store.get('newKeys', []));
+    S.activity = store.get('activity', []);
+    S.seenActivity = store.get('seenActivity', 0);
+    S.history = store.get('history', []);
+    S.routing = store.get('routing', null);
+    S.forms = store.get('forms', null);
+    S.weekly = store.get('weekly', '');
+    S.errors = store.get('errors', []);
+  }
   const saveLocal = () => {
     store.set('hidden', S.hidden); store.set('snooze', S.snooze); store.set('plan', S.plan); store.set('todos', S.todos); store.set('settings', S.settings);
     store.set('newKeys', [...S.newKeys]); store.set('activity', S.activity.slice(-150)); store.set('seenActivity', S.seenActivity); store.set('history', S.history.slice(-40)); store.set('weekly', S.weekly);

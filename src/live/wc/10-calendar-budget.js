@@ -88,10 +88,25 @@ ${ledger ? `<h3>결의 내역 · ${esc(ledger.name || ledger.bgtCd)} <span class
   }
   async function loadBudget() {
     const b = S.budget;
-    if (!b.project) { const p = S.settings.budget[0] || {project: 'A201', filter: '노121', label: '젠더유스 거버넌스운영'}; b.project = p.project; b.filter = p.filter || ''; }
+    if (!b.catalog) {
+      try { b.catalog = await GW.budgetCatalog(); } catch {}
+    }
+    if (!b.project) {
+      const p = S.settings.budget && S.settings.budget[0];
+      if (p && p.project) {
+        b.project = p.project; b.filter = p.filter || '';
+      } else if (b.catalog && b.catalog.length) {
+        // Find best match for user dept if available
+        const myDept = (S.raw && S.raw.principal && S.raw.principal.deptName) || '';
+        const match = myDept ? b.catalog.find(c => c.name.includes(myDept) || myDept.includes(c.name.replace(/운영$/, ''))) : null;
+        const target = match || b.catalog[0];
+        b.project = target.project; b.filter = '';
+      } else {
+        b.project = 'A201'; b.filter = '';
+      }
+    }
     const seq = ++b.seq;
     b.busy = true; b.ledger = null; b.monthly = null; b.month = ''; if (S.view === 'budget') renderMain();
-    if (!b.catalog) GW.budgetCatalog().then(c => { b.catalog = c; if (S.view === 'budget') renderMain(); }).catch(() => {});
     let full = b.full && b.full.project === b.project ? b.full : null;
     if (!full) { try { full = await GW.budgetProject({project: b.project, filter: ''}); } catch (e) { full = {error: true, message: e.message}; } }
     if (seq !== b.seq) return;

@@ -400,3 +400,26 @@ test('work center: every clickable data-act has a handler, CSS is a separate des
   assert.ok(!/font-size:(?:[0-9]|1[01])(?:\.\d+)?px/.test(css), 'no text smaller than 12px');
   assert.ok(/:focus-visible/.test(css), 'keyboard focus ring');
 });
+test('multi-user: storage keys are partitioned per user (empSeq/loginId)', async () => {
+  const fs = await import('node:fs/promises');
+  const dir = new URL('../src/live/wc/', import.meta.url);
+  const src = await fs.readFile(new URL('01-storage.js', dir), 'utf8');
+  assert.ok(src.includes('bwyfgw:wc:'), 'base prefix');
+  assert.ok(src.includes('getUserKey()'), 'dynamic user key function');
+  assert.ok(src.includes('switchUserStorage'), 'switch user function');
+});
+
+test('multi-user: briefing analysis adapts to whatever principal is passed', () => {
+  const raw1 = fixture();
+  raw1.principal = {empSeq: '999001', loginId: 'userA', name: '김철수', deptName: '청소년활동팀'};
+  raw1.data.approval.lists.deptWaiting.docs[0].toEmp = '김철수';
+  const a1 = analyze(raw1, null, NOW);
+  const mineA = a1.actions.filter(x => x.scope !== 'ref');
+  assert.ok(mineA.some(x => x.title.includes('협조 요청 공문')), 'dept doc assigned to 김철수 is mine');
+
+  const raw2 = fixture();
+  raw2.principal = {empSeq: '999002', loginId: 'userB', name: '이영희', deptName: '경영지원부'};
+  const a2 = analyze(raw2, null, NOW);
+  const mineB = a2.actions.filter(x => x.scope !== 'ref');
+  assert.ok(!mineB.some(x => x.title.includes('협조 요청 공문')), 'dept doc not assigned to 이영희 is ref');
+});

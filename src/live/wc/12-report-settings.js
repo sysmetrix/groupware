@@ -22,7 +22,7 @@ ${S.weekly ? `<h2>주간 업무 실적 초안 <span class="saved on" id="wkSaved
     const perm = 'Notification' in window ? ({granted: '허용됨', denied: '브라우저에서 막혀 있음', default: '아직 묻지 않음'}[Notification.permission] || '') : '이 브라우저는 지원하지 않음';
     const r = rel();
     const ruleChips = (l, name) => r[l].length ? `<div style="margin-top:8px"><span class="muted">${name}</span> ${r[l].map((q, i) => `<span class="chip">${esc(q.label || q.v)}<button class="btn sm ghost icon" style="height:22px;width:22px" data-act="delRule" data-l="${l}" data-i="${i}" aria-label="지우기">${ic('x')}</button></span>`).join(' ')}</div>` : '';
-    const usedKB = (() => { let n = 0; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k.startsWith(LS) || k.startsWith('bwyfgw:')) n += (localStorage.getItem(k) || '').length; } } catch {} return Math.round(n / 1024); })();
+    const usedKB = (() => { let n = 0; try { const p = getPrefix(); for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k.startsWith(p)) n += (localStorage.getItem(k) || '').length; } } catch {} return Math.round(n / 1024); })();
     return `${pgh('설정', '바꾸는 즉시 저장됩니다', `<span class="saved" id="setSaved">${ic('check')}저장됨</span>`)}
 <div class="set">
 <div class="si"><b>내 업무 범위</b><div><label><input type="checkbox" class="setc" data-k="roles.deptReceiver" ${st.roles?.deptReceiver ? 'checked' : ''}>부서 접수는 내 업무</label><label><input type="checkbox" class="setc" data-k="roles.distributor" ${st.roles?.distributor ? 'checked' : ''}>문서 배부는 내 업무</label><label><input type="checkbox" class="setc" data-k="roles.sender" ${st.roles?.sender ? 'checked' : ''}>다른 사람 문서 발송도 내 업무</label><div class="muted">체크하지 않은 종류는 "참고"로 접혀 처리할 일에서 빠집니다.</div>${ruleChips('mute', '목록에서 뺀 것:')}${ruleChips('mine', '내 일로 지정한 것:')}</div></div>
@@ -53,7 +53,7 @@ ${S.weekly ? `<h2>주간 업무 실적 초안 <span class="saved on" id="wkSaved
     const rows = {};
     root.querySelectorAll('#budgetRows input').forEach(i => { (rows[i.dataset.i] = rows[i.dataset.i] || {})[i.dataset.b] = i.value.trim(); });
     const list = Object.values(rows).filter(b => /^[A-Za-z0-9가-힣]+$/.test(b.project || '')).map(b => ({project: b.project, filter: b.filter || '', label: b.label || ''}));
-    S.settings.budget = list.length ? list : DEFAULT_SETTINGS.budget; S.budget.table = null;
+    S.settings.budget = list; S.budget.table = null;
     saveLocal();
     const s = $('#setSaved'); if (s) { s.classList.add('on'); setTimeout(() => s.classList.remove('on'), 1600); }
   }

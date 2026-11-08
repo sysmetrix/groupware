@@ -4,7 +4,7 @@
   let palItems = [], palIndex = 0;
   function openPalette(q = '') {
     S.paletteOpen = true; S.menuOpen = ''; S.helpOpen = false;
-    $('#overlay').innerHTML = `<div class="modal" data-act="closeOverlay"><div class="dlg pal" data-stop="1"><input id="palq" placeholder="무엇을 할까요? 예) 배부, A201, 지난달 근태, 새 메일, 전략경영실-1234, 회의록" value="${esc(q)}" autocomplete="off"><div id="pallist" style="margin-top:8px"></div><div class="muted" style="margin-top:6px">↑↓ 이동 · Enter 실행 · Esc 닫기</div></div></div>`;
+    $('#overlay').innerHTML = `<div class="modal" data-act="closeOverlay"><div class="dlg pal" data-stop="1"><input id="palq" placeholder="무엇을 할까요? 예) 결재, 사업 예산, 지난달 근태, 새 메일, 문서번호, 회의록" value="${esc(q)}" autocomplete="off"><div id="pallist" style="margin-top:8px"></div><div class="muted" style="margin-top:6px">↑↓ 이동 · Enter 실행 · Esc 닫기</div></div></div>`;
     const inp = $('#palq');
     inp.focus(); inp.setSelectionRange(q.length, q.length);
     palRender(q);

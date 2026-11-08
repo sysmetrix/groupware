@@ -127,8 +127,8 @@
       case 'goBudgetPick': S.budget.pickOpen = true; go('budget'); break;
       case 'bTogglePick': S.budget.pickOpen = !S.budget.pickOpen; renderMain(); break;
       case 'bPick': e.stopPropagation(); S.budget.project = el.dataset.p; S.budget.filter = el.dataset.f || ''; loadBudget(); break;
-      case 'bPin': { e.stopPropagation(); const p = el.dataset.p, f = el.dataset.f || '', l = el.dataset.l || f || p; const i = S.settings.budget.findIndex(x => x.project === p && (x.filter || '') === f); if (i >= 0) { S.settings.budget.splice(i, 1); toast('내 관심 사업에서 뺐습니다.'); } else { S.settings.budget.push({project: p, filter: f, label: l}); toast('내 관심 사업에 추가했습니다.'); } if (!S.settings.budget.length) S.settings.budget = [...DEFAULT_SETTINGS.budget]; saveLocal(); renderMain(); break; }
-      case 'bUnpin': { e.stopPropagation(); S.settings.budget.splice(Number(el.dataset.i), 1); if (!S.settings.budget.length) S.settings.budget = [...DEFAULT_SETTINGS.budget]; saveLocal(); renderMain(); toast('내 관심 사업에서 뺐습니다.'); break; }
+      case 'bPin': { e.stopPropagation(); const p = el.dataset.p, f = el.dataset.f || '', l = el.dataset.l || f || p; const i = S.settings.budget.findIndex(x => x.project === p && (x.filter || '') === f); if (i >= 0) { S.settings.budget.splice(i, 1); toast('내 관심 사업에서 뺐습니다.'); } else { S.settings.budget.push({project: p, filter: f, label: l}); toast('내 관심 사업에 추가했습니다.'); } /* allow empty budget */ saveLocal(); renderMain(); break; }
+      case 'bUnpin': { e.stopPropagation(); S.settings.budget.splice(Number(el.dataset.i), 1); /* allow empty budget */ saveLocal(); renderMain(); toast('내 관심 사업에서 뺐습니다.'); break; }
       case 'loadBudget': S.budget.project = $('#bcode').value.trim(); S.budget.filter = $('#bfilter').value.trim(); if (!S.budget.project) { toast('프로젝트 코드를 입력하세요.'); break; } loadBudget(); break;
       case 'ledger': loadLedger(el.dataset.code); break;
       case 'loadMonthly': loadMonthly(); break;
@@ -171,7 +171,7 @@
       case 'resetDone': pushUndo('표시 초기화'); S.hidden = {}; S.snooze = {}; S.plan = {}; saveLocal(); render(); toastUndo('숨기기·미루기·보드 계획을 지웠습니다.'); break;
       case 'resetRouting': S.routing = null; store.del('routing'); toast('추천 이력을 지웠습니다.'); break;
       case 'tourAgain': S.settings.tourDone = false; saveLocal(); toggleHelp(true); break;
-      case 'resetAll': if (confirm('이 브라우저에 저장된 업무센터 설정·할 일·표시를 모두 지울까요? (그룹웨어 자료는 바뀌지 않습니다)')) { for (const k of Object.keys(localStorage)) if (k.startsWith(LS) && k !== LS + 'src') localStorage.removeItem(k); S.hidden = {}; S.snooze = {}; S.plan = {}; S.todos = []; S.newKeys.clear(); S.activity = []; S.history = []; S.settings = {...DEFAULT_SETTINGS}; S.routing = null; S.forms = null; applyLook(); render(); } break;
+      case 'resetAll': if (confirm('이 브라우저에 저장된 내 업무센터 설정·할 일·표시를 모두 지울까요? (그룹웨어 자료는 바뀌지 않습니다)')) { const p = getPrefix(); for (const k of Object.keys(localStorage)) if (k.startsWith(p)) localStorage.removeItem(k); S.hidden = {}; S.snooze = {}; S.plan = {}; S.todos = []; S.newKeys.clear(); S.activity = []; S.history = []; S.settings = {...DEFAULT_SETTINGS}; S.routing = null; S.forms = null; applyLook(); render(); } break;
       case 'toastUndo': undo(); root.querySelector('.toast')?.remove(); break;
       default: break;
     }
