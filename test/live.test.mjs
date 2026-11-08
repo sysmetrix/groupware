@@ -383,14 +383,19 @@ test('titles are cleaned and reports carry no ms or raw decimals', () => {
 
 test('work center: every clickable data-act has a handler, CSS is a separate design-system file', async () => {
   const fs = await import('node:fs/promises');
-  const src = await fs.readFile(new URL('../src/live/workcenter.browser.js', import.meta.url), 'utf8');
+  const dir = new URL('../src/live/wc/', import.meta.url);
+  const names = (await fs.readdir(dir)).filter(n => n.endsWith('.js')).sort();
+  const src = (await fs.readFile(new URL('../src/live/workcenter.browser.js', import.meta.url), 'utf8')) + (await Promise.all(names.map(n => fs.readFile(new URL(n, dir), 'utf8')))).join('\n');
   const css = await fs.readFile(new URL('../src/live/wc-style.css', import.meta.url), 'utf8');
   const acts = new Set([...src.matchAll(/data-act=\\?"([A-Za-z]+)\\?"/g)].map(m => m[1]));
   const handled = new Set([...src.matchAll(/case '([A-Za-z]+)'/g)].map(m => m[1]));
   const special = new Set(['closeOverlay', 'toastUndo']);
   const missing = [...acts].filter(a => !handled.has(a) && !special.has(a));
   assert.deepEqual(missing, [], `unhandled actions: ${missing.join(', ')}`);
-  assert.ok(src.includes("'/*@WC_CSS@*/'"));
+  assert.ok(src.includes("'/*@WC_CSS@*/'") && src.includes('/*@WC_PARTS@*/'));
+  const {execFileSync} = await import('node:child_process');
+  execFileSync(process.execPath, ['scripts/live-build.mjs'], {cwd: new URL('..', import.meta.url)});
+  execFileSync(process.execPath, ['--check', 'build/live/gw-live.js'], {cwd: new URL('..', import.meta.url)});
   assert.ok(/word-break:keep-all/.test(css), 'Korean words must not break mid-word');
   assert.ok(!/font-size:(?:[0-9]|1[01])(?:\.\d+)?px/.test(css), 'no text smaller than 12px');
   assert.ok(/:focus-visible/.test(css), 'keyboard focus ring');

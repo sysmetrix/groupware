@@ -186,3 +186,6 @@ th{white-space:nowrap}
 .wc:not(.nopane) .hello .stats{display:none}.wc:not(.nopane) .hello{padding:12px 16px}
 .menu{max-width:340px}.menu .mh{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 nav .foot a{white-space:nowrap}
+.frame.idle:empty{display:none}
+.wc:not(.nopane) .row{grid-template-columns:24px 1fr auto}.wc:not(.nopane) .row .qa{grid-column:2/4;justify-content:flex-start;margin-top:-2px}.wc:not(.nopane) .row.ref .qa{grid-column:auto}
+.menu .mh{display:block;max-width:320px}

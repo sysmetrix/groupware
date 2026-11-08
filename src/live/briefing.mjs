@@ -110,11 +110,11 @@ export function attendanceAnomalies(days = [], {now = new Date(), leaves = []} =
     const absent = /결근|미출근/.test(r.result);
     const nearSwap = swapFor.get(r.date) || '';
     const hints = [];
-    if (nearSwap) hints.push(`${fmtYmd(nearSwap).slice(5)} 근무일대체와 연결된 날일 수 있음`);
+    if (nearSwap) hints.push(`${fmtYmd(nearSwap).slice(5).replace('-', '/')}에 휴일근무(근무일대체) 기록 있음`);
     if (r.applied) hints.push(`근태신청 ${r.status || '진행 중'}`);
-    out.push({date: r.date, result: r.result, item: r.item, status: r.status, nearSwap: nearSwap || '',
+    out.push({date: r.date, result: r.result, item: r.item, status: r.status, nearSwap: nearSwap || '', applied: !!r.applied || (/미인정/.test(r.result || '') && !!r.item),
       priority: absent && !r.applied && !nearSwap ? 'high' : 'medium',
-      advice: [...hints, r.applied ? '결재가 끝났는지 확인' : '출장·휴가·대체 등 근태신청이 필요한지 확인'].join(' · ')});
+      advice: [...hints, r.applied ? '근태신청 결재가 끝나면 그룹웨어 기록이 바뀝니다' : '쉰 날이면 근태신청을 해야 그룹웨어 기록이 바뀝니다'].join(' · ')});
   }
   return out;
 }
