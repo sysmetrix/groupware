@@ -172,7 +172,7 @@
     } catch (e) { S.error = e && e.message || String(e); logError('자료 읽기', S.error); }
     finally { S.loading = false; }
     if (silent && isUserBusy()) { S.pendingRefresh = true; renderHead(); renderBand(); renderNav(); return; }
-    render();
+    render(); renderHead();
   }
   function logError(where, msg) { S.errors = [...(S.errors || []), {at: Date.now(), where, msg: String(msg).slice(0, 300)}].slice(-30); store.set('errors', S.errors); }
   function ingest(raw) {
