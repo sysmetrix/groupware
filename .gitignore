@@ -12,3 +12,4 @@ coverage/
 *.har
 *.saz
 .DS_Store
+build/
