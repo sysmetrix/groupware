@@ -27,6 +27,12 @@
     "evaluate:model": "node --env-file-if-exists=.env scripts/evaluate-model.mjs",
     "attach:extract": "node --env-file-if-exists=.env scripts/attach-extract.mjs",
     "live:build": "node scripts/live-build.mjs",
+    "harness": "node scripts/harness.mjs",
+    "harness:fast": "node scripts/harness.mjs --fast",
+    "loop": "node scripts/loop.mjs",
+    "loop:once": "node scripts/loop.mjs --once",
+    "graph": "node scripts/graph.mjs",
+    "graph:write": "node scripts/graph.mjs --write",
     "live:report": "node scripts/live-report.mjs",
     "test:attachments": "python -m unittest discover -s test -p \"*_test.py\""
   }

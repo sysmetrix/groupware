@@ -1,0 +1,10 @@
+{
+  "note": "환경 때문에 실패하는 것으로 확인된 테스트. 하네스는 이를 실패가 아닌 주의로 보고한다. 원인을 고치면 항목을 지운다.",
+  "tests": [
+    {
+      "since": "2026-11-09",
+      "reason": "python 의존 패키지(pypdf 계열 jbig2dec)가 이 PC의 python 버전에서 import 오류: TypeError: 'jbig2dec_binary' is a field but has no type annotation",
+      "name": "real PDF/XLSX/HWPX upload"
+    }
+  ]
+}
