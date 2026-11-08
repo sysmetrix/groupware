@@ -9,7 +9,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '3.0.0';
+  const VERSION = '3.1.0';
   let api = null;
   const lazy = {
     version: VERSION,
@@ -46,7 +46,7 @@
     filter: {area: 'all', level: 'all', q: '', onlyNew: false, showHidden: false}, multi: new Set(), lastClickKey: '',
     apTab: 'distWaiting', apMore: {}, mailFilter: 'all', mailGroup: false,
     sel: null, pane: {url: '', mounted: '', expanded: false, extract: null, preview: null},
-    focus: null, focusConfirmed: false,
+    focus: null,
     search: {kw: '', types: ['doc', 'mail', 'board', 'file', 'person'], period: '', res: null, busy: false, more: {}}, mailSearch: {kw: '', res: null},
     budget: {project: '', filter: '', table: null, ledger: null, monthly: null, month: '', busy: false, q: '', seq: 0},
     att: {month: '', rows: null, busy: false, seq: 0, day: ''}, cal: {offset: 0},
@@ -65,6 +65,8 @@
   const hm4 = s => (s && /^\d{4}$/.test(s)) ? `${s.slice(0, 2)}:${s.slice(2)}` : (s || '');
   const dtm12 = s => (s && /^\d{12}/.test(s)) ? `${ymd8(s)} ${s.slice(8, 10)}:${s.slice(10, 12)}` : ymd8(s);
   const mins = m => m === null || m === undefined ? '-' : `${Math.floor(m / 60)}시간${m % 60 ? ` ${m % 60}분` : ''}`;
+  // 6.59375일 -> "6일 4시간 45분" (1일 = 8시간)
+  const fmtDays = v => { if (v === null || v === undefined || v === '') return '-'; const n = Number(v); const d = Math.trunc(n); const m = Math.round((n - d) * 8 * 60); return `${d}일${m ? ` ${Math.floor(m / 60) ? Math.floor(m / 60) + '시간' : ''}${m % 60 ? ` ${m % 60}분` : ''}` : ''}`.replace(/\s+/g, ' ').trim(); };
   const WD = ['일', '월', '화', '수', '목', '금', '토'];
   const today = () => R.kstNow(new Date()).date;
   const hhmm = d => { const k = R.kstNow(d); return `${String(k.hh).padStart(2, '0')}:${String(k.mm).padStart(2, '0')}`; };
@@ -189,7 +191,7 @@ kbd{font:11px monospace;border:1px solid var(--line);border-bottom-width:2px;bor
 .batch{position:sticky;top:0;z-index:3;background:#fff8e1;border:1px solid #f6d9a8;border-radius:9px;padding:6px 10px;margin-bottom:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}.wc.dark .batch{background:#3a3220;border-color:#5a4718}
 .term{border-bottom:1px dotted var(--muted);cursor:help}
 </style><div class="wc nopane" id="wc"><header><div class="ttl">GW 통합 업무센터</div><span class="badge" title="이 화면이 그룹웨어 자료를 읽을 때는 아무것도 바꾸지 않습니다. 오른쪽 처리 창에 열리는 그룹웨어 원래 화면의 버튼은 실제로 처리됩니다.">조회는 안전 · 처리는 원래 화면에서</span><input id="gsearch" placeholder="통합검색 또는 명령 (Ctrl+K)" autocomplete="off"><span class="meta" id="meta"></span>
-<button class="hb" data-act="menuNew" title="새 메일·새 기안·근태신청">+ 새로 만들기</button><button class="hb" data-act="focusStart" title="처리할 항목을 하나씩 차례로 처리 (F)">연속 처리</button><button class="hb" data-act="menuBell" id="bell" title="새로 들어온 항목">알림</button><button class="hb" data-act="fsDown" title="글자 작게">가−</button><button class="hb" data-act="fsUp" title="글자 크게">가+</button><button class="hb" data-act="theme" title="밝게/어둡게">테마</button><button class="hb" data-act="help" title="도움말 (?)">?</button><button class="hb" data-act="refresh" title="새로고침 (R)">새로고침</button><button class="hb" data-act="close" title="닫기 (Esc)">닫기</button></header>
+<button class="hb" data-act="menuNew" title="새 메일·새 기안·근태신청">+ 새로 만들기</button><button class="hb" data-act="focusStart" title="처리할 항목을 하나씩 차례로 처리 (F)">연속 처리</button><button class="hb" data-act="menuBell" id="bell" title="새로 들어온 항목">알림</button><button class="hb" data-act="menuView" title="글자 크기·테마·도움말">보기·도움말 ▾</button><button class="hb" data-act="refresh" title="새로고침 (R)">새로고침</button><button class="hb" data-act="close" title="닫기 (Esc)">닫기</button></header>
 <div class="band" id="band"></div><nav id="nav"></nav><main id="main"></main><div class="split" id="split" title="끌어서 처리 창 너비 조절"></div><aside id="pane"></aside><div id="overlay"></div></div>`;
   const $ = sel => root.querySelector(sel);
   const wcEl = $('#wc');
@@ -301,7 +303,7 @@ kbd{font:11px monospace;border:1px solid var(--line);border-bottom-width:2px;bor
       if (S.paletteOpen || S.helpOpen || S.menuOpen) { closeOverlay(); return; }
       if (typing) { t.blur(); return; }
       if (S.focus) { stopFocus(); return; }
-      if (S.pane.url) { S.pane.url = ''; renderPane(); return; }
+      if (S.pane.url) { if (!leavePane()) return; S.pane.url = ''; renderPane(); return; }
       if (S.sel) { S.sel = null; render(); return; }
       close(); return;
     }
@@ -322,7 +324,7 @@ kbd{font:11px monospace;border:1px solid var(--line);border-bottom-width:2px;bor
     if (c === 'KeyR') { refresh(); return; }
     if (c === 'KeyF') { startFocus(); return; }
     if (/^Digit[1-9]$/.test(c)) { const v = VIEWS[Number(c.slice(5)) - 1]; if (v) go(v.id); return; }
-    if (S.focus) { if (c === 'Enter' || c === 'KeyN') focusNext(true); else if (c === 'KeyB') focusPrev(); return; }
+    if (S.focus) { if (c === 'KeyN') focusNext(true); else if (c === 'KeyB') focusPrev(); return; }
     if (S.view === 'today' && ['KeyJ', 'KeyK', 'ArrowDown', 'ArrowUp'].includes(c)) { e.preventDefault(); moveSel(c === 'KeyJ' || c === 'ArrowDown' ? 1 : -1); return; }
     const x = selectedAction();
     if (!x) return;
@@ -430,7 +432,7 @@ ${tile('긴급', high + '건', '기한 임박·오래 기다린 순', 'tileLevel
 ${tile('결재·접수·배부', s.approvalAction + '건', `결재 ${s.pending ?? '-'} · 접수 ${s.deptWaiting ?? '-'} · 배부 ${s.distWaiting ?? '-'}`, 'tileArea', '결재', s.approvalAction > 0, u.approval)}
 ${tile('메일', vis.filter(x => x.area === '메일').length + '건', `안 읽음 ${s.mailUnread} · 기한·답장 확인 포함`, 'tileArea', '메일', false, u.mail)}
 ${tile('7일 내 기한', dl7.length + '건', dl7[0] ? `${dl7[0].date.slice(5)} ${dl7[0].title.slice(0, 16)}` : '제목·미리보기 기준', 'goCalendar', '', dl7.some(x => x.dday <= 1))}
-${tile('근태 확인', S.a.anomalies.length + '건', `잔여 연차 ${s.leaveRemaining ?? '-'}일`, 'tileArea', '근태', false, u.attendance)}
+${tile('근태 확인', S.a.anomalies.length + '건', `잔여 연차 ${fmtDays(s.leaveRemaining)}`, 'tileArea', '근태', false, u.attendance)}
 ${tile('발송·반려', (s.sendWaiting ?? 0) + s.rejectedSubmitted + '건', `발송 대기 ${s.sendWaiting ?? '-'} · 반려 ${s.rejectedSubmitted}`, 'goApproval', 'sendWaiting', s.rejectedSubmitted > 0, u.approval)}
 </div>
 <div class="charts">${chartFlow()}${chartDeadlines()}${chartBudget()}${chartAttendance()}${chartTrend()}</div>
@@ -483,21 +485,34 @@ ${tile('발송·반려', (s.sendWaiting ?? 0) + s.rejectedSubmitted + '건', `�
     if (!p) return '';
     const head = p.rows[0], el = S.a.budget.elapsedPct;
     const leaves = p.rows.filter(r => r.level === '세').slice(0, 5);
-    const bar = (r, y, label) => `<g class="hit" data-act="goBudgetCode" data-v="${esc(r.code)}"><text x="0" y="${y + 10}" font-size="10.5" fill="currentColor">${esc(label.slice(0, 13))}</text><rect x="100" y="${y + 1}" width="150" height="11" rx="3" fill="#e7ebf2"/><rect x="100" y="${y + 1}" width="${Math.min(150, r.rate * 1.5)}" height="11" rx="3" fill="${r.rate < el - 30 ? '#e37400' : '#1a73e8'}"><title>${esc(r.name)} 집행 ${pct(r.rate)} (예산 ${won(r.budget)}원)</title></rect><line x1="${100 + el * 1.5}" x2="${100 + el * 1.5}" y1="${y - 1}" y2="${y + 14}" stroke="#1d2330" stroke-width="1.5"><title>연간 경과율 ${el}%</title></line><text x="254" y="${y + 10}" font-size="10" fill="currentColor">${Math.round(r.rate)}%</text></g>`;
-    const rows = [bar(head, 0, head.name), ...leaves.map((r, i) => bar(r, (i + 1) * 18, r.name.replace(/^○\s*/, '').replace(/젠더유스 거버넌스\s*/, '')))].join('');
+    const bar = (r, y, label) => `<g class="hit" data-act="goBudgetCode" data-v="${esc(r.code)}"><text x="96" y="${y + 10}" font-size="10" text-anchor="end" fill="currentColor">${esc(label.slice(0, 9))}<title>${esc(r.name)}</title></text><rect x="100" y="${y + 1}" width="150" height="11" rx="3" fill="#e7ebf2"/><rect x="100" y="${y + 1}" width="${Math.min(150, r.rate * 1.5)}" height="11" rx="3" fill="${r.rate < el - 30 ? '#e37400' : '#1a73e8'}"><title>${esc(r.name)} 집행 ${pct(r.rate)} (예산 ${won(r.budget)}원)</title></rect><line x1="${100 + el * 1.5}" x2="${100 + el * 1.5}" y1="${y - 1}" y2="${y + 14}" stroke="#1d2330" stroke-width="1.5"><title>연간 경과율 ${el}%</title></line><text x="254" y="${y + 10}" font-size="10" fill="currentColor">${Math.round(r.rate)}%</text></g>`;
+    const short = shortLabels(leaves.map(r => r.name));
+    const rows = [bar(head, 0, head.name), ...leaves.map((r, i) => bar(r, (i + 1) * 18, short[i]))].join('');
     return `<div class="chart"><div class="ct"><span>예산 ${esc(p.project)} ${esc(p.filter)}</span><span class="muted">세로선 = 연간 경과 ${el}%</span></div><svg viewBox="0 0 280 ${(leaves.length + 1) * 18}" width="100%" height="${(leaves.length + 1) * 18}">${rows}</svg></div>`;
+  }
+  // Drop the words all labels share ("○ 젠더유스 거버넌스 회의비(자)" -> "회의비(자)").
+  function shortLabels(names) {
+    const clean = names.map(n => String(n).replace(/^[○●·\s]+/, ''));
+    if (clean.length < 2) return clean;
+    let p = clean[0];
+    for (const n of clean) while (p && !n.startsWith(p)) p = p.slice(0, -1);
+    p = p.replace(/\S+$/, '');
+    return clean.map(n => n.slice(p.length).trim() || n);
   }
   function chartAttendance() {
     const days = S.raw.data.attendance?.days || [];
     if (!days.length) return '';
     const bad = new Set(S.a.anomalies.map(x => x.date));
-    const cells = days.map((r, i) => { const cls = bad.has(r.date) ? '#f28b82' : r.holiday || /휴일/.test(r.result) ? '#dadce0' : /정상/.test(r.result) ? '#81c995' : '#fdd663'; return `<rect class="hit" data-act="goAttendanceDay" data-v="${r.date}" x="${(i % 7) * 38}" y="${Math.floor(i / 7) * 30}" width="34" height="26" rx="5" fill="${cls}"><title>${esc(`${ymd8(r.date)} ${r.result} ${r.item} ${r.status}`)}</title></rect><text x="${(i % 7) * 38 + 17}" y="${Math.floor(i / 7) * 30 + 17}" font-size="10.5" text-anchor="middle" fill="#1d2330" pointer-events="none">${Number(r.date.slice(6))}</text>`; }).join('');
-    const h = Math.ceil(days.length / 7) * 30;
+    const first = days[0].date;
+    const off = new Date(Number(first.slice(0, 4)), Number(first.slice(4, 6)) - 1, 1).getDay();
+    const pos = r => off + Number(r.date.slice(6)) - 1;
+    const cells = days.map(r => { const i = pos(r); const cls = bad.has(r.date) ? '#f28b82' : r.holiday || /휴일/.test(r.result) ? '#dadce0' : /정상/.test(r.result) ? '#81c995' : '#fdd663'; return `<rect class="hit" data-act="goAttendanceDay" data-v="${r.date}" x="${(i % 7) * 38}" y="${Math.floor(i / 7) * 30}" width="34" height="26" rx="5" fill="${cls}"><title>${esc(`${ymd8(r.date)} ${r.result} ${r.item} ${r.status}`)}</title></rect><text x="${(i % 7) * 38 + 17}" y="${Math.floor(i / 7) * 30 + 17}" font-size="10.5" text-anchor="middle" fill="#1d2330" pointer-events="none">${Number(r.date.slice(6))}</text>`; }).join('');
+    const h = (Math.floor(pos(days[days.length - 1]) / 7) + 1) * 30;
     return `<div class="chart"><div class="ct"><span>이번 달 근태</span><span class="muted">빨강 = 확인 필요</span></div><svg viewBox="0 0 266 ${h}" width="100%" height="${h}">${cells}</svg></div>`;
   }
   function chartTrend() {
     const h = S.history.slice(-14);
-    if (h.length < 2) return `<div class="chart"><div class="ct"><span>처리할 일 추이</span></div><p class="muted">며칠 사용하면 하루 단위 추이가 그려집니다.</p></div>`;
+    if (h.length < 2) return '';
     const max = Math.max(1, ...h.map(x => x.total));
     const pts = (k) => h.map((x, i) => `${10 + i * (250 / (h.length - 1))},${70 - x[k] / max * 60}`).join(' ');
     return `<div class="chart"><div class="ct"><span>처리할 일 추이</span><span class="muted">파랑 전체 · 빨강 긴급</span></div><svg viewBox="0 0 270 78" width="100%" height="78"><polyline points="${pts('total')}" fill="none" stroke="#1a73e8" stroke-width="2"/><polyline points="${pts('high')}" fill="none" stroke="#c5221f" stroke-width="2"/>${h.map((x, i) => `<circle cx="${10 + i * (250 / (h.length - 1))}" cy="${70 - x.total / max * 60}" r="3" fill="#1a73e8"><title>${esc(x.date)} 전체 ${x.total} · 긴급 ${x.high}</title></circle>`).join('')}</svg></div>`;
@@ -675,14 +690,16 @@ ${res ? group('contact', x => `<div class="row"><div></div><div><span class="pil
     const fc = r => { const f = Math.max(0.05, el / 100); const proj = Math.min(r.budget * 1.5, r.executed / f); return {proj, rate: r.budget ? proj / r.budget * 100 : 0, unused: Math.max(0, r.budget - proj)}; };
     const summary = head ? (() => { const f = fc(head); return `<div class="box ${f.rate < 85 ? 'warn' : 'okb'}"><b>${esc(head.name)}</b> 예산 ${won(head.budget)}원 · 집행 ${won(head.executed)}원(${pct(head.rate)}) · 잔액 ${won(head.balance)}원<br>지금 속도(연간 경과 ${el}%)로 가면 연말 집행률 약 <b>${pct(f.rate)}</b>, 쓰지 못할 예상액 약 <b>${won(f.unused)}원</b>. <span class="muted">단순 비례 추정이며 행사 일정에 따라 달라집니다.</span></div>`; })() : '';
     const leaves = rows.filter(r => r.level === '세');
+    const leafShort = shortLabels(leaves.map(r => r.name));
     const ledger = b.ledger;
     const monthly = b.monthly && b.monthly.code === (b.filter || head?.code) ? b.monthly : null;
     const monthChart = monthly ? (() => {
-      const vals = monthly.months.map(m => { const r = (m.rows || []).find(x => x.code === monthly.code) || (m.rows || [])[0]; return r ? r.executed : 0; });
-      const max = Math.max(1, ...vals);
-      return `<div class="chart"><div class="ct"><span>월별 집행 (${esc(monthly.code)})</span><span class="muted">막대를 누르면 그 달 결의만 보기</span></div><svg viewBox="0 0 300 120" width="100%" height="130">${vals.map((v, i) => `<g class="hit" data-act="budgetMonth" data-v="${String(i + 1).padStart(2, '0')}"><rect x="${8 + i * 24}" y="${100 - v / max * 88}" width="18" height="${Math.max(1, v / max * 88)}" rx="3" fill="${b.month === String(i + 1).padStart(2, '0') ? '#c5221f' : '#1a73e8'}"><title>${i + 1}월 ${won(v)}원</title></rect><text x="${17 + i * 24}" y="114" font-size="10" text-anchor="middle" fill="currentColor">${i + 1}</text></g>`).join('')}</svg></div>`;
+      const vals = monthly.months.map(m => { if (m.error) return null; const r = (m.rows || []).find(x => x.code === monthly.code) || (m.rows || [])[0]; return r ? r.executed : 0; });
+      const max = Math.max(1, ...vals.filter(v => v !== null));
+      const failed = vals.filter(v => v === null).length;
+      return `<div class="chart"><div class="ct"><span>월별 집행 (${esc(monthly.code)})</span><span class="muted">막대를 누르면 그 달 결의만${failed ? ` · ${failed}개월 조회 실패(?)` : ''}</span></div><svg viewBox="0 0 300 120" width="100%" height="130">${vals.map((v, i) => v === null ? `<g><rect x="${8 + i * 24}" y="40" width="18" height="60" rx="3" fill="none" stroke="#9aa4b2" stroke-dasharray="3 2"><title>${i + 1}월 조회 실패</title></rect><text x="${17 + i * 24}" y="74" font-size="11" text-anchor="middle" fill="#9aa4b2">?</text><text x="${17 + i * 24}" y="114" font-size="10" text-anchor="middle" fill="currentColor">${i + 1}</text></g>` : `<g class="hit" data-act="budgetMonth" data-v="${String(i + 1).padStart(2, '0')}"><rect x="${8 + i * 24}" y="${100 - v / max * 88}" width="18" height="${Math.max(1, v / max * 88)}" rx="3" fill="${b.month === String(i + 1).padStart(2, '0') ? '#c5221f' : '#1a73e8'}"><title>${i + 1}월 ${won(v)}원</title></rect><text x="${17 + i * 24}" y="114" font-size="10" text-anchor="middle" fill="currentColor">${i + 1}</text></g>`).join('')}</svg></div>`;
     })() : (b.monthlyBusy ? '<p class="muted"><span class="spin"></span> 월별 집행을 읽는 중…</p>' : `<p><button class="btn sm" data-act="loadMonthly">월별 집행 그래프 보기</button></p>`);
-    const barChart = leaves.length ? `<div class="chart"><div class="ct"><span>세목별 집행률</span><span class="muted">세로선 = 연간 경과 ${el}% · 막대를 누르면 결의 내역</span></div><svg viewBox="0 0 300 ${leaves.length * 22}" width="100%" height="${leaves.length * 22}">${leaves.map((r, i) => `<g class="hit" data-act="ledger" data-code="${esc(r.code)}"><text x="0" y="${i * 22 + 13}" font-size="10.5" fill="currentColor">${esc(r.name.replace(/^○\s*/, '').slice(0, 15))}</text><rect x="118" y="${i * 22 + 3}" width="150" height="12" rx="3" fill="#e7ebf2"/><rect x="118" y="${i * 22 + 3}" width="${Math.min(150, r.rate * 1.5)}" height="12" rx="3" fill="${r.balance < 0 ? '#c5221f' : r.rate < el - 35 ? '#e37400' : '#1a73e8'}"><title>${esc(r.name)} ${pct(r.rate)} · 잔액 ${won(r.balance)}원</title></rect><line x1="${118 + el * 1.5}" x2="${118 + el * 1.5}" y1="${i * 22}" y2="${i * 22 + 18}" stroke="#1d2330" stroke-width="1.5"/><text x="272" y="${i * 22 + 13}" font-size="10" fill="currentColor">${Math.round(r.rate)}%</text></g>`).join('')}</svg></div>` : '';
+    const barChart = leaves.length ? `<div class="chart"><div class="ct"><span>세목별 집행률</span><span class="muted">세로선 = 연간 경과 ${el}% · 막대를 누르면 결의 내역</span></div><svg viewBox="0 0 300 ${leaves.length * 22}" width="100%" height="${leaves.length * 22}">${leaves.map((r, i) => `<g class="hit" data-act="ledger" data-code="${esc(r.code)}"><text x="112" y="${i * 22 + 13}" font-size="10.5" text-anchor="end" fill="currentColor">${esc(leafShort[i].slice(0, 12))}<title>${esc(r.name)}</title></text><rect x="118" y="${i * 22 + 3}" width="150" height="12" rx="3" fill="#e7ebf2"/><rect x="118" y="${i * 22 + 3}" width="${Math.min(150, r.rate * 1.5)}" height="12" rx="3" fill="${r.balance < 0 ? '#c5221f' : r.rate < el - 35 ? '#e37400' : '#1a73e8'}"><title>${esc(r.name)} ${pct(r.rate)} · 잔액 ${won(r.balance)}원</title></rect><line x1="${118 + el * 1.5}" x2="${118 + el * 1.5}" y1="${i * 22}" y2="${i * 22 + 18}" stroke="#1d2330" stroke-width="1.5"/><text x="272" y="${i * 22 + 13}" font-size="10" fill="currentColor">${Math.round(r.rate)}%</text></g>`).join('')}</svg></div>` : '';
     const lrows = ledger && ledger.rows ? ledger.rows.filter(r => !b.month || r.date.slice(4, 6) === b.month) : [];
     const multiLedger = ledger && ledger.bgtCd === '__ALL';
     return `<h2>예산 집행 <a class="btn sm" href="${esc(S.a.budget.url)}" target="_blank">예실대비현황</a></h2>
@@ -761,7 +778,7 @@ ${ledger ? `<h3>결의 내역 · ${esc(ledger.name || ledger.bgtCd)} <span class
     const startDow = new Date(y, mo - 1, 1).getDay(), last = new Date(y, mo, 0).getDate();
     const byDate = new Map(rows.map(r => [r.date, r]));
     const leaveDays = new Set();
-    for (const u of lv?.history || []) if (u.approved) leaveDays.add(u.start);
+    for (const u of lv?.history || []) if (u.approved && u.days >= 1) leaveDays.add(u.start); // 하루 휴가만 파랑, 반차·외출은 부분(노랑)
     const cells = [];
     for (let i = 0; i < startDow; i++) cells.push('<div></div>');
     for (let dnum = 1; dnum <= last; dnum++) {
@@ -773,11 +790,11 @@ ${ledger ? `<h3>결의 내역 · ${esc(ledger.name || ledger.bgtCd)} <span class
     const selRow = st.day ? byDate.get(st.day) : null;
     return `<h2>근태·연차 <a class="btn sm" href="${esc(at?.url || '')}" target="_blank">근무시간현황</a><button class="btn sm primary" data-act="openUrl" data-url="${esc(at?.requestUrl || '')}" data-title="근태신청">근태신청 화면 열기</button></h2>
 <div class="grid2"><div class="box"><b>오늘</b> 출근 ${esc(hm4(at?.today.come) || '기록 없음')} · 퇴근 ${esc(hm4(at?.today.leave) || '기록 없음')}<br><b>이번 달</b> 인정 ${mins(at?.month.recognizedMin)} · 기본 ${mins(at?.month.basicMin)} · 초과 ${mins(at?.month.overtimeMin)} · 제외 ${mins(at?.month.exceptMin)}</div>
-<div class="box"><b>${esc(lv?.year)}년 연차</b> 부여 ${lv?.granted} · 사용 ${lv?.used} · <b>잔여 ${lv?.remaining}일</b><br>${(lv?.upcoming || []).map(u => `예정 ${esc(ymd8(u.start))} ${esc(u.kind)} ${u.days}일(${u.approved ? '결재완료' : '진행 중'})`).join('<br>') || '<span class="muted">예정된 휴가 없음</span>'}</div></div>
+<div class="box"><b>${esc(lv?.year)}년 연차</b> 부여 ${fmtDays(lv?.granted)} · 사용 ${fmtDays(lv?.used)} · <b>잔여 ${fmtDays(lv?.remaining)}</b> <span class="muted">(${lv?.remaining}일, 1일=8시간)</span><br>${(lv?.upcoming || []).map(u => `예정 ${esc(ymd8(u.start))} ${esc(u.kind)} ${u.days}일(${u.approved ? '결재완료' : '진행 중'})`).join('<br>') || '<span class="muted">예정된 휴가 없음</span>'}</div></div>
 <div class="bar" style="margin-top:10px"><span class="chip ${month === thisM ? 'on' : ''}" data-act="attMonth" data-v="${thisM}">이번 달</span><span class="chip ${month === prevM ? 'on' : ''}" data-act="attMonth" data-v="${prevM}">지난달</span>${st.rows ? '<button class="btn sm" data-act="csvAtt">CSV</button>' : ''}<span class="muted">초록 정상 · 노랑 부분(외출·조퇴 등) · 파랑 휴가 · 회색 휴일 · 빨강 확인 필요</span></div>
 ${st.busy ? '<p><span class="spin"></span></p>' : `<div class="att">${WD.map(w => `<div class="muted" style="text-align:center">${w}</div>`).join('')}${cells.join('')}</div>`}
 ${selRow ? `<div class="box ${bad.has(st.day) ? 'warn' : ''}"><b>${esc(ymd8(st.day))}</b> ${esc(selRow.workType)} · 출결 ${esc(selRow.result)} · ${esc(selRow.item || '근태항목 없음')} · 상태 ${esc(selRow.status)} · 출근 ${esc(hm4(selRow.come) || '-')} · 퇴근 ${esc(hm4(selRow.leave) || '-')} · 인정 ${selRow.recognizedMin === null ? '-' : mins(selRow.recognizedMin)}${bad.has(st.day) ? `<br>${esc(bad.get(st.day).advice)}` : ''}<div class="acts"><button class="btn sm primary" data-act="openUrl" data-url="${esc(at?.requestUrl || '')}" data-title="근태신청 ${esc(ymd8(st.day))}">이 날짜 근태신청 하러 가기</button></div></div>` : ''}
-${anomalies.length ? `<h3>확인이 필요한 날 ${anomalies.length}일</h3><div class="list">${anomalies.map(x => `<div class="row" data-act="attDay" data-v="${x.date}"><div></div><div><span class="pill ${x.priority}">${PRI[x.priority]}</span></div><div><div class="t">${esc(ymd8(x.date))} 출결 '${esc(x.result)}' ${x.status ? `(${esc(x.status)})` : ''}</div><div class="d">${esc(x.advice)}</div></div><div class="w"></div></div>`).join('')}</div>` : ''}
+${anomalies.length ? `<h3>확인이 필요한 날 ${anomalies.length}일</h3><div class="list">${anomalies.map(x => { const act = S.a.actions.find(a => a.key === `att:${x.date}`); const lvl = act ? act.priority : 'medium'; return `<div class="row" data-act="attDay" data-v="${x.date}"><div></div><div><span class="pill ${lvl}">${PRI[lvl]}</span></div><div><div class="t">${esc(ymd8(x.date))} 출결 '${esc(x.result)}' ${x.status ? `(${esc(x.status)})` : ''}</div><div class="d">${esc(x.advice)}</div></div><div class="w"></div></div>`; }).join('')}</div>` : ''}
 <h3>올해 연차·휴가 사용 내역 <span class="muted">${(lv?.history || []).length}건</span></h3><table><tr><th>기간</th><th>구분</th><th class="num">일수</th><th>제목</th><th>상태</th></tr>${(lv?.history || []).slice(0, 40).map(u => `<tr><td class="nowrap">${esc(ymd8(u.start))}${u.end !== u.start ? '~' + esc(ymd8(u.end).slice(5)) : ''}</td><td>${esc(u.kind)}</td><td class="num">${u.days}</td><td>${esc(u.title)}</td><td>${u.approved ? '완료' : '진행'}</td></tr>`).join('')}</table>`;
   }
   async function loadAttendance(month) {
@@ -835,15 +852,33 @@ ${S.weekly ? `<h3>주간 업무 실적 초안 <button class="btn sm primary" dat
     const info = paneInfo();
     const ph = $('#ph');
     ph.className = 'ph' + (S.pane.url ? '' : ' min');
-    ph.innerHTML = `<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><div class="t">${esc(info.title || '')}</div><div style="display:flex;gap:4px">${S.pane.url ? `<button class="btn sm" data-act="paneExpand" title="처리 창을 넓게">${S.pane.expanded ? '목록 보기' : '크게'}</button><a class="btn sm" href="${esc(S.pane.url)}" target="_blank" title="새 창으로">새 창</a>` : ''}<button class="btn sm" data-act="closePane" title="닫기 (Esc)">✕</button></div></div><div class="body">${info.body || ''}</div>`;
+    ph.innerHTML = `<div class="box warn" id="dirtyNote" style="display:${S.pane.dirty ? 'block' : 'none'};margin:0 0 6px">처리 창에 입력 중입니다. 보내기·저장·상신 전에 다른 항목으로 옮기면 사라질 수 있어 먼저 여쭤봅니다.</div><div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><div class="t">${esc(info.title || '')}</div><div style="display:flex;gap:4px">${S.pane.url ? `<button class="btn sm" data-act="paneExpand" title="처리 창을 넓게">${S.pane.expanded ? '목록 보기' : '크게'}</button><a class="btn sm" href="${esc(S.pane.url)}" target="_blank" title="새 창으로">새 창</a>` : ''}<button class="btn sm" data-act="closePane" title="닫기 (Esc)">✕</button></div></div><div class="body">${info.body || ''}</div>`;
     const frame = $('#frame');
     if (S.pane.url !== S.pane.mounted) {
       frame.innerHTML = '';
-      if (S.pane.url) { const f = document.createElement('iframe'); f.src = S.pane.url; f.addEventListener('load', () => scanFrame(f, S.pane.url)); frame.append(f); }
+      S.pane.dirty = false;
+      if (S.pane.url) { const f = document.createElement('iframe'); f.src = S.pane.url; const u = S.pane.url; f.addEventListener('load', () => { scanFrame(f, u); watchDirty(f, u); }); frame.append(f); }
       S.pane.mounted = S.pane.url;
     }
     if (!S.pane.url && !frame.querySelector('.empty')) frame.innerHTML = `<div class="empty">${info.url ? '"처리 창에 열기"를 누르면 그룹웨어 원래 화면이 여기에 열립니다.<br>그 화면의 버튼(결재·접수·배부·발송·보내기)은 실제로 처리됩니다.' : '이 항목은 열 화면이 없습니다.'}</div>`;
     $('#fbar').innerHTML = focusBar();
+  }
+  // Mark the pane "dirty" as soon as the user types anything in the embedded groupware screen
+  // (답장 본문, 결재 의견, 기안 제목 ...), including nested editor iframes.
+  function watchDirty(f, url) {
+    const seen = new WeakSet();
+    const mark = () => { if (S.pane.url === url && !S.pane.dirty) { S.pane.dirty = true; const b = $('#dirtyNote'); if (b) b.style.display = 'block'; } };
+    const attach = doc => { if (!doc || seen.has(doc)) return; seen.add(doc); ['input', 'keydown', 'paste', 'drop'].forEach(ev => doc.addEventListener(ev, e => { if (ev !== 'keydown' || (e.key && e.key.length === 1)) mark(); }, true)); };
+    const scan = () => { if (!f.isConnected || S.pane.url !== url) return false; try { const walk = doc => { attach(doc); for (const i of doc.querySelectorAll('iframe')) { try { walk(i.contentDocument); } catch {} } }; walk(f.contentDocument); } catch {} return true; };
+    scan();
+    const t = setInterval(() => { if (!scan()) clearInterval(t); }, 1500);
+  }
+  // Ask before throwing away what the user typed in the pane.
+  function leavePane() {
+    if (!S.pane.url || !S.pane.dirty) return true;
+    const ok = confirm('처리 창에 입력하던 내용이 있습니다(답장·의견·기안 등).\n보내기·저장·상신을 하지 않았다면 이동할 때 사라집니다.\n(메일은 그룹웨어 설정에 따라 임시보관함에 자동 저장됐을 수 있습니다.)\n그래도 이동할까요?');
+    if (ok) S.pane.dirty = false;
+    return ok;
   }
   // After the user opens a document, read its text (same origin) and pull out deadlines.
   function scanFrame(f, url, tries = 0) {
@@ -870,8 +905,8 @@ ${S.weekly ? `<h3>주간 업무 실적 초안 <button class="btn sm primary" dat
     return `<b>원문 자동 추출</b>${x.deadlines.length ? `<div>${x.deadlines.map(d => `<span class="pill ${d.dday <= 1 ? 'solid' : d.dday <= 3 ? 'high' : 'medium'}" title="${esc(d.context)}">${esc(d.date.slice(5))}${d.time ? ' ' + esc(d.time) : ''} ${ddayText(d.dday)}</span>`).join('')}</div><div class="muted">${esc(nx ? nx.context : '')}</div>` : '<div class="muted">기한 표현을 찾지 못했습니다.</div>'}${x.asks.length ? `<div style="margin-top:4px">${x.asks.map(a => `· ${esc(a.trim().slice(0, 140))}`).join('<br>')}</div>` : ''}${x.amounts.length ? `<div class="muted">금액: ${x.amounts.map(esc).join(', ')}</div>` : ''}${x.attach.length ? `<div class="muted" style="margin-top:4px">${x.attach.map(esc).join('<br>')}</div>` : ''}<div class="acts">${nx ? `<button class="btn sm" data-act="todoFromExtract">${esc(nx.date.slice(5))} 기한으로 할 일 추가</button>` : ''}</div>`;
   };
   const relatedQ = t => String(t || '').replace(/\(.*?\)|\[.*?\]|「|」|『|』|20\d{2}년?/g, ' ').split(/\s+/).filter(w => w.length >= 2).slice(0, 3).join(' ');
-  function actsFor(url, {key, q, title, unread, extra} = {}) {
-    return `<div class="acts">${url ? `<button class="btn primary" data-act="openUrl" data-url="${esc(url)}" data-title="${esc(title || '')}" ${unread ? 'data-unread="1"' : ''}>처리 창에 열기</button>` : ''}${extra || ''}${key ? `<button class="btn" data-act="quickHide" data-k="${esc(key)}" title="이 화면에서만 숨김. 그룹웨어 상태는 그대로">숨기기</button><button class="btn" data-act="quickSnooze" data-k="${esc(key)}">내일까지 미루기</button>` : ''}<button class="btn" data-act="todoFromSel">할 일 추가</button>${q ? `<button class="btn" data-act="related" data-q="${esc(q)}">관련 문서 찾기</button>` : ''}</div>`;
+  function actsFor(url, {key, q, title, unread, what, extra} = {}) {
+    return `<div class="acts">${url ? `<button class="btn primary" data-act="openUrl" data-url="${esc(url)}" data-title="${esc(title || '')}" ${unread ? `data-unread="1" data-what="${esc(what || '문서')}"` : ''}>처리 창에 열기</button>` : ''}${extra || ''}${key ? `<button class="btn" data-act="quickHide" data-k="${esc(key)}" title="이 화면에서만 숨김. 그룹웨어 상태는 그대로">숨기기</button><button class="btn" data-act="quickSnooze" data-k="${esc(key)}">내일까지 미루기</button>` : ''}<button class="btn" data-act="todoFromSel">할 일 추가</button>${q ? `<button class="btn" data-act="related" data-q="${esc(q)}">관련 문서 찾기</button>` : ''}</div>`;
   }
   function paneInfo() {
     const sel = S.sel;
@@ -882,7 +917,7 @@ ${S.weekly ? `<h3>주간 업무 실적 초안 <button class="btn sm primary" dat
       const why = `<div class="muted">${PRI[x.priority]} · 점수 ${x.score}${x.why && x.why.length ? ' · ' + esc(x.why.join(', ')) : ''}</div>`;
       if (x.type === 'doc') return docPane(findDoc(x.ref.kind, x.ref.docId) || {title: x.title, url: x.url, docId: x.ref.docId}, x.ref.kind, x, why);
       if (x.type === 'mail') return mailPane(findMail(x.ref.box, x.ref.uid), x, why);
-      if (x.type === 'notice') return {title: x.title, url: x.url, body: `${why}<div class="kv"><b>구분</b><span>${esc(x.kind)}</span><b>작성</b><span>${esc(x.detail)}</span><b>등록</b><span>${esc(x.when)}</span></div><div class="box warn">원문을 열면 게시글이 읽음 처리되고 조회수가 올라갑니다.</div>${actsFor(x.url, {key: x.key, q: relatedQ(x.title), title: x.title})}<div class="box" id="extract">${extractHtml()}</div>`};
+      if (x.type === 'notice') return {title: x.title, url: x.url, body: `${why}<div class="kv"><b>구분</b><span>${esc(x.kind)}</span><b>작성</b><span>${esc(x.detail)}</span><b>등록</b><span>${esc(x.when)}</span></div><div class="box warn">원문을 열면 게시글이 읽음 처리되고 조회수가 올라갑니다.</div>${actsFor(x.url, {key: x.key, q: relatedQ(x.title), title: x.title, unread: true, what: '게시글'})}<div class="box" id="extract">${extractHtml()}</div>`};
       if (x.type === 'attendance') return {title: x.title, url: x.url, body: `${why}<div class="box warn">${esc(x.detail)}</div>${actsFor(x.url, {key: x.key, title: '근태신청'})}<div class="box tip">근태신청 화면이 열립니다. 해당 날짜의 출장·휴가·근무일대체 신청 여부를 확인하세요. <button class="btn sm" data-act="goAttendanceDay" data-v="${esc(x.ref.date)}">근태 달력에서 보기</button></div>`};
       if (x.type === 'conflict') return {title: x.title, url: x.url, body: `${why}<div class="box warn"><b>휴가일 마감</b> ${esc(x.detail)}</div>${actsFor(x.url, {key: x.key, title: x.title})}`};
       return {title: x.title, url: x.url, body: `${why}<div class="kv"><b>구분</b><span>${esc(x.area)} · ${esc(x.kind)}</span><b>내용</b><span>${esc(x.detail)}</span></div>${actsFor(x.url, {key: x.key, title: x.title})}`};
@@ -921,8 +956,9 @@ ${S.weekly ? `<h3>주간 업무 실적 초안 <button class="btn sm primary" dat
   function mailPane(m, action, why) {
     if (!m) return {title: action ? action.title : '메일', url: S.a.mail.url, body: actsFor(S.a.mail.url, {key: action && action.key, title: '받은메일함'})};
     const dl = R.extractAllDeadlines(m.subject + ' ' + m.preview).filter(x => x.dday >= -1);
-    const reply = `<button class="btn primary" data-act="openUrl" data-url="${esc(GW.links.compose('re', m))}" data-title="답장: ${esc(m.subject)}">답장 쓰기</button><button class="btn" data-act="openUrl" data-url="${esc(GW.links.compose('reall', m))}" data-title="전체 답장: ${esc(m.subject)}">전체 답장</button><button class="btn" data-act="openUrl" data-url="${esc(GW.links.compose('fw', m))}" data-title="전달: ${esc(m.subject)}">전달</button><button class="btn" data-act="openUrl" data-url="${esc(S.a.mail.url)}" data-title="받은메일함">메일함에서 원문</button>`;
-    return {title: m.subject || '(제목 없음)', url: S.a.mail.url, body: `${why || ''}<div class="kv"><b>보낸 사람</b><span>${esc(m.from)} &lt;${esc(m.fromEmail)}&gt;</span><b>받은 시각</b><span>${esc(m.date)}</span><b>메일함</b><span>${esc(m.box)}</span><b>상태</b><span>${m.seen ? '읽음' : '안 읽음'}${m.answered ? ' · 답장함' : ''}${m.forwarded ? ' · 전달함' : ''}${m.attach ? ' · 첨부' : ''}</span></div><div class="box">${esc(m.preview) || '<span class="muted">미리보기 없음</span>'}</div>${dl.length ? `<div class="box tip"><b>찾은 기한</b> ${dl.map(d => `<span class="pill ${d.dday <= 1 ? 'solid' : 'medium'}">${esc(d.date.slice(5))}${d.time ? ' ' + esc(d.time) : ''} ${ddayText(d.dday)}</span>`).join('')}</div>` : ''}<div class="acts">${reply}</div>${actsFor('', {key: action ? action.key : `mail:${m.box}:${m.uid}`, q: relatedQ(m.subject)})}<div class="muted">답장 쓰기 창은 받는 사람·제목이 채워진 채 열리며, 보내기를 눌러야 발송됩니다. 안 읽은 메일이라도 답장 창을 여는 것만으로는 읽음 처리되지 않는지 그룹웨어 동작을 꼭 확인하세요.</div>`};
+    const ur = m.seen ? '' : 'data-unread="1" data-what="메일"';
+    const reply = `<button class="btn primary" data-act="openUrl" data-url="${esc(GW.links.compose('re', m))}" data-title="답장: ${esc(m.subject)}" ${ur}>답장 쓰기</button><button class="btn" data-act="openUrl" data-url="${esc(GW.links.compose('reall', m))}" data-title="전체 답장: ${esc(m.subject)}" ${ur}>전체 답장</button><button class="btn" data-act="openUrl" data-url="${esc(GW.links.compose('fw', m))}" data-title="전달: ${esc(m.subject)}" ${ur}>전달</button><button class="btn" data-act="openUrl" data-url="${esc(S.a.mail.url)}" data-title="받은메일함">메일함에서 원문</button>`;
+    return {title: m.subject || '(제목 없음)', url: S.a.mail.url, body: `${why || ''}<div class="kv"><b>보낸 사람</b><span>${esc(m.from)} &lt;${esc(m.fromEmail)}&gt;</span><b>받은 시각</b><span>${esc(m.date)}</span><b>메일함</b><span>${esc(m.box)}</span><b>상태</b><span>${m.seen ? '읽음' : '안 읽음'}${m.answered ? ' · 답장함' : ''}${m.forwarded ? ' · 전달함' : ''}${m.attach ? ' · 첨부' : ''}</span></div><div class="box">${esc(m.preview) || '<span class="muted">미리보기 없음</span>'}</div>${dl.length ? `<div class="box tip"><b>찾은 기한</b> ${dl.map(d => `<span class="pill ${d.dday <= 1 ? 'solid' : 'medium'}">${esc(d.date.slice(5))}${d.time ? ' ' + esc(d.time) : ''} ${ddayText(d.dday)}</span>`).join('')}</div>` : ''}<div class="acts">${reply}</div>${actsFor('', {key: action ? action.key : `mail:${m.box}:${m.uid}`, q: relatedQ(m.subject)})}<div class="muted">답장 쓰기 창은 받는 사람·제목이 채워진 채 열리고, 보내기를 눌러야 발송됩니다. 작성 중인 내용은 그룹웨어 메일 설정(기본 3분)에 따라 임시보관함에 자동 저장될 수 있습니다. ${m.seen ? '' : '안 읽은 메일은 답장 창을 열 때 읽음으로 바뀔 수 있어 먼저 묻습니다.'}</div>`};
   }
   function searchPane(it) {
     if (!it) return {title: '검색 결과를 찾을 수 없습니다', url: '', body: ''};
@@ -940,6 +976,7 @@ ${S.weekly ? `<h3>주간 업무 실적 초안 <button class="btn sm primary" dat
   const findMail = (box, uid) => [...(S.raw.data.mail?.inbox.records || []), ...(S.raw.data.mail?.otherUnseen || [])].find(m => m.box === box && m.uid === uid);
 
   function selectAction(key, {keepPane = false} = {}) {
+    if (!keepPane && S.sel && S.sel.key !== key && !leavePane()) return;
     S.sel = {type: 'action', key};
     if (!keepPane) { S.pane.url = ''; S.pane.extract = null; S.pane.preview = null; }
     if (S.newKeys.delete(key)) saveLocal();
@@ -949,17 +986,26 @@ ${S.weekly ? `<h3>주간 업무 실적 초안 <button class="btn sm primary" dat
     else renderMain();
     renderPane();
   }
-  function openUrl(url, {title = '', unread = false} = {}) {
+  function openUrl(url, {title = '', unread = false, what = '문서'} = {}) {
     if (!url) return;
-    if (unread && !confirm('아직 열람하지 않은 문서입니다. 처리 창에 열면 그룹웨어에 열람으로 기록됩니다. 열까요?')) return;
+    if (url !== S.pane.url && !leavePane()) return;
+    if (unread && !confirm(`아직 읽지 않은 ${what}입니다. 처리 창에 열면 그룹웨어에 읽음(열람)으로 기록될 수 있습니다. 열까요?`)) return;
     if (!S.sel) S.sel = {type: 'frame', title: title || '그룹웨어 화면', url};
     S.pane.url = url; S.pane.extract = null;
     renderPane();
   }
+  // Would opening this item record a read/열람 in the groupware?
+  function marksRead(x) {
+    if (!x) return false;
+    if (x.type === 'doc') { const d = findDoc(x.ref.kind, x.ref.docId); return !!(d && d.unread); }
+    if (x.type === 'notice') return true;
+    if (x.type === 'mail') { const m = findMail(x.ref.box, x.ref.uid); return !!(m && !m.seen); }
+    return false;
+  }
   function openItem(x) {
-    const d = x.type === 'doc' ? findDoc(x.ref.kind, x.ref.docId) : null;
-    if (x.type === 'mail') { const m = findMail(x.ref.box, x.ref.uid); openUrl(m ? GW.links.compose('re', m) : x.url, {title: x.title}); return; }
-    openUrl(x.url, {title: x.title, unread: !!(d && d.unread)});
+    const what = x.type === 'mail' ? '메일' : x.type === 'notice' ? '게시글' : '문서';
+    if (x.type === 'mail') { const m = findMail(x.ref.box, x.ref.uid); openUrl(m ? GW.links.compose('re', m) : x.url, {title: x.title, unread: marksRead(x), what}); return; }
+    openUrl(x.url, {title: x.title, unread: marksRead(x), what});
   }
   function openWindow(url, x) {
     const d = x && x.type === 'doc' ? findDoc(x.ref.kind, x.ref.docId) : null;
@@ -993,61 +1039,74 @@ ${S.weekly ? `<h3>주간 업무 실적 초안 <button class="btn sm primary" dat
   function startFocus(keys) {
     const list = (keys && keys.length ? keys : queue().filter(x => ['doc', 'mail', 'attendance', 'conflict', 'notice'].includes(x.type)).map(x => x.key));
     if (!list.length) { toast('처리할 항목이 없습니다.'); return; }
-    const unreadN = list.filter(k => { const x = S.a.actions.find(a => a.key === k); const d = x && x.type === 'doc' ? findDoc(x.ref.kind, x.ref.docId) : null; return d && d.unread; }).length;
-    if (unreadN && !S.focusConfirmed && !confirm(`연속 처리를 시작합니다 (${list.length}건).\n원문을 차례로 처리 창에 엽니다. 미열람 문서 ${unreadN}건은 열면 열람으로 기록됩니다. 계속할까요?`)) return;
-    S.focusConfirmed = true;
-    S.focus = {keys: list, i: 0, results: {}};
+    if (!leavePane()) return;
+    S.focus = {keys: list, i: 0, results: {}, busy: false};
     if (S.view !== 'today' && S.view !== 'approval') S.view = 'today';
     focusOpen();
-    toast('연속 처리: 원래 화면에서 처리한 뒤 "처리했음 → 다음"을 누르세요. 그룹웨어에서 실제로 처리됐는지 확인해 드립니다.');
+    toast('연속 처리: 그룹웨어 원래 화면에서 처리한 뒤 아래 초록 버튼을 누르세요. 실제로 처리됐는지 확인해 드립니다.');
   }
+  // Items that would record a read are not opened automatically: the pane shows a gate instead.
   function focusOpen() {
     const f = S.focus;
     const k = f.keys[f.i];
     const x = S.a.actions.find(a => a.key === k);
     S.sel = {type: 'action', key: k};
-    S.pane.extract = null; S.pane.preview = null;
-    if (x) S.pane.url = x.type === 'mail' ? (findMail(x.ref.box, x.ref.uid) ? GW.links.compose('re', findMail(x.ref.box, x.ref.uid)) : x.url) : x.url;
+    S.pane.extract = null; S.pane.preview = null; S.pane.dirty = false;
+    f.gate = false;
+    if (!x) S.pane.url = '';
+    else if (x.type === 'mail') S.pane.url = ''; // 답장·전달·메일함 중 고르게 한다
+    else if (marksRead(x)) { S.pane.url = ''; f.gate = true; }
+    else S.pane.url = x.url;
     render();
   }
   function focusBar() {
     const f = S.focus;
     if (!f) return '';
-    const done = Object.values(f.results).filter(r => r === 'done').length, remain = Object.values(f.results).filter(r => r === 'remain').length;
+    const cnt = r => Object.values(f.results).filter(v => v === r).length;
     const k = f.keys[f.i];
     const x = S.a.actions.find(a => a.key === k);
-    const label = x && x.type === 'doc' ? '처리했음 → 확인하고 다음' : '확인했음 → 다음';
-    return `<div class="fbar"><span class="prog">연속 처리 ${f.i + 1} / ${f.keys.length}${done || remain ? ` · 처리 확인 ${done}${remain ? ` · 아직 남음 ${remain}` : ''}` : ''}</span><button class="btn sm" data-act="focusPrev" ${f.i === 0 ? 'disabled' : ''}>◀ 이전</button><button class="btn sm" data-act="focusSkip">건너뛰기</button><button class="btn ok" data-act="focusNext">${label}</button><button class="btn sm" data-act="focusStop">끝내기</button></div>`;
+    const label = x && x.type === 'doc' ? '처리했음 → 확인하고 다음' : x && x.type === 'mail' ? '답장했음 → 보낸메일 확인하고 다음' : '직접 확인했음 → 다음';
+    const gate = f.gate ? `<div class="box warn" style="margin:0 10px 6px">이 항목은 열면 그룹웨어에 읽음(열람)으로 기록됩니다. <button class="btn sm primary" data-act="focusOpenGate">열고 처리하기</button> <button class="btn sm" data-act="focusSkip">열지 않고 건너뛰기</button></div>` : '';
+    const summary = [cnt('done') ? `처리 확인 ${cnt('done')}` : '', cnt('manual') ? `직접 확인 ${cnt('manual')}` : '', cnt('remain') ? `아직 남음 ${cnt('remain')}` : '', cnt('unsent') ? `답장 못 찾음 ${cnt('unsent')}` : ''].filter(Boolean).join(' · ');
+    return `${gate}<div class="fbar"><span class="prog">연속 처리 ${f.i + 1} / ${f.keys.length}${summary ? ' · ' + summary : ''}</span><button class="btn sm" data-act="focusPrev" ${f.i === 0 || f.busy ? 'disabled' : ''}>◀ 이전</button><button class="btn sm" data-act="focusSkip" ${f.busy ? 'disabled' : ''}>건너뛰기</button><button class="btn ok" data-act="focusNext" ${f.busy ? 'disabled' : ''}>${f.busy ? '<span class="spin"></span> 확인 중…' : label}</button><button class="btn sm" data-act="focusStop" ${f.busy ? 'disabled' : ''}>끝내기</button></div>`;
   }
   async function focusNext(verify = true) {
     const f = S.focus;
-    if (!f) return;
+    if (!f || f.busy) return;
+    if (!leavePane()) return;
     const k = f.keys[f.i];
     const x = S.a.actions.find(a => a.key === k);
-    if (verify && x && x.type === 'doc' && ['distWaiting', 'deptWaiting', 'pending', 'sendWaiting'].includes(x.ref.kind)) {
-      toast('그룹웨어에서 처리됐는지 확인하는 중…');
-      try {
-        const r = await GW.collect({modules: ['approval']});
-        const still = ((r.data.approval?.lists[x.ref.kind] || {}).docs || []).some(d => d.docId === x.ref.docId);
+    f.busy = true; $('#fbar').innerHTML = focusBar();
+    try {
+      if (verify && x && x.type === 'doc' && ['distWaiting', 'deptWaiting', 'pending', 'sendWaiting'].includes(x.ref.kind)) {
+        // Re-read the whole list (up to 200) so that long lists are not misjudged.
+        const r = await GW.approvalPage(x.ref.kind, 1, {size: 200});
+        const still = r.docs.some(d => d.docId === x.ref.docId);
         f.results[k] = still ? 'remain' : 'done';
-        if (S.raw && r.data.approval) { S.raw.data.approval = r.data.approval; S.raw.status.approval = r.status.approval; }
         toast(still ? '아직 그룹웨어 목록에 남아 있습니다. 처리가 저장되지 않았을 수 있습니다.' : '✓ 그룹웨어에서 처리된 것을 확인했습니다.');
-      } catch (e) { f.results[k] = 'unknown'; toast('확인하지 못했습니다: ' + e.message); }
-    } else if (verify && x) { pushUndo('연속 처리 확인'); f.results[k] = 'done'; S.hidden[k] = Date.now(); saveLocal(); }
+      } else if (verify && x && x.type === 'mail') {
+        const m = findMail(x.ref.box, x.ref.uid);
+        const r = await GW.findReply({subject: m ? m.subject : x.title, since: m ? m.date : ''});
+        if (r.found) { pushUndo('연속 처리 확인'); f.results[k] = 'done'; S.hidden[k] = Date.now(); saveLocal(); toast(`✓ 보낸메일함에서 답장을 찾았습니다 (${r.date.slice(5, 16)}).`); }
+        else { f.results[k] = 'unsent'; toast('보낸메일함에서 이 메일의 답장을 찾지 못했습니다. 목록에 남겨 둡니다.'); }
+      } else if (verify && x) { pushUndo('연속 처리 확인'); f.results[k] = 'manual'; S.hidden[k] = Date.now(); saveLocal(); }
+    } catch (e) { f.results[k] = 'unknown'; toast('확인하지 못했습니다: ' + e.message); }
+    f.busy = false;
+    if (!S.focus) return;
     if (f.i >= f.keys.length - 1) { finishFocus(); return; }
     f.i++; focusOpen();
   }
-  function focusPrev() { if (S.focus && S.focus.i > 0) { S.focus.i--; focusOpen(); } }
+  function focusPrev() { if (S.focus && S.focus.i > 0 && !S.focus.busy && leavePane()) { S.focus.i--; focusOpen(); } }
   function finishFocus() {
     const f = S.focus;
-    const done = Object.values(f.results).filter(r => r === 'done').length, remain = f.keys.filter(k => f.results[k] === 'remain');
-    S.focus = null; S.pane.url = ''; S.sel = null;
+    const cnt = r => f.keys.filter(k => f.results[k] === r).length;
+    S.focus = null; S.pane.url = ''; S.sel = null; S.pane.dirty = false;
     if (S.raw) { const a = R.analyze(S.raw, store.get('state', null)); applyUrgentWords(a); S.a = a; }
     render();
-    toast(`연속 처리를 마쳤습니다: 처리 확인 ${done}건${remain.length ? `, 아직 남은 ${remain.length}건` : ''}.`);
+    toast(`연속 처리 끝: 그룹웨어에서 처리 확인 ${cnt('done')}건${cnt('manual') ? ` · 직접 확인 ${cnt('manual')}건` : ''}${cnt('remain') ? ` · 아직 남음 ${cnt('remain')}건` : ''}${cnt('unsent') ? ` · 답장 못 찾음 ${cnt('unsent')}건` : ''}${cnt('skip') ? ` · 건너뜀 ${cnt('skip')}건` : ''}.`);
     refresh({silent: true});
   }
-  function stopFocus() { if (!S.focus) return; finishFocus(); }
+  function stopFocus() { if (!S.focus || S.focus.busy) return; if (!leavePane()) return; finishFocus(); }
 
   // ---------- overlays: palette, help, menus ----------
   let palItems = [], palIndex = 0;
@@ -1127,6 +1186,9 @@ ${S.weekly ? `<h3>주간 업무 실적 초안 <button class="btn sm primary" dat
       const list = await loadForms();
       const fl = $('#formList');
       if (fl) fl.innerHTML = (list || []).slice(0, 10).map(f => `<div class="mi" data-act="openUrl" data-url="${esc(f.url)}" data-title="새 기안: ${esc(f.name)}">📝 ${esc(f.name)} <span class="muted">${f.count ? `${f.count}번 사용` : '추천'}</span></div>`).join('') || '<div class="mi muted">양식이 없습니다.</div>';
+    } else if (which === 'view') {
+      const fsName = {s: '작게', m: '보통', l: '크게', xl: '아주 크게'};
+      $('#overlay').innerHTML = `<div class="menu" data-stop="1"><div class="mh">글자 크기: ${fsName[S.settings.fontSize] || '보통'}</div><div class="mi" data-act="fsUp">가+ 글자 크게</div><div class="mi" data-act="fsDown">가− 글자 작게</div><div class="mi" data-act="theme">${S.settings.theme === 'dark' ? '밝은 테마로' : '어두운 테마로'}</div><div class="mi" data-act="help">? 사용법·용어·단축키</div><div class="mi" data-act="openPalette">Ctrl+K 명령 찾기</div><div class="mi" data-act="view" data-v="settings">설정</div></div>`;
     } else if (which === 'bell') {
       const items = S.activity.slice(-40).reverse();
       $('#overlay').innerHTML = `<div class="menu" data-stop="1"><div class="mh">새로 들어온 항목 (업무센터가 확인한 시각 기준)</div>${items.map(x => `<div class="mi" data-act="bellItem" data-k="${esc(x.key)}"><span class="pill ${x.priority || 'low'}">${PRI[x.priority] || '참고'}</span>${esc(x.title)}<div class="muted">${esc(x.kind)} · ${hhmm(new Date(x.at))}${x.at > S.seenActivity ? ' · 새' : ''}</div></div>`).join('') || '<div class="mi muted">아직 없습니다.</div>'}</div>`;
@@ -1178,9 +1240,10 @@ ${S.weekly ? `<h3>주간 업무 실적 초안 <button class="btn sm primary" dat
       case 'menuNew': openMenu('new'); break;
       case 'menuBell': openMenu('bell'); break;
       case 'bellItem': closeOverlay(); go('today'); selectAction(el.dataset.k); break;
-      case 'fsUp': fontStep(1); break;
-      case 'fsDown': fontStep(-1); break;
-      case 'theme': toggleTheme(); break;
+      case 'fsUp': fontStep(1); if (S.menuOpen === 'view') { S.menuOpen = ''; openMenu('view'); } break;
+      case 'fsDown': fontStep(-1); if (S.menuOpen === 'view') { S.menuOpen = ''; openMenu('view'); } break;
+      case 'theme': toggleTheme(); if (S.menuOpen === 'view') { S.menuOpen = ''; openMenu('view'); } break;
+      case 'openPalette': closeOverlay(); openPalette(''); break;
       case 'palRun': { const c = palItems[Number(el.dataset.i)]; closeOverlay(); if (c) c.run(); break; }
       case 'tileLevel': S.filter.level = S.filter.level === v ? 'all' : v; S.filter.area = 'all'; renderMain(); break;
       case 'tileArea': S.filter.area = S.filter.area === v ? 'all' : v; S.filter.level = 'all'; renderMain(); break;
@@ -1214,27 +1277,29 @@ ${S.weekly ? `<h3>주간 업무 실적 초안 <button class="btn sm primary" dat
       case 'focusStart': startFocus(); break;
       case 'focusList': { const l = S.a.approval.lists[S.apTab]; startFocus(((l && l.docs) || []).map(d => `doc:${S.apTab}:${d.docId}`).filter(k => S.a.actions.some(a => a.key === k))); break; }
       case 'focusNext': focusNext(true); break;
-      case 'focusSkip': if (S.focus) { S.focus.results[S.focus.keys[S.focus.i]] = 'skip'; if (S.focus.i >= S.focus.keys.length - 1) finishFocus(); else { S.focus.i++; focusOpen(); } } break;
+      case 'focusSkip': if (S.focus && !S.focus.busy && leavePane()) { S.focus.results[S.focus.keys[S.focus.i]] = 'skip'; if (S.focus.i >= S.focus.keys.length - 1) finishFocus(); else { S.focus.i++; focusOpen(); } } break;
+      case 'focusOpenGate': if (S.focus) { const x = S.a.actions.find(a => a.key === S.focus.keys[S.focus.i]); S.focus.gate = false; if (x) { S.pane.url = x.url; renderPane(); } } break;
+      case 'menuView': openMenu('view'); break;
       case 'focusPrev': focusPrev(); break;
       case 'focusStop': stopFocus(); break;
       case 'apTab': S.apTab = v; renderMain(); break;
       case 'apMore': { const l = S.a.approval.lists[S.apTab]; const have = l.docs.length + (S.apMore[S.apTab] || []).length; try { const r = await GW.approvalPage(S.apTab, Math.floor(have / 30) + 1); S.apMore[S.apTab] = [...(S.apMore[S.apTab] || []), ...r.docs.filter(d => !l.docs.some(x => x.docId === d.docId))]; } catch (err) { toast(err.message); } renderMain(); break; }
-      case 'selDoc': S.sel = {type: 'doc', kind: el.dataset.kind, docId: el.dataset.id}; S.pane.url = ''; S.pane.extract = null; S.pane.preview = null; renderMain(); renderPane(); break;
+      case 'selDoc': if (!leavePane()) break; S.sel = {type: 'doc', kind: el.dataset.kind, docId: el.dataset.id}; S.pane.url = ''; S.pane.extract = null; S.pane.preview = null; renderMain(); renderPane(); break;
       case 'reloadRouting': toast('배부·접수 이력을 읽는 중…'); await loadRouting(true); render(); break;
       case 'mailFilter': S.mailFilter = v; renderMain(); break;
       case 'mailGroup': S.mailGroup = !S.mailGroup; renderMain(); break;
-      case 'selMail': S.sel = {type: 'mail', box: el.dataset.box, uid: el.dataset.uid}; S.pane.url = ''; renderMain(); renderPane(); break;
+      case 'selMail': if (!leavePane()) break; S.sel = {type: 'mail', box: el.dataset.box, uid: el.dataset.uid}; S.pane.url = ''; renderMain(); renderPane(); break;
       case 'selMailSearch': { const it = (S.mailSearch.res && S.mailSearch.res.groups.mail.items || []).find(x => x.uid === el.dataset.uid); if (it) { S.sel = {type: 'search', item: it}; S.pane.url = ''; renderPane(); } break; }
       case 'clearMailSearch': S.mailSearch = {kw: '', res: null}; renderMain(); break;
       case 'stype': S.search.types = S.search.types.includes(v) ? S.search.types.filter(t => t !== v) : [...S.search.types, v]; renderMain(); break;
       case 'doSearch': S.search.kw = ($('#sq') || {}).value?.trim() || S.search.kw; S.search.period = ($('#speriod') || {}).value || ''; runSearch(); break;
       case 'searchMore': { const t = el.dataset.t; const s = S.search; const g = s.res.groups[t]; const page = (s.more[t] || 1) + 1; try { const r = await GW.search(s.kw, {types: [t], pageSize: 10, page, from: periodFrom(s.period)}); const add = r.groups[t].items; g.items = [...g.items, ...add]; s.more[t] = page; } catch (err) { toast(err.message); } renderMain(); break; }
-      case 'selSearch': { const g = S.search.res && S.search.res.groups[el.dataset.t]; const it = g && g.items.find(x => (x.docId || x.uid || x.id || x.fileId) === el.dataset.id); if (it) { S.sel = {type: 'search', item: it}; S.pane.url = ''; S.pane.extract = null; renderMain(); renderPane(); } break; }
+      case 'selSearch': { if (!leavePane()) break; const g = S.search.res && S.search.res.groups[el.dataset.t]; const it = g && g.items.find(x => (x.docId || x.uid || x.id || x.fileId) === el.dataset.id); if (it) { S.sel = {type: 'search', item: it}; S.pane.url = ''; S.pane.extract = null; renderMain(); renderPane(); } break; }
       case 'related': S.search.kw = el.dataset.q; runSearch(['doc', 'board', 'mail', 'file']); break;
-      case 'openUrl': closeOverlay(); openUrl(el.dataset.url, {title: el.dataset.title || el.textContent.trim(), unread: el.dataset.unread === '1'}); break;
+      case 'openUrl': closeOverlay(); openUrl(el.dataset.url, {title: el.dataset.title || el.textContent.trim(), unread: el.dataset.unread === '1', what: el.dataset.what || '문서'}); break;
       case 'copy': copyText(v); break;
       case 'paneExpand': S.pane.expanded = !S.pane.expanded; renderPane(); break;
-      case 'closePane': if (S.focus) stopFocus(); S.sel = null; S.pane.url = ''; S.pane.expanded = false; render(); break;
+      case 'closePane': if (S.focus) { stopFocus(); break; } if (!leavePane()) break; S.sel = null; S.pane.url = ''; S.pane.expanded = false; render(); break;
       case 'todoFromSel': { const t = selInfo(); const x = selectedAction(); addTodo(t.title, x && x.deadline && x.deadline.date || '', x ? x.kind : '업무센터 항목', t.url, x ? x.key : ''); break; }
       case 'todoFromExtract': { const nx = S.pane.extract && R.nextDeadline(S.pane.extract.deadlines); const t = selInfo(); if (nx) addTodo(t.title, nx.date, '원문 기한 자동 추출', t.url); break; }
       case 'boardCard': { const k = el.dataset.k; if (path.some(n => n && n.tagName === 'BUTTON')) break; if (k.startsWith('todo:')) { const t = S.todos.find(x => `todo:${x.id}` === k); if (t && t.url) { S.sel = {type: 'frame', title: t.title, url: t.url}; openUrl(t.url, {title: t.title}); } } else { go('today'); selectAction(k); } break; }
@@ -1251,7 +1316,7 @@ ${S.weekly ? `<h3>주간 업무 실적 초안 <button class="btn sm primary" dat
       case 'budgetMonth': { const m = S.budget.month === v ? '' : v; if (!S.budget.ledger || S.budget.ledger.bgtCd !== '__ALL') { await loadLedgerAll(); } S.budget.month = m; renderMain(); break; }
       case 'ledgerAll': loadLedgerAll(); break;
       case 'budgetMonthClear': S.budget.month = ''; renderMain(); break;
-      case 'ledgerRow': { const r = S.budget.ledger.rows[Number(el.dataset.i)]; S.sel = {type: 'ledger', row: r}; S.pane.url = ''; renderPane(); break; }
+      case 'ledgerRow': { if (!leavePane()) break; const r = S.budget.ledger.rows[Number(el.dataset.i)]; S.sel = {type: 'ledger', row: r}; S.pane.url = ''; renderPane(); break; }
       case 'findDocNo': findAndOpenDocNo(el.dataset.no, el.dataset.t); break;
       case 'csvBudget': { const t = S.budget.table; download(`예산_${t.project}_${today()}.csv`, R.toCsv(t.rows, [{label: '구분', key: 'level'}, {label: '코드', key: 'code'}, {label: '과목', key: 'name'}, {label: '예산', key: 'budget'}, {label: '집행', key: 'executed'}, {label: '잔액', key: 'balance'}, {label: '집행률(%)', key: 'rate'}]), 'text/csv;charset=utf-8'); break; }
       case 'richBudget': { const t = S.budget.table; const html = `<table border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse;font-size:10pt"><tr><th>과목</th><th>예산</th><th>집행</th><th>잔액</th><th>집행률</th></tr>${t.rows.map(r => `<tr><td>${esc(r.level)} ${esc(r.name)}</td><td align="right">${won(r.budget)}</td><td align="right">${won(r.executed)}</td><td align="right">${won(r.balance)}</td><td align="right">${pct(r.rate)}</td></tr>`).join('')}</table>`; copyRich(html, t.rows.map(r => `${r.level} ${r.name}\t${won(r.budget)}\t${won(r.executed)}\t${won(r.balance)}\t${pct(r.rate)}`).join('\n')); break; }

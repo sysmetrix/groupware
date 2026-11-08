@@ -264,10 +264,39 @@ test('deadline mails: unanswered ones rise, answered ones stay low, leave-day co
   const open = a.actions.find(x => x.type === 'mail' && x.title === '자료 제출 요청(~11/12)');
   const answered = a.actions.find(x => x.ref && x.ref.uid === '7');
   assert.equal(open.kind, '기한 있는 메일');
-  assert.equal(answered.kind, '기한 있는 메일(답장함)');
-  assert.equal(answered.priority, 'low');
+  assert.match(answered.kind, /답장함/);
+  assert.notEqual(answered.priority, 'high');
+  assert.ok(answered.score < open.score);
   const conflict = a.actions.find(x => x.type === 'conflict');
   assert.ok(conflict, 'deadline on a leave day is flagged');
   assert.ok(conflict.score > open.score);
   assert.ok(a.actions.filter(x => x.priority === 'high').length <= 6);
+});
+
+test('v3.1 rules: Re: mails are not my deadline, one swap explains one absence, plain negatives stay numeric', () => {
+  const raw = fixture();
+  raw.data.mail.inbox.records.push({uid: '8', box: 'INBOX', subject: 'Re: 「지침」검토 요청(~11/13)', from: '동료', date: '2026-11-08 10:00:00', seen: true, answered: false, forwarded: false, attach: false, preview: ''});
+  const a = analyze(raw, null, NOW);
+  assert.ok(!a.actions.some(x => x.ref && x.ref.uid === '8'), 'read Re: mail is not an action');
+  assert.ok(!a.deadlines.some(x => x.title.startsWith('Re:')), 'Re: mail is not a deadline');
+  const days = [
+    {date: '20261101', workType: '근무일대체', result: '정상근무', holiday: true},
+    {date: '20261102', result: '결근', status: '대기', holiday: false, applied: false},
+    {date: '20261104', result: '결근', status: '대기', holiday: false, applied: false},
+  ];
+  const an = attendanceAnomalies(days, {now: NOW});
+  assert.equal(an.find(x => x.date === '20261102').nearSwap, '20261101');
+  assert.equal(an.find(x => x.date === '20261104').nearSwap, '');
+  assert.equal(an.find(x => x.date === '20261104').priority, 'high');
+  assert.equal(toCsv([{a: -1500, b: '=1+1'}], [{label: 'A', key: 'a'}, {label: 'B', key: 'b'}]), '\uFEFFA,B\r\n-1500,\'=1+1');
+});
+
+test('routing ignores common place words and needs a meaningful topic match', () => {
+  const hist = [
+    {title: '2026 부천 교육 대토론회 협조 요청', sendOrg: '부천시지속가능발전협의회', sendDeptCode: '1', toDept: '소사청소년센터', date: '2026-10-30 10:00:00'},
+    {title: '2026 부천 교육 대토론회 협조 요청', sendOrg: '부천시지속가능발전협의회', sendDeptCode: '1', toDept: '산울림청소년센터', date: '2026-10-30 10:00:00'},
+  ];
+  const rec = recommendRouting({title: '[협조] 2026 부천 미래+클 공유학교 성과 공유회 운영계획 안내 및 참여 협조', sendOrg: '경기도부천교육지원청', sendDeptCode: '9'}, hist);
+  assert.equal(rec.length, 0);
+  assert.equal(rec.group, null);
 });

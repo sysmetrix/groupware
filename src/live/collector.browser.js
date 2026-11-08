@@ -15,7 +15,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '3.0.0';
+  const VERSION = '3.1.0';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
@@ -490,6 +490,18 @@
     return {project, code, year: y, months: res};
   }
 
+  // Did I send a reply to this mail? Looks for "Re:/RE:/회신:" + same subject in 보낸메일함 after `since`.
+  async function findReply({subject = '', since = ''} = {}) {
+    const boxes = arr((await call('/mail/mail000A01')).mailboxList);
+    const sent = boxes.find(b => b.name === 'SENT');
+    if (!sent) return {checked: false};
+    const d = await call('/mail/mail003A01', {boxName: 'SENT', mainApiCode: 'mail003A01', mboxSeq: sent.mboxSeq, page: 1, pageSize: 50, sort: 'rfc822date', sortType: 'desc', listType: '', showType: '', seen: false});
+    const norm = s => String(s || '').replace(/^\s*((re|fw|fwd|회신|답장|전달)\s*[:：]\s*)+/i, '').replace(/\s+/g, '').toLowerCase();
+    const want = norm(subject);
+    const hit = arr(d && d.Records).find(r => norm(r.subject) === want && (!since || str(r.tooltipDate || r.rfc822date, 25) >= since));
+    return {checked: true, found: !!hit, subject: hit ? mask(hit.subject, 200) : '', date: hit ? str(hit.tooltipDate || hit.rfc822date, 25) : '', to: hit ? str(hit.toAddrName, 60) : ''};
+  }
+
   async function submittedRange({days = 7, size = 100} = {}) {
     const ctx = context();
     const now = new Date();
@@ -526,7 +538,7 @@
   }
 
   window.BWYFGW = Object.freeze({
-    version: VERSION, collect, call, search, budgetProject, budgetLedger, budgetMonthly, attendanceDays, routingHistory, submittedRange, approvalPage, docPreview, frequentForms,
+    version: VERSION, collect, call, search, budgetProject, budgetLedger, budgetMonthly, attendanceDays, routingHistory, submittedRange, approvalPage, docPreview, frequentForms, findReply,
     context: () => { const c = context(); return {name: c.name, deptName: c.deptName, compName: c.compName, duty: c.duty, position: c.position}; },
     readOnlyEndpoints: () => [...READ_ONLY], routes: ROUTES, links: LINKS, searchLabels: SEARCH_LABELS, defaults: DEFAULTS,
   });

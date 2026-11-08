@@ -50,7 +50,8 @@ function docLink(raw, list) { return list?.url || raw?.data?.approval?.url || ra
 
 // Every deadline-like expression in a longer text (document body, mail preview).
 // A date counts only when it is introduced as a deadline (~, 까지, 기한, 마감, 제출, 회신, 신청) and ends like a date.
-export function extractAllDeadlines(text, now = new Date()) {
+// strict: for short previews, only explicit deadline words (~, 까지, 기한, 마감) count.
+export function extractAllDeadlines(text, now = new Date(), {strict = false} = {}) {
   const s = String(text || '').replace(/\s+/g, ' ');
   const found = [];
   const re = /(?:(20\d{2})\s*[.\-/년]\s*)?(\d{1,2})\s*(?:[./]|월)\s*(\d{1,2})(?=\s*(?:\.|일|\(|까지|\s*\d{1,2}:\d{2}|$|[^\d부개명건회차]))\s*\.?\s*(?:일)?\s*(?:\(([월화수목금토일])\))?\s*(\d{1,2}:\d{2})?\s*(까지|마감|한|제출)?/g;
@@ -59,7 +60,7 @@ export function extractAllDeadlines(text, now = new Date()) {
     const lead = s.slice(Math.max(0, m.index - 14), m.index);
     const tail = s.slice(m.index + m[0].length, m.index + m[0].length + 4);
     if (/^\s*[~\-–]\s*\d/.test(tail)) continue; // start of a range: the end date is the deadline
-    const isDeadline = /까지|마감|제출/.test(m[0]) || /~\s*$|기한|마감|제출|회신|신청|접수/.test(lead);
+    const isDeadline = strict ? (/까지|마감/.test(m[0]) || /~\s*$|기한|마감/.test(lead)) : (/까지|마감|제출/.test(m[0]) || /~\s*$|기한|마감|제출|회신|신청|접수/.test(lead));
     if (!isDeadline) continue;
     const month = Number(m[2]), day = Number(m[3]);
     if (month < 1 || month > 12 || day < 1 || day > 31) continue;
@@ -86,6 +87,13 @@ export function attendanceAnomalies(days = [], {now = new Date(), leaves = []} =
     if (u.days >= 0.75) for (let d = dayNumber(fmtYmd(u.start)); d <= dayNumber(fmtYmd(u.end || u.start)); d++) covered.add(new Date(d * 86400000).toISOString().slice(0, 10).replace(/-/g, ''));
   }
   const swaps = days.filter(r => /근무일대체|대체/.test(r.workType || '') || /근무일대체/.test(r.item || '')).map(r => r.date);
+  // One 근무일대체 can explain only one absence: pair each swap with the nearest unexplained absence.
+  const candidates = days.filter(r => r && !r.holiday && !/휴일/.test(r.result || '') && /결근|미출근/.test(r.result || '') && !r.applied && !covered.has(r.date)).map(r => r.date);
+  const swapFor = new Map();
+  for (const s of swaps) {
+    const best = candidates.filter(c => !swapFor.has(c) && Math.abs(dayNumber(fmtYmd(c)) - dayNumber(fmtYmd(s))) <= 7).sort((a, b) => Math.abs(dayNumber(fmtYmd(a)) - dayNumber(fmtYmd(s))) - Math.abs(dayNumber(fmtYmd(b)) - dayNumber(fmtYmd(s))))[0];
+    if (best) swapFor.set(best, s);
+  }
   const out = [];
   for (const r of days) {
     if (!r || r.holiday || /휴일/.test(r.result || '')) continue;
@@ -95,7 +103,7 @@ export function attendanceAnomalies(days = [], {now = new Date(), leaves = []} =
     if (r.applied && r.status === '승인') continue; // covered by an approved request (외출·반차 등)
     if (covered.has(r.date)) continue; // approved full-day leave on that day
     const absent = /결근|미출근/.test(r.result);
-    const nearSwap = swaps.find(s => Math.abs(dayNumber(fmtYmd(s)) - dayNumber(fmtYmd(r.date))) <= 7 && s !== r.date);
+    const nearSwap = swapFor.get(r.date) || '';
     const hints = [];
     if (nearSwap) hints.push(`${fmtYmd(nearSwap).slice(5)} 근무일대체와 연결된 날일 수 있음`);
     if (r.applied) hints.push(`근태신청 ${r.status || '진행 중'}`);
@@ -108,13 +116,15 @@ export function attendanceAnomalies(days = [], {now = new Date(), leaves = []} =
 
 // Suggest where an incoming document should go, from past distribution/receipt history.
 // Honest numbers: "비슷한 문서 n건 중 k건".
-const STOP = /^(20\d{2}년?|\d+|안내|요청|알림|관련|제출|협조|실시|결과|계획|참석|회신|보고|개최|운영|및|등|위한|대한|2026|2025)$/;
+const STOP = /^(20\d{2}년?|\d+월?|안내|요청|알림|관련|제출|협조|실시|결과|계획|참석|회신|보고|개최|운영|및|등|위한|대한|부천|부천시|경기도|경기|재단|여성청소년재단|부천여성청소년재단|협조요청|참여|프로그램|사업)$/;
 const tokens = t => new Set(String(t || '').replace(/[\[\]()「」『』【】<>"'“”‘’·,.:;!?~\-_/]/g, ' ').split(/\s+/).filter(w => w.length >= 2 && !STOP.test(w)));
 export function recommendRouting(doc, history = [], {target = 'toDept', limit = 3} = {}) {
   const out = [];
   out.group = null; out.similar = 0;
   if (!doc || !history.length) return out;
   const want = tokens(doc.title);
+  // Rare words count more than words that appear in many past titles (IDF).
+  const df = new Map();
   const byDoc = new Map();
   for (const h of history) {
     if (!h[target]) continue;
@@ -123,15 +133,18 @@ export function recommendRouting(doc, history = [], {target = 'toDept', limit = 
     e.targets.add(h[target]);
     byDoc.set(key, e);
   }
+  for (const e of byDoc.values()) for (const w of tokens(e.title)) df.set(w, (df.get(w) || 0) + 1);
+  const N = Math.max(1, byDoc.size);
+  const idf = w => Math.log(1 + N / (df.get(w) || 1));
   const similar = [];
   for (const e of byDoc.values()) {
     const have = tokens(e.title);
-    let overlap = 0;
-    for (const w of want) if (have.has(w)) overlap++;
+    let overlap = 0, weight = 0;
+    for (const w of want) if (have.has(w)) { overlap++; weight += idf(w); }
     const sameDept = !!(doc.sendDeptCode && doc.sendDeptCode === e.sendDeptCode);
     const sameOrg = !!(doc.sendOrg && doc.sendOrg === e.sendOrg);
-    if (!overlap) continue; // topic must match; sender alone is not evidence enough
-    similar.push({...e, overlap, sameDept, score: overlap * 2 + (sameDept ? 3 : sameOrg ? 1 : 0)});
+    if (!overlap || weight < 2.2) continue; // topic must match on a meaningful word; sender alone is not evidence
+    similar.push({...e, overlap, weight, sameDept, score: weight + (sameDept ? 3 : sameOrg ? 1 : 0)});
   }
   similar.sort((a, b) => b.score - a.score || String(b.date).localeCompare(String(a.date)));
   const pool = similar.slice(0, 12);
@@ -150,7 +163,8 @@ export function recommendRouting(doc, history = [], {target = 'toDept', limit = 
       reasons: [r.sameDept ? '같은 발송 부서' : '', '제목 주제 일치'].filter(Boolean), examples: r.examples});
   }
   const best = pool[0];
-  out.group = best && best.targets.size >= 2 ? {title: best.title, date: best.date, from: best.from, targets: [...best.targets]} : null;
+  // Show "동시 배부" only when the closest past document is really close (strong word match).
+  out.group = best && best.targets.size >= 2 && (best.weight >= 3 || (best.sameDept && best.weight >= 2.2)) ? {title: best.title, date: best.date, from: best.from, targets: [...best.targets], strong: best.sameDept} : null;
   return out;
 }
 
@@ -183,7 +197,7 @@ export function weeklyReport({submitted = [], receipts = [], me = '', from = '',
 export function toCsv(rows, columns) {
   const cell = v => {
     let s = String(v ?? '');
-    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; // spreadsheet formula injection guard
+    if (/^[=+\-@\t\r]/.test(s) && !/^-?\d[\d,]*(\.\d+)?$/.test(s)) s = "'" + s; // formula injection guard (plain negative numbers stay numbers)
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   return '\uFEFF' + [columns.map(c => cell(c.label)).join(','), ...rows.map(r => columns.map(c => cell(typeof c.value === 'function' ? c.value(r) : r[c.key])).join(','))].join('\r\n');
@@ -193,7 +207,15 @@ export function toCsv(rows, columns) {
 const URGENT_WORDS = /긴급|필독|즉시|오늘까지|금일|시급|독촉|재요청/;
 const REQUEST_WORDS = /요청|제출|회신|협조|검토|확인|조사|취합|의견|신청|작성/;
 const PROMO_WORDS = /홍보|문화혜택|공연|모집|소식|초대|이벤트|할인|뉴스|웨비나|박람회|공모전 안내/;
-const BASE = {mailAnswered: 14, pending: 62, rejected: 70, deptWaiting: 50, distWaiting: 48, sendWaiting: 34, viewing: 12, mailUnreadAsk: 46, mailUnread: 26, mailOther: 10, mailDeadline: 44, mailReply: 22, notice: 10, leave: 8, attHigh: 48, attMedium: 30, conflict: 85};
+const BASE = {mailAnswered: 30, conflictAnswered: 30, mailReplyIn: 12, pending: 62, rejected: 70, deptWaiting: 50, distWaiting: 48, sendWaiting: 34, viewing: 12, mailUnreadAsk: 46, mailUnread: 26, mailOther: 10, mailDeadline: 44, mailReply: 22, notice: 10, leave: 8, attHigh: 58, attMedium: 42, conflict: 85};
+// Working days between a date text and now (weekends skipped).
+function bizDays(dateText, now) {
+  const t = Date.parse(String(dateText || '').replace(' ', 'T') + '+09:00');
+  if (!Number.isFinite(t)) return 0;
+  let n = 0;
+  for (let d = new Date(t + 9 * 3600_000); d.getTime() + 86400000 <= now.getTime() + 9 * 3600_000; d = new Date(d.getTime() + 86400000)) { const w = d.getUTCDay(); if (w !== 0 && w !== 6) n++; }
+  return n;
+}
 function scoreAction(a, now) {
   let s = BASE[a.base] ?? 20;
   const why = [];
@@ -203,7 +225,11 @@ function scoreAction(a, now) {
     if (add) { s += add; why.push(`기한 ${n <= 0 ? '오늘·지남' : `D-${n}`}`); }
   }
   const waited = Number.isFinite(a.waitDays) ? Math.max(0, Math.floor(a.waitDays)) : 0;
-  if (waited && ['pending', 'deptWaiting', 'distWaiting', 'sendWaiting'].includes(a.base)) { s += Math.min(15, waited * 3); if (waited >= 2) why.push(`${waited}일 대기`); }
+  if (waited && ['pending', 'deptWaiting', 'distWaiting', 'sendWaiting'].includes(a.base)) {
+    const biz = a.bizWait ?? waited;
+    s += biz >= 3 ? 22 : Math.min(12, biz * 4);
+    if (waited >= 2) why.push(biz >= 3 ? `근무일 ${biz}일 대기` : `${waited}일 대기`);
+  }
   if (URGENT_WORDS.test(a.title)) { s += 20; why.push('긴급 표현'); }
   if (PROMO_WORDS.test(a.title) && !REQUEST_WORDS.test(a.title)) { s -= 22; why.push('홍보·안내성'); }
   return {score: s, why};
@@ -219,7 +245,7 @@ export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6} = {}) 
   const deadlines = [];
   const addDeadline = (title, source, url, key = '', preview = '') => {
     let info = extractDeadlineInfo(title, now);
-    if (!info.date && preview) { const all = extractAllDeadlines(preview, now); const nx = nextDeadline(all); if (nx) info = {date: nx.date, time: nx.time}; }
+    if (!info.date && preview) { const all = extractAllDeadlines(preview, now, {strict: true}); const nx = nextDeadline(all); if (nx) info = {date: nx.date, time: nx.time}; }
     if (!info.date) return null;
     const left = dday(info.date, now);
     if (left < -1 || left > 60) return null;
@@ -237,7 +263,7 @@ export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6} = {}) 
     for (const doc of l.docs) {
       const k = `doc:${key}:${doc.docId}`;
       const deadline = addDeadline(doc.title, l.label, doc.url || docLink(raw, l), k);
-      push({key: k, type: 'doc', base: key, ref: {kind: key, docId: doc.docId}, area: '결재', kind: l.label, title: doc.title, detail: [verb, doc.sender || doc.drafter, doc.docNo, doc.attachments ? `첨부 ${doc.attachments}` : ''].filter(Boolean).join(' · '), when: doc.date, waitDays: ageDays(doc.date, now), deadline, url: doc.url || docLink(raw, l), listUrl: l.url, isNew: hasPrev && !prevDocs.has(`${key}:${doc.docId}`)});
+      push({key: k, type: 'doc', base: key, ref: {kind: key, docId: doc.docId}, area: '결재', kind: l.label, title: doc.title, detail: [verb, doc.sender || doc.drafter, doc.docNo, doc.attachments ? `첨부 ${doc.attachments}` : ''].filter(Boolean).join(' · '), when: doc.date, waitDays: ageDays(doc.date, now), bizWait: bizDays(doc.date, now), deadline, url: doc.url || docLink(raw, l), listUrl: l.url, isNew: hasPrev && !prevDocs.has(`${key}:${doc.docId}`)});
     }
   };
   docAction('pending', '내 결재 차례');
@@ -260,6 +286,12 @@ export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6} = {}) 
   const recentAction = uniqueMails.filter(m => m.seen && !m.answered && !m.forwarded && ageDays(m.date, now) <= 3 && ACTION_WORDS.test(m.subject) && !NOISE_WORDS.test(m.subject) && !/^re:|^회신:|^답장:/i.test(m.subject.trim()));
   for (const m of uniqueMails) {
     const k = `mail:${m.box}:${m.uid}`;
+    // "Re:/FW:" mails are replies to a request (often my own): not my deadline.
+    const isReplyMail = /^\s*(re|fw|fwd|회신|답장|전달)\s*[:：]/i.test(m.subject || '');
+    if (isReplyMail) {
+      if (!m.seen && !NOISE_WORDS.test(m.subject)) push({key: k, type: 'mail', base: 'mailReplyIn', ref: {box: m.box, uid: m.uid}, area: '메일', kind: '내 요청에 온 회신', title: m.subject, detail: `${m.from} · 안 읽음`, when: m.date, url: d.mail.url, isNew: hasPrev && !prevMail.has(`${m.box}:${m.uid}`)});
+      continue;
+    }
     const dl = ageDays(m.date, now) <= 30 ? addDeadline(m.subject, '메일', d.mail?.url, k, m.preview) : null;
     const hasDeadline = dl && dl.dday >= -1 && dl.dday <= 7 && !NOISE_WORDS.test(m.subject);
     const unread = !m.seen && !NOISE_WORDS.test(m.subject);
@@ -268,7 +300,7 @@ export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6} = {}) 
     const replied = m.answered || m.forwarded;
     // A deadline mail I already answered is most likely done: keep it visible but low.
     const base = hasDeadline ? (replied ? 'mailAnswered' : 'mailDeadline') : unread ? (ACTION_WORDS.test(m.subject) ? 'mailUnreadAsk' : m.box === 'INBOX' ? 'mailUnread' : 'mailOther') : 'mailReply';
-    const kind = hasDeadline ? (replied ? '기한 있는 메일(답장함)' : '기한 있는 메일') : unread ? (m.box === 'INBOX' ? '안 읽은 메일' : `안 읽은 메일(${m.box})`) : '답장했는지 확인';
+    const kind = hasDeadline ? (replied ? '기한 메일 · 답장함(제출까지 끝났는지 확인)' : '기한 있는 메일') : unread ? (m.box === 'INBOX' ? '안 읽은 메일' : `안 읽은 메일(${m.box})`) : '답장했는지 확인';
     const flags = [m.seen ? '읽음' : '안 읽음', m.answered ? '답장함' : '', m.forwarded ? '전달함' : '', m.attach ? '첨부' : ''].filter(Boolean).join(' · ');
     push({key: k, type: 'mail', base, ref: {box: m.box, uid: m.uid}, area: '메일', kind, title: m.subject || '(제목 없음)', detail: `${m.from} · ${flags}`, when: m.date, deadline: dl, url: d.mail.url, isNew: hasPrev && !prevMail.has(`${m.box}:${m.uid}`)});
   }
@@ -290,8 +322,8 @@ export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6} = {}) 
     const u = offDays.get(dl.date);
     if (!u || dl.dday < 0) continue;
     const owner = actions.find(a => a.key === dl.key);
-    if (owner && owner.base === 'mailAnswered') continue; // already answered
-    push({key: `conflict:${dl.date}:${dl.key || dl.title.slice(0, 20)}`, type: 'conflict', base: 'conflict', ref: {key: dl.key}, area: '기한', kind: '휴가일 마감', title: dl.title, detail: `${dl.date.slice(5)}${dl.time ? ' ' + dl.time : ''} 마감인데 그날 ${u.kind} · 전날까지 처리하세요`, when: dl.date, deadline: {date: dl.date, time: dl.time, dday: dl.dday}, url: dl.url, isNew: false});
+    const answered = owner && owner.base === 'mailAnswered'; // keep the warning, but lower
+    push({key: `conflict:${dl.date}:${dl.key || dl.title.slice(0, 20)}`, type: 'conflict', base: answered ? 'conflictAnswered' : 'conflict', ref: {key: dl.key}, area: '기한', kind: '휴가일 마감', title: dl.title, detail: `${dl.date.slice(5)}${dl.time ? ' ' + dl.time : ''} 마감인데 그날 ${u.kind}${answered ? ' · 답장은 했음, 제출까지 끝났는지 확인' : ' · 전날까지 처리하세요'}`, when: dl.date, deadline: {date: dl.date, time: dl.time, dday: dl.dday}, url: dl.url, isNew: false});
   }
 
   // Attendance (cross-checked with approved leave and 근무일대체)
