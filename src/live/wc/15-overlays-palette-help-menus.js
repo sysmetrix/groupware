@@ -74,16 +74,22 @@
     if (S.menuOpen === which) { closeOverlay(); return; }
     S.menuOpen = which; S.paletteOpen = false; S.helpOpen = false; S.coach = null;
     if (which === 'new') {
-      $('#overlay').innerHTML = `<div class="menu" data-stop="1" style="min-width:320px">
-        <div class="mh">메일 작성</div>
-        <div class="mi" data-act="openUrl" data-url="${esc(GW.links.compose('plain'))}" data-title="새 메일 쓰기">✉ 새 메일 쓰기</div>
-        
-        <div class="mh">근태·출장·휴가 신청</div>
-        <div class="mi" data-act="openUrl" data-url="${esc(GW.links.route(GW.routes.attendanceRequest))}" data-title="근태신청">🚗 근태신청 (휴가·출장·연장·대체근무)</div>
+      $('#overlay').innerHTML = `<div class="menu" data-stop="1" style="min-width:340px">
+        <div class="mh">⚡ 결재 직전 자동 완성 기안</div>
+        <div class="mi" data-act="quickDraft" data-t="result">📝 결과보고서 기안 (서식·예산 자동 완성)</div>
+        <div class="mi" data-act="quickDraft" data-t="plan">📝 운영계획서 기안 (4단계 서식 자동 완성)</div>
+        <div class="mi" data-act="quickDraft" data-t="budget">📊 예산집행품의서 기안 (실시간 잔액표 삽입)</div>
 
-        <div class="mh">자주 쓰는 일반 결재 기안</div>
+        <div class="mh">🚗 근태·출장·휴가 신청</div>
+        <div class="mi" data-act="openUrl" data-url="${esc(GW.links.route(GW.routes.attendanceRequest))}" data-title="근태신청">🚗 관내·관외 출장신청</div>
+        <div class="mi" data-act="openUrl" data-url="${esc(GW.links.route(GW.routes.attendanceRequest))}" data-title="근태신청">🌴 연차·반차·대체휴가 신청</div>
+
+        <div class="mh">일반 결재 양식</div>
         <div id="formList"><div class="mi muted"><span class="spin"></span> 양식을 읽는 중…</div></div>
         <div class="mi" data-act="openUrl" data-url="${esc(GW.links.route(GW.routes.draft))}" data-title="결재작성">📂 전체 결재 양식함에서 고르기</div>
+
+        <div class="mh">메일 작성</div>
+        <div class="mi" data-act="openUrl" data-url="${esc(GW.links.compose('plain'))}" data-title="새 메일 쓰기">✉ 새 메일 쓰기</div>
       </div>`;
       const list = await loadForms();
       const fl = $('#formList');

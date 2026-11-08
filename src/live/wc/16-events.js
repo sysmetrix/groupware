@@ -33,6 +33,8 @@
       case 'coach': startCoach(); break;
       case 'coachNext': coachNext(); break;
       case 'coachEnd': endCoach(); break;
+      case 'mailToDraft': mailToDraft(el.dataset.uid); break;
+      case 'quickDraft': autoStartDraft(el.dataset.t); break;
       case 'autoFillMail': autoFillMail(v); break;
       case 'autoFillDraft': autoFillDraft(v); break;
       case 'autoFillAtt': autoFillAtt(); break;

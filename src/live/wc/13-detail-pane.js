@@ -206,7 +206,7 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
     return {title: m.subject || '(제목 없음)', url: GW.links.compose('re', m), body: `${why || ''}<div class="kv"><b>보낸 사람</b><span>${esc(m.from)} <span class="muted">${esc(m.fromEmail)}</span></span><b>받은 시각</b><span>${esc(m.date.slice(0, 16))}</span>${to ? `<b>받는 사람</b><span title="${esc(to)}">${esc(to.length > 90 ? to.slice(0, 90) + '…' : to)}</span>` : ''}<b>상태</b><span>${m.seen ? '읽음' : '안 읽음'}${m.answered ? ' · 답장함' : ''}${m.forwarded ? ' · 전달함' : ''}</span></div>
 ${c && !c.error ? '' : `<div class="body-text open" style="max-height:120px">${esc((m.preview || '').replace(/대용량 파일첨부[\s\S]*?보관\)/, '').trim()) || '미리보기 없음'}</div>`}
 ${mailFilesBox(m)}
-<div class="acts"><button class="btn primary" data-act="openUrl" data-url="${esc(GW.links.compose('re', m))}" data-title="답장: ${esc(m.subject)}" ${ur}>${ic('mail')}답장 쓰기</button>${reply}${action ? `<button class="btn icon" data-act="rowMenu" data-k="${esc(action.key)}" aria-label="더 보기">${ic('more')}</button>` : ''}</div>
+<div class="acts"><button class="btn primary" data-act="openUrl" data-url="${esc(GW.links.compose('re', m))}" data-title="답장: ${esc(m.subject)}" ${ur}>${ic('mail')}답장 쓰기</button><button class="btn" data-act="mailToDraft" data-uid="${esc(m.uid)}" title="메일 내용을 바탕으로 기안문 서식을 결재 직전 상태로 자동 완성합니다">${ic('doc')}이 메일로 기안문 작성</button>${reply}${action ? `<button class="btn icon" data-act="rowMenu" data-k="${esc(action.key)}" aria-label="더 보기">${ic('more')}</button>` : ''}</div>
 <p class="muted" style="margin-top:10px">답장 창은 받는 사람·제목이 채워진 채 열리고 "보내기"를 눌러야 발송됩니다.${m.seen ? '' : ' 안 읽은 메일은 답장 창을 열 때 읽음으로 바뀔 수 있어 먼저 묻습니다.'}</p>`};
   }
   function searchPane(it) {
@@ -277,7 +277,197 @@ ${mailFilesBox(m)}
   }
 
 
-  // ---------- Smart Auto-Fill Service Functions ----------
+
+  // ---------- Smart Auto-Submission & Auto-Fill Service Engine ----------
+  async function mailToDraft(uid) {
+    const m = findMail('INBOX', uid) || [...(S.raw.data.mail?.inbox.records || []), ...(S.raw.data.mail?.otherUnseen || [])].find(x => x.uid === uid);
+    if (!m) { toast('메일 정보를 찾을 수 없습니다.'); return; }
+    
+    toast('기안문 화면을 열고 메일 내용을 결재 직전 서식으로 자동 기입하는 중…');
+    const url = GW.links.draft('mg_20160303185413307', '일반기안문');
+    openUrl(url, {title: `새 기안: [공문] ${m.subject}`});
+    S.pane.expanded = true;
+
+    // Wait for iframe to load, then inject
+    setTimeout(() => {
+      const f = $('#frame iframe');
+      const d = f?.contentDocument;
+      if (!d) return;
+
+      const cleanSubj = String(m.subject || '업무 협조 요청').replace(/^(Re|Fw|전달|회신)\s*:\s*/i, '').trim();
+      const myName = (S.raw && S.raw.principal && S.raw.principal.name) || '서원하';
+      const myDept = (S.raw && S.raw.principal && S.raw.principal.deptName) || '전략경영실';
+      const todayStr = R.kstNow(new Date()).date;
+      const previewText = (m.preview || '').replace(/대용량 파일첨부[\s\S]*?보관\)/, '').trim().slice(0, 300);
+
+      // 1. Title
+      const titleInput = d.querySelector('input[placeholder="제목을 입력해주세요"]');
+      if (titleInput) {
+        titleInput.value = `[업무협조] ${cleanSubj}`;
+        titleInput.dispatchEvent(new Event('input', {bubbles: true}));
+        titleInput.dispatchEvent(new Event('change', {bubbles: true}));
+      }
+
+      // 2. Metadata: 공개, 일반, 내부결재
+      const pubRadio = [...d.querySelectorAll('input[type="radio"]')].find(rd => rd.value === '001');
+      if (pubRadio) { pubRadio.checked = true; pubRadio.dispatchEvent(new Event('change', {bubbles: true})); }
+      const normRadios = [...d.querySelectorAll('input[type="radio"]')].filter(rd => rd.value === '000');
+      normRadios.forEach(rd => { rd.checked = true; rd.dispatchEvent(new Event('change', {bubbles: true})); });
+
+      // 3. Body HWP injection
+      const bodyHtml = `
+<p><b>1. 관련 근거</b></p>
+<p>&nbsp; 가. ${esc(m.from)} 발송 메일 ("${esc(cleanSubj)}", ${esc(m.date.slice(0, 10))})</p>
+<p>&nbsp; 나. 2026년도 ${esc(myDept)} 부서 추진 계획</p>
+<p><br></p>
+<p><b>2. 주요 요청 사항 및 배경</b></p>
+<p>&nbsp; 가. 발신: ${esc(m.from)} (${esc(m.fromEmail || '')})</p>
+<p>&nbsp; 나. 개요: ${esc(previewText || cleanSubj)}</p>
+<p><br></p>
+<p><b>3. 세부 조치 및 추진 계획</b></p>
+<p>&nbsp; 가. 일시: ${esc(todayStr)} ~ </p>
+<p>&nbsp; 나. 조치 내용: 요청 사항 세부 검토 및 부서별 실행 과제 추진</p>
+<p><br></p>
+<p><b>4. 행정 사항</b></p>
+<p>&nbsp; 가. 관련 부서 업무 협조 및 기한 내 회신 완료</p>`;
+
+      let injected = false;
+      const walk = (doc) => {
+        if (!doc) return;
+        const hwp = doc.querySelector('#hwpEditorBoardContent') || doc.body;
+        if (hwp && (hwp.isContentEditable || doc.designMode === 'on')) {
+          hwp.innerHTML = bodyHtml;
+          hwp.dispatchEvent(new Event('input', {bubbles: true}));
+          injected = true;
+          return;
+        }
+        for (const ifr of doc.querySelectorAll('iframe')) {
+          try { walk(ifr.contentDocument); } catch (e) {}
+        }
+      };
+      walk(d);
+      toast('✓ 메일 내용을 바탕으로 기안문이 결재 직전 상태로 자동 완성되었습니다.');
+    }, 4500);
+  }
+
+  async function autoFillDraft(templateType) {
+    const f = $('#frame iframe');
+    const d = f?.contentDocument;
+    if (!d) { toast('기안문 화면이 열려 있지 않습니다.'); return; }
+
+    if (templateType === 'lineGuide') {
+      // Open approval line modal
+      const lineBtn = [...d.querySelectorAll('.topBtn')].find(b => b.innerText.trim() === '결재라인지정');
+      if (lineBtn) lineBtn.click();
+      toast('결재라인 대화상자가 열렸습니다. 부서 표준: 기안(서원하 차장) → 중간(부장) → 전결(실장)');
+      return;
+    }
+
+    const sel = S.sel;
+    const item = sel && sel.type === 'action' ? selectedAction() : null;
+    const myName = (S.raw && S.raw.principal && S.raw.principal.name) || '서원하';
+    const myDept = (S.raw && S.raw.principal && S.raw.principal.deptName) || '전략경영실';
+    const todayStr = R.kstNow(new Date()).date;
+    const baseTitle = item ? item.title : (S.budget.table && S.budget.table.rows && S.budget.table.rows[0] ? S.budget.table.rows[0].name.replace(/^[○●·\s]+/, '') : '업무 추진');
+
+    let titleText = '';
+    let bodyHtml = '';
+
+    if (templateType === 'result' || templateType === 'oneClick') {
+      titleText = `${baseTitle} 결과보고`;
+      const t = S.budget.table;
+      const head = t && t.rows && t.rows[0];
+      const budgetSnippet = head ? `<p>&nbsp; 다. 소요 예산: ${esc(head.name)} 집행 ${won(head.executed)}원 (집행률 ${pct(head.rate)})</p>` : '';
+      bodyHtml = `
+<p><b>1. 추진 목적</b></p>
+<p>&nbsp; 가. 2026년도 재단 경영 목표 달성 및 ${esc(myDept)} 핵심 과제 추진</p>
+<p>&nbsp; 나. 사업 운영 성과 점검 및 업무 연속성 확보</p>
+<p><br></p>
+<p><b>2. 주요 추진 결과</b></p>
+<p>&nbsp; 가. 일시: ${esc(todayStr)}</p>
+<p>&nbsp; 나. 장소/대상: ${esc(myDept)} 및 관내 청소년·시민</p>
+<p>&nbsp; 다. 주요 내용: ${esc(baseTitle)} 세부 실행 계획에 따른 추진 완료</p>
+${budgetSnippet}
+<p><br></p>
+<p><b>3. 향후 계획 및 기대효과</b></p>
+<p>&nbsp; 가. 추진 성과 공유 및 부서 간 업무 연계 활성화</p>
+<p>&nbsp; 나. 개선 사항 차기 실행 계획 반영 및 체계적 이력 관리</p>`;
+    } else if (templateType === 'plan') {
+      titleText = `${baseTitle} 운영계획(안)`;
+      bodyHtml = `
+<p><b>1. 기본 방침</b></p>
+<p>&nbsp; 가. 2026년도 재단 전략 목표 및 ${esc(myDept)} 운영 지침 준수</p>
+<p>&nbsp; 나. 부서 간 긴밀한 소통과 책임 있는 예산 집행 체계 구축</p>
+<p><br></p>
+<p><b>2. 세부 운영 계획</b></p>
+<p>&nbsp; 가. 사업명: ${esc(baseTitle)}</p>
+<p>&nbsp; 나. 기간: ${esc(todayStr)} ~ </p>
+<p>&nbsp; 다. 추진 내용: 세부 일정 및 운영 가이드에 따른 단계별 진행</p>
+<p><br></p>
+<p><b>3. 소요 예산</b></p>
+<p>&nbsp; 가. 비예산 (또는 관련 세목 예산 범위 내 집행)</p>
+<p><br></p>
+<p><b>4. 행정 사항</b></p>
+<p>&nbsp; 가. 관련 부서 업무 협조 및 기한 준수</p>`;
+    } else if (templateType === 'budget') {
+      titleText = `${S.budget.table?.rows?.[0]?.name?.replace(/^[○●·\s]+/, '') || '사업'} 예산 집행 품의`;
+      const t = S.budget.table;
+      const head = t && t.rows && t.rows[0];
+      const leaves = (t && t.rows ? t.rows.filter(r => r.level === '세') : []).slice(0, 6);
+      const budgetRows = leaves.map(r => `<tr><td>${esc(r.name.replace(/^[○●·\s]+/, ''))}</td><td align="right">${won(r.budget)}원</td><td align="right">${won(r.executed)}원</td><td align="right">${won(r.balance)}원</td><td align="right">${pct(r.rate)}</td></tr>`).join('');
+      bodyHtml = `
+<p><b>1. 관련 근거</b></p>
+<p>&nbsp; 가. 2026년도 본예산 집행 계획</p>
+<p>&nbsp; 나. ${esc((head && head.name) || '예산')} 운영 지침</p>
+<p><br></p>
+<p><b>2. 집행 개요</b></p>
+<p>&nbsp; 가. 과목: ${esc((head && head.name) || '')} (${esc((head && head.code) || '')})</p>
+<p>&nbsp; 나. 집행 사유: 사업 추진에 따른 물품 구입 및 운영비 집행</p>
+<p><br></p>
+<p><b>3. 실시간 예산 집행 현황</b></p>
+<table border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse;font-size:10pt;width:100%">
+  <tr bgcolor="#f1f5f9"><th>과목명</th><th>예산액</th><th>집행액</th><th>잔액</th><th>집행률</th></tr>
+  ${budgetRows || `<tr><td>${esc(head ? head.name : '과목')}</td><td align="right">${won(head ? head.budget : 0)}원</td><td align="right">${won(head ? head.executed : 0)}원</td><td align="right">${won(head ? head.balance : 0)}원</td><td align="right">${pct(head ? head.rate : 0)}</td></tr>`}
+</table>
+<p><br></p>
+<p>위와 같이 예산을 집행하고자 하오니 재가하여 주시기 바랍니다.</p>`;
+    }
+
+    // 1. Fill title
+    const titleInput = d.querySelector('input[placeholder="제목을 입력해주세요"]');
+    if (titleInput && titleText) {
+      titleInput.value = titleText;
+      titleInput.dispatchEvent(new Event('input', {bubbles: true}));
+      titleInput.dispatchEvent(new Event('change', {bubbles: true}));
+    }
+
+    // 2. Set default radios: 공개, 일반, 내부결재
+    const pubRadio = [...d.querySelectorAll('input[type="radio"]')].find(rd => rd.value === '001');
+    if (pubRadio) { pubRadio.checked = true; pubRadio.dispatchEvent(new Event('change', {bubbles: true})); }
+    const normRadios = [...d.querySelectorAll('input[type="radio"]')].filter(rd => rd.value === '000');
+    normRadios.forEach(rd => { rd.checked = true; rd.dispatchEvent(new Event('change', {bubbles: true})); });
+
+    // 3. Inject HWP body
+    let injected = false;
+    const walk = (doc) => {
+      if (!doc) return;
+      const hwp = doc.querySelector('#hwpEditorBoardContent') || doc.body;
+      if (hwp && (hwp.isContentEditable || doc.designMode === 'on')) {
+        hwp.innerHTML = bodyHtml;
+        hwp.dispatchEvent(new Event('input', {bubbles: true}));
+        injected = true;
+        return;
+      }
+      for (const ifr of doc.querySelectorAll('iframe')) {
+        try { walk(ifr.contentDocument); } catch (e) {}
+      }
+    };
+    walk(d);
+
+    if (injected) toast('✓ 제목·본문·메타데이터가 결재 직전 상태로 자동 완성되었습니다. 상단의 [결재]를 누르시면 상신됩니다.');
+    else toast('에디터를 찾지 못했습니다.');
+  }
+
   async function autoFillMail(templateType) {
     const f = $('#frame iframe');
     const d = f?.contentDocument;
@@ -297,7 +487,7 @@ ${mailFilesBox(m)}
 <p><br></p>
 <p>보내주신 <b>[${esc(originTitle)}]</b> 건과 관련하여 담당 사항에 대한 확인 및 검토를 완료하였음을 회신드립니다.</p>
 <p>&nbsp; 1. 확인 일자: ${esc(todayStr)}</p>
-<p>&nbsp; 2. 확인 결과: 이상 없음 (요청 내용 반영 완료)</p>
+<p>&nbsp; 2. 확인 결과: 이상 없음 (요청 사항 반영 완료)</p>
 <p><br></p>
 <p>감사합니다.</p><p><br></p>`;
     } else if (templateType === 'submit') {
@@ -342,100 +532,6 @@ ${mailFilesBox(m)}
     else toast('메일 에디터를 찾지 못했습니다.');
   }
 
-  async function autoFillDraft(templateType) {
-    const f = $('#frame iframe');
-    const d = f?.contentDocument;
-    if (!d) { toast('기안문 화면이 열려 있지 않습니다.'); return; }
-
-    const sel = S.sel;
-    const item = sel && sel.type === 'action' ? selectedAction() : null;
-    const todayStr = R.kstNow(new Date()).date;
-    const baseTitle = item ? item.title : (S.budget.table && S.budget.table.rows && S.budget.table.rows[0] ? S.budget.table.rows[0].name : '업무 추진');
-
-    let titleText = '';
-    let bodyHtml = '';
-
-    if (templateType === 'result') {
-      titleText = `${baseTitle} 결과보고`;
-      bodyHtml = `
-<p><b>1. 추진 목적</b></p>
-<p>&nbsp; 가. 재단 경영 목표 달성 및 부서 핵심 과제 추진</p>
-<p>&nbsp; 나. 사업 운영 성과 점검 및 업무 연속성 확보</p>
-<p><br></p>
-<p><b>2. 주요 추진 결과</b></p>
-<p>&nbsp; 가. 일시: ${esc(todayStr)}</p>
-<p>&nbsp; 나. 대상/장소: 전략경영실 및 관련 부서</p>
-<p>&nbsp; 다. 주요 내용: ${esc(baseTitle)} 세부 계획에 따른 실행 완료</p>
-<p><br></p>
-<p><b>3. 향후 계획 및 기대효과</b></p>
-<p>&nbsp; 가. 결과 보고 공유 및 개선 사항 차기 계획 반영</p>
-<p>&nbsp; 나. 행정 효율화 및 체계적 이력 관리</p>`;
-    } else if (templateType === 'plan') {
-      titleText = `${baseTitle} 계획(안)`;
-      bodyHtml = `
-<p><b>1. 기본 방침</b></p>
-<p>&nbsp; 가. 2026년도 재단 전략 목표 및 운영 지침 준수</p>
-<p>&nbsp; 나. 부서 간 긴밀한 소통과 책임 있는 집행 체계 구축</p>
-<p><br></p>
-<p><b>2. 세부 운영 계획</b></p>
-<p>&nbsp; 가. 사업명: ${esc(baseTitle)}</p>
-<p>&nbsp; 나. 기간: ${esc(todayStr)} ~ </p>
-<p>&nbsp; 다. 추진 내용: 세부 일정 및 운영 가이드에 따른 단계별 진행</p>
-<p><br></p>
-<p><b>3. 소요 예산</b></p>
-<p>&nbsp; 가. 비예산 (또는 관련 세목 예산 범위 내 집행)</p>
-<p><br></p>
-<p><b>4. 행정 사항</b></p>
-<p>&nbsp; 가. 관련 부서 협조 및 업무 일정 조율</p>`;
-    } else if (templateType === 'budget') {
-      titleText = `${S.budget.table?.rows?.[0]?.name || '사업'} 예산 집행 품의`;
-      const t = S.budget.table;
-      const head = t && t.rows && t.rows[0];
-      const leaves = (t && t.rows ? t.rows.filter(r => r.level === '세') : []).slice(0, 5);
-      const budgetRows = leaves.map(r => `<tr><td>${esc(r.name.replace(/^[○●·\s]+/, ''))}</td><td align="right">${won(r.budget)}원</td><td align="right">${won(r.executed)}원</td><td align="right">${won(r.balance)}원</td><td align="right">${pct(r.rate)}</td></tr>`).join('');
-      bodyHtml = `
-<p><b>1. 관련 근거</b></p>
-<p>&nbsp; 가. 2026년도 본예산 집행 계획</p>
-<p>&nbsp; 나. ${esc((head && head.name) || '예산')} 운영 계획</p>
-<p><br></p>
-<p><b>2. 집행 개요</b></p>
-<p>&nbsp; 가. 과목: ${esc((head && head.name) || '')} (${esc((head && head.code) || '')})</p>
-<p>&nbsp; 나. 소요 금액: 금${won((head && head.executed) || 0)}원 (예산현액 기준)</p>
-<p><br></p>
-<p><b>3. 실시간 예산 현황</b></p>
-<table border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse;font-size:10pt;width:100%">
-  <tr bgcolor="#f2f2f2"><th>과목명</th><th>예산액</th><th>집행액</th><th>잔액</th><th>집행률</th></tr>
-  ${budgetRows || `<tr><td>${esc(head ? head.name : '과목')}</td><td align="right">${won(head ? head.budget : 0)}원</td><td align="right">${won(head ? head.executed : 0)}원</td><td align="right">${won(head ? head.balance : 0)}원</td><td align="right">${pct(head ? head.rate : 0)}</td></tr>`}
-</table>`;
-    }
-
-    const titleInput = d.querySelector('input[placeholder="제목을 입력해주세요"]');
-    if (titleInput && titleText) {
-      titleInput.value = titleText;
-      titleInput.dispatchEvent(new Event('input', {bubbles: true}));
-      titleInput.dispatchEvent(new Event('change', {bubbles: true}));
-    }
-
-    let injected = false;
-    const walk = (doc) => {
-      if (!doc) return;
-      const hwp = doc.querySelector('#hwpEditorBoardContent') || doc.body;
-      if (hwp && (hwp.isContentEditable || doc.designMode === 'on')) {
-        hwp.innerHTML = bodyHtml;
-        hwp.dispatchEvent(new Event('input', {bubbles: true}));
-        injected = true;
-        return;
-      }
-      for (const ifr of doc.querySelectorAll('iframe')) {
-        try { walk(ifr.contentDocument); } catch (e) {}
-      }
-    };
-    walk(d);
-
-    if (injected) toast('✓ 기안문 제목과 표준 본문이 자동으로 기입되었습니다.');
-    else toast('에디터를 찾지 못했습니다.');
-  }
-
   function autoFillAtt() {
     const sel = S.sel;
     const x = sel && sel.type === 'action' ? selectedAction() : null;
@@ -445,7 +541,7 @@ ${mailFilesBox(m)}
       reason = x.context || `${dStr} 휴일대체근무에 따른 대체휴무 사용`;
     }
     copyText(reason);
-    toast(`✓ 근태 사유가 복사되었습니다 ("${reason.slice(0, 25)}..."). 근태신청 사유란에 붙여넣기(Ctrl+V)하세요.`);
+    toast(`✓ 대체휴무 사유가 복사되었습니다 ("${reason.slice(0, 25)}..."). 근태신청 사유란에 붙여넣기(Ctrl+V)하세요.`);
   }
 
   function autoFillBar() {
@@ -459,10 +555,21 @@ ${mailFilesBox(m)}
       return `<div class="autofill-bar"><span class="lbl">${ic('star')} 회신 자동 기입:</span><button class="btn sm" data-act="autoFillMail" data-v="confirm">✉️ 확인 회신문</button><button class="btn sm" data-act="autoFillMail" data-v="submit">✉️ 자료 제출 회신문</button><button class="btn sm" data-act="autoFillMail" data-v="extend">✉️ 기한 연장 요청</button></div>`;
     }
     if (isDraft) {
-      return `<div class="autofill-bar"><span class="lbl">${ic('star')} 기안 자동 기입:</span><button class="btn sm" data-act="autoFillDraft" data-v="result">📝 결과보고서 서식</button><button class="btn sm" data-act="autoFillDraft" data-v="plan">📝 운영계획서 서식</button><button class="btn sm" data-act="autoFillDraft" data-v="budget">📊 실시간 예산표 삽입</button></div>`;
+      return `<div class="autofill-bar"><span class="lbl">${ic('star')} 결재 직전 자동 완성:</span><button class="btn sm primary" data-act="autoFillDraft" data-v="oneClick">⚡ 원클릭 결재 완성</button><button class="btn sm" data-act="autoFillDraft" data-v="result">📝 결과보고</button><button class="btn sm" data-act="autoFillDraft" data-v="plan">📝 운영계획</button><button class="btn sm" data-act="autoFillDraft" data-v="budget">📊 실시간 예산표 삽입</button><button class="btn sm ghost" data-act="autoFillDraft" data-v="lineGuide" title="결재라인지정 대화상자를 열고 결재선 안내">👥 결재라인 가이드</button></div>`;
     }
     if (isAtt) {
-      return `<div class="autofill-bar"><span class="lbl">${ic('star')} 근태 도우미:</span><button class="btn sm" data-act="autoFillAtt">📅 대체휴무 사유 자동 복사</button></div>`;
+      return `<div class="autofill-bar"><span class="lbl">${ic('star')} 근태 도우미:</span><button class="btn sm" data-act="autoFillAtt">📅 대체휴무 사유 복사</button></div>`;
     }
     return '';
+  }
+
+  function autoStartDraft(type) {
+    closeOverlay();
+    const url = GW.links.draft('mg_20160303185413307', '일반기안문');
+    openUrl(url, {title: '새 기안: 일반기안문'});
+    S.pane.expanded = true;
+    toast('기안문 양식을 열고 서식을 결재 직전 상태로 자동 기입하는 중…');
+    setTimeout(() => {
+      autoFillDraft(type);
+    }, 4500);
   }
