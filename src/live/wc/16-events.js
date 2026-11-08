@@ -123,7 +123,7 @@
       case 'openUrl': closeOverlay(); openUrl(el.dataset.url, {title: el.dataset.title || el.textContent.trim(), unread: el.dataset.unread === '1', what: el.dataset.what || '문서'}); break;
       case 'copy': copyText(v); break;
       case 'paneExpand': S.pane.expanded = !S.pane.expanded; renderPane(); break;
-      case 'closePane': if (S.focus) { stopFocus(); break; } if (!leavePane()) break; S.sel = null; S.pane.url = ''; S.pane.expanded = false; render(); break;
+      case 'closePane': if (S.focus) { stopFocus(); break; } S.pane.dirty = false; S.sel = null; S.pane.url = ''; S.pane.expanded = false; render(); break;
       case 'todoFromSel': { const t = selInfo(); const x = selectedAction(); addTodo(t.title, x && x.deadline && x.deadline.date || '', x ? x.kind : '업무센터 항목', t.url, x ? x.key : ''); break; }
       case 'todoFromExtract': { const nx = S.pane.extract && R.nextDeadline(S.pane.extract.deadlines); const t = selInfo(); if (nx) addTodo(t.title, nx.date, '원문 기한 자동 추출', t.url); break; }
       case 'boardCard': { const k = el.dataset.k; if (path.some(n => n && n.tagName === 'BUTTON')) break; if (k.startsWith('todo:')) { const t = S.todos.find(x => `todo:${x.id}` === k); if (t && t.url) { S.sel = {type: 'frame', title: t.title, url: t.url}; openUrl(t.url, {title: t.title}); } } else { go('today'); selectAction(k); } break; }

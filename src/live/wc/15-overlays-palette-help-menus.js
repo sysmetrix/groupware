@@ -17,7 +17,7 @@
     add('연속 처리 시작', '처리할 일을 하나씩', () => startFocus(), '처리 모드');
     add('새로고침', '자료 다시 읽기', () => refresh());
     add('새 메일 쓰기', '메일', () => openUrl(GW.links.compose('plain'), {title: '새 메일 쓰기'}), 'mail');
-    for (const f of (S.forms && S.forms.list) || []) add(`새 기안: ${f.name}`, f.count ? `최근 6개월 ${f.count}번 사용` : '추천 양식', () => openUrl(f.url, {title: `새 기안: ${f.name}`}), '기안 결재작성 양식');
+    for (const f of ((S.forms && S.forms.list) || []).filter(f => f.isStandalone !== false)) add(`새 기안: ${f.name}`, f.count ? `최근 6개월 ${f.count}번 사용` : '추천 양식', () => openUrl(f.url, {title: `새 기안: ${f.name}`}), '기안 결재작성 양식');
     add('전체 양식에서 기안', '결재작성', () => openUrl(GW.links.route(GW.routes.draft), {title: '결재작성'}), '기안 양식');
     add('근태신청', '출장·휴가·대체', () => openUrl(GW.links.route(GW.routes.attendanceRequest), {title: '근태신청'}), '휴가 출장');
     add('근태 지난달 보기', '근태·연차', () => { go('attendance'); const p = R.kstNow(new Date()); const d = new Date(Date.UTC(p.y, p.m - 2, 1)); loadAttendance(`${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}`); });
@@ -74,10 +74,22 @@
     if (S.menuOpen === which) { closeOverlay(); return; }
     S.menuOpen = which; S.paletteOpen = false; S.helpOpen = false; S.coach = null;
     if (which === 'new') {
-      $('#overlay').innerHTML = `<div class="menu" data-stop="1"><div class="mh">새로 만들기 (처리 창에 열림, 저장·발송 전까지 아무것도 남지 않음)</div><div class="mi" data-act="openUrl" data-url="${esc(GW.links.compose('plain'))}" data-title="새 메일 쓰기">✉ 새 메일 쓰기</div><div class="mh">새 기안 · 내가 자주 쓰는 양식</div><div id="formList"><div class="mi muted"><span class="spin"></span> 양식을 읽는 중…</div></div><div class="mi" data-act="openUrl" data-url="${esc(GW.links.route(GW.routes.draft))}" data-title="결재작성">전체 양식에서 고르기</div><div class="mi" data-act="openUrl" data-url="${esc(GW.links.route(GW.routes.attendanceRequest))}" data-title="근태신청">근태신청(휴가·출장·대체)</div></div>`;
+      $('#overlay').innerHTML = `<div class="menu" data-stop="1" style="min-width:320px">
+        <div class="mh">메일 작성</div>
+        <div class="mi" data-act="openUrl" data-url="${esc(GW.links.compose('plain'))}" data-title="새 메일 쓰기">✉ 새 메일 쓰기</div>
+        
+        <div class="mh">근태·출장·휴가 신청</div>
+        <div class="mi" data-act="openUrl" data-url="${esc(GW.links.route(GW.routes.attendanceRequest))}" data-title="근태신청">🚗 근태신청 (휴가·출장·연장·대체근무)</div>
+
+        <div class="mh">자주 쓰는 일반 결재 기안</div>
+        <div id="formList"><div class="mi muted"><span class="spin"></span> 양식을 읽는 중…</div></div>
+        <div class="mi" data-act="openUrl" data-url="${esc(GW.links.route(GW.routes.draft))}" data-title="결재작성">📂 전체 결재 양식함에서 고르기</div>
+      </div>`;
       const list = await loadForms();
       const fl = $('#formList');
-      if (fl) fl.innerHTML = (list || []).slice(0, 10).map(f => `<div class="mi" data-act="openUrl" data-url="${esc(f.url)}" data-title="새 기안: ${esc(f.name)}">📝 ${esc(f.name)} <span class="muted">${f.count ? `${f.count}번 사용` : '추천'}</span></div>`).join('') || '<div class="mi muted">양식이 없습니다.</div>';
+      // Filter out interlocked ERP/HR forms so user never encounters "연동본문 데이터 조회 실패"
+      const safeForms = (list || []).filter(f => f.isStandalone !== false).slice(0, 5);
+      if (fl) fl.innerHTML = safeForms.map(f => `<div class="mi" data-act="openUrl" data-url="${esc(f.url)}" data-title="새 기안: ${esc(f.name)}">📝 ${esc(f.name)} <span class="muted">${f.count ? `${f.count}번 사용` : '추천'}</span></div>`).join('') || '<div class="mi muted">자주 쓰는 일반 기안문이 없습니다.</div>';
     } else if (which.startsWith('row:')) {
       const key = which.slice(4);
       const x = S.a.actions.find(a => a.key === key);

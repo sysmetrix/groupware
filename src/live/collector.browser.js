@@ -80,7 +80,14 @@
     // Mail compose (re = 답장, reall = 전체 답장, fw = 전달, plain = 새 메일). Nothing is sent until the user presses 보내기.
     compose: (kind, mail) => `${ORIGIN}/#popup?${qs({MicroModuleCode: 'mail', callComp: 'UDAP001', mailKind: kind, uid: mail && mail.uid, mbox: mail && mail.box, popType: 'Y', moduleSeq: '700'})}`,
     // New approval draft with a given form (nothing is saved until 임시저장/상신).
-    draft: formId => `${ORIGIN}/#popup?${qs({MicroModuleCode: 'ea', tiKeyCode: formId, callComp: 'UCAP001'})}`,
+    draft: (formId, name = '') => {
+      const fid = String(formId || '');
+      // Interlocked forms (근태 36, 출장 40, 연장 43, 대체 1012/1021, 지출결의 1007/1009/1011) must NOT be opened via raw tiKeyCode.
+      // Amaranth 10 fails with "연동본문 데이터 조회 실패하였습니다." unless opened from their originating modules.
+      if (/^(36|40|43|1012|1021)$/.test(fid) || /휴가|출장|근태|연장|대체/.test(name)) return `${ORIGIN}/${ROUTES.attendanceRequest}`;
+      if (/^(1007|1009|1011|1013)$/.test(fid) || /지출결의|구입과지출/.test(name)) return `${ORIGIN}/${ROUTES.draft}`;
+      return `${ORIGIN}/#popup?${qs({MicroModuleCode: 'ea', tiKeyCode: fid, callComp: 'UCAP001'})}`;
+    },
     article: a => `${ORIGIN}/#/popup?${qs({callComp: 'UFAP003', art_seq_no: a.id, cat_seq_no: a.cat, cat_type: a.catType || 'L', alarm_yn: 'Y', MicroModuleCode: 'board', externalYn: 'Y'})}`,
     file: fileId => `${ORIGIN}/#/popup?${qs({MicroModuleCode: 'ecm', callComp: 'UQAP001', pageCode: 'UQAP029', uid: fileId, targetObjectType: 'FL'})}`,
     route: r => ORIGIN + '/' + r,
@@ -538,7 +545,17 @@
       count.set(id, e);
     }
     for (const f of arr(rec)) { const id = str(f.form_id, 40); if (id && !count.has(id)) count.set(id, {formId: id, name: str(f.form_name, 60), count: 0, last: '', recommended: true}); }
-    return [...count.values()].sort((a, b) => b.count - a.count).map(f => ({...f, url: LINKS.draft(f.formId)}));
+    return [...count.values()].sort((a, b) => b.count - a.count).map(f => {
+      const fid = String(f.formId || '');
+      const isHr = /^(36|40|43|1012|1021)$/.test(fid) || /휴가|출장|근태|연장|대체/.test(f.name);
+      const isErp = /^(1007|1009|1011|1013)$/.test(fid) || /지출결의|구입과지출/.test(f.name);
+      return {
+        ...f,
+        isHr, isErp,
+        isStandalone: !isHr && !isErp,
+        url: LINKS.draft(f.formId, f.name)
+      };
+    });
   }
 
   // Executed amount per month for one budget code (and its children) — 12 parallel calls.

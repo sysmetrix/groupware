@@ -423,3 +423,18 @@ test('multi-user: briefing analysis adapts to whatever principal is passed', () 
   const mineB = a2.actions.filter(x => x.scope !== 'ref');
   assert.ok(!mineB.some(x => x.title.includes('협조 요청 공문')), 'dept doc not assigned to 이영희 is ref');
 });
+test('safe draft links: interlocked forms (36, 40, 1007, 1012) route to safe modules, not raw tiKeyCode', async () => {
+  const {api} = await loadCollector({});
+  // Raw tiKeyCode on interlocked forms causes Amaranth 10 error "연동본문 데이터 조회 실패하였습니다."
+  const hrUrl = api.links.draft('36', '연차휴가신청서');
+  assert.ok(hrUrl.includes(api.routes.attendanceRequest), 'leave draft routes to attendance request');
+
+  const tripUrl = api.links.draft('40', '출장신청서');
+  assert.ok(tripUrl.includes(api.routes.attendanceRequest), 'biztrip draft routes to attendance request');
+
+  const expUrl = api.links.draft('1007', '지출결의서');
+  assert.ok(expUrl.includes(api.routes.draft), 'accounting draft routes to full draft picker');
+
+  const stdUrl = api.links.draft('mg_20160303185413307', '일반기안문');
+  assert.ok(stdUrl.includes('tiKeyCode=mg_20160303185413307'), 'general form opens direct draft popup');
+});

@@ -35,7 +35,20 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
   function watchDirty(f, url) {
     const seen = new WeakSet();
     const mark = () => { if (S.pane.url === url && !S.pane.dirty) { S.pane.dirty = true; const b = $('#dirtyNote'); if (b) b.style.display = 'block'; } };
-    const attach = doc => { if (!doc || seen.has(doc)) return; seen.add(doc); ['input', 'change', 'keydown', 'paste', 'drop'].forEach(ev => doc.addEventListener(ev, e => { if (ev !== 'keydown' || (e.key && e.key.length === 1)) mark(); }, true)); };
+    const attach = doc => {
+      if (!doc || seen.has(doc)) return;
+      seen.add(doc);
+      // ONLY listen to genuine user typing (trusted keydown with printable key, paste, drop)
+      // NEVER trigger on programmatic change/input events fired during form initialization!
+      ['keydown', 'paste', 'drop'].forEach(ev => doc.addEventListener(ev, e => {
+        if (!e.isTrusted) return;
+        if (ev === 'keydown') {
+          if (e.key && e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) mark();
+        } else {
+          mark();
+        }
+      }, true));
+    };
     const scan = () => { if (!f.isConnected || S.pane.url !== url) return false; try { const walk = doc => { attach(doc); for (const i of doc.querySelectorAll('iframe')) { try { walk(i.contentDocument); } catch {} } }; walk(f.contentDocument); } catch {} return true; };
     scan();
     const t = setInterval(() => { if (!scan()) clearInterval(t); }, 1500);
@@ -55,6 +68,18 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
       const collect = doc => { if (!doc || !doc.body) return; text += '\n' + doc.body.innerText; for (const ta of doc.querySelectorAll('textarea,input[type=text],input:not([type])')) text += '\n' + (ta.value || ''); for (const inner of doc.querySelectorAll('iframe')) { try { collect(inner.contentDocument); } catch {} } };
       collect(f.contentDocument);
     } catch { return; }
+    // Detect interlocked document error (연동본문 데이터 조회 실패)
+    if (text.includes('연동본문 데이터 조회 실패') || (text.includes('연동본문') && text.includes('실패'))) {
+      S.pane.dirty = false;
+      const b = $('#dirtyNote'); if (b) b.style.display = 'none';
+      try {
+        const allBtns = [...f.contentDocument.querySelectorAll('button')];
+        const ok = allBtns.find(btn => btn.innerText.trim() === '확인');
+        if (ok) ok.click();
+      } catch {}
+      toast('이 양식은 근태관리/회계 화면에서 상신해야 하는 연동 양식입니다. 관련 화면(근태신청/전체양식)을 이용하세요.');
+      return;
+    }
     if (text.replace(/\s/g, '').length < 80 && tries < 8) { setTimeout(() => scanFrame(f, url, tries + 1), 1200); return; }
     const deadlines = R.extractAllDeadlines(text).filter(x => x.dday >= -1 && x.dday <= 120);
     const flat = text.replace(/\s+/g, ' ');
