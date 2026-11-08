@@ -48,10 +48,7 @@
         break;
       }
       case 'openResultPicker': openResultPlanPicker(); break;
-      case 'selectPlanForResult': {
-        startResultFromPlan(el.dataset.id, el.dataset.no, el.dataset.title, el.dataset.date);
-        break;
-      }
+      case 'selectPlanForResult': { startResultFromPlan(el.dataset.id); break; }
       case 'quickAtt': quickAttendanceApplication(el.dataset.t); break;
       case 'autoFillMail': autoFillMail(v); break;
       case 'autoFillDraft': autoFillDraft(v); break;

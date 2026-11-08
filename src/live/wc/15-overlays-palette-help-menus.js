@@ -75,11 +75,10 @@
     S.menuOpen = which; S.paletteOpen = false; S.helpOpen = false; S.coach = null;
     if (which === 'new') {
       $('#overlay').innerHTML = `<div class="menu" data-stop="1" style="min-width:380px">
-        <div class="mh">⚡ 전자결재 기안 (제목·기록물철·결재선·본문 풀 자동 완성)</div>
-        <div class="mi" data-act="quickDraft" data-t="plan">📝 <b>일반기안문</b> (운영계획서 자동 기입)</div>
-        <div class="mi" data-act="quickDraft" data-t="result">📝 <b>일반기안문</b> (결과보고서·실시간 예산)</div>
+        <div class="mh">⚡ 전자결재 기안 (내 지난 결재문서 패턴 그대로)</div>
+        <div class="mi" data-act="quickDraft" data-t="result">📝 <b>결과보고</b> — 내 계획서를 골라 이어서 작성 (기록물철·본문·참조문서 자동)</div>
+        <div class="mi" data-act="quickDraft" data-t="plan">📝 <b>운영·참가계획</b> — 같은 사업의 과거 계획서 서식으로 작성</div>
         <div class="mi" data-act="quickDraft" data-t="goods">📦 <b>물품매입품의서</b> (운영물품 구입 품의)</div>
-        <div class="mi" data-act="quickDraft" data-t="budget">📊 <b>예산집행품의서</b> (실시간 잔액표 삽입)</div>
 
         <div class="mh">🚗 근태·출장·휴가 연동 신청 (공식 근태관리 화면)</div>
         <div class="mi" data-act="quickAtt" data-t="trip">🚗 <b>관내·관외 출장신청</b> (사유 자동 준비)</div>

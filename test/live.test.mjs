@@ -438,3 +438,58 @@ test('safe draft links: interlocked forms (36, 40, 1007, 1012) route to safe mod
   const stdUrl = api.links.draft('mg_20160303185413307', '일반기안문');
   assert.ok(stdUrl.includes('tiKeyCode=mg_20160303185413307'), 'general form opens direct draft popup');
 });
+// ---- 기안 패턴(조직 서식 학습) ----
+import {patternTokens, buildPatternModel, predictDraftMeta, formatRunRef, planToResultTitle, buildResultBody, textWidthPt, buildPlanSkeleton} from '../src/live/briefing.mjs';
+
+const PLAN_BODY = ['1. 가나부-1613(2026. 3. 4.)호와 관련입니다.', '2. 2026년『시험 사업』을 다음과 같이 운영하고자 합니다.', '  가. 사 업 명: 2026년『시험 사업』', '  나. 운영일정: 2026. 11. 1.(일) 14:00~16:30', '  다. 운영장소: 시험센터 2층', '  라. 참가인원: 연 40명(실 40명) ※ 선착순 접수', '  마. 주요내용: 아주 긴 설명이 이어지는 항목입니다 아주 긴 설명이 이어지는 항목입니다 아주 긴 설명이 이어지는 항목입니다 아주 긴 설명이 이어지는 항목입니다', '  바. 소요예산: 비예산', '', '붙임  운영계획서 1부.  끝.'].join('\r\n');
+
+test('org pattern: result body follows real plan->result conversion rules', () => {
+  const r = buildResultBody(PLAN_BODY, {runday: '가나부-7679 (2026.10.03)', planTitle: '2026년『시험 사업』 운영계획'});
+  assert.equal(r.lines[0], '1. 가나부-7679(2026. 10. 3.)호와 관련입니다.');
+  assert.equal(r.lines[1], '2. 2026년『시험 사업』 운영 결과를 다음과 같이 보고합니다.');
+  assert.equal(r.lines[2], '  가. 사 업 명: 2026년『시험 사업』');
+  assert.equal(r.lines[5], '  라. 참가인원: 연 40명(실 40명)'); // ※ 비고 삭제
+  assert.equal(r.lines[r.lines.length - 2], '');
+  assert.equal(r.lines[r.lines.length - 1], '붙임  결과보고서 1부.  끝.');
+  assert.deepEqual(r.notes, ['참가인원 실적 확인']);
+  assert.equal(r.text.includes('\r\n'), true);
+  // 긴 항목만 내어쓰기 대상
+  assert.equal(r.hang[6], true);
+  assert.equal(r.hang[2], false);
+});
+test('org pattern: numbered plan items are re-lettered and 참가 wording is used', () => {
+  const plan = ['재단의 역량 강화를 위해 다음과 같이 교육에 참가하고자 합니다.', '  1. 교 육 명: 2026년 시험교육 2기', '  2. 일    시: 2026. 8. 24.(월)', '  3. 참 가 비: 없음', '', '붙임  안내문 1부.  끝.'].join('\r\n');
+  const r = buildResultBody(plan, {runday: '가나부-5967 (2026.08.18)', planTitle: '2026년 시험교육 2기 참가 계획'});
+  assert.deepEqual(r.lines, ['1. 가나부-5967(2026. 8. 18.)호와 관련입니다.', '2. 2026년 시험교육 참가 결과를 다음과 같이 보고합니다.', '  가. 교 육 명: 2026년 시험교육 2기', '  나. 일    시: 2026. 8. 24.(월)', '  다. 참 가 비: 없음', '', '붙임  결과보고서 1부.  끝.']);
+});
+test('org pattern: titles, run refs and width model', () => {
+  assert.equal(planToResultTitle('2026년『A』 운영계획'), '2026년『A』 운영 결과보고');
+  assert.equal(planToResultTitle('2026년 B 참가 계획'), '2026년 B 참가 결과보고');
+  assert.equal(planToResultTitle('2026년 C 운영 계획(안)'), '2026년 C 운영 결과보고');
+  assert.equal(formatRunRef('가나부-7679 (2026.08.03)'), '가나부-7679(2026. 8. 3.)');
+  assert.equal(textWidthPt('  가. 사 업 명: AB'), 12 + 12 + 6 + 6 + 12 + 6 + 12 + 6 + 12 + 6 + 6 + 6 + 12 - 6); // 한글 12pt, 영문/공백/기호 6pt
+});
+test('org pattern: binder/meta prediction prefers the source document, then the same business', () => {
+  const docs = [
+    {id: '1', docNo: 'X-1', title: '2026년『소셜리빙랩 시험』 운영계획', form: '일반기안문', binder: 'ESG 경영', open: '공개', urgent: '일반문서', sec: '일반문서', docKind: '내부결재'},
+    {id: '2', docNo: 'X-2', title: '2026년 참여기구 워크숍 운영계획', form: '일반기안문', binder: '유스 거버넌스 운영', open: '공개', urgent: '일반문서', sec: '일반문서', docKind: '내부결재'},
+    {id: '3', docNo: 'X-3', title: '2026년 AX 챌린저 시험교육 참가계획', form: '일반기안문', binder: '직원교육', open: '공개', urgent: '일반문서', sec: '일반문서', docKind: '내부결재'},
+    {id: '4', docNo: 'X-4', title: '접수받은 문서', form: '-', binder: '접수문서(외부)'},
+  ];
+  const m = buildPatternModel(docs);
+  assert.equal(m.entries.length, 3); // 접수문서는 본인 생산 패턴이 아니므로 제외
+  assert.equal(predictDraftMeta(m, {title: '아무 제목', sourceDocNo: 'X-1'}).binder, 'ESG 경영');
+  assert.equal(predictDraftMeta(m, {title: '2026년『소셜리빙랩 시험』 발대식 예산 지급 건의'}).binder, 'ESG 경영');
+  assert.equal(predictDraftMeta(m, {title: '2026년 완전히 새로운 사업 참가계획'}).binder, '직원교육');
+  const d = predictDraftMeta(m, {title: '2026년 완전히 새로운 사업 운영계획'});
+  assert.equal(d.confidence, 'default');
+  assert.equal(d.docKind, '내부결재');
+  assert.deepEqual(patternTokens('2026년『소셜리빙랩 시험』 운영계획'), ['소셜리빙랩', '시험']);
+});
+test('org pattern: plan skeleton reuses the labels and reference line of the closest past plan', () => {
+  const m = buildPatternModel([{id: '1', docNo: 'X-1', title: '2026년『시험 사업』 운영계획', form: '일반기안문', binder: 'ESG 경영', date: '2026-10-22', body: PLAN_BODY}]);
+  const s = buildPlanSkeleton(m, {title: '2026년『시험 사업 2차』 운영계획'});
+  assert.equal(s.lines[0], '1. 가나부-1613(2026. 3. 4.)호와 관련입니다.');
+  assert.equal(s.lines[2], '  가. 사 업 명: ');
+  assert.equal(s.lines[s.lines.length - 1], '붙임  운영계획서 1부.  끝.');
+});

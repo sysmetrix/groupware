@@ -624,3 +624,123 @@ export function toDataset(raw, scope) {
   ];
   return {schemaVersion: 1, source: {kind: 'browser-snapshot', label: `그룹웨어 실시간 목록 조회 · ${raw.principal?.compName || ''} ${raw.principal?.deptName || ''}`.trim(), exportedAt, baseUrl: origin, coverage}, principal: {userId: scope.userId, displayName: scope.displayName, organizationId: scope.organizationId}, items};
 }
+
+// ---------------------------------------------------------------------------
+// 기안 패턴: 사용자 본인의 결재문서에서 학습한 조직 서식 규칙 (순수 함수, 테스트 가능)
+// ---------------------------------------------------------------------------
+const PAT_GENERIC = new Set(['운영', '계획', '운영계획', '결과보고', '참가', '지급', '건의', '구입', '제출', '요청', '협조', '안내', '추진', '현황', '보고', '관련', '실시', '개최', '변경', '시행', '알림', '신청', '수립', '의견', '자료', '검토', '결과', '수행', '제작', '대관', '물품', '운영물품', '구입비', '연간', '상반기', '하반기', '중간보고', '참가비', '참가계획']);
+export function patternTokens(title) {
+  return String(title || '').replace(/[『』「」()（）\[\]“”"'·,.:~\-–/]/g, ' ').split(/\s+/)
+    .filter(w => w.length >= 2 && !PAT_GENERIC.has(w) && !/^\d+(년|기|분기|차|회)?$/.test(w));
+}
+const PAT_DEFAULT = {open: '공개', urgent: '일반문서', sec: '일반문서', docKind: '내부결재', sender: ''};
+export function buildPatternModel(docs = []) {
+  const own = docs.filter(d => d && d.binder && !/^접수문서/.test(d.binder));
+  const entries = own.map(d => ({...d, tokens: patternTokens(d.title)}));
+  const freq = {};
+  for (const e of entries) freq[e.binder] = (freq[e.binder] || 0) + 1;
+  const top = Object.entries(freq).sort((a, b) => b[1] - a[1])[0];
+  return {entries, defaultBinder: top ? top[0] : '', freq};
+}
+function metaOf(e) { return {binder: e.binder, open: e.open || PAT_DEFAULT.open, urgent: e.urgent || PAT_DEFAULT.urgent, sec: e.sec || PAT_DEFAULT.sec, docKind: e.docKind || PAT_DEFAULT.docKind, sender: e.sender || ''}; }
+// 새 문서의 기본항목(기록물철·공개·긴급·보안·문서구분)을 과거 결재문서 패턴으로 예측한다.
+// 1순위: 근거(계획서) 문서의 값을 그대로, 2순위: 같은 사업(제목 핵심어)의 과거 문서, 3순위: 유형별 기본값.
+export function predictDraftMeta(model, {title = '', sourceDocNo = '', sourceTitle = ''} = {}) {
+  const es = (model && model.entries) || [];
+  if (sourceDocNo || sourceTitle) {
+    const src = es.find(e => (sourceDocNo && e.docNo === sourceDocNo) || (sourceTitle && e.title === sourceTitle));
+    if (src) return {...metaOf(src), basis: `근거 문서(${src.docNo || src.title})의 기록물철·기본항목을 그대로 사용`, confidence: 'source'};
+  }
+  const tk = patternTokens(sourceTitle || title);
+  let best = null;
+  for (const e of es) {
+    let s = 0;
+    for (const t of tk) if (e.tokens.includes(t)) s += t.length >= 3 ? 2 : 1;
+    if (s >= 2 && (!best || s > best.s)) best = {s, e};
+  }
+  if (best) return {...metaOf(best.e), basis: `같은 사업의 과거 문서 “${best.e.title}”와 동일`, confidence: 'similar'};
+  const joined = `${title} ${sourceTitle}`;
+  if (/참가\s*(계획|결과보고|비)|교육 참가|아카데미|연수/.test(joined)) {
+    const ed = es.find(e => e.binder === '직원교육');
+    if (ed) return {...PAT_DEFAULT, binder: '직원교육', basis: '교육 참가 문서는 직원교육 기록물철 사용', confidence: 'rule'};
+  }
+  return {...PAT_DEFAULT, binder: (model && model.defaultBinder) || '', basis: '가장 많이 쓴 기록물철(확인 필요)', confidence: 'default'};
+}
+// "전략경영실-7679 (2026.10.23)" -> "전략경영실-7679(2026. 10. 23.)"
+export function formatRunRef(runday = '') {
+  const m = String(runday).match(/^\s*(\S+?)\s*\((\d{4})\.(\d{1,2})\.(\d{1,2})\)/);
+  return m ? `${m[1]}(${m[2]}. ${Number(m[3])}. ${Number(m[4])}.)` : String(runday || '').trim();
+}
+// 참조문서 칸에 표시되는 형식: 전략경영실-7679(2026. 10. 23., "제목")
+export function formatRefDoc(runday = '', title = '') {
+  const r = formatRunRef(runday).replace(/\.\)$/, '.');
+  return r ? `${r.replace(/\.$/, '')}., "${title}")`.replace(/\.\.,/, '.,') : '';
+}
+export function planToResultTitle(planTitle = '') {
+  const t = String(planTitle).trim();
+  if (/참가\s*계획(\(변경\))?$/.test(t)) return t.replace(/\s*참가\s*계획(\(변경\))?$/, ' 참가 결과보고');
+  if (/운영\s*계획(\(안\))?$/.test(t)) return t.replace(/\s*운영\s*계획(\(안\))?$/, ' 운영 결과보고');
+  if (/계획(\(안\))?$/.test(t)) return t.replace(/\s*계획(\(안\))?$/, ' 결과보고');
+  return `${t} 결과보고`;
+}
+// 굴림체 12pt 기준 줄 너비(pt): 한글·전각 12, 영문·숫자·공백·ASCII 기호 6
+export function textWidthPt(s = '') {
+  let w = 0;
+  for (const ch of String(s)) w += /[\u1100-\u11FF\u3130-\u318F\uAC00-\uD7AF\u4E00-\u9FFF\u3000-\u303F\uFF00-\uFFEF\u2460-\u27BF\u00B7\u203B]/.test(ch) ? 12 : 6;
+  return w;
+}
+const HANG_LIMIT_PT = 440; // 본문 폭(약 482pt)보다 여유를 두어, 줄이 넘어갈 수 있는 항목에는 내어쓰기를 적용
+// 계획서 본문 -> 결과보고 본문. 실제 결재 문서쌍(계획서/결과보고)에서 추출한 변환 규칙:
+//  1) "1. <계획서 시행번호(시행일)>호와 관련입니다."  2) "2. <사업명> <운영|참가> 결과를 다음과 같이 보고합니다."
+//  3) 계획서의 항목(사 업 명, 운영일정, ...)을 라벨 그대로 가나다 순으로 복사(참가인원의 ※ 비고는 삭제)
+//  4) 빈 줄 + "붙임  결과보고서 1부.  끝."  5) 줄이 넘어갈 항목은 96pt 내어쓰기(HStyle0 + margin-left 96pt, text-indent -96pt, 왼쪽 정렬)
+export function buildResultBody(planBody = '', {runday = '', docNo = '', planTitle = ''} = {}) {
+  const src = String(planBody).split(/\r?\n/);
+  const start = src.findIndex(l => /^ {2}(?:[가-하]|\d{1,2})\.\s+\S/.test(l));
+  const items = [];
+  const notes = [];
+  if (start >= 0) {
+    let n = 0;
+    for (let i = start; i < src.length; i++) {
+      const l = src[i];
+      if (/^\s*붙임/.test(l)) break;
+      if (!l.trim()) continue;
+      const m = l.match(/^ {2}(?:[가-하]|\d{1,2})\.\s+(.*)$/);
+      if (m) {
+        let body = m[1];
+        if (/^(참가인원|인\s*원|참\s*가\s*인\s*원)\s*:/.test(body)) { body = body.replace(/\s*※.*$/, ''); notes.push('참가인원 실적 확인'); }
+        items.push(`  ${'가나다라마바사아자차카타파하'[n++]}. ${body}`);
+      } else items.push(l);
+    }
+  }
+  const t = String(planTitle).replace(/\s*\d+기(?=\s*(운영|참가))/, '');
+  const kind = /참가\s*(계획|결과)/.test(t) ? '참가' : /운영\s*(계획|결과)/.test(t) ? '운영' : '추진';
+  const name = t.replace(/\s*(운영|참가)\s*(계획|결과보고)(\(안\)|\(변경\))?\s*$/, '').replace(/\s*(시행|추진|실시)?계획(\(안\))?\s*$/, '').trim();
+  const ref = formatRunRef(runday) || docNo;
+  const lines = [`1. ${ref}호와 관련입니다.`, `2. ${name} ${kind} 결과를 다음과 같이 보고합니다.`, ...items, '', '붙임  결과보고서 1부.  끝.'];
+  const hang = lines.map(l => /^ {2}(?:[가-하])\.\s/.test(l) && textWidthPt(l) > HANG_LIMIT_PT);
+  return {lines, text: lines.join('\r\n'), hang, notes: [...new Set(notes)]};
+}
+// 새 운영/참가 계획서의 뼈대: 같은 사업의 과거 계획서(없으면 가장 최근 계획서)의 1항(근거 문서)·라벨을 그대로 쓰고 값만 비운다.
+export function buildPlanSkeleton(model, {title = ''} = {}) {
+  const es = ((model && model.entries) || []).filter(e => e.body && /계획(\(안\)|\(변경\))?$/.test(String(e.title).trim()) && /^일반기안문/.test(e.form || '일반기안문'));
+  if (!es.length) return null;
+  const tk = patternTokens(title);
+  let best = null;
+  for (const e of es) { let s = 0; for (const t of tk) if (e.tokens.includes(t)) s += t.length >= 3 ? 2 : 1; if (!best || s > best.s || (s === best.s && String(e.date || '') > String(best.e.date || ''))) best = {s, e}; }
+  const lines = String(best.e.body).split(/\r?\n/);
+  const start = lines.findIndex(l => /^ {2}(?:[가-하]|\d{1,2})\.\s+\S/.test(l));
+  if (start < 0) return null;
+  const refLine = lines.find(l => /^1\.\s/.test(l)) || '';
+  const kind = /참가\s*계획/.test(title) ? '참가' : '운영';
+  const name = String(title).replace(/\s*(운영|참가)\s*계획(\(안\))?\s*$/, '').trim();
+  const items = [];
+  let n = 0;
+  for (let i = start; i < lines.length; i++) {
+    if (/^\s*붙임/.test(lines[i])) break;
+    const m = lines[i].match(/^ {2}(?:[가-하]|\d{1,2})\.\s+([^:：]+[:：])/);
+    if (m) items.push(`  ${'가나다라마바사아자차카타파하'[n++]}. ${m[1].trim()} `);
+  }
+  const out = [refLine || '1. 전략경영실-    (    .  .  .)호와 관련입니다.', kind === '참가' ? `2. ${name}에 참가하고자 합니다.` : `2. ${name}을(를) 다음과 같이 운영하고자 합니다.`, ...items, '', `붙임  ${kind === '참가' ? '안내문' : '운영계획서'} 1부.  끝.`];
+  return {lines: out, text: out.join('\r\n'), basis: best.e.title};
+}
