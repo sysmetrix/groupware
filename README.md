@@ -52,9 +52,9 @@ Windows 백그라운드 실행은 `npm run services:status`, `npm run services:s
 
 직접 넣는 파일은 [내 문서 사용 안내](docs/document-library.md)를 참고하세요. JSON 작성 없이 사용할 수 있습니다. 기존 그룹웨어 스냅샷에 첨부를 연결하는 CLI는 [로컬 첨부 안내](docs/attachments.md)에 있습니다. 내 문서의 보관 원본과 검색 내용은 `data/library/`에 저장하며 GitHub에 올리지 않습니다.
 
-## 실시간 그룹웨어 수집 (읽기 전용, v1.0.0)
+## GW 통합 업무센터 (실시간·읽기 전용, v2.0.0)
 
-로그인된 그룹웨어 화면 안에서 앱의 목록 API를 직접 읽어 결재·문서유통·메일·공지·일정·근태·연차·예산을 약 0.3초에 수집하고, 할 일·기한·새 항목을 정리한 브리핑을 만듭니다. 메일·문서를 열지 않아 읽음 상태가 바뀌지 않으며 쓰기 API는 허용 목록으로 차단합니다. `npm run live:build`로 원클릭 북마크(`build/live/install.html`)를 만들고, `npm run live:report -- <raw.json>`으로 `data/live/latest.html`을 생성합니다. [실시간 수집기 안내](docs/live-collector.md)
+로그인된 그룹웨어 화면 위에 전체 화면 업무센터를 띄워 결재·문서유통·메일·공지·근태·연차·예산·일정·통합검색을 한 페이지에서 보고, 오른쪽 처리 창에 그룹웨어 원래 결재문서·게시글·근태신청 화면을 열어 그 자리에서 처리합니다. 배부 부서·접수 담당자 추천, 본문 기한 자동 추출, 예산 세목별 결의 내역 대조, 주간 업무 실적 초안, 자동 새로고침·알림을 제공합니다. 자료는 앱의 조회 API를 약 0.3초에 읽으며 쓰기 API는 허용 목록으로 차단합니다. `npm run live:build` 후 `build/live/install.html`에서 북마크를 설치하세요. [업무센터·수집기 안내](docs/live-collector.md)
 
 ## 로컬 AI 사용 (선택)
 

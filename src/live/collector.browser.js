@@ -1,33 +1,35 @@
 /*
- * BWYF groupware live collector (runs inside a logged-in https://gw.bwyf.or.kr page).
+ * BWYF groupware live collector v2 (runs inside a logged-in https://gw.bwyf.or.kr page).
  *
- * How it works
  * - Reuses the groupware's own signed API client (the webpack module that adds
- *   Authorization / timestamp / wehago-sign headers). This script never reads,
- *   copies or prints cookie, token or signing-key values.
- * - Only endpoints in READ_ONLY are callable. Writes (send, approve, commute
- *   registration, visit statistics, preference saves) are rejected before any
- *   request is made.
- * - Listing APIs do not open mails or documents, so unread states stay intact.
+ *   Authorization / timestamp / wehago-sign headers). Cookie, token and signing-key
+ *   values are never read, copied or printed by this script.
+ * - Only endpoints in READ_ONLY are callable. Writes (approve, receive, distribute,
+ *   send, commute registration, visit statistics, search-history and preference
+ *   saves) are rejected before any request is made.
+ * - List/search APIs do not open mails or documents, so unread states stay intact.
  *
- * Usage (page context):  await BWYFGW.collect({ mailCount: 100, days: 14 })
+ * Page context:  await BWYFGW.collect()            snapshot of all work areas
+ *                await BWYFGW.search('예산')       full-text search across modules
+ *                await BWYFGW.budgetLedger({project:'A201', bgtCd:'노1211110'})
  */
 (() => {
   'use strict';
-  const VERSION = '1.0.0';
+  const VERSION = '2.0.0';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
-  // Endpoints verified on 2026-11-08 as list/read calls issued by the app itself.
+  // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
   const READ_ONLY = new Set([
     '/mail/mail000A01', '/mail/mail000A03', '/mail/mail003A01',
     '/ea/api/getMenuCountInfo', '/ea/ea036A02', '/ea/ea025A04', '/ea/ea023A02', '/ea/ea027A02',
     '/ea/ea038A09', '/ea/ea038A15',
     '/board/APIHandler/ViewBoardArtList', '/board/APIHandler/getBoardReadCnt',
     '/schres/sc111A02', '/schres/sc111A03', '/gw/APIHandler/gw114A14',
-    '/human/common/judgeTimeManagement/getTodayComeLeaveInfo', '/personal/hpd0220/0hr00001',
+    '/human/common/judgeTimeManagement/getTodayComeLeaveInfo', '/personal/hpd0220/0hr00001', '/human/hrd0410/selectTab2',
     '/personal/hpd0550/0hp00002', '/personal/hpd0550/0hp00003',
-    '/nonprofit/NCC0610/0BN00002',
+    '/nonprofit/NCC0610/0BN00002', '/nonprofit/popup/0BN00001',
     '/event/event02A01',
+    '/gw/APIHandler/gw018A02',
   ]);
 
   // Left-menu ids of 전자결재(비영리) observed in getMenuCountInfo (2026-11-08).
@@ -47,6 +49,10 @@
     {key: 'viewing', label: '열람문서', menu: '11000500', page: 'UCA1040', api: '/ea/ea038A15', period: 'rsReceiveDate'},
   ];
 
+  // 통합검색(gw018A02) boardType codes observed on the portal search screen.
+  const SEARCH_TYPES = {doc: '7', mail: '0', board: '9', file: '10', schedule: '3', person: '11', contact: '16', note: '12'};
+  const SEARCH_LABELS = {doc: '전자결재 문서', mail: '메일', board: '게시판', file: '첨부파일', schedule: '일정', person: '인물', contact: '연락처', note: '노트'};
+
   const ROUTES = {
     mail: '#/UD/UDA/UDA0000?specialLnb=Y&moduleCode=UD&menuCode=UDA&pageCode=UDA0020',
     approvalHome: '#/UC/UCA/UCA0000?specialLnb=Y&moduleCode=UC&menuCode=UCA&pageCode=UCA8000',
@@ -54,8 +60,25 @@
     notice: '#/UF/UFA/UFA0000?specialLnb=Y&moduleCode=UF&menuCode=3000300_001008&pageCode=UFA3000',
     schedule: '#/UE/UEA/UEA0000?specialLnb=Y&moduleCode=UE&menuCode=UEA&pageCode=UEA0000',
     worktime: '#/HP/HPD0220/HPD0220',
+    attendanceRequest: '#/HP/HPD0100/HPD0100',
     leave: '#/HP/HPD0550/HPD0550',
     budget: '#/HP/NPC2040/NCC0610',
+    draft: '#/UC/UCA/UCA0000?specialLnb=Y&moduleCode=UC&menuCode=UCA&pageCode=UCA7000',
+  };
+
+  // Native screens that the groupware itself opens as popups (same origin, embeddable in an iframe).
+  const qs = o => Object.entries(o).filter(([, v]) => v !== undefined && v !== null && v !== '').map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
+  const LINKS = {
+    doc(doc, kind = '') {
+      const p = {MicroModuleCode: 'ea', callComp: 'UCAP001', diKeyCode: doc.docId, tiKeyCode: doc.tiKeyCode};
+      if (kind === 'deptWaiting') Object.assign(p, {pageCode: 'UCA3022', recvOpenYN: 'Y', diSeqNum: doc.diSeqNum});
+      if (kind === 'distWaiting') Object.assign(p, {recvOpenYN: 'Y', isBaebu: 'Y', diSeqNum: doc.diSeqNum});
+      if (kind === 'sendWaiting') Object.assign(p, {isSend: 'Y'});
+      return `${ORIGIN}/#popup?${qs(p)}`;
+    },
+    article: a => `${ORIGIN}/#/popup?${qs({callComp: 'UFAP003', art_seq_no: a.id, cat_seq_no: a.cat, cat_type: a.catType || 'L', alarm_yn: 'Y', MicroModuleCode: 'board', externalYn: 'Y'})}`,
+    file: fileId => `${ORIGIN}/#/popup?${qs({MicroModuleCode: 'ecm', callComp: 'UQAP001', pageCode: 'UQAP029', uid: fileId, targetObjectType: 'FL'})}`,
+    route: r => ORIGIN + '/' + r,
   };
 
   class GwError extends Error {
@@ -86,11 +109,11 @@
 
   function parseRejection(reason) {
     if (reason instanceof GwError) return reason;
-    let text = typeof reason === 'string' ? reason : (reason && reason.message) || String(reason);
+    const text = typeof reason === 'string' ? reason : (reason && reason.message) || (reason && typeof reason === 'object' ? JSON.stringify(reason) : String(reason));
     try {
       const j = JSON.parse(text);
-      const code = j && (j.errors && j.errors.code || j.resultCode || j.errorCode);
-      const msg = j && (j.errors && j.errors.message || j.resultMsg || j.errorMsg) || '';
+      const code = j && (j.errors && j.errors.code || j.resultCode || j.errorCode || j.status);
+      const msg = j && (j.errors && j.errors.message || j.resultMsg || j.errorMsg || j.error) || '';
       if (code === 'E002' || /Token is not exists|Session is not exists/i.test(msg)) return new GwError('SESSION_EXPIRED', '그룹웨어 로그인 세션이 만료되었습니다.');
       if (code === 601) return new GwError('ORIGIN_REJECTED', '허용된 쿠키 인증 URL이 아닙니다(601).');
       return new GwError('API_ERROR', `${code || ''} ${msg}`.trim() || 'API 오류');
@@ -124,12 +147,21 @@
   const str = (v, max = 300) => (v === null || v === undefined) ? '' : String(v).replace(/\s+/g, ' ').trim().slice(0, max);
   const num = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
   const SECRET = /((?:비밀\s*번호|비번|패스워드|password|passwd|pwd|pw|임시\s*번호|인증\s*번호|OTP)\s*[:：=]?\s*)(\S+)/gi;
-  const mask = s => str(s, 1000).replace(SECRET, '$1[MASKED]');
+  const mask = (s, max = 1000) => str(s, max).replace(SECRET, '$1[MASKED]');
+  const arr = v => Array.isArray(v) ? v : [];
   const firstList = obj => {
     if (!obj || typeof obj !== 'object') return {list: [], total: null};
     if (Array.isArray(obj.list)) return {list: obj.list, total: obj.totalCount !== undefined ? num(obj.totalCount) : (obj.startCount !== undefined ? num(obj.startCount) : null)};
     for (const k of ['map', 'list', 'result']) if (obj[k] && typeof obj[k] === 'object' && !Array.isArray(obj[k])) return firstList(obj[k]);
     return {list: [], total: null};
+  };
+  const snippetAround = (text, keyword, size = 160) => {
+    const t = mask(text, 20000);
+    if (!keyword) return t.slice(0, size);
+    const i = t.toLowerCase().indexOf(String(keyword).toLowerCase());
+    if (i < 0) return t.slice(0, size);
+    const start = Math.max(0, i - Math.floor(size / 3));
+    return (start ? '…' : '') + t.slice(start, start + size) + (start + size < t.length ? '…' : '');
   };
 
   function context() {
@@ -146,26 +178,42 @@
     };
   }
 
-  // ---------- modules ----------
+  const approvalBase = (ctx, from, to, pageSize) => ({fDocSts: '', sDocSts: '', readYn: '', selectFlag: '', riKind: '', c_aiokflag: '', allDocSts: '', sortType: 'DESC', page: '1', pageSize: String(pageSize), menuAuthType: 'USER', searchAuthType: 'U', sfrDt: from, stoDt: to, fromDate: from, toDate: to, multiDeptSeq: [], multiKlUserName: [], multiTxtDrafters: [], multiReceiveSendUsers: [], multiRiEmpNames: [], multiLastKlEmps: [], multiaiUserNames: [], co_id: ctx.compSeq, searchType: ''});
+
+  const toDoc = (r, kind = '') => {
+    const doc = {
+      kind, docId: str(r.diKeyCode, 30), tiKeyCode: str(r.tiKeyCode, 30), diSeqNum: str(r.diSeqNum, 30),
+      title: mask(r.diTitle, 300), status: str(r.diStatusName || r.rsStatusName || r.rsFlagName, 60), statusCode: str(r.diStatus || r.rsStatus, 10),
+      drafter: str(r.diEmpName, 40), drafterDept: str(r.diDeptName, 60), approver: str(r.diKyulJaeUserName, 40),
+      sender: str(r.riSendOrgName || r.orgDept || r.riSendDeptName, 100), sendOrg: str(r.riSendOrgName, 60), sendDept: str(r.riSendDeptName, 60), sendDeptCode: str(r.riSendDeptCode, 20),
+      docNo: str(r.riSendDocNum || r.riDocFullNum || r.diDocNum || r.docNo, 60), toDept: str(r.rsDeptName, 60), toEmp: str(r.rsEmpName || r.empName, 40),
+      date: str(r.diWriteDate || r.riArriveDate || r.rsReceiveDate || r.rsReadDate, 25), attachments: num(r.attachCount), comments: num(r.commentCount),
+      // 열람문서 rows carry the reader's empSeq in riReadYn once read and '' before.
+      unread: r.riReadYn === 'N' || r.readYn === 'N' || r.rsReadYn === 'N' || (kind === 'viewing' && !r.riReadYn),
+    };
+    doc.url = LINKS.doc(doc, kind);
+    return doc;
+  };
+
+  // ---------- snapshot modules ----------
   async function collectMail(ctx, opt) {
     const boxesRaw = await call('/mail/mail000A01');
-    const boxes = ((boxesRaw && boxesRaw.mailboxList) || []).map(b => ({seq: b.mboxSeq, name: str(b.name, 60), total: num(b.exists), unseen: num(b.unseen)}));
+    const boxes = arr(boxesRaw && boxesRaw.mailboxList).map(b => ({seq: b.mboxSeq, name: str(b.name, 60), total: num(b.exists), unseen: num(b.unseen)}));
     const inbox = boxes.find(b => b.name === 'INBOX') || {seq: 571, name: 'INBOX'};
     const toMail = (r, box) => ({
-      uid: str(r.muid, 40), box, subject: mask(r.subject).slice(0, 300), from: str(r.fromAddrName || r.from, 80), fromEmail: str(r.fromAddrEmail, 120),
+      uid: str(r.muid, 40), box, subject: mask(r.subject, 300), from: str(r.fromAddrName || r.from, 80), fromEmail: str(r.fromAddrEmail, 120),
       date: str(r.tooltipDate || r.rfc822date, 40), shortDate: str(r.rfc822date, 20), seen: num(r.seen) === 1, flagged: num(r.flagged) === 1,
-      answered: num(r.answered) === 1, forwarded: num(r.forward) === 1, attach: num(r.attach) > 0, size: num(r.size), preview: mask(r.context).slice(0, 220),
+      answered: num(r.answered) === 1, forwarded: num(r.forward) === 1, attach: num(r.attach) > 0, size: num(r.size), preview: mask(r.context, 400),
     });
-    const list = async (box, size, seenFilter) => {
-      const body = {boxName: box.name, mainApiCode: 'mail003A01', mboxSeq: box.seq, page: 1, pageSize: size, sort: 'rfc822date', sortType: 'desc', listType: '', showType: '', seen: false};
-      const d = await call('/mail/mail003A01', body);
-      const records = ((d && d.Records) || []).map(r => toMail(r, box.name));
-      return {total: num(d.TotalRecordCount), unseen: num(d.TotalUnseenCount), records: seenFilter ? records.filter(r => !r.seen) : records};
+    const list = async (box, size, unseenOnly) => {
+      const d = await call('/mail/mail003A01', {boxName: box.name, mainApiCode: 'mail003A01', mboxSeq: box.seq, page: 1, pageSize: size, sort: 'rfc822date', sortType: 'desc', listType: '', showType: '', seen: false});
+      const records = arr(d && d.Records).map(r => toMail(r, box.name));
+      return {total: num(d && d.TotalRecordCount), unseen: num(d && d.TotalUnseenCount), records: unseenOnly ? records.filter(r => !r.seen) : records};
     };
     const inboxData = await list(inbox, Math.min(Math.max(opt.mailCount, 10), 200));
     const extra = boxes.filter(b => !['INBOX', 'SENT', 'DRAFTS', 'TRASH', 'SPAM'].includes(b.name) && b.unseen > 0);
     const others = await Promise.all(extra.map(b => list(b, 30, true).then(x => x.records).catch(() => [])));
-    return {boxes, inbox: {total: inboxData.total, unseen: inboxData.unseen, fetched: inboxData.records.length, records: inboxData.records}, otherUnseen: others.flat(), url: ORIGIN + '/' + ROUTES.mail};
+    return {boxes, inbox: {total: inboxData.total, unseen: inboxData.unseen, fetched: inboxData.records.length, records: inboxData.records}, otherUnseen: others.flat(), url: LINKS.route(ROUTES.mail)};
   }
 
   async function collectApproval(ctx, opt) {
@@ -176,38 +224,36 @@
     });
     const now = new Date();
     const from = ymd(addDays(now, -opt.approvalDays)), to = ymd(now);
-    const base = {fDocSts: '', sDocSts: '', readYn: '', selectFlag: '', riKind: '', c_aiokflag: '', allDocSts: '', sortType: 'DESC', page: '1', pageSize: String(opt.approvalPageSize), menuAuthType: 'USER', searchAuthType: 'U', sfrDt: from, stoDt: to, fromDate: from, toDate: to, multiDeptSeq: [], multiKlUserName: [], multiTxtDrafters: [], multiReceiveSendUsers: [], multiRiEmpNames: [], multiLastKlEmps: [], multiaiUserNames: [], co_id: ctx.compSeq, searchType: ''};
-    const toDoc = (r, viewing = false) => ({
-      docId: str(r.diKeyCode, 30), title: mask(r.diTitle).slice(0, 300), status: str(r.diStatusName || r.rsStatusName || r.rsFlagName, 60), statusCode: str(r.diStatus || r.rsStatus, 10),
-      drafter: str(r.diEmpName, 40), drafterDept: str(r.diDeptName, 60), approver: str(r.diKyulJaeUserName, 40),
-      sender: str(r.riSendOrgName || r.orgDept || r.riSendDeptName, 100), docNo: str(r.riSendDocNum || r.diDocNum || r.docNo, 60),
-      date: str(r.diWriteDate || r.riArriveDate || r.rsReceiveDate || r.rsReadDate, 25), attachments: num(r.attachCount), comments: num(r.commentCount),
-      // 열람문서 rows carry the reader's empSeq in riReadYn once read and '' before.
-      unread: r.riReadYn === 'N' || r.readYn === 'N' || r.rsReadYn === 'N' || (viewing && !r.riReadYn),
-    });
+    const base = approvalBase(ctx, from, to, opt.approvalPageSize);
     const lists = {};
     await Promise.all(APPROVAL_LISTS.map(async def => {
       const body = {...base, nMenuID: def.menu, pageCode: def.page, periodPicker: def.period, sortField: def.period, topSort: def.period, ...(def.extra || {})};
+      const url = LINKS.route(ROUTES.approvalPage(def.page));
       try {
         const {list, total} = firstList(await call(def.api, body));
-        lists[def.key] = {label: def.label, menu: def.menu, total, fetched: list.length, from, to, docs: list.map(r => toDoc(r, def.key === 'viewing')), url: ORIGIN + '/' + ROUTES.approvalPage(def.page)};
+        lists[def.key] = {label: def.label, menu: def.menu, total, fetched: list.length, from, to, docs: list.map(r => toDoc(r, def.key)), url};
       } catch (e) {
-        lists[def.key] = {label: def.label, menu: def.menu, error: e.code || 'ERROR', message: e.message, docs: [], url: ORIGIN + '/' + ROUTES.approvalPage(def.page)};
+        lists[def.key] = {label: def.label, menu: def.menu, error: e.code || 'ERROR', message: e.message, docs: [], url};
       }
     }));
-    return {counts, lists, url: ORIGIN + '/' + ROUTES.approvalHome};
+    return {counts, lists, url: LINKS.route(ROUTES.approvalHome)};
   }
 
   async function collectNotice(ctx, opt) {
     const boardNo = String(opt.noticeBoard || '223');
     const body = {adminPage: 'N', searchAuthType: '', boardNo, searchTotal: '', searchTitle: '', searchNick: '', searchDesc: '', searchBoard: '', searchRemarkNo: '', searchEtcValue: '', searchStartDate: '', searchEndDate: '', searchStartTerm: '', searchEndTerm: '', eventStatus: '', reserveStatus: '', counselingOk: '', searchMailFrom: '', sort: 'write_date', project_id: null, page: 1, pageSize: String(opt.noticeCount), sortType: 'desc', menuCode: 'UFA', pageCode: 'UFA3000', moduleCode: 'UF', noticeYn: '', apiName: 'ViewBoardArtList', use_list_art_content: 'N'};
     const [d, readCnt] = await Promise.all([call('/board/APIHandler/ViewBoardArtList', body), call('/board/APIHandler/getBoardReadCnt', {cat_seq_no: boardNo}).catch(() => null)]);
-    const articles = ((d && d.articleList) || []).map(a => ({
-      id: str(a.art_seq_no, 20), title: mask(a.art_title).slice(0, 300), writer: str(a.mbr_nick, 40), dept: str(a.deptname || a.dept_name, 60),
-      date: str(a.write_date_origin || a.write_date, 25), read: a.art_read_yn === 'Y', top: a.notice_yn === 'Y' || a.notice_yn_top === 'Y',
-      files: num(a.file_cnt), mine: a.my_yn === 'Y', reserved: a.reserve_yn === 'Y' && String(a.reserve_state) === '0', reserveStart: str(a.reserve_start, 25),
-    }));
-    return {board: boardNo, total: num(d.totalCnt), unread: readCnt ? num(String(readCnt.not_read_cnt || '0').split('/')[0]) : null, fetched: articles.length, articles, url: ORIGIN + '/' + ROUTES.notice};
+    const articles = arr(d && d.articleList).map(a => {
+      const art = {
+        id: str(a.art_seq_no, 20), cat: str(a.cat_seq_no || boardNo, 20), catType: str(a.cat_type || 'L', 4), catTitle: str(a.cat_title, 40),
+        title: mask(a.art_title, 300), writer: str(a.mbr_nick, 40), dept: str(a.deptname || a.dept_name, 60),
+        date: str(a.write_date_origin || a.write_date, 25), read: a.art_read_yn === 'Y', top: a.notice_yn === 'Y' || a.notice_yn_top === 'Y',
+        files: num(a.file_cnt), mine: a.my_yn === 'Y', reserved: a.reserve_yn === 'Y' && String(a.reserve_state) === '0', reserveStart: str(a.reserve_start, 25),
+      };
+      art.url = LINKS.article(art);
+      return art;
+    });
+    return {board: boardNo, total: num(d && d.totalCnt), unread: readCnt ? num(String(readCnt.not_read_cnt || '0').split('/')[0]) : null, fetched: articles.length, articles, url: LINKS.route(ROUTES.notice)};
   }
 
   async function collectSchedule(ctx, opt) {
@@ -215,32 +261,46 @@
     const now = new Date();
     const start = ymd(now), end = ymd(addDays(now, opt.days));
     const cals = await call('/schres/sc111A02', {companyInfo, calType: '', langCode: ctx.langCode});
-    const calendars = ((cals && cals.resultList) || []).filter(c => c.displayYn !== 'N').map(c => ({seq: str(c.mcalSeq, 20), type: str(c.calType, 4), title: str(c.calTitle, 60), writable: c.calRwGbn === 'w'}));
+    const calendars = arr(cals && cals.resultList).filter(c => c.displayYn !== 'N').map(c => ({seq: str(c.mcalSeq, 20), type: str(c.calType, 4), title: str(c.calTitle, 60), writable: c.calRwGbn === 'w'}));
     const calList = calendars.map(c => ({mcalSeq: c.seq, calType: c.type, adminYn: c.writable ? 'Y' : 'N', color: ''}));
     const [rows, holidays] = await Promise.all([
       calList.length ? call('/schres/sc111A03', {companyInfo, startDate: start, endDate: end, mySchYn: 'N', calList, tcalList: [], acalList: [], searchEmpSeq: '', excelYn: null, abUID: '', sortDate: 'Y', langCode: ctx.langCode}) : {resultList: []},
       call('/gw/APIHandler/gw114A14', {startDate: start, endDate: end, compSeq: ctx.compSeq}).catch(() => []),
     ]);
-    const events = ((rows && rows.resultList) || []).filter(r => r.delYn !== 'Y').map(r => ({
-      id: str(r.schSeq, 20), title: mask(r.schTitle).slice(0, 200), calendar: str(r.calTitle, 60), start: str(r.startDate, 12), end: str(r.endDate, 12),
+    const events = arr(rows && rows.resultList).filter(r => r.delYn !== 'Y').map(r => ({
+      id: str(r.schSeq, 20), title: mask(r.schTitle, 200), calendar: str(r.calTitle, 60), start: str(r.startDate, 12), end: str(r.endDate, 12),
       allDay: r.alldayYn === 'Y', place: str(r.schPlace, 100), people: str(r.schUserList, 200),
     })).sort((a, b) => a.start.localeCompare(b.start));
-    return {start, end, calendars, events, holidays: (Array.isArray(holidays) ? holidays : []).map(h => ({date: str(h.h_day, 8), title: str(h.title, 60)})), url: ORIGIN + '/' + ROUTES.schedule};
+    return {start, end, calendars, events, holidays: arr(holidays).map(h => ({date: str(h.h_day, 8), title: str(h.title, 60)})), url: LINKS.route(ROUTES.schedule)};
+  }
+
+  async function attendanceDays({from, to} = {}) {
+    const ctx = context();
+    const p = kstParts();
+    const f = from || `${p.y}${p.m}01`, t = to || `${p.y}${p.m}${String(lastDayOfMonth(p.y, p.m)).padStart(2, '0')}`;
+    const rows = await call('/human/hrd0410/selectTab2', {admin: true, appWorkTm: -1, appWorkTmFlag: '1', atDtTo: t, atDtFrom: f, empArr: [ctx.erpEmpSeq], isIncludeHoliday: true, searchType: '1'});
+    return arr(rows).map(r => ({
+      date: str(r.atDt, 8), weekday: num(r.weekDc), workType: str(r.workTpNm, 20), result: str(r.attresultNm, 20), item: str(r.atNm, 30), status: str(r.worktmStNm, 10),
+      come: str(r.comeTm, 4), leave: str(r.leaveTm, 4), recognizedMin: r.appworkTm === null || r.appworkTm === undefined ? null : num(r.appworkTm),
+      holiday: String(r.holiFg) !== '1', applied: r.appformYn === 'Y', lateMin: num(r.latecomeworkTm), earlyLeaveMin: num(r.fastleaveworkTm),
+    })).sort((a, b) => a.date.localeCompare(b.date));
   }
 
   async function collectAttendance(ctx) {
     const p = kstParts();
     const today = `${p.y}${p.m}${p.d}`;
     const monthFrom = `${p.y}${p.m}01`, monthTo = `${p.y}${p.m}${String(lastDayOfMonth(p.y, p.m)).padStart(2, '0')}`;
-    const [todayInfo, month] = await Promise.all([
+    const [todayInfo, month, days] = await Promise.all([
       call('/human/common/judgeTimeManagement/getTodayComeLeaveInfo', {empCd: ctx.erpEmpSeq, coCd: ctx.erpCompSeq, workDt: today}).catch(e => ({error: e.code})),
       call('/personal/hpd0220/0hr00001', {atDtFrom: monthFrom, atDtTo: monthTo}).catch(e => ({error: e.code})),
+      attendanceDays({from: monthFrom, to: today}).catch(e => ({error: e.code})),
     ]);
     const mins = v => (v === null || v === undefined || v === '') ? null : num(v);
     return {
       today: {date: today, come: str(todayInfo && todayInfo.comeTm, 12), leave: str(todayInfo && todayInfo.leaveTm, 12), error: todayInfo && todayInfo.error || ''},
       month: {from: monthFrom, to: monthTo, recognizedMin: mins(month.appworkTm), basicMin: mins(month.basicworkTm), overtimeMin: mins(month.overworkTm), exceptMin: mins(month.exceptworkTm), nightMin: mins(month.nightworkTm), error: month.error || ''},
-      url: ORIGIN + '/' + ROUTES.worktime,
+      days: Array.isArray(days) ? days : [], daysError: Array.isArray(days) ? '' : days.error,
+      url: LINKS.route(ROUTES.worktime), requestUrl: LINKS.route(ROUTES.attendanceRequest),
     };
   }
 
@@ -255,45 +315,121 @@
     const granted = num(s.basicDy) + num(s.belowBasicDy) + num(s.basicAdjustDy) + num(s.addDy) + num(s.etcDy) + num(s.rewDy) + num(s.changeDy) + num(s.boBasicDy) + num(s.boRewDy) + num(s.boChangeDy);
     const used = num(s.useDy) + num(s.useRewDy) + num(s.useChangeDy) + num(s.appProcessDy);
     const today = ymd();
-    const uses = (Array.isArray(usesRaw) ? usesRaw : []).map(u => ({start: str(u.startDt, 8), end: str(u.endDt, 8), startTime: str(u.startTm, 4), endTime: str(u.endTm, 4), kind: str(u.atNm, 30), days: num(u.ycUseCnt), title: mask(u.titleDc).slice(0, 120), approved: String(u.approState) === '1'}));
+    const uses = arr(usesRaw).map(u => ({start: str(u.startDt, 8), end: str(u.endDt, 8), startTime: str(u.startTm, 4), endTime: str(u.endTm, 4), kind: str(u.atNm, 30), days: num(u.ycUseCnt), title: mask(u.titleDc, 120), approved: String(u.approState) === '1', applied: str(u.appDt, 8)}));
     return {
       year, granted: +granted.toFixed(5), used: +used.toFixed(5), remaining: +(granted - used).toFixed(5),
       breakdown: {basic: num(s.basicDy), add: num(s.addDy), reward: num(s.rewDy), change: num(s.changeDy), etc: num(s.etcDy), usedBasic: num(s.useDy), usedReward: num(s.useRewDy), usedChange: num(s.useChangeDy), inApproval: num(s.appProcessDy)},
       upcoming: uses.filter(u => u.end >= today).sort((a, b) => a.start.localeCompare(b.start)), usedCount: uses.length,
-      url: ORIGIN + '/' + ROUTES.leave,
+      history: uses.sort((a, b) => b.start.localeCompare(a.start)).slice(0, 120),
+      url: LINKS.route(ROUTES.leave),
     };
   }
 
+  const budgetRow = r => ({code: str(r.bgtCd, 30), name: str(r.bgtNm, 120), level: str(r.divFgNm, 6), path: str(r.bglistCd, 160), budget: num(r.abgtSumAm), executed: num(r.unitAm), balance: num(r.subAm), rate: num(r.sumRt)});
+  async function budgetTable(ctx, t, opt = {}) {
+    const year = Number(opt.year || t.year || kstParts().y);
+    // 기수(회계기수): 2026년 = 12기 (observed). Override with opt.gisu if the foundation renumbers.
+    const gisu = String(opt.gisu || t.gisu || year - 2014);
+    const body = {bgtFrYm: `${year}01`, bgtToYm: `${year}12`, bgtBeforeFrYm: '', bgtBeforeToYm: '', bgtStartFrYm: `${year}0101`, summaryYn: 'Y', abgtFg: '1', divCds: `${ctx.erpCompSeq}|`, mgtCds: `${t.project}|`, bottomCds: '', mgtBottomList: [], bgtCnt: '1', abdocuFg: '1', acctdefFg: 'N001', abdocuDtFg: '1', grFg: '0', zeroFg: '2', divFg: '8', sumRtFg: '2', ctrCd05: '3', ctrCd10: '1', optionBN03: '1', optionBN10: '1', optionBN11: '0', optionBN14: '0', pOptionBn15: '0', coCd: ctx.erpCompSeq, gisu, empCd: ctx.erpEmpSeq, gisuFrDt: `${year}0101`, gisuToDt: `${year}1231`};
+    const d = await call('/nonprofit/NCC0610/0BN00002', body, {timeoutMs: 30000});
+    const all = arr(d && d.printList).map(budgetRow);
+    const rows = t.filter ? all.filter(r => r.path.split('|').includes(t.filter)) : all;
+    const total = d && d.expendSum ? budgetRow({...d.expendSum, bgtCd: t.project, bgtNm: '합계', divFgNm: '계'}) : null;
+    return {project: t.project, label: t.label || '', filter: t.filter || '', year, gisu, period: '누계', total, rows, rowCount: all.length};
+  }
+
   async function collectBudget(ctx, opt) {
-    const targets = (opt.budget || []).filter(t => t && t.project);
-    if (!targets.length) return {projects: [], skipped: true};
-    const year = Number(opt.budgetYear || kstParts().y);
-    // 기수(회계기수): 2026년 = 12기 (observed). Override with opt.budgetGisu if the foundation renumbers.
-    const gisu = String(opt.budgetGisu || year - 2014);
-    const projects = await Promise.all(targets.map(async t => {
-      const body = {bgtFrYm: `${year}01`, bgtToYm: `${year}12`, bgtBeforeFrYm: '', bgtBeforeToYm: '', bgtStartFrYm: `${year}0101`, summaryYn: 'Y', abgtFg: '1', divCds: `${ctx.erpCompSeq}|`, mgtCds: `${t.project}|`, bottomCds: '', mgtBottomList: [], bgtCnt: '1', abdocuFg: '1', acctdefFg: 'N001', abdocuDtFg: '1', grFg: '0', zeroFg: '2', divFg: '8', sumRtFg: '2', ctrCd05: '3', ctrCd10: '1', optionBN03: '1', optionBN10: '1', optionBN11: '0', optionBN14: '0', pOptionBn15: '0', coCd: ctx.erpCompSeq, gisu, empCd: ctx.erpEmpSeq, gisuFrDt: `${year}0101`, gisuToDt: `${year}1231`};
-      try {
-        const d = await call('/nonprofit/NCC0610/0BN00002', body, {timeoutMs: 30000});
-        const row = r => ({code: str(r.bgtCd, 30), name: str(r.bgtNm, 120), level: str(r.divFgNm, 6), path: str(r.bglistCd, 120), budget: num(r.abgtSumAm), executed: num(r.unitAm), balance: num(r.subAm), rate: num(r.sumRt)});
-        const all = (d.printList || []).map(row);
-        const rows = t.filter ? all.filter(r => r.path.split('|').includes(t.filter)) : all.filter(r => ['관', '항'].includes(r.level));
-        const sum = d.expendSum ? row({...d.expendSum, bgtCd: t.project, bgtNm: '합계', divFgNm: '계'}) : null;
-        return {project: t.project, label: t.label || '', filter: t.filter || '', year, gisu, period: '누계', total: sum, rows, rowCount: all.length};
-      } catch (e) {
-        return {project: t.project, label: t.label || '', filter: t.filter || '', error: e.code || 'ERROR', message: e.message, rows: []};
-      }
-    }));
-    return {projects, url: ORIGIN + '/' + ROUTES.budget};
+    const targets = arr(opt.budget).filter(t => t && t.project);
+    if (!targets.length) return {projects: [], skipped: true, url: LINKS.route(ROUTES.budget)};
+    const projects = await Promise.all(targets.map(t => budgetTable(ctx, t, {year: opt.budgetYear, gisu: opt.budgetGisu}).then(p => (t.filter ? p : {...p, rows: p.rows.filter(r => ['관', '항'].includes(r.level))})).catch(e => ({project: t.project, label: t.label || '', filter: t.filter || '', error: e.code || 'ERROR', message: e.message, rows: []}))));
+    return {projects, url: LINKS.route(ROUTES.budget)};
   }
 
   async function collectAlerts(ctx, opt) {
     const d = await call('/event/event02A01', {header: {groupSeq: ctx.groupSeq, empSeq: ctx.empSeq}, body: {reqType: '2', reqSubType: 'N', pageSize: String(opt.alertCount), newYn: 'N', mentionYn: 'N', langCode: ctx.langCode, eventType: '', searchType: 'received', timeStamp: Date.now()}});
-    const alerts = ((d && d.alertList) || []).map(a => {
+    const alerts = arr(d && d.alertList).map(a => {
       let data = {};
       try { data = typeof a.data === 'string' ? JSON.parse(a.data) : (a.data || {}); } catch { data = {}; }
-      return {type: str(a.eventType, 20), subType: str(a.eventSubType, 20), title: mask(data.title || a.title || a.alertTitle).slice(0, 200), docNo: str(data.doc_no, 60), who: str(data.drafter_nm || data.userName || a.senderName, 40), dept: str(data.deptName, 60), time: str(data.rep_dt || a.createDate || a.alertDate, 25), read: !!a.readDate};
+      const msg = a.message || {};
+      return {type: str(a.eventType, 20), subType: str(a.eventSubType, 20), head: str(msg.alertTitle, 80), title: mask(data.title || msg.alertContent || a.title, 200), docNo: str(data.doc_no, 60), who: str(data.drafter_nm || data.userName || a.senderName, 40), dept: str(data.deptName, 60), time: str(data.rep_dt || a.createDate, 25), read: !!a.readDate, url: a.url && String(a.url).startsWith('/#') ? ORIGIN + a.url : ''};
     });
     return {alerts};
+  }
+
+  // ---------- on-demand functions ----------
+  async function search(keyword, {types = ['doc', 'mail', 'board', 'file', 'schedule', 'person', 'contact'], pageSize = 10, page = 1, from = '', to = ''} = {}) {
+    const kw = String(keyword || '').trim();
+    if (kw.length < 2) throw new GwError('BAD_QUERY', '검색어를 두 글자 이상 입력하세요.');
+    context();
+    const groups = {};
+    await Promise.all(types.filter(t => SEARCH_TYPES[t]).map(async type => {
+      const body = {header: {}, body: {tsearchKeyword: kw, tsearchSubKeyword: '', boardType: SEARCH_TYPES[type], fromDate: from, toDate: to, dateDiv: '', detailSearchYn: from || to ? 'Y' : 'N', selectDiv: 'S', orderDiv: 'B', syncTime: 'N', pageIndex: page, hrSearchYn: 'N', hrEmpSeq: '', pageSize, webMobileDiv: 'W'}};
+      try {
+        const d = await call('/gw/APIHandler/gw018A02', body, {timeoutMs: 20000});
+        const items = arr(d && d.resultgrid).map(x => normalizeSearch(type, x, kw)).filter(Boolean);
+        groups[type] = {label: SEARCH_LABELS[type], total: num(d && d.totalcount), items};
+      } catch (e) { groups[type] = {label: SEARCH_LABELS[type], total: 0, items: [], error: e.code || 'ERROR', message: e.message}; }
+    }));
+    return {keyword: kw, page, pageSize, groups, searchedAt: new Date().toISOString()};
+  }
+
+  // Search results carry names as {kr, en, ...} objects.
+  const ml = v => (v && typeof v === 'object') ? (v.kr || v.ko || Object.values(v).find(x => typeof x === 'string' && x) || '') : v;
+  function normalizeSearch(type, x, kw) {
+    if (type === 'doc') {
+      const form = str(ml(x.formNm), 60);
+      const doc = {type, docId: str(x.docId || x.pkSeq, 30), docNo: str(x.docNo, 60), title: mask(x.docTitle, 300), form: form === 'temporary' ? '접수문서' : form, date: str(x.docDate, 20), drafter: str(ml(x.userNm), 40), dept: str(ml(x.deptNm), 60), files: arr(x.fileList).map(f => ({id: str(f.filePath || f.fileId, 60), name: str(f.orignlFileName || f.fileName, 160)})), snippet: snippetAround(x.docContents, kw)};
+      doc.url = LINKS.doc(doc);
+      return doc;
+    }
+    if (type === 'mail') return {type, uid: str(x.muid, 30), box: str(x.boxName, 30), subject: mask(x.subject, 300), from: str(x.fromAddrName, 60), to: str(x.toAddrName, 60), date: str(x.rfc822date, 20), size: num(x.size), snippet: snippetAround(x.mailBody, kw)};
+    if (type === 'board') {
+      const a = {type, id: str(x.artSeqNo || x.pkSeq, 20), cat: str(x.catSeqNo, 20), catType: str(x.catType || 'L', 4), catTitle: str(ml(x.catTitle), 60), title: mask(x.artTitle, 300), writer: str(ml(x.mbrNick), 40), date: str(x.writeDate, 20), files: arr(x.fileList).map(f => ({id: str(f.fileId || f.filePath, 60), name: str(f.orignlFileName || f.fileName, 160)})), snippet: snippetAround(x.artContent, kw)};
+      a.url = LINKS.article(a);
+      return a;
+    }
+    if (type === 'file') return {type, fileId: str(x.fileId, 60), name: str(x.fileName, 200), ext: str(x.fileExtsn, 10), size: num(x.fileSize), parent: mask(ml(x.title), 200), owner: str(ml(x.empName) || ml(x.createName), 40), date: str(x.createDate, 20), source: str(x.jobType, 20), url: x.fileId ? LINKS.file(x.fileId) : ''};
+    if (type === 'schedule') return {type, id: str(x.schSeq || x.pkSeq, 20), title: mask(x.schTitle, 200), start: str(x.startDate, 20), end: str(x.endDate, 20), snippet: snippetAround(x.contents, kw)};
+    if (type === 'person') return {type, name: str(ml(x.empName), 40), dept: str(ml(x.deptName) || ml(x.compDeptName), 80), duty: str(ml(x.dutyName), 30), position: str(ml(x.positionName), 30), tel: str(x.telNum, 30), email: str(x.emailAddr || x.email, 80)};
+    if (type === 'contact') return {type, name: str(ml(x.empName) || ml(x.title), 60), company: str(ml(x.compName), 80), dept: str(ml(x.division), 60), rank: str(ml(x.rank), 30), email: str(Array.isArray(x.emailAddress) ? x.emailAddress[0] : x.emailAddress, 80), tel: str(arr(x.compNumberList)[0] && (x.compNumberList[0].number || x.compNumberList[0]), 30)};
+    if (type === 'note') return {type, title: mask(x.docName, 200), owner: str(x.ownerName, 40), date: str(x.modDate, 20), snippet: snippetAround(x.content, kw)};
+    return null;
+  }
+
+  async function budgetProject(t, opt = {}) { return budgetTable(context(), t, opt); }
+
+  async function budgetLedger({project, bgtCd, year, gisu, from, to} = {}) {
+    if (!project || !bgtCd) throw new GwError('BAD_QUERY', '프로젝트 코드와 예산과목 코드가 필요합니다.');
+    const ctx = context();
+    const y = Number(year || kstParts().y);
+    const body = {targetDivCd: [ctx.erpCompSeq], searchPeriodFg: '1', searchPeriod: {frDt: from || `${y}0101`, toDt: to || `${y}1231`}, excutionFg: '1', mgtCd: [project], bottomCds: '', mgtBottomList: null, bgtCd: [bgtCd], optionBN01: '2', optionBN02: '1', optionBN03: '1', optionBN11: '0', optionBN14: '0', fgTy02: '', gisu: String(gisu || y - 2014), grFg: '0', printFg: '3'};
+    const d = await call('/nonprofit/popup/0BN00001', body, {timeoutMs: 30000});
+    const rows = arr(d && d.result).map(r => ({
+      date: str(r.gisuDt, 8), desc: mask(r.rmkDc || r.subject, 300), amount: num(r.unitAm), docNo: str(r.noDoc, 60), writer: str(r.korNm, 40), dept: str(r.deptNm, 60),
+      slip: str(r.abdIsuNumber || r.slipApprovNum, 40), fillDate: str(r.docuFillDt, 8), code: str(r.bgtCd, 30), name: str(r.bgtNm, 120), authorized: r.isAuthorized !== 'N',
+    }));
+    return {project, bgtCd, year: y, rows, sum: num(d && d.unitAmSum), checkSum: rows.reduce((s, r) => s + r.amount, 0)};
+  }
+
+  async function routingHistory({days = 180, size = 500} = {}) {
+    const ctx = context();
+    const now = new Date();
+    const from = ymd(addDays(now, -days)), to = ymd(now);
+    const base = approvalBase(ctx, from, to, Math.min(size, 1000));
+    const pick = r => ({title: mask(r.diTitle, 200), sendOrg: str(r.riSendOrgName, 60), sendDept: str(r.riSendDeptName, 60), sendDeptCode: str(r.riSendDeptCode, 20), toDept: str(r.rsDeptName, 60), toEmp: str(r.rsEmpName || r.empName, 40), date: str(r.riArriveDate, 25)});
+    const [dist, dept] = await Promise.all([
+      call('/ea/ea023A02', {...base, nMenuID: '11002800', pageCode: 'UCA3033', periodPicker: 'riArriveDate', sortField: 'riArriveDate', topSort: 'riArriveDate'}, {timeoutMs: 30000}).then(d => firstList(d).list.map(pick)).catch(() => []),
+      call('/ea/ea025A04', {...base, nMenuID: '11002400', pageCode: 'UCA3024', periodPicker: 'riArriveDate', sortField: 'riArriveDate', topSort: 'riArriveDate'}, {timeoutMs: 30000}).then(d => firstList(d).list.map(pick)).catch(() => []),
+    ]);
+    return {from, to, dist: dist.filter(r => r.toDept), dept: dept.filter(r => r.toEmp), fetchedAt: new Date().toISOString()};
+  }
+
+  async function submittedRange({days = 7, size = 100} = {}) {
+    const ctx = context();
+    const now = new Date();
+    const from = ymd(addDays(now, -days)), to = ymd(now);
+    const d = await call('/ea/ea038A09', {...approvalBase(ctx, from, to, size), nMenuID: '11000300', pageCode: 'UCA1020', periodPicker: 'diWriteDate', sortField: 'diWriteDate', topSort: 'diWriteDate', searchSts: '002'});
+    return {from, to, docs: firstList(d).list.map(r => toDoc(r, 'submitted'))};
   }
 
   const MODULES = {mail: collectMail, approval: collectApproval, notice: collectNotice, schedule: collectSchedule, attendance: collectAttendance, leave: collectLeave, budget: collectBudget, alerts: collectAlerts};
@@ -323,5 +459,9 @@
     };
   }
 
-  window.BWYFGW = Object.freeze({version: VERSION, collect, call, context: () => { const c = context(); return {name: c.name, deptName: c.deptName, compName: c.compName}; }, readOnlyEndpoints: () => [...READ_ONLY], routes: ROUTES, defaults: DEFAULTS});
+  window.BWYFGW = Object.freeze({
+    version: VERSION, collect, call, search, budgetProject, budgetLedger, attendanceDays, routingHistory, submittedRange,
+    context: () => { const c = context(); return {name: c.name, deptName: c.deptName, compName: c.compName, duty: c.duty, position: c.position}; },
+    readOnlyEndpoints: () => [...READ_ONLY], routes: ROUTES, links: LINKS, searchLabels: SEARCH_LABELS, defaults: DEFAULTS,
+  });
 })();

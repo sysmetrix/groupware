@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
-import {analyze, nextState, renderHtml, renderMarkdown, toDataset, extractDeadline} from '../src/live/briefing.mjs';
+import {analyze, nextState, renderHtml, renderMarkdown, toDataset, extractDeadline, extractAllDeadlines, attendanceAnomalies, recommendRouting, weeklyReport, toCsv} from '../src/live/briefing.mjs';
 import {validateDataset} from '../src/schema.mjs';
 import {buildReport} from '../scripts/live-report.mjs';
 
@@ -159,4 +159,98 @@ test('collector maps session expiry and isolates module failures', async () => {
 test('collector refuses to run outside a logged-in groupware page', async () => {
   const {api} = await loadCollector({respond: () => Promise.resolve({resultCode: 0, resultData: {}}), userInfo: null});
   await assert.rejects(api.collect({modules: ['leave']}), e => e.code === 'NOT_LOGGED_IN');
+});
+
+// ---------- v2: work center engine ----------
+test('extractAllDeadlines finds every deadline in a document body', () => {
+  const body = '■ 12월 월간업무보고 계획 ○ 자료 제출기한: ~ 11. 25.(수) ▶부서별 자료 제출기한: ~ 11. 19.(목) ○ 보고회: 11. 30.(월) 09:30';
+  const found = extractAllDeadlines(body, NOW).map(x => x.date);
+  assert.deepEqual(found, ['2026-11-19', '2026-11-25']);
+  assert.deepEqual(extractAllDeadlines('2026. 12. 3.(목)까지 회신 바랍니다', NOW).map(x => x.date), ['2026-12-03']);
+  assert.deepEqual(extractAllDeadlines('행사일 11. 30.(월) 개최', NOW), [], 'plain event dates are not deadlines');
+});
+
+test('attendanceAnomalies flags unexplained absences only', () => {
+  const rows = [
+    {date: '20261102', result: '결근', status: '대기', holiday: false, applied: false},
+    {date: '20261103', result: '조퇴', item: '외출', status: '승인', holiday: false, applied: true},
+    {date: '20261106', result: '미인정', item: '관내출장', status: '대기', holiday: false, applied: true},
+    {date: '20261107', result: '휴일', status: '승인', holiday: true},
+  ];
+  const a = attendanceAnomalies(rows);
+  assert.deepEqual(a.map(x => [x.date, x.priority]), [['20261102', 'high'], ['20261106', 'medium']]);
+});
+
+test('analyze turns attendance anomalies into actions with stable keys', () => {
+  const raw = fixture();
+  raw.data.attendance.days = [{date: '20261102', result: '결근', status: '대기', holiday: false, applied: false}];
+  const a = analyze(raw, null, NOW);
+  const x = a.actions.find(y => y.type === 'attendance');
+  assert.equal(x.key, 'att:20261102');
+  assert.equal(x.priority, 'high');
+  assert.ok(a.actions.every(y => typeof y.key === 'string' && y.key.length > 3), 'every action has a key');
+});
+
+test('recommendRouting ranks departments and detects simultaneous distribution', () => {
+  const hist = [
+    {title: '2026년 공중화장실 관리인 교육 참석 안내', sendOrg: '부천시장', sendDept: '자원순환과', sendDeptCode: '3860816', toDept: '고리울청소년센터', date: '2026-10-01 10:00:00'},
+    {title: '2026년 공중화장실 관리인 교육 참석 안내', sendOrg: '부천시장', sendDept: '자원순환과', sendDeptCode: '3860816', toDept: '소사청소년센터', date: '2026-10-01 10:00:00'},
+    {title: '2026년 공중화장실 관리인 교육 참석 안내', sendOrg: '부천시장', sendDept: '자원순환과', sendDeptCode: '3860816', toDept: '산울림청소년센터', date: '2026-10-01 10:00:00'},
+    {title: '청소년지도사 만족도 설문', sendOrg: '부천시장', sendDept: '청년청소년과', sendDeptCode: '3860700', toDept: '부천시청소년센터', date: '2026-09-01 10:00:00'},
+  ];
+  const rec = recommendRouting({title: '공중화장실 관리인 교육 결과 제출', sendOrg: '부천시장', sendDeptCode: '3860816'}, hist);
+  assert.equal(rec.length, 3);
+  assert.ok(rec[0].reasons.includes('같은 발송 부서'));
+  assert.equal(rec.group.targets.length, 3);
+  assert.deepEqual([...recommendRouting({title: '전혀 다른 제목'}, hist)], []);
+});
+
+test('weeklyReport separates work documents from personal requests and groups repeats', () => {
+  const text = weeklyReport({
+    submitted: [
+      {title: '수능 이후 프로그램 제출', status: '결재완료', statusCode: '008', docNo: 'A-1'},
+      {title: '수능 이후 프로그램 제출', status: '결재완료', statusCode: '008', docNo: 'A-2'},
+      {title: '사업 계획', status: '결재중(부장)', statusCode: '002'},
+      {title: '(11-09)대체휴가(홍길동)', status: '결재완료', statusCode: '008'},
+    ],
+    me: '시험부서 홍길동', from: '20261102', to: '20261108', now: NOW,
+  });
+  assert.match(text, /기안·보고 3건 \(결재완료 2, 진행 1\)/);
+  assert.match(text, /수능 이후 프로그램 제출 \(2건: A-1, A-2\)/);
+  assert.match(text, /복무 신청 1건/);
+});
+
+test('toCsv writes a BOM and escapes cells', () => {
+  const csv = toCsv([{a: 'x,"y"', b: 1}], [{label: 'A', key: 'a'}, {label: 'B', value: r => r.b + 1}]);
+  assert.equal(csv, '\uFEFFA,B\r\n"x,""y""",2');
+});
+
+test('collector v2 builds native popup links and normalizes search results', async () => {
+  const {api, calls} = await loadCollector({respond: (p, body) => {
+    if (p === '/gw/APIHandler/gw018A02') return Promise.resolve({resultCode: 0, resultData: {totalcount: 1, resultgrid: [{docId: '9', docNo: 'X-1', docTitle: '예산 보고', formNm: {kr: 'temporary'}, userNm: {kr: '김시험'}, deptNm: {kr: '시험부서'}, docContents: '앞부분 예산 집행 비밀번호: abc123 뒷부분', docDate: '20261101', fileList: []}]}});
+    if (p === '/nonprofit/popup/0BN00001') { assert.deepEqual([...body.mgtCd], ['P1']); assert.deepEqual([...body.bgtCd], ['B1']); return Promise.resolve({resultCode: 0, resultData: {result: [{gisuDt: '20260310', rmkDc: '물품비', unitAm: 300, noDoc: 'D-1', korNm: '홍'}], unitAmSum: 300}}); }
+    return Promise.resolve({resultCode: 0, resultData: {}});
+  }});
+  const s = await api.search('예산', {types: ['doc']});
+  const doc = s.groups.doc.items[0];
+  assert.equal(doc.form, '접수문서');
+  assert.equal(doc.drafter, '김시험');
+  assert.match(doc.snippet, /\[MASKED\]/);
+  assert.match(doc.url, /#popup\?MicroModuleCode=ea&callComp=UCAP001&diKeyCode=9$/);
+  assert.match(api.links.doc({docId: '5', diSeqNum: '2'}, 'distWaiting'), /recvOpenYN=Y&isBaebu=Y&diSeqNum=2/);
+  const l = await api.budgetLedger({project: 'P1', bgtCd: 'B1', year: 2026});
+  assert.equal(l.checkSum, 300);
+  assert.equal(l.rows[0].docNo, 'D-1');
+  await assert.rejects(api.search('a'), e => e.code === 'BAD_QUERY');
+  assert.ok(!calls.some(p => /gw018A04|gw032A01|PutVisitStat|iniWrite/.test(p)), 'no search-history or visit writes');
+});
+
+test('bundle build includes collector, analysis and lazy work center', async () => {
+  const {execFileSync} = await import('node:child_process');
+  const {fileURLToPath} = await import('node:url');
+  execFileSync(process.execPath, [fileURLToPath(new URL('../scripts/live-build.mjs', import.meta.url))], {stdio: 'pipe'});
+  const bundle = await fs.readFile(new URL('../build/live/gw-live.js', import.meta.url), 'utf8');
+  for (const s of ['window.BWYFGW =', 'window.BWYFGW_REPORT', 'window.BWYFGW_WC', 'recommendRouting']) assert.ok(bundle.includes(s), s);
+  const mini = await fs.readFile(new URL('../build/live/bookmarklet-mini.txt', import.meta.url), 'utf8');
+  assert.ok(mini.length < 2000, 'launch bookmark stays small');
 });
