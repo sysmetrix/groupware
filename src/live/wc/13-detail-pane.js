@@ -281,6 +281,32 @@ ${mailFilesBox(m)}
 
 
 
+  
+  // ---------- Smart Record Binder (기록물철) Pattern Resolver ----------
+  function resolveBinderByPattern(title, formName) {
+    const t = String(title || '').trim();
+    const f = String(formName || '').trim();
+
+    // 1. Form-level mapping
+    if (/연차|휴가|외출|반차|조퇴|병가/.test(t) || /연차휴가|휴가/.test(f)) return '근태관리';
+    if (/출장|관내출장|관외출장/.test(t) || /출장신청서/.test(f)) return '근태관리';
+    if (/휴일대체|근무일대체|대체근무/.test(t) || /근무일대체/.test(f)) return '근태관리';
+    if (/시간외|연장근무/.test(t) || /연장근무/.test(f)) return '근태관리';
+    if (/물품매입|수리제조|구입|임차|제작/.test(t) || /물품매입/.test(f)) return '예산 및 자금배정';
+    if (/지출결의|지급|대관료|회의비|사례비|보상금|급량비/.test(t) || /지출결의/.test(f)) return '예산 및 자금배정';
+
+    // 2. Business project & topic mapping (Based on 180 days 200 real documents)
+    if (/AX|AI|경진대회|디지털|스마트|인공지능/.test(t)) return 'AX 챌린저';
+    if (/KPI|성과관리|경영평가|지표|실적평가/.test(t)) return '경영평가';
+    if (/ESG|사회적가치|사회공헌|홍보|협약|MOU/.test(t)) return 'ESG 경영';
+    if (/워크숍|연합교류|캠프|교류활동|협업의날|행사/.test(t)) return '재단행사(협업의날 등)';
+    if (/업무보고|현황 제출|자료 제출|주요 청소년 프로그램/.test(t)) return '업무보고';
+    if (/청년정책|청년 연합|소셜리빙랩|이주배경청소년|설문조사|수요조사/.test(t)) return '기획일반';
+    if (/운영계획|결과보고|계획|방침/.test(t)) return '기획일반';
+
+    return '기획일반';
+  }
+
   // ---------- Smart Auto-Submission & Auto-Fill Service Engine ----------
   async function mailToDraft(uid) {
     const m = findMail('INBOX', uid) || [...(S.raw.data.mail?.inbox.records || []), ...(S.raw.data.mail?.otherUnseen || [])].find(x => x.uid === uid);
@@ -499,7 +525,7 @@ ${mailFilesBox(m)}
     setTimeout(() => {
       autoFillSpecificDraft({
         titleText: resultTitle,
-        targetBinder: '기획일반',
+        targetBinder: resolveBinderByPattern(resultTitle, '일반기안문'),
         bodyText: formattedBody
       });
     }, 4500);
@@ -555,7 +581,7 @@ ${mailFilesBox(m)}
       }
     }
 
-    // 4. Automated Approval Line (기안 서원하 -> 전결 이은경 실장)
+    // 4. Automated Approval Line (기안 서원하 -> 전결 이은경 실장) via Add Button (btnImg ml4) + Apply
     const lineBtn = [...d.querySelectorAll('.topBtn, button')].find(b => b.innerText.trim() === '결재라인지정');
     if (lineBtn) {
       lineBtn.click();
@@ -563,12 +589,12 @@ ${mailFilesBox(m)}
       const dialog = d.querySelector('.obtdialog.open, ._isDialog');
       if (dialog) {
         const siljang = Array.from(dialog.querySelectorAll('*')).find(el => el.children.length === 0 && (el.innerText || '').includes('이은경'));
-        if (siljang) {
-          siljang.click();
-          siljang.dispatchEvent(new MouseEvent('dblclick', {bubbles: true}));
-        }
+        if (siljang) siljang.click();
         await new Promise(r => setTimeout(r, 400));
-        const applyBtn = Array.from(dialog.querySelectorAll('button, input[type="button"]')).find(b => b.innerText.trim() === '반영' || b.innerText.trim() === '확인');
+        const addBtn = dialog.querySelector('button.btnImg.ml4, button[class*="btnImg"]');
+        if (addBtn) addBtn.click();
+        await new Promise(r => setTimeout(r, 600));
+        const applyBtn = Array.from(dialog.querySelectorAll('button, input[type="button"]')).find(b => (b.innerText || '').trim() === '반영');
         if (applyBtn) applyBtn.click();
       }
     }
@@ -601,7 +627,7 @@ ${mailFilesBox(m)}
 
     let titleText = '';
     let bodyHtml = '';
-    let targetBinder = '기획일반';
+    let targetBinder = resolveBinderByPattern(baseTitle, templateType);
 
     if (templateType === 'result' || templateType === 'oneClick') {
       titleText = `2026년『${baseTitle}』운영 결과보고`;
