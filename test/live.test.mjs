@@ -439,7 +439,7 @@ test('safe draft links: interlocked forms (36, 40, 1007, 1012) route to safe mod
   assert.ok(stdUrl.includes('tiKeyCode=mg_20160303185413307'), 'general form opens direct draft popup');
 });
 // ---- 기안 패턴(조직 서식 학습) ----
-import {patternTokens, buildPatternModel, predictDraftMeta, formatRunRef, planToResultTitle, buildResultBody, textWidthPt, buildPlanSkeleton, moneyKo, buildPaymentProposalBody, pendingPayments, sha256Hex, chainAudit, verifyAudit, normalizePolicy, featureAllowed, purgeExpired, compareVersions, maskSensitive, classifyTeamRow, buildTeamCalendar, checkPaymentEntry, maskAccount, isGeminiKey, buildAiContext} from '../src/live/briefing.mjs';
+import {patternTokens, buildPatternModel, predictDraftMeta, formatRunRef, planToResultTitle, buildResultBody, textWidthPt, buildPlanSkeleton, moneyKo, buildPaymentProposalBody, pendingPayments, sha256Hex, chainAudit, verifyAudit, normalizePolicy, featureAllowed, purgeExpired, compareVersions, maskSensitive, classifyTeamRow, buildTeamCalendar, checkPaymentEntry, maskAccount, isGeminiKey, buildAiContext, expandPlanned} from '../src/live/briefing.mjs';
 
 const PLAN_BODY = ['1. 가나부-1613(2026. 3. 4.)호와 관련입니다.', '2. 2026년『시험 사업』을 다음과 같이 운영하고자 합니다.', '  가. 사 업 명: 2026년『시험 사업』', '  나. 운영일정: 2026. 11. 1.(일) 14:00~16:30', '  다. 운영장소: 시험센터 2층', '  라. 참가인원: 연 40명(실 40명) ※ 선착순 접수', '  마. 주요내용: 아주 긴 설명이 이어지는 항목입니다 아주 긴 설명이 이어지는 항목입니다 아주 긴 설명이 이어지는 항목입니다 아주 긴 설명이 이어지는 항목입니다', '  바. 소요예산: 비예산', '', '붙임  운영계획서 1부.  끝.'].join('\r\n');
 
@@ -601,4 +601,19 @@ test('ai helpers: key format and context excludes mail bodies, clips long text',
   assert.equal(isGeminiKey('AQ.Ab8RN6Jabcdefghijklmnopqrstuvwxyz0123456789'), true); assert.equal(isGeminiKey('AQ.short'), false); assert.equal(isGeminiKey('sk-abc'), false); assert.equal(isGeminiKey(''), false);
   const ctx = buildAiContext({name: '서원하', mine: [{state: '급함', title: 'x'.repeat(200), headline: '답장 필요', deadline: '11/09 16:00'}], todayAway: [{name: '김', label: '연차'}], now: new Date('2026-11-09T10:00:00+09:00')});
   assert.match(ctx, /2026-11-09 10:00/); assert.match(ctx, /김\(연차\)/); assert.ok(ctx.split('\n').every(l => l.length < 220));
+});
+
+test('expandPlanned: future-only day rows, weekends skipped in ranges, own overtime kept, duplicates removed', () => {
+  const apps = [
+    {empCd: '1', korNm: '가', deptNm: '전략경영실', atNm: '연차', startDt: '20261112', endDt: '20261117', approState: '1', appDt: 'a', appSq: '1'},
+    {empCd: '1', korNm: '가', deptNm: '전략경영실', atNm: '연차', startDt: '20261112', endDt: '20261117', approState: '1', appDt: 'a', appSq: '1'},
+    {empCd: '2', korNm: '나', deptNm: '전략경영실', atNm: '관내출장', startDt: '20261108', endDt: '20261108', approState: '0', appDt: 'b', appSq: '2'},
+    {empCd: '9', korNm: '나', deptNm: '전략경영실', atNm: '연장근무', startDt: '20261110', endDt: '20261110', startTm: '1800', endTm: '2100', approState: '1', appDt: 'c', appSq: '3'},
+  ];
+  const rows = expandPlanned(apps, {fromYmd: '20261101', toYmd: '20261130', todayYmd: '20261109', meCd: '9'});
+  assert.deepEqual(rows.filter(r => r.item === '연차').map(r => r.date), ['20261112', '20261113', '20261116', '20261117']); // 토·일 제외, 중복 제거
+  assert.equal(rows.some(r => r.item === '관내출장'), false); // 어제까지는 지문 기반 자료 사용                                                                 // 오늘 이전은 지문 기반 자료 사용
+  assert.equal(rows.find(r => r.item === '연장근무').mine, true);
+  const cal = buildTeamCalendar(rows, new Date('2026-11-09T10:00:00+09:00'));
+  assert.equal(cal.byDate['20261112'].length, 1); assert.equal(cal.byDate['20261110'][0].state, 'wait');
 });

@@ -995,3 +995,28 @@ export function buildAiContext({name = '', mine = [], deadlines = [], todayAway 
   return lines.filter(Boolean).join('\n');
 }
 export const AI_SYSTEM = '당신은 한국 공공기관(부천여성청소년재단 전략경영실) 차장의 업무 비서입니다. 아래 업무 요약만 근거로 답하고, 없는 사실은 지어내지 말고 "자료에 없음"이라고 말하세요. 한국어 존댓말, 이모지 금지, 짧고 구체적으로. 우선순위를 말할 때는 마감과 상태를 근거로 들고, 결재·상신·삭제 같은 실행은 제안만 하고 대신 하지 않습니다.';
+
+// ---------------------------------------------------------------------------
+// 도래하지 않은 날짜: 근태/출장 신청 현황(결재 중 포함)을 날짜별 행으로 펼친다. 지문은 아직 없으므로 신청만 보여 준다.
+// ---------------------------------------------------------------------------
+export function expandPlanned(apps = [], {fromYmd, toYmd, todayYmd, meCd = ''} = {}) {
+  const out = [];
+  const toDay = s => Math.floor(Date.parse(fmtYmd(s) + 'T00:00:00Z') / 86400000);
+  const ymdOf = n => new Date(n * 86400000).toISOString().slice(0, 10).replace(/-/g, '');
+  const seen = new Set();
+  for (const a of apps) {
+    const s = String(a.startDt || a.atDt || ''), e = String(a.endDt || a.startDt || a.atDt || '');
+    if (!/^\d{8}$/.test(s) || !/^\d{8}$/.test(e)) continue;
+    const key = [a.empCd, a.appDt, a.appSq, s, e, a.atNm].join('|');
+    if (seen.has(key)) continue; seen.add(key);
+    if (a.deleteReqYn === 'Y' || a.docdelYn === 'N') continue;
+    const multi = s !== e;
+    for (let d = toDay(s); d <= toDay(e) && d - toDay(s) < 62; d++) {
+      const ymd = ymdOf(d), dow = new Date(d * 86400000).getUTCDay();
+      if (ymd < todayYmd || ymd < fromYmd || ymd > toYmd) continue; // 오늘부터는 지문 기록이 아직 없어 신청 현황으로 채운다
+      if (multi && (dow === 0 || dow === 6)) continue;
+      out.push({emp: String(a.empCd || ''), name: a.korNm || a.empNm || '', dept: a.deptNm || '', date: ymd, item: a.atNm || '', appStart: a.startTm || '', appEnd: a.endTm || '', come: '', leave: '', result: '', mine: !!meCd && String(a.empCd) === String(meCd), pending: String(a.approState) !== '1'});
+    }
+  }
+  return out;
+}

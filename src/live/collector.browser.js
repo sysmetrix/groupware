@@ -15,7 +15,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '5.3.2';
+  const VERSION = '5.4.0';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
@@ -25,7 +25,7 @@
     '/ea/ea038A09', '/ea/ea038A15',
     '/board/APIHandler/ViewBoardArtList', '/board/APIHandler/getBoardReadCnt',
     '/schres/sc111A02', '/schres/sc111A03', '/gw/APIHandler/gw114A14',
-    '/human/common/judgeTimeManagement/getTodayComeLeaveInfo', '/personal/hpd0220/0hr00001', '/human/hrd0410/selectTab2',
+    '/human/common/judgeTimeManagement/getTodayComeLeaveInfo', '/personal/hpd0220/0hr00001', '/human/hrd0410/selectTab2', '/human/hrd1130/0hr00004', '/human/hrd0220/0hr00001',
     '/personal/hpd0550/0hp00002', '/personal/hpd0550/0hp00003',
     '/nonprofit/NCC0610/0BN00002', '/nonprofit/popup/0BN00001', '/system/codepickers/CP0001A0001',
     '/event/event02A01',
@@ -315,6 +315,17 @@
       otMin: num(r.overworkTm), holiOtMin: num(r.holioverworkTm), recognizedMin: num(r.appworkTm), holiday: /휴일/.test(r.attresultNm || '') && !r.atNm,
       mine: str(r.empCd, 12) === me,
     })).filter(r => r.item && r.item !== '-').sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name, 'ko'));
+  }
+  // 앞으로 예정된 휴가·출장·연장근무: 근태/출장 신청 현황(결재 중 포함)을 읽는다. 신청일 기준 최근 150일 안의 신청만 본다.
+  async function teamPlanned() {
+    const ctx = context();
+    const now = new Date(), to = ymd(now), from = ymd(addDays(now, -150));
+    const [leave, trip] = await Promise.all([
+      call('/human/hrd0220/0hr00001', {coCd: ctx.erpCompSeq, dateFg: '1', appDtFrom: from, appDtTo: to, approStateList: ['0', '1', '5'], deleteRequest: false, noDoc: '', divCdList: [], deptCdList: [], empCdList: [], atItemCdList: [], atCdList: [], htypCdList: [], prtyCdList: [], keyword: '', administrator: false, searchType: 'deptCd'}).catch(() => []),
+      call('/human/hrd1130/0hr00004', {coCd: ctx.erpCompSeq, appDtFrom: from, appDtTo: to, startDt: '', endDt: '', divCdList: [], deptCdList: [], empCdList: [], approvalStatusCdList: ['0', '1', '2', '3', '5']}).catch(() => []),
+    ]);
+    const pick = r => ({empCd: str(r.empCd, 12), korNm: str(r.korNm || r.empNm, 20), deptNm: str(r.deptNm, 30), atNm: str(r.atNm, 30), atItemNm: str(r.atItemNm, 20), startDt: str(r.startDt, 8), endDt: str(r.endDt, 8), startTm: str(r.startTm, 4), endTm: str(r.endTm, 4), appDt: str(r.appDt, 8), appSq: str(r.appSq, 12), approState: str(r.approState, 2), deleteReqYn: str(r.deleteReqYn, 1), docdelYn: str(r.docdelYn, 1)});
+    return {apps: [...arr(leave), ...arr(trip)].map(pick), me: String(ctx.erpEmpSeq || '')};
   }
   async function collectAttendance(ctx) {
     const p = kstParts();
@@ -645,7 +656,7 @@
   }
 
   window.BWYFGW = Object.freeze({
-    version: VERSION, collect, call, search, budgetCatalog, budgetProject, budgetLedger, budgetMonthly, attendanceDays, teamAttendance, routingHistory, submittedRange, approvalPage, docPreview, frequentForms, findReply, mailDetail, mailAttachment, mailAttachmentPreview, saveBlob,
+    version: VERSION, collect, call, search, budgetCatalog, budgetProject, budgetLedger, budgetMonthly, attendanceDays, teamAttendance, teamPlanned, routingHistory, submittedRange, approvalPage, docPreview, frequentForms, findReply, mailDetail, mailAttachment, mailAttachmentPreview, saveBlob,
     context: () => { const c = context(); return {name: c.name, deptName: c.deptName, compName: c.compName, duty: c.duty, position: c.position}; },
     readOnlyEndpoints: () => [...READ_ONLY], routes: ROUTES, links: LINKS, searchLabels: SEARCH_LABELS, defaults: DEFAULTS,
   });
