@@ -103,6 +103,8 @@ export function attendanceAnomalies(days = [], {now = new Date(), leaves = []} =
   for (const r of days) {
     if (!r || r.holiday || /휴일/.test(r.result || '')) continue;
     if (r.date === today && k.hh < 18) continue; // the day is not over yet
+    // 출근 지문은 판정하지 않는다: 퇴근 지문이 있고 '이상근태'가 출근 지문 누락 때문일 때는 제외
+    if (/이상/.test(r.result || '') && !/결근|지각|조퇴|미인정|미퇴근/.test(r.result || '') && !r.come && r.leave) continue;
     const bad = /결근|지각|조퇴|미인정|미출근|미퇴근|이상/.test(r.result || '');
     if (!bad) continue;
     if (r.applied && r.status === '승인') continue; // covered by an approved request (외출·반차 등)
@@ -875,4 +877,47 @@ export function compareVersions(a, b) {
 // 진단 보고서에서 개인정보 성격의 문자열을 가린다(사번·문서번호 숫자·이메일·전화).
 export function maskSensitive(s) {
   return String(s ?? '').replace(/[\w.+-]+@[\w-]+\.[\w.]+/g, '***@***').replace(/\b01[016789][-\s]?\d{3,4}[-\s]?\d{4}\b/g, '***-****-****').replace(/(empSeq|loginId|사번)["':=\s]+[\w-]+/gi, '$1=***');
+}
+
+// ---------------------------------------------------------------------------
+// 직원 근태 달력: 휴가·출장(교육 포함)·시간외 근무만 골라 표시하고, 시간외는 퇴근 지문을 신청 종료 시각과 대조한다.
+// 출근 지문은 판정하지 않는다(조기근무만 예외).
+// ---------------------------------------------------------------------------
+const hmMin = s => { const m = String(s || '').match(/^(\d{2})(\d{2})$/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
+const hmFmt = s => (String(s || '').length === 4 ? `${s.slice(0, 2)}:${s.slice(2)}` : '');
+export function classifyTeamRow(r, now = new Date()) {
+  const item = String(r.item || '');
+  const k = kstNow(now), today = k.date.replace(/-/g, ''), nowMin = k.hh * 60 + (k.mm || 0);
+  let kind = '';
+  if (/휴가|연차|반차|병가|공가|대체휴가|보상휴가/.test(item)) kind = 'leave';
+  else if (/출장|교육/.test(item)) kind = 'trip';
+  else if (/연장근무|휴일근무|조기근무/.test(item)) kind = 'ot';
+  if (!kind) return null;
+  const base = {kind, label: item, name: r.name, dept: r.dept, date: r.date, mine: !!r.mine, emp: r.emp};
+  if (kind !== 'ot') return {...base, state: 'info', detail: ''};
+  const s = hmMin(r.appStart), e = hmMin(r.appEnd), come = hmMin(r.come), leave = hmMin(r.leave);
+  const span = `${hmFmt(r.appStart)}~${hmFmt(r.appEnd)}`;
+  if (/조기근무/.test(item)) {
+    if (r.date > today || (r.date === today && nowMin < (s ?? 0))) return {...base, state: 'wait', detail: `신청 ${span}`};
+    if (come === null) return {...base, state: 'miss', detail: `신청 ${span} · 출근 지문 없음`};
+    if (s !== null && come > s) return {...base, state: 'short', detail: `신청 ${span} · 출근 ${hmFmt(r.come)} (${come - s}분 늦음)`};
+    return {...base, state: 'ok', detail: `신청 ${span} · 출근 ${hmFmt(r.come)}`};
+  }
+  if (r.date > today || (r.date === today && e !== null && nowMin < e)) return {...base, state: 'wait', detail: `신청 ${span}${leave !== null ? ` · 현재 지문 ${hmFmt(r.leave)}` : ''}`};
+  if (leave === null) return {...base, state: 'miss', detail: `신청 ${span} · 퇴근 지문 없음`};
+  if (e !== null && leave < e) return {...base, state: 'short', detail: `신청 ${span} · 퇴근 지문 ${hmFmt(r.leave)} (신청 종료보다 ${e - leave}분 일찍)`};
+  return {...base, state: 'ok', detail: `신청 ${span} · 퇴근 지문 ${hmFmt(r.leave)}`};
+}
+export function buildTeamCalendar(rows = [], now = new Date()) {
+  const byDate = {}, problems = [];
+  for (const r of rows) {
+    const c = classifyTeamRow(r, now);
+    if (!c) continue;
+    (byDate[c.date] = byDate[c.date] || []).push(c);
+    if (c.kind === 'ot' && (c.state === 'miss' || c.state === 'short')) problems.push(c);
+  }
+  const order = {ot: 0, leave: 1, trip: 2};
+  for (const d of Object.keys(byDate)) byDate[d].sort((a, b) => (b.mine - a.mine) || (order[a.kind] - order[b.kind]) || a.name.localeCompare(b.name, 'ko'));
+  problems.sort((a, b) => (b.mine - a.mine) || b.date.localeCompare(a.date));
+  return {byDate, problems, depts: [...new Set(rows.map(r => r.dept).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ko'))};
 }

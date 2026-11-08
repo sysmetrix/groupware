@@ -173,7 +173,12 @@
       case 'addTodo': addTodoFromInput(); break;
       case 'todoDel': { const t = S.todos.find(x => x.id === el.dataset.id); if (!t) break; pushUndo('할 일 삭제'); S.todos = S.todos.filter(x => x.id !== t.id); delete S.plan[`todo:${t.id}`]; saveLocal(); renderMain(); renderNav(); toastUndo(`"${t.title.slice(0, 20)}" 할 일을 지웠습니다.`); break; }
       case 'todoEdit': { const t = S.todos.find(x => x.id === el.dataset.id); if (!t) break; const nt = prompt('할 일 내용', t.title); if (nt === null) break; const nd = prompt('기한 (YYYY-MM-DD, 비우면 없음)', t.due || ''); pushUndo('할 일 고치기'); t.title = nt.trim() || t.title; t.due = /^\d{4}-\d{2}-\d{2}$/.test((nd || '').trim()) ? nd.trim() : ''; saveLocal(); renderMain(); break; }
-      case 'calPrev': S.cal.offset--; renderMain(); break;
+      case 'calLayer': { const cf = teamCfg(); cf.layers[el.dataset.v] = !cf.layers[el.dataset.v]; renderMain(); break; }
+    case 'calDept': teamCfg().dept = el.dataset.v; renderMain(); break;
+    case 'calMine': { const cf = teamCfg(); cf.mine = !cf.mine; renderMain(); break; }
+    case 'calDay': { const cf = teamCfg(); cf.day = el.dataset.v === cf.day ? '' : el.dataset.v; renderMain(); break; }
+    case 'calTeamReload': delete (S.team || {})[monthKey()]; renderMain(); break;
+    case 'calPrev': S.cal.offset--; renderMain(); break;
       case 'calNext': S.cal.offset++; renderMain(); break;
       case 'calToday': S.cal.offset = 0; renderMain(); break;
       case 'calItem': if (el.dataset.k && S.a.actions.some(x => x.key === el.dataset.k)) { go('today'); selectAction(el.dataset.k); } else if (el.dataset.url) openUrl(el.dataset.url, {title: el.textContent.trim()}); break;

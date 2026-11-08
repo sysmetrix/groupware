@@ -4,6 +4,7 @@
   function vCalendar() {
     const base = new Date(); base.setDate(1); base.setMonth(base.getMonth() + S.cal.offset);
     const y = base.getFullYear(), mo = base.getMonth();
+    ensureTeam(`${y}${String(mo + 1).padStart(2, '0')}`);
     const first = new Date(y, mo, 1), startDow = first.getDay(), last = new Date(y, mo + 1, 0).getDate();
     const items = calendarItems();
     const t0 = today();
@@ -13,13 +14,16 @@
       const iso = `${y}-${String(mo + 1).padStart(2, '0')}-${String(dnum).padStart(2, '0')}`;
       const dow = (startDow + dnum - 1) % 7;
       const its = items.filter(x => x.date === iso);
-      cells.push(`<div class="c ${iso === t0 ? 'today' : ''} ${dow === 0 || its.some(x => x.cls === 'h') ? 'sun' : dow === 6 ? 'sat' : ''}" data-drop-date="${iso}"><div class="dn">${dnum}${iso === t0 ? ' <span class="bdg todo" style="height:18px">오늘</span>' : ''}</div>${its.slice(0, 4).map(it => `<span class="ev ${it.cls}" ${it.todo ? `draggable="true" data-drag="todo:${esc(it.todo)}"` : ''} data-act="calItem" data-k="${esc(it.key || '')}" data-url="${esc(it.url || '')}" title="${esc(it.tag + ' · ' + it.text)}">${esc(it.text)}</span>`).join('')}${its.length > 4 ? `<span class="muted">외 ${its.length - 4}건</span>` : ''}</div>`);
+      const d8 = iso.replace(/-/g, ''), tm = teamOf(d8);
+      cells.push(`<div class="c ${iso === t0 ? 'today' : ''} ${dow === 0 || its.some(x => x.cls === 'h') ? 'sun' : dow === 6 ? 'sat' : ''}" data-drop-date="${iso}" ${tm.length ? `data-act="calDay" data-v="${d8}"` : ''}><div class="dn">${dnum}${iso === t0 ? ' <span class="bdg todo" style="height:18px">오늘</span>' : ''}</div>${tm.slice(0, 4).map(teamChip).join('')}${tm.length > 4 ? `<span class="muted" style="font-size:12px">+${tm.length - 4}명</span>` : ''}${its.slice(0, tm.length ? 2 : 4).map(it => `<span class="ev ${it.cls}" ${it.todo ? `draggable="true" data-drag="todo:${esc(it.todo)}"` : ''} data-act="calItem" data-k="${esc(it.key || '')}" data-url="${esc(it.url || '')}" title="${esc(it.tag + ' · ' + it.text)}">${esc(it.text)}</span>`).join('')}${its.length > (tm.length ? 2 : 4) ? `<span class="muted">외 ${its.length - (tm.length ? 2 : 4)}건</span>` : ''}</div>`);
     }
     const upcoming = items.filter(x => x.date >= t0 && x.cls !== 'h').sort((a, b) => a.date.localeCompare(b.date)).slice(0, 12);
-    const legend = [['e', '일정'], ['l', '내 휴가'], ['d', '기한'], ['a', '근태 확인·출장'], ['t', '내 할 일(끌어서 날짜 변경)'], ['h', '휴일']];
+    const legend = [['e', '일정'], ['l', '내 휴가'], ['d', '기한'], ['a', '근태 확인·출장'], ['t', '내 할 일(끌어서 날짜 변경)'], ['h', '휴일'], ['tl', '직원 휴가'], ['tt', '직원 출장·교육'], ['to', '시간외 퇴근 확인됨'], ['tw', '시간외 퇴근 지문 확인 필요']];
     return `${pgh(`${y}년 ${mo + 1}월`, '', `<button class="btn sm icon" data-act="calPrev" aria-label="이전 달">${ic('back')}</button><button class="btn sm" data-act="calToday">이번 달</button><button class="btn sm icon" data-act="calNext" aria-label="다음 달" style="transform:scaleX(-1)">${ic('back')}</button><a class="btn sm" href="${esc(S.raw.data.schedule?.url || '')}" target="_blank" rel="noopener">${ic('ext')}그룹웨어 일정</a>`)}
+${teamBar(y, mo)}
 <div class="legend">${legend.map(([c, n]) => `<span><i class="ev ${c}" style="display:inline-block;margin:0;padding:0;width:12px;height:12px"></i>${n}</span>`).join('')}</div>
 <div class="cal">${WD.map(w => `<div class="h">${w}</div>`).join('')}${cells.join('')}</div>
+${teamDayPanel()}
 <h2>다가오는 일정·기한</h2>${upcoming.length ? `<div class="list" role="list">${upcoming.map(it => `<div class="row" role="listitem" tabindex="0" data-act="calItem" data-k="${esc(it.key || '')}" data-url="${esc(it.url || '')}" style="grid-template-columns:110px 1fr auto"><span class="bdg ${it.cls === 'd' && R.dday(it.date) <= 1 ? 'urgent' : it.cls === 'd' ? 'todo' : 'tag'}">${esc(it.tag.split(' · ')[0])}</span><div class="mn"><div class="t">${esc(it.text)}</div></div><div class="w">${esc(it.date.slice(5).replace('-', '/'))} · ${ddayText(R.dday(it.date))}</div></div>`).join('')}</div>` : '<div class="list"><div class="empty"><b>다가오는 일정이 없습니다</b></div></div>'}`;
   }
   function calendarItems() {
@@ -27,13 +31,64 @@
     const sc = S.raw.data.schedule;
     for (const e of sc?.events || []) out.push({date: ymd8(e.start), text: `${e.allDay ? '' : dtm12(e.start).slice(11) + ' '}${e.title}`, tag: e.calendar || '일정', cls: 'e'});
     for (const h of sc?.holidays || []) out.push({date: ymd8(h.date), text: h.title, tag: '휴일', cls: 'h'});
-    for (const u of S.raw.data.leave?.history || S.raw.data.leave?.upcoming || []) out.push({date: ymd8(u.start), text: `${u.kind}${u.days ? ' ' + fmtDays(u.days) : ''}`, tag: '내 휴가', cls: 'l'});
+    const teamOn = Object.values(S.team || {}).some(t => t.rows);
+    if (!teamOn) for (const u of S.raw.data.leave?.history || S.raw.data.leave?.upcoming || []) out.push({date: ymd8(u.start), text: `${u.kind}${u.days ? ' ' + fmtDays(u.days) : ''}`, tag: '내 휴가', cls: 'l'});
     for (const d of S.a.deadlines) { const ow = d.key && S.a.actions.find(a => a.key === d.key); const hot = !ow || (isMine(ow) && ['overdue', 'urgent', 'todo'].includes(stateOf(ow))); out.push({date: d.date, text: `${d.time ? d.time + ' ' : ''}${d.title}`, tag: hot ? `기한 · ${d.source}` : `기한(확인용) · ${d.source}`, cls: hot ? 'd' : 'h', key: d.key, url: d.url}); }
     for (const x of S.a.actions.filter(x => x.type === 'attendance')) out.push({date: String(x.when).slice(0, 10), text: x.headline || x.title, tag: '근태 확인', cls: 'a', key: x.key});
-    for (const r of S.raw.data.attendance?.days || []) if (/출장/.test(r.item || '')) out.push({date: ymd8(r.date), text: r.item, tag: '출장', cls: 'a'});
+    if (!teamOn) for (const r of S.raw.data.attendance?.days || []) if (/출장/.test(r.item || '')) out.push({date: ymd8(r.date), text: r.item, tag: '출장', cls: 'a'});
     if (S.pane.extract) for (const x of S.pane.extract.deadlines) out.push({date: x.date, text: x.context, tag: '본문 기한', cls: 'd'});
     for (const t of S.todos.filter(t => t.due && t.status !== 'done')) out.push({date: t.due, text: t.title, tag: '내 할 일', cls: 't', todo: t.id, url: t.url});
     return out;
+  }
+
+  // ----- 직원 근태 레이어 (휴가·출장·시간외 퇴근 지문) -----
+  const TEAM_STATE = {ok: ['✓', '퇴근 지문 확인'], miss: ['✗', '지문 없음'], short: ['!', '신청 종료 전 퇴근'], wait: ['…', '아직 진행 전'], info: ['', '']};
+  function teamCfg() { const cs = S.cal; cs.layers = cs.layers || {leave: true, trip: true, ot: true}; cs.dept = cs.dept || ''; cs.day = cs.day || ''; return cs; }
+  function monthKey() { const b = new Date(); b.setDate(1); b.setMonth(b.getMonth() + S.cal.offset); return `${b.getFullYear()}${String(b.getMonth() + 1).padStart(2, '0')}`; }
+  function ensureTeam(mk) {
+    S.team = S.team || {};
+    if (S.team[mk] || !GW.teamAttendance) return;
+    const lastD = new Date(Number(mk.slice(0, 4)), Number(mk.slice(4)), 0).getDate();
+    S.team[mk] = {busy: true, rows: null, err: ''};
+    GW.teamAttendance({from: mk + '01', to: mk + String(lastD).padStart(2, '0')})
+      .then(rows => { S.team[mk] = {busy: false, rows, err: '', cal: R.buildTeamCalendar(rows, new Date()), at: Date.now()}; })
+      .catch(e => { S.team[mk] = {busy: false, rows: null, err: String(e.message || e).slice(0, 80)}; logError('team', e.message); })
+      .finally(() => { if (S.view === 'calendar') renderMain(); });
+  }
+  function teamEntries(mk) {
+    const cfg = teamCfg(), t = (S.team || {})[mk];
+    if (!t || !t.cal) return {byDate: {}, problems: [], depts: []};
+    const keep = x => cfg.layers[x.kind] && (!cfg.dept || x.dept === cfg.dept) && (!cfg.mine || x.mine);
+    const byDate = {};
+    for (const [d, l] of Object.entries(t.cal.byDate)) { const f = l.filter(keep); if (f.length) byDate[d] = f; }
+    return {byDate, problems: t.cal.problems.filter(keep), depts: t.cal.depts};
+  }
+  const teamOf = d8 => (teamEntries(monthKey()).byDate[d8] || []);
+  function teamChip(x) {
+    const st = TEAM_STATE[x.state] || TEAM_STATE.info;
+    const cls = x.kind === 'leave' ? 'tl' : x.kind === 'trip' ? 'tt' : x.state === 'ok' ? 'to' : x.state === 'wait' ? 'tn' : 'tw';
+    const txt = x.kind === 'ot' ? `${x.name} 시간외 ${st[0]}` : `${x.name} ${x.label.replace(/^(관내|관외)/, '$1 ')}`;
+    return `<span class="ev ${cls} ${x.mine ? 'me' : ''}" title="${esc(x.name + ' · ' + x.dept + ' · ' + x.label + (x.detail ? ' · ' + x.detail : ''))}">${esc(txt)}</span>`;
+  }
+  function teamBar(y, mo) {
+    const cfg = teamCfg(), mk = monthKey(), t = (S.team || {})[mk] || {};
+    const te = teamEntries(mk);
+    const lay = [['leave', '휴가'], ['trip', '출장·교육'], ['ot', '시간외 퇴근']];
+    const status = t.busy ? '<span class="muted"><span class="spin"></span> 직원 근태를 불러오는 중…</span>' : t.err ? `<span class="muted">직원 근태를 읽지 못했습니다(${esc(t.err)}) <button class="btn sm" data-act="calTeamReload">다시</button></span>` : t.rows ? `<span class="muted">직원 ${new Set(t.rows.map(r => r.emp)).size}명 · 읽기 전용 · 휴가·출장·시간외만 표시</span>` : '';
+    const pr = te.problems;
+    return `<div class="teambar"><div class="seg">${lay.map(([k, n]) => `<button class="${cfg.layers[k] ? 'on' : ''}" data-act="calLayer" data-v="${k}">${n}</button>`).join('')}</div>
+      <div class="seg"><button class="${!cfg.dept ? 'on' : ''}" data-act="calDept" data-v="">전체 부서</button>${te.depts.map(d => `<button class="${cfg.dept === d ? 'on' : ''}" data-act="calDept" data-v="${esc(d)}">${esc(d.replace(/청소년센터|여성청소년센터/, m => m))}</button>`).join('')}</div>
+      <label class="chk"><input type="checkbox" data-act="calMine" ${cfg.mine ? 'checked' : ''}> 내 것만</label>${status}</div>
+      ${cfg.layers.ot && t.rows ? (pr.length ? `<div class="box warn tprob"><b>시간외 퇴근 지문 확인 필요 ${pr.length}건</b> <span class="muted">(신청 종료 시각과 퇴근 지문 대조 · 출근 지문은 보지 않음)</span>${pr.slice(0, 4).map(p => `<div class="tp ${p.mine ? 'me' : ''}" role="button" tabindex="0" data-act="calDay" data-v="${p.date}"><span class="bdg ${p.state === 'miss' ? 'urgent' : 'check'}">${p.state === 'miss' ? '지문 없음' : '일찍 퇴근'}</span> <b>${esc(p.name)}</b>${p.mine ? ' (나)' : ''} <span class="muted">${esc(p.date.slice(4, 6))}/${esc(p.date.slice(6))} · ${esc(p.detail)}</span></div>`).join('')}${pr.length > 8 ? `<div class="muted">외 ${pr.length - 8}건은 날짜를 눌러 확인하세요</div>` : ''}</div>` : '<div class="box tip tprob"><b>시간외 신청일의 퇴근 지문이 모두 정상입니다</b></div>') : ''}`;
+  }
+  function teamDayPanel() {
+    const cfg = teamCfg(), d8 = cfg.day;
+    if (!d8) return '';
+    const l = teamOf(d8);
+    if (!l.length) return '';
+    const grp = [['ot', '시간외 근무'], ['leave', '휴가'], ['trip', '출장·교육']];
+    return `<div class="box" style="margin-top:12px"><b>${esc(d8.slice(0, 4))}-${esc(d8.slice(4, 6))}-${esc(d8.slice(6))}</b> 직원 근태 <button class="btn sm ghost" data-act="calDay" data-v="">닫기</button>
+      ${grp.map(([k, n]) => { const g = l.filter(x => x.kind === k); return g.length ? `<div style="margin-top:8px"><span class="muted">${n} ${g.length}명</span>${g.map(x => { const st = TEAM_STATE[x.state] || TEAM_STATE.info; return `<div class="tp ${x.mine ? 'me' : ''}"><b>${esc(x.name)}</b> <span class="muted">${esc(x.dept)}</span> · ${esc(x.label)}${x.kind === 'ot' ? ` <span class="bdg ${x.state === 'ok' ? 'confirm' : x.state === 'miss' ? 'urgent' : x.state === 'wait' ? 'info' : 'check'}">${st[0]} ${st[1]}</span> <span class="muted">${esc(x.detail)}</span>` : ''}</div>`; }).join('')}</div>` : ''; }).join('')}</div>`;
   }
 
   // ----- 예산 집행 (customizable: pick any foundation project & subject, pin to my list) -----

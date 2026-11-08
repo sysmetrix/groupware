@@ -15,7 +15,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '5.0.0';
+  const VERSION = '5.1.0';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
@@ -298,6 +298,24 @@
     })).sort((a, b) => a.date.localeCompare(b.date));
   }
 
+
+  // 직원 근태(조회 전용): 같은 사번 체계(앞자리 + 3자리 순번)를 병렬 조회해 휴가·출장·시간외 판정에 필요한 필드만 돌려준다.
+  async function teamAttendance({from, to} = {}) {
+    const ctx = context();
+    const me = String(ctx.erpEmpSeq || '');
+    const m = me.match(/^(\D*\d*?)(\d{3})$/);
+    if (!m) throw Object.assign(new Error('사번 형식을 알 수 없습니다'), {code: 'EMP_FORMAT'});
+    const prefix = m[1];
+    const chunks = [];
+    for (let s = 1; s <= 400; s += 100) { const ids = []; for (let i = s; i < s + 100 && i <= 999; i++) ids.push(prefix + String(i).padStart(3, '0')); chunks.push(ids); }
+    const lists = await Promise.all(chunks.map(ids => call('/human/hrd0410/selectTab2', {admin: true, appWorkTm: -1, appWorkTmFlag: '1', atDtTo: to, atDtFrom: from, empArr: ids, isIncludeHoliday: true, searchType: '1'}).catch(() => [])));
+    return lists.flatMap(arr).map(r => ({
+      emp: str(r.empCd, 12), name: str(r.korNm, 20), dept: str(r.deptNm, 30), date: str(r.atDt, 8), item: str(r.atNm, 30), result: str(r.attresultNm, 20),
+      appStart: str(r.appStartTm, 4), appEnd: str(r.appEndTm, 4), come: str(r.comeTm, 4), leave: str(r.leaveTm, 4),
+      otMin: num(r.overworkTm), holiOtMin: num(r.holioverworkTm), recognizedMin: num(r.appworkTm), holiday: /휴일/.test(r.attresultNm || '') && !r.atNm,
+      mine: str(r.empCd, 12) === me,
+    })).filter(r => r.item && r.item !== '-').sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name, 'ko'));
+  }
   async function collectAttendance(ctx) {
     const p = kstParts();
     const today = `${p.y}${p.m}${p.d}`;
@@ -627,7 +645,7 @@
   }
 
   window.BWYFGW = Object.freeze({
-    version: VERSION, collect, call, search, budgetCatalog, budgetProject, budgetLedger, budgetMonthly, attendanceDays, routingHistory, submittedRange, approvalPage, docPreview, frequentForms, findReply, mailDetail, mailAttachment, mailAttachmentPreview, saveBlob,
+    version: VERSION, collect, call, search, budgetCatalog, budgetProject, budgetLedger, budgetMonthly, attendanceDays, teamAttendance, routingHistory, submittedRange, approvalPage, docPreview, frequentForms, findReply, mailDetail, mailAttachment, mailAttachmentPreview, saveBlob,
     context: () => { const c = context(); return {name: c.name, deptName: c.deptName, compName: c.compName, duty: c.duty, position: c.position}; },
     readOnlyEndpoints: () => [...READ_ONLY], routes: ROUTES, links: LINKS, searchLabels: SEARCH_LABELS, defaults: DEFAULTS,
   });

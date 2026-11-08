@@ -386,7 +386,7 @@ test('work center: every clickable data-act has a handler, CSS is a separate des
   const dir = new URL('../src/live/wc/', import.meta.url);
   const names = (await fs.readdir(dir)).filter(n => n.endsWith('.js')).sort();
   const src = (await fs.readFile(new URL('../src/live/workcenter.browser.js', import.meta.url), 'utf8')) + (await Promise.all(names.map(n => fs.readFile(new URL(n, dir), 'utf8')))).join('\n');
-  const css = await fs.readFile(new URL('../src/live/wc-style.css', import.meta.url), 'utf8');
+  const css = (await fs.readFile(new URL('../src/live/wc-style.css', import.meta.url), 'utf8')) + (await fs.readFile(new URL('../src/live/wc-theme.css', import.meta.url), 'utf8'));
   const acts = new Set([...src.matchAll(/data-act=\\?"([A-Za-z]+)\\?"/g)].map(m => m[1]));
   const handled = new Set([...src.matchAll(/case '([A-Za-z]+)'/g)].map(m => m[1]));
   const special = new Set(['closeOverlay', 'toastUndo']);
@@ -439,7 +439,7 @@ test('safe draft links: interlocked forms (36, 40, 1007, 1012) route to safe mod
   assert.ok(stdUrl.includes('tiKeyCode=mg_20160303185413307'), 'general form opens direct draft popup');
 });
 // ---- 기안 패턴(조직 서식 학습) ----
-import {patternTokens, buildPatternModel, predictDraftMeta, formatRunRef, planToResultTitle, buildResultBody, textWidthPt, buildPlanSkeleton, moneyKo, buildPaymentProposalBody, pendingPayments, sha256Hex, chainAudit, verifyAudit, normalizePolicy, featureAllowed, purgeExpired, compareVersions, maskSensitive} from '../src/live/briefing.mjs';
+import {patternTokens, buildPatternModel, predictDraftMeta, formatRunRef, planToResultTitle, buildResultBody, textWidthPt, buildPlanSkeleton, moneyKo, buildPaymentProposalBody, pendingPayments, sha256Hex, chainAudit, verifyAudit, normalizePolicy, featureAllowed, purgeExpired, compareVersions, maskSensitive, classifyTeamRow, buildTeamCalendar} from '../src/live/briefing.mjs';
 
 const PLAN_BODY = ['1. 가나부-1613(2026. 3. 4.)호와 관련입니다.', '2. 2026년『시험 사업』을 다음과 같이 운영하고자 합니다.', '  가. 사 업 명: 2026년『시험 사업』', '  나. 운영일정: 2026. 11. 1.(일) 14:00~16:30', '  다. 운영장소: 시험센터 2층', '  라. 참가인원: 연 40명(실 40명) ※ 선착순 접수', '  마. 주요내용: 아주 긴 설명이 이어지는 항목입니다 아주 긴 설명이 이어지는 항목입니다 아주 긴 설명이 이어지는 항목입니다 아주 긴 설명이 이어지는 항목입니다', '  바. 소요예산: 비예산', '', '붙임  운영계획서 1부.  끝.'].join('\r\n');
 
@@ -541,4 +541,22 @@ test('governance: audit hash chain detects tampering, policy normalization, rete
   assert.deepEqual(Object.keys(r.patterns.docs).sort(), ['b', 'c']); assert.equal(r.removed, 1);
   assert.equal(compareVersions('4.10.0', '4.9.0'), 1); assert.equal(compareVersions('4.9.0', '4.9'), 0);
   assert.ok(!/a@b|1234-5678|202030/.test(maskSensitive('a@b.com 010-1234-5678 empSeq: 202030')));
+});
+
+test('team calendar: classify leave/trip/overtime and check leave-work fingerprint against requested end', () => {
+  const now = new Date('2026-11-09T09:00:00+09:00');
+  const row = o => ({name: '가나', dept: '전략경영실', date: '20261105', item: '연장근무', appStart: '1800', appEnd: '2100', come: '', leave: '2102', ...o});
+  assert.equal(classifyTeamRow(row(), now).state, 'ok');                       // 출근 지문 없어도 퇴근만 보면 정상
+  assert.equal(classifyTeamRow(row({leave: '2043'}), now).state, 'short');
+  assert.match(classifyTeamRow(row({leave: '2043'}), now).detail, /17분 일찍/);
+  assert.equal(classifyTeamRow(row({leave: ''}), now).state, 'miss');
+  assert.equal(classifyTeamRow(row({date: '20261110'}), now).state, 'wait');
+  assert.equal(classifyTeamRow(row({item: '관내출장'}), now).kind, 'trip');
+  assert.equal(classifyTeamRow(row({item: '사외교육'}), now).kind, 'trip');
+  assert.equal(classifyTeamRow(row({item: '오후반차'}), now).kind, 'leave');
+  assert.equal(classifyTeamRow(row({item: '외출'}), now), null);                // 외출·조퇴는 표시하지 않음
+  assert.equal(classifyTeamRow(row({item: '조기근무', appStart: '0700', appEnd: '0900', come: '0648', leave: ''}), now).state, 'ok');
+  assert.equal(classifyTeamRow(row({item: '조기근무', appStart: '0700', appEnd: '0900', come: '', leave: ''}), now).state, 'miss');
+  const cal = buildTeamCalendar([row({leave: '2000', mine: true}), row({name: '다라', item: '연차', date: '20261105'})], now);
+  assert.equal(cal.problems.length, 1); assert.equal(cal.byDate['20261105'].length, 2); assert.equal(cal.byDate['20261105'][0].mine, true);
 });
