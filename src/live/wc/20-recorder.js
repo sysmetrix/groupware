@@ -7,7 +7,7 @@
   const REC_DANGER = /^(결재\s*상신|결재상신|상신하기|상신|결재|임시저장|저장|보관|보내기|발송|회수|삭제|승인|반려|전결|대결|전송|폐기|기안)(\(\w\))?$/;
   const REC_TYPES = new Set(['click', 'dblclick', 'type', 'select', 'check', 'key', 'canvasClick', 'confirm', 'assert', 'waitFor']);
   // 클릭 대상(버튼) 이름을 글자, 값, aria-label, title 어디서든 찾아 위험 여부를 판단한다.
-  const recDanger = el => { const b = (el.closest && el.closest('button,a,[role=button],.OBTButton,input[type=button],input[type=submit]')) || el; return [b.innerText, b.value, b.getAttribute && b.getAttribute('aria-label'), b.title].map(x => rNorm(x).replace(/\s+/g, '')).find(x => x && REC_DANGER.test(x)) || ''; };
+  const recDanger = el => { const b = (el.closest && el.closest('button,a,[role=button],.topBtn,.OBTButton,input[type=button],input[type=submit]')) || el; return [b.innerText, b.value, b.getAttribute && b.getAttribute('aria-label'), b.title].map(x => rNorm(x).replace(/\s+/g, '')).find(x => x && REC_DANGER.test(x)) || ''; };
   const REC_DATA_ATTRS = ['data-testid', 'data-id', 'data-code', 'data-name', 'name'];
   const rNorm = s => (s || '').replace(/\s+/g, ' ').trim();
   const rVisible = el => !!(el && el.isConnected && el.getClientRects().length > 0);
@@ -184,6 +184,7 @@
         if (!window.confirm(`비가역 버튼(“${dl}”)을 누릅니다. 진행할까요?`)) throw new Error(`“${dl}” 실행 거부로 중단`);
       }
       if (dl) AUTO.allow = true; // 사용자가 확인한 이 한 번의 동작만 가드를 통과시킨다
+      try {
       el.scrollIntoView({block: 'center', inline: 'center'});
       const r = el.getBoundingClientRect();
       if (step.type === 'click' || step.type === 'dblclick') recMouse(el, r.left + r.width / 2, r.top + r.height / 2, step.type === 'dblclick');
@@ -192,7 +193,7 @@
       else if (step.type === 'check') { if (!!el.checked !== !!step.checked) el.click(); }
       else if (step.type === 'key') { const w = el.ownerDocument.defaultView; el.dispatchEvent(new w.KeyboardEvent('keydown', {key: step.key, ctrlKey: !!step.ctrlKey, bubbles: true})); el.dispatchEvent(new w.KeyboardEvent('keyup', {key: step.key, ctrlKey: !!step.ctrlKey, bubbles: true})); }
       else if (step.type === 'assert') { const actual = rNorm(el.innerText || el.value || el.textContent), want = interp(step.expectText, vars); if (!actual.includes(want)) throw new Error(`검증 실패: “${want}” ≠ “${actual.slice(0, 40)}”`); }
-      AUTO.allow = false;
+      } finally { AUTO.allow = false; }
       return `${used.by}: ${String(used.value).slice(0, 40)}`;
     };
     return {
@@ -221,7 +222,7 @@
   // ---------- 기록기 화면 ----------
   const macroLoad = () => { const m = store.get('macros', []); return Array.isArray(m) ? m : []; };
   const macroSave = m => store.set('macros', m);
-  const recFrameDocNow = () => { const f = $('#frame iframe'); try { return f && f.contentDocument; } catch { return null; } };
+  const recFrameDocNow = () => { const f = $('#frame iframe'); try { const d = f && f.contentDocument; if (d && AUTO.running) installGuard(d.defaultView); return d; } catch { return null; } };
   const recVarsOf = m => [...new Set((JSON.stringify(m.steps).match(/\{\{\s*([^}]+?)\s*\}\}/g) || []).map(x => x.replace(/[{}\s]/g, '')))];
   const stepLabel = s => {
     const sel = (s.selectors && s.selectors[0] && s.selectors[0].value) || '';
@@ -313,8 +314,6 @@
     const vars = {};
     for (const v of recVarsOf(m)) { const val = prompt(`“${v}” 값을 입력하세요.`, (m.vars || {})[v] ?? ''); if (val === null) return; vars[v] = val; }
     closeOverlay();
-    try { const fw = $('#frame iframe').contentWindow; installGuard(fw); } catch {}
-    AUTO.running = true; AUTO.allow = false;
     const log = [];
     const render = () => { const el = $('#recplay'); if (el) el.innerHTML = m.steps.map((s, k) => `<div style="display:flex;gap:8px;padding:3px 0;border-top:1px solid var(--line)"><b style="width:18px;color:${log[k] ? (log[k].ok ? 'var(--ok)' : 'var(--hi)') : 'var(--muted)'}">${log[k] ? (log[k].ok ? '✓' : '✗') : (k === log.length ? '▶' : '·')}</b><span style="flex:1">${stepLabel(s)}${log[k] && !log[k].ok ? `<div class="err" style="font-size:12px">${esc(log[k].detail)}</div>` : ''}</span></div>`).join(''); };
     $('#overlay').innerHTML = `<div class="modal"><div class="dlg" data-stop="1" style="width:min(620px,94vw);padding:18px 22px;position:absolute;right:24px;bottom:24px;top:auto;left:auto;transform:none;max-height:70vh;overflow:auto" role="dialog" aria-label="기록 재생"><h2 style="margin:0 0 6px;font-size:16px">▶ ${esc(m.name)} 재생 중</h2><div id="recplay"></div><div class="acts" style="margin-top:8px;justify-content:flex-end"><button class="btn sm danger" data-act="recAbort">중지</button><button class="btn sm primary" data-act="closeHelp">닫기</button></div></div></div>`;
@@ -322,7 +321,8 @@
     player = createPlayer({getRootDocs: () => { const x = recFrameDocNow(); return x ? [x] : []; }, onProgress: (k, res) => { log[k] = res; render(); },
       beforeStep: mode === 'step' ? async (s, k) => window.confirm(`${k + 1}/${m.steps.length}단계를 실행할까요?\n${stepLabel(s).replace(/<[^>]+>/g, '')}`) : null});
     let r;
-    try { r = await player.play(m, {vars}); } finally { AUTO.running = false; AUTO.allow = false; player = null; }
+    AUTO.running = true; AUTO.allow = false;
+    try { const fw = $('#frame iframe').contentWindow; installGuard(fw); r = await player.play(m, {vars}); } finally { AUTO.running = false; AUTO.allow = false; player = null; }
     logActionRecord({command: `기록 재생: ${m.name}`, type: '기록기', target: m.name, summary: r.ok ? `${m.steps.length}단계를 모두 재생했습니다.` : `${r.at + 1}단계에서 중단했습니다: ${(r.results[r.at] || {}).detail || ''}`, steps: r.results.map((x, k) => `${x.ok ? '✓' : '✗'} ${k + 1}. ${x.detail}`), verified: r.ok});
     toast(r.ok ? `“${m.name}” 재생을 마쳤습니다.` : `재생을 중단했습니다: ${(r.results[r.at] || {}).detail || ''}`);
   }

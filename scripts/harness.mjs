@@ -11,7 +11,7 @@ import {graphReport} from './graph.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = new Set(process.argv.slice(2));
 const FAST = args.has('--fast'), AS_JSON = args.has('--json');
-const BUDGET = {bundleKB: 640, wcFileLines: 1200, minFontPx: 12};
+const BUDGET = {bundleKB: 640, wcFileLines: 600, minFontPx: 12};
 const node = process.execPath;
 const sh = (cmd, a, opt = {}) => spawnSync(cmd, a, {cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, ...opt});
 
@@ -48,6 +48,32 @@ await stage('코드 그래프', async () => {
   return {fails, warns, info: `모듈 ${g.files.length}, 이벤트 ${g.acts.length}, 처리기 ${g.cases.length}`};
 });
 
+await stage('이벤트 데이터 계약', async () => {
+  // 처리기가 el.dataset.X 를 읽으면, 그 data-act 를 만드는 모든 템플릿 태그에 data-X 가 있어야 한다(없으면 클릭 시 undefined).
+  const dir = path.join(root, 'src', 'live', 'wc');
+  const files = (await fs.readdir(dir)).filter(n => n.endsWith('.js')).sort();
+  const srcs = {}; for (const n of files) srcs[n] = await fs.readFile(path.join(dir, n), 'utf8');
+  const ev = srcs[files.find(n => n.includes('events'))];
+  const all = Object.values(srcs).join('\n');
+  const fails = [], warns = [];
+  const re = /case '([\w-]+)':((?:\s*case '[\w-]+':)*)([^]*?)(?=\n\s*case '|\n\s*default:)/g;
+  for (const m of ev.matchAll(re)) {
+    const acts = [m[1], ...[...m[2].matchAll(/case '([\w-]+)'/g)].map(x => x[1])];
+    const need = [...new Set([...m[3].matchAll(/(?:el|actEl)\.dataset\.(\w+)/g)].map(x => x[1]))];
+    const optional = k => new RegExp('!\\s*(?:el|actEl)\\.dataset\\.' + k + '\\b|(?:el|actEl)\\.dataset\\.' + k + '\\s*(?:\\|\\||\\?\\?)').test(m[3]);
+    if (!need.length) continue;
+    for (const a of acts) {
+      const tags = [...all.matchAll(new RegExp('<[^<>]*data-act="' + a + '"[^<>]*>', 'g'))].map(x => x[0]);
+      if (!tags.length) continue;
+      for (const k of need.filter(k => !optional(k))) {
+        const missing = tags.filter(tg => !new RegExp('data-' + k.replace(/[A-Z]/g, c => '-' + c.toLowerCase()) + '=').test(tg));
+        if (missing.length === tags.length) fails.push('data-act="' + a + '" 처리기는 dataset.' + k + ' 를 읽는데 템플릿에 data-' + k + ' 가 없음');
+        else if (missing.length) warns.push('data-act="' + a + '" 일부 템플릿(' + missing.length + '곳)에 data-' + k + ' 없음');
+      }
+    }
+  }
+  return {fails, warns, info: '처리기 데이터 요구 검사'};
+});
 await stage('단위 테스트', async () => {
   const files = FAST ? ['test/live.test.mjs', 'test/harness.test.mjs'] : (await fs.readdir(path.join(root, 'test'))).filter(n => n.endsWith('.test.mjs')).map(n => 'test/' + n);
   const r = sh(node, ['--test', ...files]);

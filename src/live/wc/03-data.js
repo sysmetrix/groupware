@@ -93,11 +93,6 @@
     try { S.routing = await GW.routingHistory({days: 180, size: 500}); store.set('routing', S.routing); } catch (e) { toast('배부·접수 이력을 읽지 못했습니다: ' + e.message); }
     return S.routing;
   }
-  async function loadForms(force = false) {
-    if (S.forms && !force && Date.now() - (S.forms.at || 0) < 7 * 86400_000) return S.forms.list;
-    try { const list = await GW.frequentForms(); S.forms = {at: Date.now(), list}; store.set('forms', S.forms); } catch (e) { toast('양식 목록을 읽지 못했습니다: ' + e.message); }
-    return S.forms ? S.forms.list : [];
-  }
   const previewCache = new Map();
   async function loadPreview(doc) {
     const k = doc.docNo || doc.title;

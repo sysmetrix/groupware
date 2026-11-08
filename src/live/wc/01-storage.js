@@ -21,7 +21,8 @@
         // Legacy migration: if per-user storage is empty, check legacy global key for 'default' or initial run
         if (v === null && currentKey !== 'default') {
           const old = localStorage.getItem('bwyfgw:wc:' + k);
-          if (old !== null) { v = old; localStorage.setItem(p + k, old); localStorage.removeItem('bwyfgw:wc:' + k); } // 한 번만 이관하고 원본은 지워 다른 사용자에게 넘어가지 않게 한다
+          const owner = localStorage.getItem('bwyfgw:wc:migrated:' + k); // 이미 다른 사용자가 가져간 자료는 넘겨받지 않는다
+          if (old !== null && (!owner || owner === currentKey)) { v = old; localStorage.setItem(p + k, old); localStorage.setItem('bwyfgw:wc:migrated:' + k, currentKey); } // 한 번만 이관하고 원본은 지워 다른 사용자에게 넘어가지 않게 한다
         }
         return v === null ? d : JSON.parse(v);
       } catch { return d; }

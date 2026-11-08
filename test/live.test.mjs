@@ -439,7 +439,7 @@ test('safe draft links: interlocked forms (36, 40, 1007, 1012) route to safe mod
   assert.ok(stdUrl.includes('tiKeyCode=mg_20160303185413307'), 'general form opens direct draft popup');
 });
 // ---- 기안 패턴(조직 서식 학습) ----
-import {patternTokens, buildPatternModel, predictDraftMeta, formatRunRef, planToResultTitle, buildResultBody, textWidthPt, buildPlanSkeleton, moneyKo, buildPaymentProposalBody, pendingPayments, sha256Hex, chainAudit, verifyAudit, normalizePolicy, featureAllowed, purgeExpired, compareVersions, maskSensitive, classifyTeamRow, buildTeamCalendar} from '../src/live/briefing.mjs';
+import {patternTokens, buildPatternModel, predictDraftMeta, formatRunRef, planToResultTitle, buildResultBody, textWidthPt, buildPlanSkeleton, moneyKo, buildPaymentProposalBody, pendingPayments, sha256Hex, chainAudit, verifyAudit, normalizePolicy, featureAllowed, purgeExpired, compareVersions, maskSensitive, classifyTeamRow, buildTeamCalendar, checkPaymentEntry, maskAccount} from '../src/live/briefing.mjs';
 
 const PLAN_BODY = ['1. 가나부-1613(2026. 3. 4.)호와 관련입니다.', '2. 2026년『시험 사업』을 다음과 같이 운영하고자 합니다.', '  가. 사 업 명: 2026년『시험 사업』', '  나. 운영일정: 2026. 11. 1.(일) 14:00~16:30', '  다. 운영장소: 시험센터 2층', '  라. 참가인원: 연 40명(실 40명) ※ 선착순 접수', '  마. 주요내용: 아주 긴 설명이 이어지는 항목입니다 아주 긴 설명이 이어지는 항목입니다 아주 긴 설명이 이어지는 항목입니다 아주 긴 설명이 이어지는 항목입니다', '  바. 소요예산: 비예산', '', '붙임  운영계획서 1부.  끝.'].join('\r\n');
 
@@ -579,4 +579,19 @@ test('review fixes: midnight overtime, combined items, amount safety, docNo prio
   assert.equal(predictDraftMeta(m, {sourceDocNo: 'A-2', sourceTitle: '동명'}).binder, '정답철');
   assert.equal(pendingPayments([{docNo: 'A-1', title: '회의비 지급 건의', form: '일반기안문', binder: 'X'}, {binder: 'X', form: '지출결의서(기안포함)', refs: ['A-1 (2026. 11. 8.)']}]).length, 0);
   assert.equal(attendanceAnomalies([{date: '20261108', result: '미출근', come: '', leave: '1800', holiday: false}], {now}).length, 0);
+});
+
+test('payment entry check: cards/transfers vs planned amount, duplicates, bad input', () => {
+  const now = new Date('2026-11-09T10:00:00+09:00');
+  const card = {date: '20261105', merchant: 'A마트', amount: '120,000', approval: '123456'};
+  const ok = checkPaymentEntry({cards: [card], transfers: [{payee: '홍길동', bank: '국민', account: '123-4567-8901', amount: '80000', date: '20261106'}]}, 200000, now);
+  assert.equal(ok.ok, true); assert.equal(ok.total, 200000); assert.equal(ok.diff, 0);
+  const over = checkPaymentEntry({cards: [{...card, amount: '300000'}]}, 200000, now);
+  assert.equal(over.ok, false); assert.match(over.errors.join(' '), /초과 집행/);
+  const less = checkPaymentEntry({cards: [card]}, 200000, now);
+  assert.equal(less.ok, true); assert.match(less.warns.join(' '), /잔액/);
+  assert.equal(checkPaymentEntry({}, 1000, now).ok, false);
+  assert.match(checkPaymentEntry({cards: [{...card, date: '20261201'}]}, 0, now).errors.join(' '), /오늘 이후/);
+  assert.match(checkPaymentEntry({cards: [card, card]}, 999999, now).errors.join(' '), /중복/);
+  assert.equal(maskAccount('123-4567-8901'), '*******8901');
 });

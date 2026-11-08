@@ -53,7 +53,7 @@ ${teamDayPanel()}
     GW.teamAttendance({from: mk + '01', to: mk + String(lastD).padStart(2, '0')})
       .then(rows => { S.team[mk] = {busy: false, rows, err: '', cal: R.buildTeamCalendar(rows, new Date()), at: Date.now()}; })
       .catch(e => { S.team[mk] = {busy: false, rows: null, err: String(e.message || e).slice(0, 80)}; logError('team', e.message); })
-      .finally(() => { if (S.view === 'calendar') renderMain(); });
+      .finally(() => { if (S.view === 'calendar' || S.view === 'today') renderMain(); });
   }
   function teamEntries(mk) {
     const cfg = teamCfg(), t = (S.team || {})[mk];
@@ -62,6 +62,29 @@ ${teamDayPanel()}
     const byDate = {};
     for (const [d, l] of Object.entries(t.cal.byDate)) { const f = l.filter(keep); if (f.length) byDate[d] = f; }
     return {byDate, problems: t.cal.problems.filter(keep), depts: t.cal.depts};
+  }
+  // 홈 화면 카드: 오늘 누가 자리를 비웠는지, 최근 시간외 퇴근 지문 확인 필요
+  function teamHomeCard() {
+    if (!allowed('teamAttendance') || !GW.teamAttendance) return '';
+    const p = R.kstNow(new Date()), mk = p.date.slice(0, 7).replace('-', '');
+    ensureTeam(mk);
+    if (p.d <= 7) { const pm = new Date(p.y, p.m - 2, 1); ensureTeam(`${pm.getFullYear()}${String(pm.getMonth() + 1).padStart(2, '0')}`); }
+    const t = (S.team || {})[mk];
+    if (!t || !t.cal) return t && t.busy ? '<div class="card2 teamhome"><div class="ct">오늘 직원 근태</div><span class="muted"><span class="spin"></span> 불러오는 중…</span></div>' : '';
+    const prevKey = (() => { const pm = new Date(p.y, p.m - 2, 1); return `${pm.getFullYear()}${String(pm.getMonth() + 1).padStart(2, '0')}`; })();
+    const pt = (S.team || {})[prevKey];
+    const s = R.teamHomeSummary(t.cal, new Date());
+    if (p.d <= 7 && pt && pt.cal) s.problems = [...s.problems, ...R.teamHomeSummary({byDate: {}, problems: pt.cal.problems}, new Date(Date.now() - 0)).problems, ...pt.cal.problems.filter(x => x.date >= R.kstNow(new Date(Date.now() - 7 * 86400000)).date.replace(/-/g, ''))].filter((x, i, a) => a.findIndex(y => y.name === x.name && y.date === x.date) === i);
+    const nm = x => esc(x.name) + (x.mine ? '(나)' : '') + ' <span class="muted">' + esc(x.label.replace(/^(관내|관외)/, '$1 ')) + '</span>';
+    const away = s.leave.length + s.trip.length;
+    const left = away
+      ? `<div class="card2"><div class="ct">오늘 자리 비움 <span class="bdg info">${away}명</span></div><div style="line-height:1.9">${s.leave.length ? '휴가: ' + s.leave.map(nm).join(' · ') + '<br>' : ''}${s.trip.length ? '출장·교육: ' + s.trip.map(nm).join(' · ') : ''}</div></div>`
+      : '';
+    const prob = s.problems.length
+      ? `<div class="card2 warnside"><div class="ct">시간외 퇴근 지문 확인 필요 <span class="bdg urgent">${s.problems.length}건</span> <button class="btn sm ghost" data-act="goCalendar" style="margin-left:auto">근태 확인하기</button></div>${s.problems.slice(0, 4).map(x => `<div class="trow"><span>${esc(x.name)}${x.mine ? '(나)' : ''}</span><span class="muted">${esc(x.date.slice(4, 6))}/${esc(x.date.slice(6))} · ${esc(x.state === 'miss' ? '지문 없음' : '일찍 퇴근')}</span></div>`).join('')}${s.problems.length > 4 ? `<button class="btn sm ghost" data-act="goCalendar">외 ${s.problems.length - 4}건 더보기</button>` : ''}</div>`
+      : '';
+    if (!left && !prob) return '<div class="teamhome quiet"><span class="bdg confirm">직원 근태</span> <span class="muted">오늘 자리 비운 직원과 최근 7일 시간외 지문 문제가 없습니다</span></div>';
+    return `<div class="cards teamhome">${left}${prob}</div>`;
   }
   const teamOf = d8 => (teamEntries(monthKey()).byDate[d8] || []);
   function teamChip(x) {

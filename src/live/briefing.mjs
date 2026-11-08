@@ -711,7 +711,7 @@ export function buildResultBody(planBody = '', {runday = '', docNo = '', planTit
       if (m) {
         let body = m[1];
         if (/^(참가인원|인\s*원|참\s*가\s*인\s*원)\s*:/.test(body)) { body = body.replace(/\s*※.*$/, ''); notes.push('참가인원 실적 확인'); }
-        items.push(`  ${'가나다라마바사아자차카타파하'[n++]}. ${body}`);
+        items.push(`  ${ordKo(n++)}. ${body}`);
       } else items.push(l);
     }
   }
@@ -741,7 +741,7 @@ export function buildPlanSkeleton(model, {title = ''} = {}) {
   for (let i = start; i < lines.length; i++) {
     if (/^\s*붙임/.test(lines[i])) break;
     const m = lines[i].match(/^ {2}(?:[가-하]|\d{1,2})\.\s+([^:：]+[:：])/);
-    if (m) items.push(`  ${'가나다라마바사아자차카타파하'[n++]}. ${m[1].trim()} `);
+    if (m) items.push(`  ${ordKo(n++)}. ${m[1].trim()} `);
   }
   const out = [refLine || '1. 전략경영실-    (    .  .  .)호와 관련입니다.', kind === '참가' ? `2. ${name}에 참가하고자 합니다.` : `2. ${name}${(() => { const k = [...name].reverse().find(ch => /[가-힣]/.test(ch)); return k && (k.charCodeAt(0) - 0xAC00) % 28 === 0 ? '를' : '을'; })()} 다음과 같이 운영하고자 합니다.`, ...items, '', `붙임  ${kind === '참가' ? '안내문' : '운영계획서'} 1부.  끝.`];
   return {lines: out, text: out.join('\r\n'), basis: best.e.title};
@@ -751,6 +751,9 @@ export function buildPlanSkeleton(model, {title = ''} = {}) {
 // 지급 문서 패턴: 계획서 -> 지급 건의(일반기안문) -> 지출결의서(기안포함)  /  계획서 -> 물품매입품의서 -> 지출결의서(기안미포함)
 // ---------------------------------------------------------------------------
 // 금액 -> "금200,000원(금이십만원)". 실제 문서처럼 십·백·천 앞의 '일'을 생략하지 않는다(일십오만, 일백삼십만).
+// 항목 부호: 가나다...하, 거너더...허, 고노도...호 (14개를 넘겨도 undefined가 나오지 않게)
+const ORD_KO = '가나다라마바사아자차카타파하거너더러머버서어저처커터퍼허고노도로모보소오조초코토포호';
+export const ordKo = n => ORD_KO[n] || String(n + 1);
 export function moneyKo(n) {
   const v = Math.round(Number(n));
   if (!Number.isFinite(v) || v <= 0) return '';
@@ -925,3 +928,50 @@ export function buildTeamCalendar(rows = [], now = new Date()) {
   problems.sort((a, b) => (b.mine - a.mine) || b.date.localeCompare(a.date));
   return {byDate, problems, depts: [...new Set(rows.map(r => r.dept).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ko'))};
 }
+
+// 홈 요약: 오늘 부재(휴가·출장)와 최근 7일 시간외 퇴근 지문 확인 필요
+export function teamHomeSummary(cal, now = new Date()) {
+  const today = kstNow(now).date.replace(/-/g, '');
+  const day = (cal && cal.byDate && cal.byDate[today]) || [];
+  const from = new Date(now.getTime() - 7 * 86400000), f8 = kstNow(from).date.replace(/-/g, '');
+  const problems = ((cal && cal.problems) || []).filter(p => p.date >= f8 && p.date <= today);
+  return {leave: day.filter(x => x.kind === 'leave'), trip: day.filter(x => x.kind === 'trip'), ot: day.filter(x => x.kind === 'ot'), problems};
+}
+
+// ---------------------------------------------------------------------------
+// 지출 확인: 건의/품의 금액 대비 실제로 쓴 내역(법인카드 승인, 계좌이체)을 사용자에게 먼저 묻고 대조한다.
+// ---------------------------------------------------------------------------
+export function checkPaymentEntry(entry = {}, planned = 0, now = new Date()) {
+  const today = kstNow(now).date.replace(/-/g, '');
+  const errors = [], warns = [];
+  const d8 = s => String(s || '').replace(/\D/g, '').slice(0, 8);
+  const cards = (entry.cards || []).filter(r => r.merchant || r.amount || r.date || r.approval);
+  const trans = (entry.transfers || []).filter(r => r.payee || r.amount || r.account || r.bank || r.date);
+  if (!cards.length && !trans.length) errors.push('법인카드 사용 내역이나 계좌이체 내역을 한 건 이상 입력하세요');
+  cards.forEach((r, i) => {
+    const n = `카드 ${i + 1}번`;
+    if (!parseWon(r.amount)) errors.push(`${n}: 금액을 입력하세요`);
+    if (!String(r.merchant || '').trim()) errors.push(`${n}: 가맹점(사용처)을 입력하세요`);
+    if (d8(r.date).length !== 8) errors.push(`${n}: 사용일을 8자리(예: 20261105)로 입력하세요`);
+    else if (d8(r.date) > today) errors.push(`${n}: 사용일이 오늘 이후입니다`);
+    if (!String(r.approval || '').trim()) warns.push(`${n}: 승인번호가 비어 있습니다(영수증과 대조하려면 입력 권장)`);
+  });
+  trans.forEach((r, i) => {
+    const n = `이체 ${i + 1}번`;
+    if (!parseWon(r.amount)) errors.push(`${n}: 금액을 입력하세요`);
+    if (!String(r.payee || '').trim()) errors.push(`${n}: 받는 사람(예금주·업체)을 입력하세요`);
+    if (!String(r.bank || '').trim()) errors.push(`${n}: 은행을 입력하세요`);
+    if (String(r.account || '').replace(/\D/g, '').length < 8) errors.push(`${n}: 계좌번호를 확인하세요(숫자 8자리 이상)`);
+    if (d8(r.date).length !== 8) warns.push(`${n}: 이체(예정)일이 비어 있거나 형식이 다릅니다`);
+  });
+  const cardTotal = cards.reduce((a, r) => a + parseWon(r.amount), 0), transTotal = trans.reduce((a, r) => a + parseWon(r.amount), 0);
+  const total = cardTotal + transTotal, diff = planned ? total - planned : 0;
+  if (planned && diff > 0) errors.push(`입력 합계 ${total.toLocaleString('en-US')}원이 건의·품의 금액 ${planned.toLocaleString('en-US')}원보다 ${diff.toLocaleString('en-US')}원 많습니다(초과 집행)`);
+  else if (planned && diff < 0) warns.push(`입력 합계가 건의·품의 금액보다 ${(-diff).toLocaleString('en-US')}원 적습니다(잔액)`);
+  if (!planned) warns.push('건의·품의 금액을 찾지 못해 대조하지 못했습니다');
+  const seen = new Set(), dup = [];
+  for (const r of cards) { const k = `${d8(r.date)}|${String(r.approval || '').trim()}|${parseWon(r.amount)}`; if (r.approval && seen.has(k)) dup.push(r.merchant); seen.add(k); }
+  if (dup.length) errors.push(`같은 카드 승인이 중복 입력됨: ${dup.join(', ')}`);
+  return {ok: errors.length === 0, errors, warns, cardTotal, transTotal, total, planned, diff, cards, trans};
+}
+export const maskAccount = a => { const s = String(a || '').replace(/\D/g, ''); return s.length > 4 ? '*'.repeat(s.length - 4) + s.slice(-4) : s; };

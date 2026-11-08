@@ -192,3 +192,11 @@ nav a{margin:1px 0}
 .cal .ev{min-height:24px;line-height:1.5}
 main>.cal,main>.teambar,main>.tprob{max-width:none}
 @media (prefers-reduced-motion:reduce){.stat:hover,.cmd-preset:hover,.btn:active,.hb:active{transform:none}.wc *{transition-duration:.01ms!important}}
+
+.teamhome{margin:22px 0 8px;align-items:start}
+.teamhome.quiet{display:flex;gap:10px;align-items:center;padding:10px 14px;border:1px dashed var(--line2);border-radius:12px}
+.teamhome .card2 .ct{display:flex;align-items:center;gap:8px}
+.teamhome .warnside{border-left:3px solid var(--hi)}
+.teamhome .trow{display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid var(--line);font-size:13px}
+
+.trow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--line);font-size:13px}

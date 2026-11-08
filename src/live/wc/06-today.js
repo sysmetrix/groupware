@@ -54,7 +54,8 @@
 </div>
 
 <div id="batch">${batchBar()}</div>
-<div id="qlist">${queueRows()}</div>`;
+<div id="qlist">${queueRows()}</div>
+${tab === 'mine' ? teamHomeCard() : ''}`;
   }
 
   const queueRows = () => {

@@ -47,8 +47,13 @@
         }
         break;
       }
-      case 'openResultPicker': openResultPlanPicker(); break;
       case 'openPay': openPaymentHub(); break;
+    case 'expOpen': expOpen(el.dataset.id); break;
+    case 'expAdd': expAdd(el.dataset.kind); break;
+    case 'expDel': expDel(el.dataset.kind, +el.dataset.i); break;
+    case 'expCheck': expCheck(); break;
+    case 'expGo': expGo(); break;
+    case 'expClose': expClose(); break;
     case 'openData': openDataCenter(); break;
     case 'openDiag': openDiag(); break;
     case 'govDel': govDel(el.dataset.k); break;
@@ -88,7 +93,6 @@
       case 'rmMute': openMenu('mute:' + el.dataset.k); break;
       case 'rmMine': openMenu('mine:' + el.dataset.k); break;
       case 'rmWindow': { const x = S.a.actions.find(a => a.key === el.dataset.k); closeOverlay(); if (x) openWindow(x.url, x); break; }
-      case 'relMenu': e.stopPropagation(); openMenu(`${el.dataset.l}:${el.dataset.k}`); break;
       case 'relAdd': {
         if (el.dataset.l === 'mine' && el.dataset.t === 'kind' && ['deptWaiting', 'distWaiting', 'sendWaiting'].includes(el.dataset.v)) { const ro = S.settings.roles = {...(S.settings.roles || {})}; ro[{deptWaiting: 'deptReceiver', distWaiting: 'distributor', sendWaiting: 'sender'}[el.dataset.v]] = true; saveLocal(); reanalyze(); closeOverlay(); render(); toast('설정의 “내 업무 범위”에 반영했습니다.'); break; }
         addRule(el.dataset.l, el.dataset.t, el.dataset.v, el.dataset.label);
@@ -96,10 +100,7 @@
         break;
       }
       case 'delRule': { const r = rel(); r[el.dataset.l].splice(Number(el.dataset.i), 1); saveLocal(); if (S.raw) reanalyze(); render(); break; }
-      case 'refToggle': S.refOpen = !el.open; break;
       case 'mailDetail': { const m = findMail(el.dataset.box, el.dataset.uid); if (m && confirm('이 메일을 불러오면 그룹웨어에 읽음으로 표시됩니다. 불러올까요?')) loadMailDetail(m, true); break; }
-      case 'crumbView': if (S.focus) { stopFocus(); break; } if (!leavePane()) break; S.sel = null; S.pane.url = ''; S.pane.expanded = false; render(); break;
-      case 'toggleCharts': S.settings.showCharts = !showCharts(); saveLocal(); renderMain(); break;
       case 'searchExample': S.search.kw = el.dataset.v; runSearch(); break;
       case 'view': go(v); break;
       case 'help': toggleHelp(); break;
@@ -206,7 +207,6 @@
       case 'richBrief': copyRich(briefHtml(), R.renderMarkdown(S.a)); break;
       case 'csvQueue': download(`할일목록_${today()}.csv`, R.toCsv(queue(), csvCols), 'text/csv;charset=utf-8'); break;
       case 'mkWeekly': makeWeekly(); break;
-      case 'cpWeekly': copyText(S.weekly); break;
       case 'richWeekly': copyRich(weeklyHtml(S.weekly), S.weekly); break;
       case 'dlWeekly': download(`주간업무실적_${today()}.txt`, S.weekly); break;
       case 'budgetRowAdd': S.settings.budget.push({project: '', filter: '', label: ''}); renderMain(); break;
@@ -228,7 +228,6 @@
       }
       case 'resetDone': pushUndo('표시 초기화'); S.hidden = {}; S.snooze = {}; S.plan = {}; saveLocal(); render(); toastUndo('숨기기·미루기·보드 계획을 지웠습니다.'); break;
       case 'resetRouting': S.routing = null; store.del('routing'); toast('추천 이력을 지웠습니다.'); break;
-      case 'tourAgain': S.settings.tourDone = false; saveLocal(); toggleHelp(true); break;
       case 'resetAll': if (confirm('이 브라우저에 저장된 내 업무센터 설정·할 일·표시를 모두 지울까요? (그룹웨어 자료는 바뀌지 않습니다)')) { const p = getPrefix(); for (const k of Object.keys(localStorage)) if (k.startsWith(p)) localStorage.removeItem(k); S.hidden = {}; S.snooze = {}; S.plan = {}; S.todos = []; S.newKeys.clear(); S.activity = []; S.history = []; S.settings = {...DEFAULT_SETTINGS}; S.routing = null; S.forms = null; applyLook(); render(); } break;
       case 'toastUndo': undo(); root.querySelector('.toast')?.remove(); break;
       default: break;

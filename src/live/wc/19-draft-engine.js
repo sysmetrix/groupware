@@ -155,7 +155,7 @@
     if (win.__wcGuard) return;
     win.__wcGuard = true;
     const block = e => {
-      if (!AUTO.running || AUTO.allow) return;
+      if (e.isTrusted || !AUTO.running || AUTO.allow) return; // 사람이 직접 누른 클릭은 막지 않는다(자동 동작만 차단)
       const b = e.target && e.target.closest && e.target.closest('button,a,[role=button],.topBtn,.OBTButton,input[type=button],input[type=submit]');
       const t = [b && b.innerText, b && b.value, b && b.getAttribute && b.getAttribute('aria-label'), b && b.title].map(x => String(x || '').replace(/\s+/g, '')).find(x => x && DENY_BTN.test(x)) || '';
       if (b && t) { e.stopImmediatePropagation(); e.preventDefault(); AUTO.blocked.push(t); }
@@ -220,9 +220,13 @@
   // 참조문서: 계획서를 제목으로 검색해 선택한다 (합성 입력/마우스 이벤트)
   async function pickRefDoc(f, planTitle, docNo) {
     const d = f.contentDocument, w = f.contentWindow;
-    const label = [...d.querySelectorAll('*')].filter(e => e.children.length === 0 && (e.innerText || '').trim().startsWith('참조문서') && e.getBoundingClientRect().width > 0).pop();
-    let scope = label, open = null;
-    for (let i = 0; i < 4 && scope && !open; i++) { scope = scope.parentElement; open = scope && btnIn(scope, /^선택$/); }
+    const findOpen = () => {
+      const label = [...d.querySelectorAll('*')].filter(e => e.children.length === 0 && (e.textContent || '').trim().startsWith('참조문서') && e.getBoundingClientRect().width > 0).pop();
+      let scope = label, btn = null;
+      for (let i = 0; i < 5 && scope && !btn; i++) { scope = scope.parentElement; btn = scope && btnIn(scope, /^선택$/); }
+      return btn;
+    };
+    const open = await waitFor(findOpen, 10000);
     if (!open) return {ok: false, detail: '참조문서 선택 버튼을 찾지 못했습니다'};
     open.click();
     await wait(1800);
@@ -406,9 +410,9 @@
       </div>
       <div class="sec"><div class="sh">② 물품매입 품의 새로 작성</div><div class="acts"><button class="btn primary" data-act="goodsPickPlan">${ic('plus')}계획서를 고르고 작성</button></div></div>
       <div class="sec"><div class="sh">③ 지출결의서를 올릴 차례인 문서 <span class="muted">(${pend.length}건)</span></div>
-        ${pend.length ? pend.map(p => `<div class="box" style="margin:6px 0"><b>${esc(p.title)}</b> <span class="bdg tag">${esc(p.kind)}</span><div class="muted" style="font-size:12.5px;margin:3px 0">${esc(p.docNo)} 참조 · ${esc(p.expenseForm)} · 기록물철 ${esc(p.binder)}${p.amount ? ' · ' + esc(won0(p.amount)) : ''}</div><div class="acts"><button class="btn sm" data-act="copy" data-v="${esc(p.expenseTitle)}">제목 복사</button><button class="btn sm" data-act="copy" data-v="${esc(p.ref || p.docNo)}">참조문서 복사</button>${p.amount ? `<button class="btn sm" data-act="copy" data-v="${esc(R.moneyKo(p.amount))}">금액(한글) 복사</button>` : ''}</div></div>`).join('') : '<div class="muted">지출결의서가 필요한 문서가 없습니다.</div>'}
+        ${pend.length ? pend.map(p => `<div class="box" style="margin:6px 0"><b>${esc(p.title)}</b> <span class="bdg tag">${esc(p.kind)}</span><div class="muted" style="font-size:12.5px;margin:3px 0">${esc(p.docNo)} 참조 · ${esc(p.expenseForm)} · 기록물철 ${esc(p.binder)}${p.amount ? ' · ' + esc(won0(p.amount)) : ''}</div><div class="acts"><button class="btn sm primary" data-act="expOpen" data-id="${esc(p.id)}">지출 내역 입력하고 확인</button><button class="btn sm" data-act="copy" data-v="${esc(p.expenseTitle)}">제목 복사</button><button class="btn sm" data-act="copy" data-v="${esc(p.ref || p.docNo)}">참조문서 복사</button>${p.amount ? `<button class="btn sm" data-act="copy" data-v="${esc(R.moneyKo(p.amount))}">금액(한글) 복사</button>` : ''}</div></div>`).join('') : '<div class="muted">지출결의서가 필요한 문서가 없습니다.</div>'}
         <div class="acts" style="margin-top:8px"><button class="btn sm" data-act="openUrl" data-url="${esc(GW.links.route(GW.routes.draft))}" data-title="결재작성">${ic('ext')}지출결의서 양식 열기</button><button class="btn sm" data-act="openRec">${ic('play')}기록기로 지출결의 입력 기록·재생</button></div>
-        <div class="muted" style="font-size:12px;margin-top:6px">지출결의서는 회계 전표와 연동된 양식이라 자동 입력 대신 값 복사와 기록기 재생을 사용합니다(상신·결재는 하지 않습니다).</div>
+        <div class="muted" style="font-size:12px;margin-top:6px">지출결의서는 일반기안문이 아니라 지출 메뉴의 별도 양식입니다. 먼저 법인카드·계좌이체 내역을 입력하면 건의·품의 금액과 대조해 확인한 뒤, 값 복사와 기록기 재생으로 이어집니다(상신·결재는 하지 않습니다).</div>
       </div>`);
   }
 

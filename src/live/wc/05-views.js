@@ -61,7 +61,6 @@
     const total = S.a ? mineVisible().length : 0;
     fab.innerHTML = `<span style="display:inline-flex;align-items:center;gap:6px">${ic('home').replace('class="i"', 'width="16" height="16" style="fill:none;stroke:currentColor;stroke-width:2"')}업무센터${S.a ? ` <b style="background:${urgent ? '#ff5252' : 'rgba(255,255,255,.25)'};border-radius:999px;padding:0 7px;font-size:12px">${urgent ? `급함 ${urgent}` : total}</b>` : ''}</span>`;
   }
-  function updCrumb() {}
   function renderBand() {
     const b = $('#band');
     const parts = [];
