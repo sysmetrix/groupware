@@ -1,10 +1,10 @@
 :host{all:initial}
 *{box-sizing:border-box}
-.wc{--fs:14px;--bg:#f4f6fa;--fg:#1b2230;--muted:#566173;--line:#e2e6ee;--line2:#cfd6e2;--card:#fff;--soft:#f7f9fc;--sel:#e9f0fd;--accent:#1a5fd0;--accent-soft:#e8f0fe;--hi:#c62828;--hi-soft:#fdecea;--md:#9a5b00;--md-soft:#fff4e0;--ok:#1e7e34;--ok-soft:#e7f5ea;--head:#172340;--r:10px;--sh:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.08);
+.wc{--fs:14px;--bg:#f8fafc;--fg:#0f172a;--muted:#566173;--line:#e2e8f0;--line2:#cbd5e1;--card:#ffffff;--soft:#f1f5f9;--sel:#eff6ff;--accent:#2563eb;--accent-soft:#dbeafe;--hi:#ef4444;--hi-soft:#fee2e2;--md:#f59e0b;--md-soft:#fef3c7;--ok:#10b981;--ok-soft:#d1fae5;--head:#0f172a;--r:10px;--sh:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.08);
  position:absolute;inset:0;display:grid;grid-template-columns:200px minmax(420px,1fr) 6px var(--paneW,560px);grid-template-rows:56px auto 1fr;background:var(--bg);color:var(--fg);
  font:var(--fs)/1.6 "Pretendard","Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif;word-break:keep-all;overflow-wrap:anywhere;-webkit-font-smoothing:antialiased}
 .wc[data-fs="s"]{--fs:13px}.wc[data-fs="l"]{--fs:16px}.wc[data-fs="xl"]{--fs:18px}
-.wc.dark{--bg:#12161c;--fg:#e7eaf0;--muted:#a3adbb;--line:#29303a;--line2:#38414d;--card:#1a1f27;--soft:#1f252e;--sel:#1d3152;--accent:#6aa1ff;--accent-soft:#1d3152;--hi:#ff8a80;--hi-soft:#3b1f1f;--md:#ffc46b;--md-soft:#3a2f12;--ok:#7fd18b;--ok-soft:#16301d;--head:#0d131e}
+.wc.dark{--bg:#0b0f17;--fg:#e7eaf0;--muted:#a3adbb;--line:#1e293b;--line2:#38414d;--card:#131b2a;--soft:#1f252e;--sel:#1e2e4a;--accent:#3b82f6;--accent-soft:#1d3152;--hi:#ff8a80;--hi-soft:#3b1f1f;--md:#ffc46b;--md-soft:#3a2f12;--ok:#7fd18b;--ok-soft:#16301d;--head:#0d131e}
 .wc.nopane{grid-template-columns:200px 1fr 0 0}.wc.expanded{grid-template-columns:200px 0 6px 1fr}.wc.expanded main{display:none}.wc.expanded #split{display:none}.wc.expanded aside{grid-column:2/5}
 svg.i{width:1.15em;height:1.15em;flex:0 0 auto;vertical-align:-.2em;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
