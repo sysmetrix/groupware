@@ -1,0 +1,109 @@
+// GW 통합 업무센터 · views
+// Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
+  // ---------- views ----------
+  const VIEWS = [
+    {id: 'today', label: '오늘 할 일'}, {id: 'approval', label: '결재·문서유통'}, {id: 'mail', label: '메일'}, {id: 'search', label: '통합검색'},
+    {id: 'board', label: '할 일 보드'}, {id: 'calendar', label: '일정 달력'}, {id: 'budget', label: '예산 집행'}, {id: 'attendance', label: '근태·연차'},
+    {id: 'report', label: '보고서'}, {id: 'settings', label: '설정'},
+  ];
+  // Charts: shown on big screens, folded on laptops unless the user chose otherwise.
+  const showCharts = () => S.settings.showCharts ?? (window.innerHeight >= 860 && window.innerWidth >= 1500);
+  const go = v => { if (S.view !== v && !S.focus) { if (!leavePane()) return; S.sel = null; S.pane.url = ''; } S.view = v; S.multi.clear(); S.pane.expanded = false; render(); const mm = $('#main'); if (mm) mm.scrollTop = 0; };
+  // Home: back to a clean "오늘 할 일" (asks first if something is being typed in the pane).
+  function goHome() {
+    if (S.focus) { stopFocus(); if (S.focus) return; }
+    if (!leavePane()) return;
+    closeOverlay();
+    S.sel = null; S.pane.url = ''; S.pane.expanded = false; S.multi.clear();
+    S.filter = {...S.filter, area: 'all', level: 'all', onlyNew: false, q: '', showHidden: false};
+    S.view = 'today';
+    render();
+    const mm = $('#main'); if (mm) mm.scrollTop = 0;
+  }
+  // Hidden items come back after 24h if the groupware still lists them (숨겼지만 아직 남음).
+  const resurfaced = k => isHidden(k) && Date.now() - S.hidden[k] > (k.startsWith('att:') ? 3 : 1) * 86400_000;
+  const visibleActions = () => S.a ? S.a.actions.filter(x => S.filter.showHidden ? (isHidden(x.key) || isSnoozed(x.key)) : ((!isHidden(x.key) || resurfaced(x.key)) && !isSnoozed(x.key))) : [];
+  const queue = () => {
+    const f = S.filter;
+    return visibleActions().filter(x => (f.area === 'all' || x.area === f.area) && (!f.onlyNew || S.newKeys.has(x.key))
+      && (!f.q || (x.title + x.detail + x.kind).toLowerCase().includes(f.q.toLowerCase())));
+  };
+  const selectedAction = () => S.sel && S.sel.type === 'action' ? S.a && S.a.actions.find(x => x.key === S.sel.key) : null;
+  function moveSel(step) {
+    const q = queue();
+    if (!q.length) return;
+    let i = q.findIndex(x => S.sel && S.sel.key === x.key);
+    i = Math.max(0, Math.min(q.length - 1, i + step));
+    selectAction(q[i].key);
+    const row = root.querySelector(`.row[data-k="${CSS.escape(q[i].key)}"]`);
+    if (row) row.scrollIntoView({block: 'nearest'});
+  }
+
+  function render() {
+    if (!S.open) return;
+    renderHead(); renderBand(); renderNav(); renderMain(); renderPane();
+  }
+  const STATE_ORDER = ['overdue', 'urgent', 'todo', 'check', 'confirm', 'wait', 'info'];
+  const STATE_NAME = {overdue: '기한 지남', urgent: '급함', todo: '할 일', check: '확인 필요', confirm: '끝났는지 확인', wait: '기다리는 중', info: '참고'};
+  const STATE_GROUP = {overdue: '급한 일', urgent: '급한 일', todo: '할 일', check: '확인이 필요한 일', confirm: '끝났는지만 확인', wait: '결재를 기다리는 중 (할 일 없음)', info: '참고'};
+  const stateOf = x => x.state || (x.scope === 'ref' ? 'info' : x.priority === 'high' ? 'urgent' : 'todo');
+  const isMine = x => x.scope !== 'ref';
+  const mineVisible = () => visibleActions().filter(x => isMine(x) && stateOf(x) !== 'wait');
+  function renderHead() {
+    const m = $('#meta');
+    if (!m) return;
+    const age = S.lastRefresh ? Math.floor((Date.now() - S.lastRefresh.getTime()) / 60000) : null;
+    m.className = 'stat' + (age !== null && age >= 10 ? ' stale' : '');
+    m.innerHTML = S.loading ? '<span class="spin"></span> 읽는 중' : S.lastRefresh ? `${ic('refresh')}${hhmm(S.lastRefresh)} 기준${age ? ` · ${age}분 전` : ''}` : `${ic('refresh')}새로고침`;
+    const unseen = S.activity.filter(x => x.at > S.seenActivity).length;
+    $('#bell').innerHTML = `${ic('bell')}${unseen ? `<span class="dot">${unseen > 99 ? '99+' : unseen}</span>` : ''}`;
+    const urgent = S.a ? mineVisible().filter(x => ['overdue', 'urgent'].includes(stateOf(x))).length : 0;
+    const total = S.a ? mineVisible().length : 0;
+    fab.innerHTML = `<span style="display:inline-flex;align-items:center;gap:6px">${ic('home').replace('class="i"', 'width="16" height="16" style="fill:none;stroke:currentColor;stroke-width:2"')}업무센터${S.a ? ` <b style="background:${urgent ? '#ff5252' : 'rgba(255,255,255,.25)'};border-radius:999px;padding:0 7px;font-size:12px">${urgent ? `급함 ${urgent}` : total}</b>` : ''}</span>`;
+  }
+  function updCrumb() {}
+  function renderBand() {
+    const b = $('#band');
+    const parts = [];
+    if (S.error === 'SESSION') parts.push(`<div class="b err">${ic('alert')}<b>그룹웨어 로그인이 끊겼습니다.</b> 지금 보이는 숫자는 최신이 아닙니다. <button class="btn sm" data-act="relogin">다시 로그인</button></div>`);
+    else if (S.error) parts.push(`<div class="b err">${ic('alert')}자료를 읽지 못했습니다: ${esc(S.error)} <button class="btn sm" data-act="refresh">다시 시도</button></div>`);
+    if (S.a && S.a.failed.length) parts.push(`<div class="b warn">${ic('alert')}${S.a.failed.map(f => esc(MODNAME[f.name] || f.name)).join(', ')} 자료를 지금 확인할 수 없습니다. 해당 숫자는 "확인 불가"로 표시합니다. <button class="btn sm" data-act="refresh">다시 시도</button></div>`);
+    if (S.pendingRefresh) parts.push(`<div class="b info">새 자료가 도착했습니다. 작업 중이라 화면은 그대로 두었습니다. <button class="btn sm primary" data-act="applyRefresh">지금 반영</button></div>`);
+    const age = S.lastRefresh ? (Date.now() - S.lastRefresh.getTime()) / 60000 : 0;
+    if (age >= 15 && !S.loading) parts.push(`<div class="b warn">${Math.floor(age)}분 전 자료입니다. <button class="btn sm" data-act="refresh">새로고침</button></div>`);
+    b.innerHTML = parts.join('');
+  }
+  const MODNAME = {mail: '메일', approval: '전자결재', notice: '공지', schedule: '일정', attendance: '근태', leave: '연차', budget: '예산', alerts: '알림'};
+  const VIEW_ICON = {today: 'inbox', overview: 'chart', approval: 'doc', mail: 'mail', search: 'search', board: 'board', calendar: 'cal', budget: 'wallet', attendance: 'clock', report: 'report', settings: 'gear'};
+  function renderNav() {
+    const u = S.a ? S.a.unknown : {};
+    const mine = S.a ? mineVisible() : [];
+    const urgent = mine.filter(x => ['overdue', 'urgent'].includes(stateOf(x))).length;
+    const byArea = a => mine.filter(x => x.area === a).length;
+    const counts = {
+      today: S.a ? {n: mine.length, cls: urgent ? 'hot' : mine.length ? 'mine' : ''} : null,
+      approval: S.a ? (u.approval ? {n: '?'} : {n: byArea('결재'), cls: byArea('결재') ? 'mine' : ''}) : null,
+      mail: S.a ? (u.mail ? {n: '?'} : {n: byArea('메일'), cls: byArea('메일') ? 'mine' : ''}) : null,
+      attendance: S.a ? {n: byArea('근태'), cls: byArea('근태') ? 'mine' : ''} : null,
+      board: S.a ? {n: boardCount()} : null,
+      calendar: S.a ? (() => { const n = mine.filter(x => x.deadline && x.deadline.dday >= 0 && x.deadline.dday <= 7).length; return {n, cls: n ? 'mine' : ''}; })() : null,
+    };
+    const item = (v, i) => { const c = counts[v.id]; return `<a data-act="view" data-v="${v.id}" class="${S.view === v.id ? 'on' : ''}" role="link" tabindex="0" aria-current="${S.view === v.id ? 'page' : 'false'}" title="${esc(v.label)} (숫자키 ${i + 1})">${ic(VIEW_ICON[v.id])}<span class="lb">${esc(v.label)}</span>${c && c.n !== '' && c.n !== 0 ? `<span class="n ${c.cls || ''}" title="${v.id === 'today' ? '내 처리할 일' : v.id === 'board' ? '보드의 남은 카드' : v.id === 'calendar' ? '7일 안에 기한이 있는 내 처리할 일' : '내 처리할 일 중 이 영역'}">${c.n}</span>` : ''}</a>`; };
+    $('#nav').innerHTML = VIEWS.slice(0, 9).map(item).join('') + '<div class="sep"></div>' + VIEWS.slice(9).map((v, i) => item(v, i + 9)).join('')
+      + `<div class="foot"><a data-act="help" role="link" tabindex="0">${ic('help')}<span class="lb">사용법</span></a><a data-act="coach" role="link" tabindex="0">${ic('play')}<span class="lb">처음 안내</span></a></div>`;
+  }
+  function boardCount() { return (S.a ? S.a.actions.filter(x => onBoard(x) && bucketOfAction(x) !== 'done').length : 0) + S.todos.filter(t => bucketOfTodo(t) !== 'done').length; }
+  function renderMain() {
+    const el = $('#main');
+    if (!S.a) { el.innerHTML = S.error && S.error !== 'SESSION' ? `<div class="empty"><div class="ill">${ic('alert')}</div><b>자료를 읽지 못했습니다</b>${esc(S.error)}<div class="acts" style="justify-content:center"><button class="btn primary" data-act="refresh">다시 시도</button></div></div>` : `<div class="pgh"><h1>그룹웨어 자료를 읽는 중입니다</h1><span class="spin"></span></div><div class="list">${'<div class="sk row"></div>'.repeat(6)}</div>`; return; }
+    const scroll = el.scrollTop;
+    const fn = {today: vToday, overview: vOverview, approval: vApproval, mail: vMail, search: vSearch, board: vBoard, calendar: vCalendar, budget: vBudget, attendance: vAttendance, report: vReport, settings: vSettings}[S.view] || vToday;
+    el.innerHTML = fn();
+    el.scrollTop = scroll;
+    if (S.view === 'report') { const f = $('#briefFrame'); if (f) f.srcdoc = R.renderHtml(S.a); }
+    if (S.view === 'budget' && !S.budget.table && !S.budget.busy) loadBudget();
+    if (S.view === 'attendance' && !S.att.rows && !S.att.busy) loadAttendance();
+    if (S.view === 'approval' && ['distWaiting', 'deptWaiting'].includes(S.apTab) && !S.routing) loadRouting().then(() => { if (S.view === 'approval') renderMain(); });
+  }
+  const pgh = (title, sub = '', tools = '') => `<div class="pgh"><h1>${title}</h1>${sub ? `<span class="sub">${sub}</span>` : ''}${tools ? `<div class="tools">${tools}</div>` : ''}</div>`;
+

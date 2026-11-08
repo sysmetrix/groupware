@@ -4,7 +4,7 @@ const files = [];
 async function visit(directory) {
   for (const entry of await fs.readdir(directory, {withFileTypes: true})) {
     const path = `${directory}/${entry.name}`;
-    if (entry.isDirectory()) await visit(path); else if (/\.(mjs|js)$/.test(path)) files.push(path);
+    if (entry.isDirectory()) { if (path.endsWith('src/live/wc')) continue; await visit(path); } else if (/\.(mjs|js)$/.test(path)) files.push(path);
   }
 }
 for (const directory of ['src', 'public', 'test', 'scripts', 'desktop']) await visit(directory);

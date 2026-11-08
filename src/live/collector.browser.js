@@ -20,14 +20,14 @@
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
   const READ_ONLY = new Set([
-    '/mail/mail000A01', '/mail/mail000A03', '/mail/mail003A01', '/mail/mail002A01',
+    '/mail/mail000A01', '/mail/mail000A03', '/mail/mail003A01', '/mail/mail002A01', '/mail/mail002A37', '/ecm/ecm001A07',
     '/ea/api/getMenuCountInfo', '/ea/ea036A02', '/ea/ea025A04', '/ea/ea023A02', '/ea/ea027A02',
     '/ea/ea038A09', '/ea/ea038A15',
     '/board/APIHandler/ViewBoardArtList', '/board/APIHandler/getBoardReadCnt',
     '/schres/sc111A02', '/schres/sc111A03', '/gw/APIHandler/gw114A14',
     '/human/common/judgeTimeManagement/getTodayComeLeaveInfo', '/personal/hpd0220/0hr00001', '/human/hrd0410/selectTab2',
     '/personal/hpd0550/0hp00002', '/personal/hpd0550/0hp00003',
-    '/nonprofit/NCC0610/0BN00002', '/nonprofit/popup/0BN00001',
+    '/nonprofit/NCC0610/0BN00002', '/nonprofit/popup/0BN00001', '/system/codepickers/CP0001A0001',
     '/event/event02A01',
     '/gw/APIHandler/gw018A02',
     '/ea/ea059A02',
@@ -404,6 +404,13 @@
     return null;
   }
 
+  // Foundation budget projects (예: A201 전략경영실운영, A600 산울림청소년센터운영 …).
+  async function budgetCatalog() {
+    const ctx = context();
+    const d = await call('/system/codepickers/CP0001A0001', {helpTy: 'SPJT_CODE', langKind: 'kr', coCd: ctx.erpCompSeq, useYn: '1', name: '', searchText: ''});
+    const list = Array.isArray(d) ? d : arr(d && (d.resultList || d.list));
+    return list.map(x => ({project: str(x.pjtCd || x.mgtCd, 20), name: str(x.pjtNm || x.mgtNm, 80)})).filter(x => x.project);
+  }
   async function budgetProject(t, opt = {}) { return budgetTable(context(), t, opt); }
 
   async function budgetLedger({project, bgtCd, year, gisu, from, to} = {}) {
@@ -435,10 +442,45 @@
       return {name: m ? m[1] : label, size: m ? m[2] : '', href: dec(x[1])};
     }).filter(f => /^https:\/\/[a-z0-9.-]+\.amaranth10\.co\.kr\//i.test(f.href));
     const bigUntil = (html.replace(/<[^>]+>/g, ' ').match(/다운로드 기간\s*:\s*[\d-]+\s*~\s*([\d-]+)/) || [])[1] || '';
-    const files = arr(mime.fileList).map(f => ({name: str(f.originalFileName, 200) + (f.fileExtsn && !String(f.originalFileName || '').toLowerCase().endsWith('.' + String(f.fileExtsn).toLowerCase()) ? '.' + f.fileExtsn : ''), size: num(f.fileSize), ext: str(f.fileExtsn, 10)}));
-    const plain = String(mime.body?.plain || '').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+    const files = arr(mime.fileList).map(f => ({name: str(f.originalFileName, 200) + (f.fileExtsn && !String(f.originalFileName || '').toLowerCase().endsWith('.' + String(f.fileExtsn).toLowerCase()) ? '.' + f.fileExtsn : ''), size: num(f.fileSize), ext: str(f.fileExtsn, 10), sn: String(f.fileSn || '')}));
+    const plain = dec(String(mime.body?.plain || '').replace(/&nbsp;/g, ' ')).replace(/\s+/g, ' ').trim();
     return {uid: String(uid), subject: str(dm.subject, 300), from: dec(str(dm.from, 200)), to: dec(str(dm.to, 2000)), cc: dec(str(dm.cc, 2000)), date: str(dm.date, 20),
-      readUrl: str(dm.url, 500), files, bigFiles, bigUntil, text: mask(plain, 4000), wasUnread: seen !== true};
+      readUrl: str(dm.url, 500), account: str(dm.email, 120), files, bigFiles, bigUntil, text: mask(plain, 4000), wasUnread: seen !== true};
+  }
+  // Download one normal mail attachment (the same request the groupware read view makes; no state change).
+  // Convert one mail attachment into a Synap document-viewer URL (HWP, PDF, xlsx …; read-only).
+  async function mailAttachmentPreview({uid, sn, account = ''} = {}) {
+    if (!uid || !sn || !account) throw new GwError('BAD_ARG', '미리보기 정보가 없습니다.');
+    const ctx = context();
+    const client = findClient();
+    const res = await client.post('/ecm/ecm001A07', {fileSn: sn, authKeyMap: JSON.stringify({email: account, muid: String(uid), empSeq: String(ctx.empSeq)}), moduleGbn: 'MAIL'});
+    const r = typeof res === 'string' ? JSON.parse(res) : res;
+    if (!r || r.resultCode !== 0 || !r.resultData) throw new GwError('API_ERROR', (r && r.resultMsg) || '문서 변환 실패');
+    return String(r.resultData);
+  }
+  async function mailAttachment({uid, sn, account = ''} = {}) {
+    if (!uid || !sn) throw new GwError('BAD_ARG', '첨부 정보가 없습니다.');
+    const ctx = context();
+    if (!account) throw new GwError('BAD_ARG', '메일 계정 정보가 없습니다. 메일 상세를 먼저 불러오세요.');
+    const client = findClient();
+    let timer;
+    try {
+      const res = await Promise.race([
+        client.post('/mail/mail002A37', '/ecm/ecm001A07', {fileSn: sn, authKeyMap: JSON.stringify({email: account, muid: String(uid), empSeq: String(ctx.empSeq)}), moduleGbn: 'MAIL'}, {filedownload: true, contextType: 'application/x-www-form-urlencoded'}),
+        new Promise((_, reject) => { timer = setTimeout(() => reject(new GwError('TIMEOUT', '첨부 받기 시간 초과')), 120000); }),
+      ]);
+      if (!(res instanceof ArrayBuffer) || res.byteLength < 1) throw new GwError('API_ERROR', '첨부를 받지 못했습니다.');
+      const head = new Uint8Array(res.slice(0, 1))[0];
+      if (head === 0x7b && res.byteLength < 2000) { const txt = new TextDecoder().decode(res); if (/resultCode|errors/.test(txt)) throw parseRejection(txt); }
+      return new Blob([res]);
+    } catch (e) { throw parseRejection(e); }
+    finally { clearTimeout(timer); }
+  }
+  function saveBlob(blob, name) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = name || 'download';
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
   }
   async function routingHistory({days = 180, size = 500} = {}) {
     const ctx = context();
@@ -534,7 +576,7 @@
   const MODULES = {mail: collectMail, approval: collectApproval, notice: collectNotice, schedule: collectSchedule, attendance: collectAttendance, leave: collectLeave, budget: collectBudget, alerts: collectAlerts};
   const DEFAULTS = {
     modules: Object.keys(MODULES), mailCount: 100, days: 14, approvalDays: 92, approvalPageSize: 30, noticeCount: 20, noticeBoard: '223', alertCount: 20,
-    budget: [{project: 'A201', label: '전략경영실운영', filter: '노121'}],
+    budget: [{project: 'A201', label: '젠더유스 거버넌스운영', filter: '노121'}],
   };
 
   async function collect(options = {}) {
@@ -559,7 +601,7 @@
   }
 
   window.BWYFGW = Object.freeze({
-    version: VERSION, collect, call, search, budgetProject, budgetLedger, budgetMonthly, attendanceDays, routingHistory, submittedRange, approvalPage, docPreview, frequentForms, findReply, mailDetail,
+    version: VERSION, collect, call, search, budgetCatalog, budgetProject, budgetLedger, budgetMonthly, attendanceDays, routingHistory, submittedRange, approvalPage, docPreview, frequentForms, findReply, mailDetail, mailAttachment, mailAttachmentPreview, saveBlob,
     context: () => { const c = context(); return {name: c.name, deptName: c.deptName, compName: c.compName, duty: c.duty, position: c.position}; },
     readOnlyEndpoints: () => [...READ_ONLY], routes: ROUTES, links: LINKS, searchLabels: SEARCH_LABELS, defaults: DEFAULTS,
   });
