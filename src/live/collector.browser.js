@@ -15,7 +15,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '3.1.0';
+  const VERSION = '4.6.0';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
@@ -579,7 +579,16 @@
     const norm = s => String(s || '').replace(/^\s*((re|fw|fwd|회신|답장|전달)\s*[:：]\s*)+/i, '').replace(/\s+/g, '').toLowerCase();
     const want = norm(subject);
     const hit = arr(d && d.Records).find(r => norm(r.subject) === want && (!since || str(r.tooltipDate || r.rfc822date, 25) >= since));
-    return {checked: true, found: !!hit, subject: hit ? mask(hit.subject, 200) : '', date: hit ? str(hit.tooltipDate || hit.rfc822date, 25) : '', to: hit ? str(hit.toAddrName, 60) : ''};
+    return {
+      checked: true,
+      found: !!hit,
+      uid: hit ? hit.muid : null,
+      subject: hit ? mask(hit.subject, 200) : '',
+      date: hit ? str(hit.tooltipDate || hit.rfc822date, 25) : '',
+      to: hit ? str(hit.toAddrName, 60) : '',
+      hasAttach: hit ? !!hit.attach : false,
+      size: hit ? num(hit.size) : 0
+    };
   }
 
   async function submittedRange({days = 7, size = 100} = {}) {
