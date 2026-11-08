@@ -304,7 +304,7 @@ export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6} = {}) 
     const replied = m.answered || m.forwarded;
     // A deadline mail I already answered is most likely done: keep it visible but low.
     const base = hasDeadline ? (replied ? 'mailAnswered' : 'mailDeadline') : unread ? (ACTION_WORDS.test(m.subject) ? 'mailUnreadAsk' : m.box === 'INBOX' ? 'mailUnread' : 'mailOther') : 'mailReply';
-    const kind = hasDeadline ? (replied ? '기한 메일 · 답장함(제출까지 끝났는지 확인)' : '기한 있는 메일') : unread ? (m.box === 'INBOX' ? '안 읽은 메일' : `안 읽은 메일(${m.box})`) : '답장했는지 확인';
+    const kind = hasDeadline ? (replied ? '기한 메일 · 제출까지 끝났는지 확인' : '기한 있는 메일') : unread ? (m.box === 'INBOX' ? '안 읽은 메일' : `안 읽은 메일(${m.box})`) : '답장했는지 확인';
     const flags = [m.seen ? '읽음' : '안 읽음', m.answered ? '답장함' : '', m.forwarded ? '전달함' : '', m.attach ? '첨부' : ''].filter(Boolean).join(' · ');
     push({key: k, type: 'mail', base, ref: {box: m.box, uid: m.uid}, area: '메일', kind, title: m.subject || '(제목 없음)', detail: `${m.from} · ${flags}`, when: m.date, deadline: dl, url: d.mail.url, isNew: hasPrev && !prevMail.has(`${m.box}:${m.uid}`)});
   }
