@@ -7,7 +7,7 @@
     set(k, v) { try { localStorage.setItem(LS + k, JSON.stringify(v)); } catch {} },
     del(k) { try { localStorage.removeItem(LS + k); } catch {} },
   };
-  const DEFAULT_SETTINGS = {refreshMin: 5, notify: false, budget: [{project: 'A201', label: '전략경영실운영', filter: '노121'}], urgentWords: [], mailCount: 100, days: 14, fontSize: 'm', theme: 'light', paneWidth: 560, beginner: true, tourDone: false};
+  const DEFAULT_SETTINGS = {refreshMin: 5, notify: false, budget: [{project: 'A201', label: '젠더유스 거버넌스운영', filter: '노121'}], urgentWords: [], mailCount: 100, days: 14, fontSize: 'm', theme: 'light', paneWidth: 560, beginner: true, tourDone: false};
   const migrateTodos = list => (Array.isArray(list) ? list : []).map(t => ({id: t.id || `t${t.at || Date.now()}${Math.random().toString(36).slice(2, 6)}`, title: t.title, due: t.due || '', status: t.status || (t.done ? 'done' : 'todo'), source: t.source || '', url: t.url || '', at: t.at || Date.now()}));
   const S = {
     settings: {...DEFAULT_SETTINGS, ...store.get('settings', {})},

@@ -27,10 +27,10 @@ ${f.level !== 'all' ? `<button class="chip on" data-act="stateFilter" data-v="al
   const queueRows = () => {
     const all = queue();
     const lvl = S.filter.level;
-    const mine = all.filter(isMine).filter(x => lvl === 'all' || (lvl === 'urgent' ? ['overdue', 'urgent'].includes(stateOf(x)) : stateOf(x) === lvl));
+    const mine = all.filter(isMine).filter(x => lvl !== 'all' || true).filter(x => lvl === 'all' || (lvl === 'urgent' ? ['overdue', 'urgent'].includes(stateOf(x)) : stateOf(x) === lvl));
     const refs = lvl === 'all' ? all.filter(x => !isMine(x)) : [];
     const groups = [];
-    for (const st of ['urgent', 'todo', 'check', 'confirm']) {
+    for (const st of ['urgent', 'todo', 'check', 'confirm', 'wait']) {
       const xs = mine.filter(x => STATE_GROUP[stateOf(x)] === STATE_GROUP[st]);
       if (xs.length && !groups.some(g => g.name === STATE_GROUP[st])) groups.push({name: STATE_GROUP[st], xs});
     }

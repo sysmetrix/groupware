@@ -27,7 +27,7 @@
     '/schres/sc111A02', '/schres/sc111A03', '/gw/APIHandler/gw114A14',
     '/human/common/judgeTimeManagement/getTodayComeLeaveInfo', '/personal/hpd0220/0hr00001', '/human/hrd0410/selectTab2',
     '/personal/hpd0550/0hp00002', '/personal/hpd0550/0hp00003',
-    '/nonprofit/NCC0610/0BN00002', '/nonprofit/popup/0BN00001',
+    '/nonprofit/NCC0610/0BN00002', '/nonprofit/popup/0BN00001', '/system/codepickers/CP0001A0001',
     '/event/event02A01',
     '/gw/APIHandler/gw018A02',
     '/ea/ea059A02',
@@ -404,6 +404,13 @@
     return null;
   }
 
+  // Foundation budget projects (예: A201 전략경영실운영, A600 산울림청소년센터운영 …).
+  async function budgetCatalog() {
+    const ctx = context();
+    const d = await call('/system/codepickers/CP0001A0001', {helpTy: 'SPJT_CODE', langKind: 'kr', coCd: ctx.erpCompSeq, useYn: '1', name: '', searchText: ''});
+    const list = Array.isArray(d) ? d : arr(d && (d.resultList || d.list));
+    return list.map(x => ({project: str(x.pjtCd || x.mgtCd, 20), name: str(x.pjtNm || x.mgtNm, 80)})).filter(x => x.project);
+  }
   async function budgetProject(t, opt = {}) { return budgetTable(context(), t, opt); }
 
   async function budgetLedger({project, bgtCd, year, gisu, from, to} = {}) {
@@ -559,7 +566,7 @@
   const MODULES = {mail: collectMail, approval: collectApproval, notice: collectNotice, schedule: collectSchedule, attendance: collectAttendance, leave: collectLeave, budget: collectBudget, alerts: collectAlerts};
   const DEFAULTS = {
     modules: Object.keys(MODULES), mailCount: 100, days: 14, approvalDays: 92, approvalPageSize: 30, noticeCount: 20, noticeBoard: '223', alertCount: 20,
-    budget: [{project: 'A201', label: '전략경영실운영', filter: '노121'}],
+    budget: [{project: 'A201', label: '젠더유스 거버넌스운영', filter: '노121'}],
   };
 
   async function collect(options = {}) {
@@ -584,7 +591,7 @@
   }
 
   window.BWYFGW = Object.freeze({
-    version: VERSION, collect, call, search, budgetProject, budgetLedger, budgetMonthly, attendanceDays, routingHistory, submittedRange, approvalPage, docPreview, frequentForms, findReply, mailDetail, mailAttachment, saveBlob,
+    version: VERSION, collect, call, search, budgetCatalog, budgetProject, budgetLedger, budgetMonthly, attendanceDays, routingHistory, submittedRange, approvalPage, docPreview, frequentForms, findReply, mailDetail, mailAttachment, saveBlob,
     context: () => { const c = context(); return {name: c.name, deptName: c.deptName, compName: c.compName, duty: c.duty, position: c.position}; },
     readOnlyEndpoints: () => [...READ_ONLY], routes: ROUTES, links: LINKS, searchLabels: SEARCH_LABELS, defaults: DEFAULTS,
   });

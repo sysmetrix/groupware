@@ -248,8 +248,8 @@ function scoreAction(a, now) {
 const SHARE_WORDS = /공유|드립니다|드려요|보내드|송부|전달드|참고|안내드/;
 const ASK_WORDS = /요청|회신|제출|검토|작성|부탁|바랍니다|주시기|주세요|의견|취합|협조|확인\s*(부탁|요망|바랍|해\s*주)|마감|기한|까지/;
 // Who handles department-level work. Default: not me (the dept 문서담당 does it) unless the settings say so.
-const STATE_ORDER = {overdue: 0, urgent: 1, todo: 2, check: 3, confirm: 4, info: 5};
-const STATE_PRI = {overdue: 'high', urgent: 'high', todo: 'medium', check: 'medium', confirm: 'medium', info: 'low'};
+const STATE_ORDER = {overdue: 0, urgent: 1, todo: 2, check: 3, confirm: 4, wait: 5, info: 6};
+const STATE_PRI = {overdue: 'high', urgent: 'high', todo: 'medium', check: 'medium', confirm: 'medium', wait: 'low', info: 'low'};
 // State-based judgement (state wins over score): what is it, and what should I do?
 function judge(a, now) {
   const lc = a.leaveConflict;
@@ -269,7 +269,7 @@ function judge(a, now) {
     state = 'check';
     const x = a.att || {};
     const absent = /결근|미출근/.test(x.result || '');
-    if (x.applied || (/미인정/.test(x.result || '') && x.item)) headline = '근태신청 결재가 끝났는지 확인';
+    if (x.applied || (/미인정/.test(x.result || '') && x.item)) { headline = '근태신청 결재를 기다리는 중'; state = 'wait'; }
     else if (absent) headline = '출근 기록 없음 · 쉰 날이면 근태신청 필요';
     else headline = `근태 '${x.result}' 확인`;
     if (x.item) facts.push(x.item);
@@ -435,8 +435,9 @@ export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6, roles 
   }
   const mineActs = actions.filter(a => a.scope !== 'ref');
   const cnt = st => mineActs.filter(a => st.includes(a.state)).length;
-  const mine = {total: mineActs.length, urgent: cnt(['overdue', 'urgent']), todo: cnt(['todo']), check: cnt(['check']), confirm: cnt(['confirm']),
-    byArea: Object.fromEntries(['결재', '메일', '기한', '근태', '공지'].map(ar => [ar, mineActs.filter(a => a.area === ar).length]))};
+  const doing = mineActs.filter(a => a.state !== 'wait');
+  const mine = {total: doing.length, urgent: cnt(['overdue', 'urgent']), todo: cnt(['todo']), check: cnt(['check']), confirm: cnt(['confirm']), wait: cnt(['wait']),
+    byArea: Object.fromEntries(['결재', '메일', '기한', '근태', '공지'].map(ar => [ar, doing.filter(a => a.area === ar).length]))};
   const todayInfo = (() => {
     const k = kstNow(now), d8 = k.date.replace(/-/g, '');
     const wd = new Date(k.date + 'T00:00:00Z').getUTCDay();
@@ -493,7 +494,7 @@ export function nextState(raw, prev = null) {
 const kstText = iso => { if (!iso) return '-'; const k = kstNow(new Date(iso)); return `${k.date} ${pad(k.hh)}:${pad(k.mm)}`; };
 const ddayText = n => n === 0 ? 'D-day' : n > 0 ? `D-${n}` : `D+${-n}`;
 const PRI_LABEL = {high: '긴급', medium: '보통', low: '참고'};
-export const STATE_LABEL = {overdue: '기한 지남', urgent: '급함', todo: '할 일', check: '확인 필요', confirm: '끝났는지 확인', info: '참고'};
+export const STATE_LABEL = {overdue: '기한 지남', urgent: '급함', todo: '할 일', check: '확인 필요', confirm: '끝났는지 확인', wait: '기다리는 중', info: '참고'};
 
 export function renderMarkdown(a) {
   const s = a.summary;

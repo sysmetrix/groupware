@@ -361,7 +361,7 @@ test('attendance items are checks without guesses in the headline; today workday
   const d2 = a.actions.find(x => x.key === 'att:20261102'), d6 = a.actions.find(x => x.key === 'att:20261106');
   assert.equal(d2.state, 'check'); assert.match(d2.headline, /출근 기록 없음/); assert.ok(!/수 있음/.test(d2.headline));
   assert.ok(!d2.facts.some(f => /수 있음/.test(f)), 'no guesses in facts'); assert.match(d2.context, /11\/01에 휴일근무/); assert.match(d2.title, /^11\/02\(월\) 근태 확인/);
-  assert.equal(d6.headline, '근태신청 결재가 끝났는지 확인');
+  assert.equal(d6.headline, '근태신청 결재를 기다리는 중'); assert.equal(d6.state, 'wait'); assert.ok(!a.actions.filter(x => x.scope !== 'ref' && x.state !== 'wait').includes(d6));
   assert.deepEqual(a.today, {date: '2026-11-09', isWorkday: true});
   assert.equal(analyze(raw, null, new Date('2026-11-08T03:00:00Z')).today.isWorkday, false);
 });

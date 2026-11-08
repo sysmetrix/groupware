@@ -81,7 +81,7 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
       if (x.type === 'doc') return docPane(findDoc(x.ref.kind, x.ref.docId) || {title: x.title, url: x.url, docId: x.ref.docId}, x.ref.kind, x, why);
       if (x.type === 'mail') return mailPane(findMail(x.ref.box, x.ref.uid), x, why);
       if (x.type === 'notice') return {title: x.title, url: x.url, body: `${why}<div class="kv"><b>구분</b><span>${esc(x.kind)}</span><b>작성</b><span>${esc(x.detail)}</span><b>등록</b><span>${esc(x.when)}</span></div><div class="box warn">원문을 열면 게시글이 읽음 처리되고 조회수가 올라갑니다.</div>${actsFor(x.url, {key: x.key, q: relatedQ(x.title), title: x.title, unread: true, what: '게시글'})}<div class="box" id="extract">${extractHtml()}</div>`};
-      if (x.type === 'attendance') return {title: x.title, url: x.url, body: `<div class="kv"><b>그룹웨어 기록</b><span>${esc(x.att ? `${x.att.result}${x.att.status ? `(${x.att.status})` : ''}${x.att.item ? ` · ${x.att.item}` : ''}` : x.detail)}</span><b>알아 둘 것</b><span>${esc(x.context || x.detail)}</span></div><div class="muted">"정상입니다"는 이 화면에서만 내리는 표시입니다. 그룹웨어 기록은 근태신청 결재가 끝나야 바뀝니다.</div>${actsFor(x.url, {key: x.key, title: '근태신청', primaryLabel: '근태신청 화면 열기', extra: x.att && x.att.applied ? '' : `<button class="btn" data-act="markDone" data-k="${esc(x.key)}">${ic('check')}정상입니다</button>`})}<div class="acts" style="margin-top:4px"><button class="btn sm ghost" data-act="goAttendanceDay" data-v="${esc(x.ref.date)}">${ic('cal')}근태 달력에서 이 날 보기</button></div>`};
+      if (x.type === 'attendance') return {title: x.title, url: x.url, body: `<div class="kv"><b>그룹웨어 기록</b><span>${esc(x.att ? `${x.att.result}${x.att.status ? `(${x.att.status})` : ''}${x.att.item ? ` · ${x.att.item}` : ''}` : x.detail)}</span><b>알아 둘 것</b><span>${esc(x.context || x.detail)}</span></div>${x.att && x.att.applied ? '<div class="muted">근태신청 결재가 끝나면 그룹웨어 기록이 바뀌고 이 항목은 저절로 사라집니다.</div>' : '<div class="muted">"정상입니다"는 이 화면에서만 내리는 표시입니다. 그룹웨어 기록은 근태신청 결재가 끝나야 바뀝니다.</div>'}${actsFor(x.url, {key: x.key, title: '근태신청', primaryLabel: '근태신청 화면 열기', extra: x.att && x.att.applied ? '' : `<button class="btn" data-act="markDone" data-k="${esc(x.key)}">${ic('check')}정상입니다</button>`})}<div class="acts" style="margin-top:4px"><button class="btn sm ghost" data-act="goAttendanceDay" data-v="${esc(x.ref.date)}">${ic('cal')}근태 달력에서 이 날 보기</button></div>`};
       if (x.type === 'conflict') return {title: x.title, url: x.url, body: `${why}<div class="box warn"><b>휴가일 마감</b> ${esc(x.detail)}</div>${actsFor(x.url, {key: x.key, title: x.title})}`};
       return {title: x.title, url: x.url, body: `${why}<div class="kv"><b>구분</b><span>${esc(x.area)} · ${esc(x.kind)}</span><b>내용</b><span>${esc(x.detail)}</span></div>${actsFor(x.url, {key: x.key, title: x.title})}`};
     }
@@ -215,7 +215,8 @@ ${mailFilesBox(m)}
     if (!S.sel) S.sel = {type: 'frame', title: title || '그룹웨어 화면', url};
     S.pane.url = url; S.pane.extract = null;
     // Full groupware screens (근태신청, 메일함, 결재작성) need width: open the pane wide.
-    if (!/#\/?popup\?/.test(url)) { S.pane.expanded = true; toast('그룹웨어 전체 화면이라 처리 창을 넓게 열었습니다. 왼쪽 메뉴나 "목록 보기"로 돌아갑니다.'); }
+    if (/ecm001A07/.test(decodeURIComponent(url))) { S.pane.expanded = true; }
+    else if (!/#\/?popup\?/.test(url)) { S.pane.expanded = true; toast('그룹웨어 전체 화면이라 처리 창을 넓게 열었습니다. 왼쪽 메뉴나 "목록 보기"로 돌아갑니다.'); }
     else S.pane.expanded = false;
     renderPane();
   }

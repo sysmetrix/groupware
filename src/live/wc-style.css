@@ -189,3 +189,7 @@ nav .foot a{white-space:nowrap}
 .frame.idle:empty{display:none}
 .wc:not(.nopane) .row{grid-template-columns:24px 1fr auto}.wc:not(.nopane) .row .qa{grid-column:2/4;justify-content:flex-start;margin-top:-2px}.wc:not(.nopane) .row.ref .qa{grid-column:auto}
 .menu .mh{display:block;max-width:320px}
+.bdg.wait{background:var(--soft);color:var(--muted);border:1px solid var(--line)}.row .hl .what.wait{color:var(--muted)}
+main{container-type:inline-size}
+.wc:not(.nopane) .row{grid-template-columns:24px 1fr auto auto}.wc:not(.nopane) .row .qa{grid-column:auto;justify-content:flex-end;margin-top:0}
+@container (max-width:680px){.row{grid-template-columns:24px 1fr auto!important}.row .qa{grid-column:2/4!important;justify-content:flex-start!important}}

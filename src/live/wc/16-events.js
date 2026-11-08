@@ -19,7 +19,7 @@
       case 'copyErrors': copyText((S.errors || []).map(x => `${new Date(x.at).toISOString()} ${x.where}: ${x.msg}`).join('\n')); break;
       case 'stateFilter': S.filter.level = S.filter.level === v || v === 'all' ? 'all' : v; renderMain(); break;
       case 'rowMenu': e.stopPropagation(); openMenu('row:' + el.dataset.k, el); break;
-      case 'markDone': e.stopPropagation(); { pushUndo('끝냄'); S.hidden[el.dataset.k] = Date.now(); saveLocal(); afterMark(); toastUndo('끝난 일로 표시했습니다. 그룹웨어에 아직 남아 있으면 하루 뒤 다시 보여 드립니다.'); } break;
+      case 'markDone': e.stopPropagation(); { pushUndo('끝냄'); S.hidden[el.dataset.k] = Date.now(); saveLocal(); afterMark(); toastUndo(el.dataset.k.startsWith('att:') ? '정상으로 표시했습니다. 그룹웨어 기록이 3일 뒤에도 그대로면 다시 보여 드립니다.' : '끝난 일로 표시했습니다. 그룹웨어에 아직 남아 있으면 하루 뒤 다시 보여 드립니다.'); } break;
       case 'coach': startCoach(); break;
       case 'coachNext': coachNext(); break;
       case 'coachEnd': endCoach(); break;
@@ -123,6 +123,11 @@
       case 'calNext': S.cal.offset++; renderMain(); break;
       case 'calToday': S.cal.offset = 0; renderMain(); break;
       case 'calItem': if (el.dataset.k && S.a.actions.some(x => x.key === el.dataset.k)) { go('today'); selectAction(el.dataset.k); } else if (el.dataset.url) openUrl(el.dataset.url, {title: el.textContent.trim()}); break;
+      case 'goBudgetPick': S.budget.pickOpen = true; go('budget'); break;
+      case 'bTogglePick': S.budget.pickOpen = !S.budget.pickOpen; renderMain(); break;
+      case 'bPick': e.stopPropagation(); S.budget.project = el.dataset.p; S.budget.filter = el.dataset.f || ''; loadBudget(); break;
+      case 'bPin': { e.stopPropagation(); const p = el.dataset.p, f = el.dataset.f || '', l = el.dataset.l || f || p; const i = S.settings.budget.findIndex(x => x.project === p && (x.filter || '') === f); if (i >= 0) { S.settings.budget.splice(i, 1); toast('내 관심 사업에서 뺐습니다.'); } else { S.settings.budget.push({project: p, filter: f, label: l}); toast('내 관심 사업에 추가했습니다.'); } if (!S.settings.budget.length) S.settings.budget = [...DEFAULT_SETTINGS.budget]; saveLocal(); renderMain(); break; }
+      case 'bUnpin': { e.stopPropagation(); S.settings.budget.splice(Number(el.dataset.i), 1); if (!S.settings.budget.length) S.settings.budget = [...DEFAULT_SETTINGS.budget]; saveLocal(); renderMain(); toast('내 관심 사업에서 뺐습니다.'); break; }
       case 'loadBudget': S.budget.project = $('#bcode').value.trim(); S.budget.filter = $('#bfilter').value.trim(); if (!S.budget.project) { toast('프로젝트 코드를 입력하세요.'); break; } loadBudget(); break;
       case 'ledger': loadLedger(el.dataset.code); break;
       case 'loadMonthly': loadMonthly(); break;
@@ -185,6 +190,7 @@
     const t = e.composedPath()[0];
     if (t.id === 'bproj' && t.value === '__custom') { S.budget.custom = true; renderMain(); }
     if (t.id === 'bproj' && t.value !== '__custom') { S.budget.custom = false; const [p, f] = t.value.split('|'); S.budget.project = p; S.budget.filter = f; loadBudget(); }
+    if (t.id === 'bCatProj') { S.budget.project = t.value; S.budget.filter = ''; loadBudget(); }
     if (t.id === 'bq') renderMain();
     if (t.classList && t.classList.contains('setc')) saveSettingField(t);
     if (t.dataset && t.dataset.b) saveBudgetRows();

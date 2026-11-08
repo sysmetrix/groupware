@@ -71,7 +71,7 @@
     for (const x of a.actions) if (re.test(x.title)) { x.score += 30; x.why = [...(x.why || []), '내 긴급 키워드']; if (x.scope !== 'ref' && ['todo', 'check'].includes(x.state)) { x.state = 'urgent'; x.priority = 'high'; } }
     sortActions(a);
   }
-  const ST_RANK = {overdue: 0, urgent: 1, todo: 2, check: 3, confirm: 4, info: 5};
+  const ST_RANK = {overdue: 0, urgent: 1, todo: 2, check: 3, confirm: 4, wait: 5, info: 6};
   function sortActions(a) { a.actions.sort((p, q) => (ST_RANK[p.state] ?? 2) - (ST_RANK[q.state] ?? 2) || q.score - p.score); }
   function notifyNew(items) {
     if (!items.length) return;
