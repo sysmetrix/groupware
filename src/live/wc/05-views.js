@@ -59,7 +59,8 @@
     $('#bell').innerHTML = `${ic('bell')}${unseen ? `<span class="dot">${unseen > 99 ? '99+' : unseen}</span>` : ''}`;
     const urgent = S.a ? mineVisible().filter(x => ['overdue', 'urgent'].includes(stateOf(x))).length : 0;
     const total = S.a ? mineVisible().length : 0;
-    fab.innerHTML = `<span style="display:inline-flex;align-items:center;gap:6px">${ic('home').replace('class="i"', 'width="16" height="16" style="fill:none;stroke:currentColor;stroke-width:2"')}업무센터${S.a ? ` <b style="background:${urgent ? '#ff5252' : 'rgba(255,255,255,.25)'};border-radius:999px;padding:0 7px;font-size:12px">${urgent ? `급함 ${urgent}` : total}</b>` : ''}</span>`;
+    { const st = !S.a ? 'idle' : urgent ? 'urgent' : total ? 'todo' : 'ok'; const sum = !S.a ? '불러오는 중' : urgent ? `급한 일 ${urgent}건 · 전체 ${total}건` : total ? `처리할 일 ${total}건` : '오늘 처리할 일 없음'; fab.dataset.st = st;
+      fab.innerHTML = `<span class="lg"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><path d="m14 17 2 2 4-4"/></svg></span><span class="t">업무센터</span><span class="sm">${sum}</span>${S.a ? `<span class="b">${urgent || total || '✓'}</span>` : ''}<kbd>Alt G</kbd>`; }
   }
   function renderBand() {
     const b = $('#band');
