@@ -80,6 +80,7 @@
         <div class="mi" data-act="quickDraft" data-t="plan">📝 <b>운영·참가계획</b> — 같은 사업의 과거 계획서 서식으로 작성</div>
         <div class="mi" data-act="quickDraft" data-t="goods">📦 <b>물품매입품의서</b> (운영물품 구입 품의)</div>
       <div class="mi" data-act="openPay">💳 <b>지급 문서</b> — 지급 건의 작성, 물품매입, 지출결의서 차례 확인</div>
+      <div class="mi" data-act="goResource">🚗 <b>자원 예약</b> — 공용차량 현황 확인, 바로 예약</div>
       <div class="mi" data-act="openAi">✨ <b>AI 도우미</b> — 오늘 우선순위 정리, 업무 질문 (Gemini)</div>
       <div class="mi" data-act="openRec">🎬 <b>기록기</b> — 그룹웨어 동작을 기록해 그대로 재생</div>
 

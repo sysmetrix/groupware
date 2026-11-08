@@ -15,11 +15,13 @@
  */
 (() => {
   'use strict';
-  const VERSION = '5.4.0';
+  const VERSION = '5.5.0';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
   const READ_ONLY = new Set([
+  // 자원(회의실·차량) 조회: 목록, 예약 현황, 자원 상세, 중복·한도 확인(POST지만 읽기 전용), 속성/옵션
+  '/schres/rs121A01', '/schres/rs121A04', '/schres/rs121A05', '/schres/rs121A42', '/schres/rs121A49', '/schres/rs121A24', '/schres/rs121A10',
     '/mail/mail000A01', '/mail/mail000A03', '/mail/mail003A01', '/mail/mail002A01', '/mail/mail002A37', '/ecm/ecm001A07',
     '/ea/api/getMenuCountInfo', '/ea/ea036A02', '/ea/ea025A04', '/ea/ea023A02', '/ea/ea027A02',
     '/ea/ea038A09', '/ea/ea038A15',
@@ -132,8 +134,13 @@
     } catch { return new GwError('API_ERROR', text.slice(0, 200)); }
   }
 
-  async function call(path, body = {}, {timeoutMs = 15000} = {}) {
+  // 쓰기는 이 목록의 주소만, 전용 함수(reserveResource)에서만 허용한다. 상신·결재·삭제·발송 계열은 여기에 절대 넣지 않는다.
+  const WRITE_ALLOWED = new Set(['/schres/rs121A06']);
+  async function call(path, body = {}, opts = {}) {
     if (!READ_ONLY.has(path)) throw new GwError('NOT_ALLOWED', `읽기 전용 허용 목록에 없는 API입니다: ${path}`);
+    return transport(path, body, opts);
+  }
+  async function transport(path, body = {}, {timeoutMs = 15000} = {}) {
     const client = findClient();
     let timer;
     try {
@@ -315,6 +322,49 @@
       otMin: num(r.overworkTm), holiOtMin: num(r.holioverworkTm), recognizedMin: num(r.appworkTm), holiday: /휴일/.test(r.attresultNm || '') && !r.atNm,
       mine: str(r.empCd, 12) === me,
     })).filter(r => r.item && r.item !== '-').sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name, 'ko'));
+  }
+  // ---------- 자원 ----------
+  async function resourceList() {
+    const attrs = await call('/schres/rs121A24', {menuAuth: 'USER'}).catch(() => ({}));
+    const attrList = [...arr(attrs && attrs.resAttrList).map(a => str(a.attrSeq, 20)).filter(Boolean), 'ETC'];
+    const d = await call('/schres/rs121A01', {searchText: '', attrUseYn: '', attrList, propList: []});
+    const out = [];
+    for (const g of arr(d && (d.resultList || d.attrList))) for (const r of arr(g.resList || [g])) if (r && r.resSeq) out.push({resSeq: str(r.resSeq, 12), name: str(r.resName, 60), attr: str(g.attrName || r.attrName, 30), attrSeq: str(g.attrSeq || r.attrSeq, 20), apprYn: str(r.apprYn, 1), desc: str(r.descText, 120), useYn: str(r.useYn, 1)});
+    return out;
+  }
+  // 하루 이상 구간의 예약 현황 (YYYYMMDD). statusType 10=신청, 20=승인
+  async function resourceBookings({from, to, resSeqs = []}) {
+    const d = await call('/schres/rs121A05', {startDate: from, endDate: to, statusType: ['10', '20'], resList: resSeqs.map(s => ({resSeq: String(s)})), statusCode: '', searchType: '', sechType: '', menuAuth: 'USER'});
+    return arr(d && d.resultList).map(r => ({resSeq: str(r.resSeq, 12), seqNum: str(r.seqNum, 12), name: str(r.resName, 60), title: str(r.reqText || r.resTitleDisplay, 120), start: str(r.resStartDate || r.startDate, 12), end: str(r.resEndDate || r.endDate, 12), status: str(r.statusCode, 4), who: str(r.empName || r.createName || r.reqEmpName, 20), mine: !!r.mineYn || undefined, raw: undefined}));
+  }
+  async function resourceDetail(resSeq) {
+    const d = await call('/schres/rs121A42', {resSeq: String(resSeq)});
+    return {resSeq: String(resSeq), name: str(d && d.resName, 60), apprYn: str(d && d.apprYn, 1), limitMin: num(String((d && d.limitReservationRange) || '').replace(/,/g, '')), raw: undefined};
+  }
+  async function resourceCheck({resSeq, start, end}) {
+    const d = await call('/schres/rs121A04', {resSeq: String(resSeq), startDate: start, endDate: end, alldayYn: 'N', resStartDate: start.slice(0, 8)});
+    return {conflict: d && d.reservationYn === 'Y', limit: d && d.limitYn === 'Y'};
+  }
+  // 예약 등록: 입력 검증, 과거 시간 거부, 중복·한도 확인 후에만 저장한다. 성공 여부는 서버 응답(successTf)으로 판단한다.
+  async function reserveResource({resSeq, title, start, end}) {
+    const ctx = context();
+    if (!/^\d+$/.test(String(resSeq))) throw new GwError('BAD_INPUT', '자원 번호가 올바르지 않습니다');
+    if (!/^\d{12}$/.test(String(start)) || !/^\d{12}$/.test(String(end)) || end <= start || start.slice(0, 8) !== end.slice(0, 8)) throw new GwError('BAD_INPUT', '시작·종료 시각이 올바르지 않습니다(같은 날, 종료가 시작보다 뒤)');
+    const nowK = ymd() + new Intl.DateTimeFormat('en-GB', {timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hour12: false}).format(new Date()).replace(':', '');
+    if (start < nowK) throw new GwError('BAD_INPUT', '이미 지난 시각은 예약할 수 없습니다');
+    const name = str(title, 100);
+    if (!name) throw new GwError('BAD_INPUT', '예약명을 입력하세요');
+    const detail = await resourceDetail(resSeq);
+    if (detail.limitMin > 0 && (Number(end.slice(8, 10)) * 60 + Number(end.slice(10)) - (Number(start.slice(8, 10)) * 60 + Number(start.slice(10)))) > detail.limitMin) throw new GwError('LIMIT', `최대 ${detail.limitMin / 60}시간까지만 예약할 수 있습니다`);
+    const chk = await resourceCheck({resSeq, start, end});
+    if (chk.conflict) throw new GwError('CONFLICT', '같은 시간에 이미 예약이 있습니다');
+    if (chk.limit) throw new GwError('LIMIT', '예약 한도를 넘었습니다');
+    const u = ctx;
+    const body = {resSeq: String(resSeq), reqText: name, apprYn: detail.apprYn, alldayYn: 'N', startDate: start, endDate: end, descText: '', resSubscriberList: [{groupSeq: u.groupSeq, compSeq: u.compSeq, deptSeq: u.deptSeq, empSeq: u.empSeq}], uidList: '', repeatType: '10', repeatEndDay: '', linkSchList: [], newSchList: []};
+    if (!WRITE_ALLOWED.has('/schres/rs121A06')) throw new GwError('NOT_ALLOWED', '쓰기 허용 목록 오류');
+    const r = await transport('/schres/rs121A06', body, {timeoutMs: 20000});
+    if (!r || Number(r.successTf) !== 1) throw new GwError('SAVE_FAILED', '서버가 예약을 저장하지 못했습니다');
+    return {ok: true, resSeq: String(resSeq), start, end, title: name, needsApproval: detail.apprYn === 'Y'};
   }
   // 앞으로 예정된 휴가·출장·연장근무: 근태/출장 신청 현황(결재 중 포함)을 읽는다. 신청일 기준 최근 150일 안의 신청만 본다.
   async function teamPlanned() {
@@ -656,7 +706,7 @@
   }
 
   window.BWYFGW = Object.freeze({
-    version: VERSION, collect, call, search, budgetCatalog, budgetProject, budgetLedger, budgetMonthly, attendanceDays, teamAttendance, teamPlanned, routingHistory, submittedRange, approvalPage, docPreview, frequentForms, findReply, mailDetail, mailAttachment, mailAttachmentPreview, saveBlob,
+    version: VERSION, collect, call, search, budgetCatalog, budgetProject, budgetLedger, budgetMonthly, attendanceDays, teamAttendance, teamPlanned, resourceList, resourceBookings, resourceDetail, resourceCheck, reserveResource, routingHistory, submittedRange, approvalPage, docPreview, frequentForms, findReply, mailDetail, mailAttachment, mailAttachmentPreview, saveBlob,
     context: () => { const c = context(); return {name: c.name, deptName: c.deptName, compName: c.compName, duty: c.duty, position: c.position}; },
     readOnlyEndpoints: () => [...READ_ONLY], routes: ROUTES, links: LINKS, searchLabels: SEARCH_LABELS, defaults: DEFAULTS,
   });

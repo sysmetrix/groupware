@@ -3,7 +3,7 @@
   // ---------- views ----------
   const VIEWS = [
     {id: 'today', label: '오늘 할 일'}, {id: 'approval', label: '결재·문서유통'}, {id: 'mail', label: '메일'}, {id: 'search', label: '통합검색'},
-    {id: 'board', label: '할 일 보드'}, {id: 'calendar', label: '일정 달력'}, {id: 'budget', label: '예산 집행'}, {id: 'attendance', label: '근태·연차'},
+    {id: 'board', label: '할 일 보드'}, {id: 'calendar', label: '일정 달력'}, {id: 'budget', label: '예산 집행'}, {id: 'attendance', label: '근태·연차'}, {id: 'resource', label: '자원 예약'},
     {id: 'report', label: '보고서'}, {id: 'settings', label: '설정'},
   ];
   // Charts: shown on big screens, folded on laptops unless the user chose otherwise.
@@ -73,7 +73,7 @@
     b.innerHTML = parts.join('');
   }
   const MODNAME = {mail: '메일', approval: '전자결재', notice: '공지', schedule: '일정', attendance: '근태', leave: '연차', budget: '예산', alerts: '알림'};
-  const VIEW_ICON = {today: 'inbox', overview: 'chart', approval: 'doc', mail: 'mail', search: 'search', board: 'board', calendar: 'cal', budget: 'wallet', attendance: 'clock', report: 'report', settings: 'gear'};
+  const VIEW_ICON = {today: 'inbox', overview: 'chart', approval: 'doc', mail: 'mail', search: 'search', board: 'board', calendar: 'cal', budget: 'wallet', attendance: 'clock', resource: 'cal', report: 'report', settings: 'gear'};
   function renderNav() {
     const u = S.a ? S.a.unknown : {};
     const mine = S.a ? mineVisible() : [];
@@ -96,12 +96,13 @@
     const el = $('#main');
     if (!S.a) { el.innerHTML = S.error && S.error !== 'SESSION' ? `<div class="empty"><div class="ill">${ic('alert')}</div><b>자료를 읽지 못했습니다</b>${esc(S.error)}<div class="acts" style="justify-content:center"><button class="btn primary" data-act="refresh">다시 시도</button></div></div>` : `<div class="pgh"><h1>그룹웨어 자료를 읽는 중입니다</h1><span class="spin"></span></div><div class="list">${'<div class="sk row"></div>'.repeat(6)}</div>`; return; }
     const scroll = el.scrollTop;
-    const fn = {today: vToday, overview: vOverview, approval: vApproval, mail: vMail, search: vSearch, board: vBoard, calendar: vCalendar, budget: vBudget, attendance: vAttendance, report: vReport, settings: vSettings}[S.view] || vToday;
+    const fn = {today: vToday, overview: vOverview, approval: vApproval, mail: vMail, search: vSearch, board: vBoard, calendar: vCalendar, budget: vBudget, attendance: vAttendance, resource: vResource, report: vReport, settings: vSettings}[S.view] || vToday;
     el.innerHTML = fn();
     el.scrollTop = scroll;
     if (S.view === 'report') { const f = $('#briefFrame'); if (f) f.srcdoc = R.renderHtml(S.a); }
     if (S.view === 'budget' && !S.budget.table && !S.budget.busy) loadBudget();
     if (S.view === 'attendance' && !S.att.rows && !S.att.busy) loadAttendance();
+    if (S.view === 'resource' && !resState().bookings && !resState().busy && !resState().err) resLoad();
     if (S.view === 'approval' && ['distWaiting', 'deptWaiting'].includes(S.apTab) && !S.routing) loadRouting().then(() => { if (S.view === 'approval') renderMain(); });
   }
   const pgh = (title, sub = '', tools = '') => `<div class="pgh"><h1>${title}</h1>${sub ? `<span class="sub">${sub}</span>` : ''}${tools ? `<div class="tools">${tools}</div>` : ''}</div>`;

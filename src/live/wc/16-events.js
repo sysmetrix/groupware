@@ -48,6 +48,15 @@
         break;
       }
       case 'openPay': openPaymentHub(); break;
+    case 'goResource': closeOverlay(); go('resource'); break;
+    case 'resSel': resSel(el.dataset.v); break;
+    case 'resDay': resDay(el.dataset.v); break;
+    case 'resGo': resGo(); break;
+    case 'resFree': resFree(el.dataset.s, el.dataset.e); break;
+    case 'resCheck': resCheck(); break;
+    case 'resBook': resBook(); break;
+    case 'resCancelForm': resCancelForm(); break;
+    case 'resReload': { const s = resState(); s.err = ''; s.list = null; s.bookings = null; renderMain(); resLoad(true); break; }
     case 'openAi': openAi(); break;
     case 'aiSetup': aiSetup(); break;
     case 'aiSaveKey': aiSaveKey(); break;

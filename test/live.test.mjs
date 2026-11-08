@@ -439,7 +439,7 @@ test('safe draft links: interlocked forms (36, 40, 1007, 1012) route to safe mod
   assert.ok(stdUrl.includes('tiKeyCode=mg_20160303185413307'), 'general form opens direct draft popup');
 });
 // ---- 기안 패턴(조직 서식 학습) ----
-import {patternTokens, buildPatternModel, predictDraftMeta, formatRunRef, planToResultTitle, buildResultBody, textWidthPt, buildPlanSkeleton, moneyKo, buildPaymentProposalBody, pendingPayments, sha256Hex, chainAudit, verifyAudit, normalizePolicy, featureAllowed, purgeExpired, compareVersions, maskSensitive, classifyTeamRow, buildTeamCalendar, checkPaymentEntry, maskAccount, isGeminiKey, buildAiContext, expandPlanned} from '../src/live/briefing.mjs';
+import {patternTokens, buildPatternModel, predictDraftMeta, formatRunRef, planToResultTitle, buildResultBody, textWidthPt, buildPlanSkeleton, moneyKo, buildPaymentProposalBody, pendingPayments, sha256Hex, chainAudit, verifyAudit, normalizePolicy, featureAllowed, purgeExpired, compareVersions, maskSensitive, classifyTeamRow, buildTeamCalendar, checkPaymentEntry, maskAccount, isGeminiKey, buildAiContext, expandPlanned, freeSlots, validateBooking, timeOptions, bookingSpanOnDay} from '../src/live/briefing.mjs';
 
 const PLAN_BODY = ['1. 가나부-1613(2026. 3. 4.)호와 관련입니다.', '2. 2026년『시험 사업』을 다음과 같이 운영하고자 합니다.', '  가. 사 업 명: 2026년『시험 사업』', '  나. 운영일정: 2026. 11. 1.(일) 14:00~16:30', '  다. 운영장소: 시험센터 2층', '  라. 참가인원: 연 40명(실 40명) ※ 선착순 접수', '  마. 주요내용: 아주 긴 설명이 이어지는 항목입니다 아주 긴 설명이 이어지는 항목입니다 아주 긴 설명이 이어지는 항목입니다 아주 긴 설명이 이어지는 항목입니다', '  바. 소요예산: 비예산', '', '붙임  운영계획서 1부.  끝.'].join('\r\n');
 
@@ -616,4 +616,21 @@ test('expandPlanned: future-only day rows, weekends skipped in ranges, own overt
   assert.equal(rows.find(r => r.item === '연장근무').mine, true);
   const cal = buildTeamCalendar(rows, new Date('2026-11-09T10:00:00+09:00'));
   assert.equal(cal.byDate['20261112'].length, 1); assert.equal(cal.byDate['20261110'][0].state, 'wait');
+});
+
+test('resource booking helpers: free slots, multi-day spans, validation', () => {
+  const day = '20261116';
+  const bk = [{start: '202611161300', end: '202611161800'}, {start: '202611160900', end: '202611161030'}, {start: '202611150900', end: '202611160800'}];
+  assert.deepEqual(freeSlots(bk, day).map(s => s.start + '-' + s.end), ['10:30-13:00']);
+  assert.deepEqual(freeSlots([], day).map(s => s.start + '-' + s.end), ['09:00-18:00']);
+  assert.deepEqual(bookingSpanOnDay({start: '202611151000', end: '202611171000'}, day), [0, 1440]);
+  assert.equal(bookingSpanOnDay({start: '202611171000', end: '202611171100'}, day), null);
+  const now = new Date('2026-11-09T10:00:00+09:00');
+  assert.equal(validateBooking({title: '', date: '2026-11-10', start: '09:00', end: '10:00', now}).ok, false);
+  assert.equal(validateBooking({title: 'a', date: '2026-11-09', start: '09:00', end: '10:30', now}).ok, false);      // 과거
+  assert.equal(validateBooking({title: 'a', date: '2026-11-10', start: '10:00', end: '09:00', now}).ok, false);
+  const ok = validateBooking({title: '출장', date: '2026-11-10', start: '09:00', end: '12:00', now});
+  assert.equal(ok.ok, true); assert.equal(ok.start12, '202611100900'); assert.equal(ok.end12, '202611101200');
+  assert.equal(validateBooking({title: 'a', date: '2026-11-10', start: '09:00', end: '14:00', now, limitMin: 240}).ok, false);
+  assert.equal(timeOptions({from: '09:00', to: '10:00', step: 30}).join(','), '09:00,09:30,10:00');
 });

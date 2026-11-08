@@ -850,7 +850,7 @@ export function verifyAudit(list = []) {
   }
   return {ok: true, checked: list.length, legacy: 0};
 }
-export const POLICY_FEATURES = ['briefing', 'teamAttendance', 'aiAssistant', 'draftResult', 'draftPlan', 'draftPay', 'draftGoods', 'recorder', 'aiConsole', 'updateCheck'];
+export const POLICY_FEATURES = ['briefing', 'teamAttendance', 'aiAssistant', 'resource', 'draftResult', 'draftPlan', 'draftPay', 'draftGoods', 'recorder', 'aiConsole', 'updateCheck'];
 export const DEFAULT_POLICY = {orgName: '', enabled: true, message: '', features: Object.fromEntries(POLICY_FEATURES.map(f => [f, true])), retentionDays: 90, requireAckVersion: '', recorderPlayConfirm: true, license: ''};
 // 관리자가 배포 폴더의 policy.js로 지정한 값을 검증·보정한다(알 수 없는 값은 무시, 안전한 쪽으로 기본값).
 export function normalizePolicy(p) {
@@ -1019,4 +1019,39 @@ export function expandPlanned(apps = [], {fromYmd, toYmd, todayYmd, meCd = ''} =
     }
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// 자원(공용차량·회의실) 예약: 하루 예약 현황에서 빈 시간 계산, 입력 검증
+// ---------------------------------------------------------------------------
+const toMin = hhmm => { const m = String(hhmm || '').match(/^(\d{2}):?(\d{2})$/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
+export const minToHm = n => `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
+// 예약 한 건(YYYYMMDDHHmm 시작·끝)이 지정한 날과 겹치는 분 구간을 돌려준다(여러 날 예약도 처리).
+export function bookingSpanOnDay(b, ymd) {
+  const s = String(b.start || ''), e = String(b.end || '');
+  if (!/^\d{12}$/.test(s) || !/^\d{12}$/.test(e)) return null;
+  if (s.slice(0, 8) > ymd || e.slice(0, 8) < ymd) return null;
+  const a = s.slice(0, 8) === ymd ? toMin(s.slice(8)) : 0, z = e.slice(0, 8) === ymd ? toMin(e.slice(8)) : 1440;
+  return z > a ? [a, z] : null;
+}
+export function freeSlots(bookings = [], ymd, {open = '09:00', close = '18:00', minMin = 30} = {}) {
+  const lo = toMin(open), hi = toMin(close);
+  const busy = bookings.map(b => bookingSpanOnDay(b, ymd)).filter(Boolean).sort((a, b) => a[0] - b[0]);
+  const out = []; let cur = lo;
+  for (const [a, z] of busy) { if (a > cur) out.push([cur, Math.min(a, hi)]); cur = Math.max(cur, z); if (cur >= hi) break; }
+  if (cur < hi) out.push([cur, hi]);
+  return out.filter(([a, z]) => z - a >= minMin).map(([a, z]) => ({start: minToHm(a), end: minToHm(z), minutes: z - a}));
+}
+export function timeOptions({from = '07:00', to = '22:00', step = 30} = {}) { const o = []; for (let m = toMin(from); m <= toMin(to); m += step) o.push(minToHm(m)); return o; }
+export function validateBooking({title = '', date = '', start = '', end = '', now = new Date(), limitMin = 0} = {}) {
+  const errors = [];
+  if (!String(title).trim()) errors.push('예약명을 입력하세요');
+  if (!/^\d{8}$/.test(String(date).replace(/-/g, ''))) errors.push('날짜를 선택하세요');
+  const a = toMin(start), z = toMin(end);
+  if (a === null || z === null) errors.push('시작·종료 시각을 선택하세요');
+  else if (z <= a) errors.push('종료 시각이 시작보다 뒤여야 합니다');
+  else if (limitMin > 0 && z - a > limitMin) errors.push(`최대 ${limitMin / 60}시간까지만 예약할 수 있습니다`);
+  const k = kstNow(now), today = k.date.replace(/-/g, ''), d8 = String(date).replace(/-/g, '');
+  if (a !== null && (d8 < today || (d8 === today && a < k.hh * 60 + k.mm))) errors.push('이미 지난 시각은 예약할 수 없습니다');
+  return {ok: errors.length === 0, errors, start12: d8 + String(start).replace(':', ''), end12: d8 + String(end).replace(':', '')};
 }

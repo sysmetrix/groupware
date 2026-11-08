@@ -121,6 +121,11 @@ await stage('안전 규칙', async () => {
   for (const e of eps) if (/save|insert|update|delete|remove|submit|approve|send|regist|create|modify|apply/i.test(e)) fails.push(`읽기 전용 목록에 쓰기로 보이는 주소: ${e}`);
   // call('/주소', '/다른주소' ...) 처럼 인자가 오염된 호출 검출 (문자열 치환 사고 방지)
   for (const m of col.matchAll(/call\('(\/[\w/]+)',\s*'\//g)) fails.push('수집기 call 인자 오염: ' + m[1]);
+  // 쓰기 허용 목록은 자원 예약 한 개뿐이어야 한다
+  const wm = col.match(/const WRITE_ALLOWED = new Set\(\[([^\]]*)\]/);
+  const wl = wm ? [...wm[1].matchAll(/'([^']+)'/g)].map(x => x[1]) : [];
+  if (wl.length !== 1 || wl[0] !== '/schres/rs121A06') fails.push('쓰기 허용 목록이 자원 예약(rs121A06) 한 개가 아님: ' + wl.join(','));
+  for (const e of eps) if (/rs121A06/.test(e)) fails.push('쓰기 주소가 읽기 전용 목록에 있음: ' + e);
   const eng = await read('src/live/wc/19-draft-engine.js');
   const deny = (eng.match(/const DENY_BTN = .*/) || [''])[0];
   for (const w of ['상신', '결재', '임시저장', '삭제', '발송']) if (!deny.includes(w)) fails.push(`비가역 버튼 차단 목록에 '${w}' 없음`);
