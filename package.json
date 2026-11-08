@@ -26,6 +26,8 @@
     "doctor:model": "node --env-file-if-exists=.env scripts/doctor-model.mjs",
     "evaluate:model": "node --env-file-if-exists=.env scripts/evaluate-model.mjs",
     "attach:extract": "node --env-file-if-exists=.env scripts/attach-extract.mjs",
+    "live:build": "node scripts/live-build.mjs",
+    "live:report": "node scripts/live-report.mjs",
     "test:attachments": "python -m unittest discover -s test -p \"*_test.py\""
   }
 }

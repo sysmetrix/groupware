@@ -1,0 +1,162 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import vm from 'node:vm';
+import {analyze, nextState, renderHtml, renderMarkdown, toDataset, extractDeadline} from '../src/live/briefing.mjs';
+import {validateDataset} from '../src/schema.mjs';
+import {buildReport} from '../scripts/live-report.mjs';
+
+const NOW = new Date('2026-11-09T00:30:00Z'); // 2026-11-09 09:30 KST
+const ORIGIN = 'https://gw.bwyf.or.kr';
+
+function fixture(overrides = {}) {
+  const doc = (id, title, extra = {}) => ({docId: id, title, status: '접수중', statusCode: '001', drafter: '', drafterDept: '', approver: '', sender: '테스트기관', docNo: `테스트-${id}`, date: '2026-11-06 10:00:00', attachments: 1, comments: 0, unread: false, ...extra});
+  const list = (label, docs, total = docs.length) => ({label, menu: '1', total, fetched: docs.length, docs, url: `${ORIGIN}/#/UC/UCA/UCA0000?pageCode=UCA0000`});
+  return {
+    schemaVersion: 1, collector: '1.0.0', origin: ORIGIN, collectedAt: '2026-11-09T00:29:00.000Z', durationMs: 300, sessionExpired: false,
+    principal: {empSeq: '1', loginId: 'u1', name: '홍길동', deptName: '시험부서', compName: '시험재단'},
+    options: {approvalDays: 92},
+    status: {mail: {ok: true, ms: 10}, approval: {ok: true, ms: 10}, notice: {ok: true, ms: 10}, schedule: {ok: true, ms: 10}, leave: {ok: true, ms: 10}, attendance: {ok: true, ms: 10}, budget: {ok: true, ms: 10}, alerts: {ok: true, ms: 10}},
+    data: {
+      mail: {boxes: [{seq: 1, name: 'INBOX', total: 3, unseen: 1}], url: `${ORIGIN}/#/UD`, otherUnseen: [{uid: '9', box: '외부', subject: 'Weekly 뉴스 모음', from: '뉴스', date: '2026-11-08 08:00:00', seen: false, answered: false, forwarded: false, attach: false, preview: ''}],
+        inbox: {total: 3, unseen: 1, fetched: 3, records: [
+          {uid: '3', box: 'INBOX', subject: '자료 제출 요청(~11/12)', from: '김시험', date: '2026-11-08 18:00:00', seen: false, answered: false, forwarded: false, attach: true, preview: '비밀번호: [MASKED]'},
+          {uid: '2', box: 'INBOX', subject: '회의 참석 확인 부탁드립니다', from: '이시험', date: '2026-11-07 12:00:00', seen: true, answered: false, forwarded: false, attach: false, preview: ''},
+          {uid: '1', box: 'INBOX', subject: '<script>alert(1)</script> 안내', from: '박시험', date: '2026-10-01 12:00:00', seen: true, answered: true, forwarded: false, attach: false, preview: ''},
+        ]}},
+      approval: {url: `${ORIGIN}/#/UC`, counts: [{menu: '11000700', name: '대기문서', count: 1, total: null}, {menu: '11002300', name: '부서대기문서', count: 1, total: null}, {menu: '11002700', name: '배부대기문서', count: 0, total: null}, {menu: '11000500', name: '열람문서', count: 1, total: 10}],
+        lists: {
+          pending: list('결재 대기', [doc('100', '예산 집행 품의', {sender: '', drafter: '최기안'})]),
+          deptWaiting: list('부서 접수 대기', [doc('200', '협조 요청 공문 (11월 20일까지 회신)')]),
+          distWaiting: list('배부 대기', []),
+          sendWaiting: list('발송 대기', []),
+          submitted: list('내 상신문서', [doc('300', '출장신청', {status: '결재중(부장)', statusCode: '002'}), doc('301', '연가신청', {status: '반려(부장)', statusCode: '007'}), doc('302', '보고', {status: '결재완료(부장)', statusCode: '008'})], 50),
+          viewing: list('열람문서', [doc('400', '열람 안내', {unread: true}), doc('401', '읽은 열람', {unread: false})], 10),
+        }},
+      notice: {total: 100, unread: 1, fetched: 2, url: `${ORIGIN}/#/UF`, articles: [
+        {id: '10', title: '[공지] 설문 참여 (~11.20.)', writer: '정작성', dept: '시험부서', date: '2026-11-05 09:00:00', read: false, top: false, files: 0, mine: false, reserved: false},
+        {id: '11', title: '예약된 글', writer: '홍길동', dept: '시험부서', date: '2026-11-01 09:00:00', read: true, top: false, files: 0, mine: true, reserved: true},
+      ]},
+      schedule: {start: '20261109', end: '20261123', calendars: [{seq: '1', type: 'E', title: '개인', writable: true}], events: [{id: '5', title: '외부 회의', calendar: '개인', start: '202611101400', end: '202611101500', allDay: false, place: '회의실', people: '홍길동'}], holidays: [], url: `${ORIGIN}/#/UE`},
+      attendance: {today: {date: '20261109', come: '0855', leave: '', error: ''}, month: {from: '20261101', to: '20261130', recognizedMin: 480, basicMin: 480, overtimeMin: 0, exceptMin: 0, nightMin: 0, error: ''}, url: `${ORIGIN}/#/HP`},
+      leave: {year: '2026', granted: 20, used: 12.5, remaining: 7.5, breakdown: {}, upcoming: [{start: '20261111', end: '20261111', kind: '연차', days: 1, title: '연차', approved: true}], usedCount: 10, url: `${ORIGIN}/#/HP/HPD0550/HPD0550`},
+      budget: {url: `${ORIGIN}/#/HP/NPC2040/NCC0610`, projects: [{project: 'P1', label: '시험사업', filter: '항1', year: 2026, gisu: '12', period: '누계', total: {code: 'P1', name: '합계', level: '계', budget: 1000, executed: 500, balance: 500, rate: 50}, rows: [{code: '항1', name: '항 이름', level: '항', path: '관1|항1|', budget: 100, executed: 60, balance: 40, rate: 60}], rowCount: 5}]},
+      alerts: {alerts: []},
+    },
+    ...overrides,
+  };
+}
+
+test('extractDeadline reads common Korean deadline notations', () => {
+  assert.equal(extractDeadline('설문 (~11.20.)', NOW), '2026-11-20');
+  assert.equal(extractDeadline('자료 제출(~11/12)', NOW), '2026-11-12');
+  assert.equal(extractDeadline('공문 11월 20일까지 회신', NOW), '2026-11-20');
+  assert.equal(extractDeadline('제출기한: 1/5', NOW), '2027-01-05');
+  assert.equal(extractDeadline('2026년 계획 보고', NOW), '');
+});
+
+test('analyze ranks actions, filters noise and finds deadlines', () => {
+  const a = analyze(fixture(), null, NOW);
+  assert.equal(a.summary.approvalAction, 2);
+  assert.equal(a.summary.rejectedSubmitted, 1);
+  assert.equal(a.summary.inProgressSubmitted, 1);
+  assert.equal(a.summary.mailUnread, 1, 'newsletter excluded');
+  assert.equal(a.actions[0].priority, 'high');
+  assert.ok(a.actions.some(x => x.kind === '열람문서' && x.title === '열람 안내'));
+  assert.ok(!a.actions.some(x => x.title === '읽은 열람'));
+  assert.ok(a.actions.some(x => x.kind === '회신 여부 확인' && x.title.startsWith('회의 참석')));
+  assert.ok(!a.actions.some(x => x.title === '예약된 글'), 'reserved own post is not an unread notice');
+  assert.deepEqual(a.deadlines.map(x => x.date), ['2026-11-12', '2026-11-20', '2026-11-20']);
+  assert.equal(a.newSince, null);
+});
+
+test('diff state marks only new items and survives failed modules', () => {
+  const raw = fixture();
+  const state = nextState(raw);
+  const later = fixture({collectedAt: '2026-11-09T03:00:00.000Z'});
+  later.data.mail.inbox.records.unshift({uid: '4', box: 'INBOX', subject: '새 요청', from: '새사람', date: '2026-11-09 11:00:00', seen: false, answered: false, forwarded: false, attach: false, preview: ''});
+  const a = analyze(later, state, NOW);
+  assert.equal(a.newSince.mails, 1);
+  assert.ok(a.actions.find(x => x.title === '새 요청').isNew);
+  assert.ok(!a.actions.find(x => x.title === '자료 제출 요청(~11/12)').isNew);
+  const failed = fixture({status: {...raw.status, mail: {ok: false, error: 'TIMEOUT'}}});
+  failed.data.mail = undefined;
+  assert.deepEqual(nextState(failed, state).mailUids, state.mailUids, 'failed module keeps previous baseline');
+});
+
+test('budget delta is computed against previous executed amounts', () => {
+  const state = nextState(fixture());
+  const later = fixture({collectedAt: '2026-11-10T00:00:00.000Z'});
+  later.data.budget.projects[0].rows[0].executed = 75;
+  const a = analyze(later, state, NOW);
+  assert.equal(a.budget.projects[0].rows[0].executedDelta, 15);
+});
+
+test('rendered HTML escapes groupware text and keeps sections', () => {
+  const html = renderHtml(analyze(fixture(), null, NOW));
+  assert.ok(!html.includes('<script>alert(1)</script>'));
+  assert.ok(html.includes('&lt;script&gt;'));
+  for (const s of ['오늘 할 일', '전자결재·문서유통', '예산 집행', '제목에서 찾은 기한']) assert.ok(html.includes(s), s);
+  const md = renderMarkdown(analyze(fixture(), null, NOW));
+  assert.match(md, /결재·문서유통 처리 필요: \*\*2건\*\*/);
+});
+
+test('assistant dataset passes the browser-snapshot contract', () => {
+  const scope = {userId: 'local-browser-user', displayName: '홍길동', organizationId: 'local-browser-organization'};
+  const dataset = validateDataset(toDataset(fixture(), scope));
+  assert.equal(dataset.source.kind, 'browser-snapshot');
+  assert.equal(dataset.items.filter(i => i.type === 'approval').length, 2);
+  assert.equal(dataset.items.filter(i => i.type === 'notice').length, 1);
+  assert.equal(dataset.items.filter(i => i.type === 'schedule').length, 1);
+  assert.equal(dataset.source.coverage.find(c => c.type === 'approval').state, 'complete');
+});
+
+test('buildReport writes latest/history files and a state baseline', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'gw-live-'));
+  const rawPath = path.join(dir, 'raw.json');
+  await fs.writeFile(rawPath, JSON.stringify(fixture()));
+  const r = await buildReport({rawPath, outDir: path.join(dir, 'out'), scopePath: path.join(dir, 'missing.json'), now: NOW});
+  for (const f of ['latest.html', 'latest.md', 'latest.json', 'state.json', 'dataset.json', 'history/2026-11-09.html', 'raw/2026-11-09.json']) await fs.access(path.join(dir, 'out', f));
+  assert.equal(r.analysis.summary.approvalAction, 2);
+  await assert.rejects(buildReport({rawPath: path.join(dir, 'missing.json'), outDir: path.join(dir, 'out')}), /형식/);
+  await fs.rm(dir, {recursive: true, force: true});
+});
+
+// ---------- collector (browser script) in a sandbox ----------
+async function loadCollector({respond, userInfo = {ucUserInfo: {empSeq: '1', groupSeq: 'g', compSeq: 'c', deptSeq: 'd', loginId: 'u', empName: '홍길동'}}}) {
+  const src = await fs.readFile(new URL('../src/live/collector.browser.js', import.meta.url), 'utf8');
+  const calls = [];
+  const client = {call() {}, post: (p, body) => { calls.push(p); return respond(p, body); }};
+  const moduleFactory = function signer() { return 'wehago-sign getTransactionId'; };
+  const req = id => ({A: client});
+  req.m = {42: moduleFactory};
+  const window = {webpackChunkklago_ui_gw: {push: ([, , cb]) => cb(req)}};
+  const sandbox = {window, location: {origin: ORIGIN}, sessionStorage: {getItem: () => JSON.stringify(userInfo)}, performance: {now: () => 0}, Intl, Date, JSON, Promise, setTimeout, clearTimeout, Object, Array, String, Number, Set, Map, Math, Function, Error};
+  vm.createContext(sandbox);
+  vm.runInContext(src, sandbox);
+  return {api: window.BWYFGW, calls};
+}
+
+test('collector only calls allow-listed read endpoints', async () => {
+  const {api, calls} = await loadCollector({respond: () => Promise.resolve({resultCode: 0, resultData: {}})});
+  await assert.rejects(api.call('/human/openapi/commute/register', {}), e => e.code === 'NOT_ALLOWED');
+  await assert.rejects(api.call('/board/APIHandler/PutVisitStat', {}), e => e.code === 'NOT_ALLOWED');
+  assert.equal(calls.length, 0);
+  for (const p of api.readOnlyEndpoints()) assert.doesNotMatch(p, /register|save|insert|update|delete|write|send|PutVisit|iniWrite/i, p);
+});
+
+test('collector maps session expiry and isolates module failures', async () => {
+  const {api} = await loadCollector({respond: p => p.startsWith('/mail/') ? Promise.reject(JSON.stringify({errors: {code: 'E002', message: 'Token is not exists'}})) : Promise.resolve({resultCode: 0, resultData: {}})});
+  const raw = await api.collect({modules: ['mail', 'leave']});
+  assert.equal(raw.status.mail.ok, false);
+  assert.equal(raw.status.mail.error, 'SESSION_EXPIRED');
+  assert.equal(raw.sessionExpired, true);
+  assert.equal(raw.status.leave.ok, true);
+});
+
+test('collector refuses to run outside a logged-in groupware page', async () => {
+  const {api} = await loadCollector({respond: () => Promise.resolve({resultCode: 0, resultData: {}}), userInfo: null});
+  await assert.rejects(api.collect({modules: ['leave']}), e => e.code === 'NOT_LOGGED_IN');
+});

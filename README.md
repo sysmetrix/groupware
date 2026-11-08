@@ -52,6 +52,10 @@ Windows 백그라운드 실행은 `npm run services:status`, `npm run services:s
 
 직접 넣는 파일은 [내 문서 사용 안내](docs/document-library.md)를 참고하세요. JSON 작성 없이 사용할 수 있습니다. 기존 그룹웨어 스냅샷에 첨부를 연결하는 CLI는 [로컬 첨부 안내](docs/attachments.md)에 있습니다. 내 문서의 보관 원본과 검색 내용은 `data/library/`에 저장하며 GitHub에 올리지 않습니다.
 
+## 실시간 그룹웨어 수집 (읽기 전용, v1.0.0)
+
+로그인된 그룹웨어 화면 안에서 앱의 목록 API를 직접 읽어 결재·문서유통·메일·공지·일정·근태·연차·예산을 약 0.3초에 수집하고, 할 일·기한·새 항목을 정리한 브리핑을 만듭니다. 메일·문서를 열지 않아 읽음 상태가 바뀌지 않으며 쓰기 API는 허용 목록으로 차단합니다. `npm run live:build`로 원클릭 북마크(`build/live/install.html`)를 만들고, `npm run live:report -- <raw.json>`으로 `data/live/latest.html`을 생성합니다. [실시간 수집기 안내](docs/live-collector.md)
+
 ## 로컬 AI 사용 (선택)
 
 이미 설치된 Ollama와 사용 가능한 로컬 모델이 있다면 `.env`에 설정합니다. 앱이 모델을 설치하거나 내려받지 않습니다.
