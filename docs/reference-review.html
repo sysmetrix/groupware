@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>그룹웨어 자동화 · 레퍼런스 분석과 고도화</title>
+<style>
+:root{--ink:#172f39;--muted:#526773;--accent:#006b60;--line:#d8e2e4;--paper:#fff;--bg:#f1f5f4}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.8 "Malgun Gothic",system-ui,sans-serif}a{color:var(--accent);text-underline-offset:3px}a:focus-visible{outline:3px solid #bb6620;outline-offset:4px}.wrap{max-width:1180px;margin:auto;padding:40px 32px 64px}header{border-top:6px solid var(--accent);padding:36px;background:var(--paper);border-radius:0 0 18px 18px}.eyebrow{font-size:12px;letter-spacing:.16em;font-weight:800;color:var(--accent)}h1{font-size:clamp(28px,4vw,44px);line-height:1.3;margin:18px 0}h1 span{display:block;font-size:.62em;font-weight:500;margin-top:14px;color:var(--muted)}h2{font-size:25px;line-height:1.5;margin:0 0 20px}h3{font-size:19px;margin:24px 0 8px}p{margin:12px 0}nav{display:flex;flex-wrap:wrap;gap:10px 22px;padding:23px 0}nav a{font-size:14px;font-weight:700}.meta,.small{font-size:13px;color:var(--muted)}section{background:var(--paper);padding:30px 34px;margin:20px 0;border:1px solid var(--line);border-radius:14px;scroll-margin-top:20px}.num{color:var(--accent);font-size:14px;display:block;letter-spacing:.1em;margin-bottom:6px}.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:22px 0}.card{background:var(--bg);padding:20px;border-radius:10px}.card strong{display:block;font-size:25px;color:var(--accent)}.note{border-left:4px solid var(--accent);padding:12px 18px;background:#edf7f3}.warn{border-color:#ad6728;background:#fff5e8}.table-wrap{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:14px;text-align:left}th{background:#edf3f3;font-size:13px}th,td{border-bottom:1px solid var(--line);padding:14px;vertical-align:top}th:first-child{min-width:140px}td{min-width:160px}code{font-family:Consolas,monospace;font-size:.9em;overflow-wrap:anywhere}ul,ol{padding-left:24px}li{margin:8px 0}.badge{display:inline-block;font-size:12px;padding:2px 8px;border-radius:4px;background:#e3f2e8;color:#24583c;font-weight:700}.planned{background:#fff0db;color:#885316}.flow{display:flex;gap:10px;align-items:stretch;flex-wrap:wrap;margin:20px 0}.flow span{flex:1;min-width:145px;padding:14px;border:1px solid var(--line);border-radius:8px;font-size:14px}.flow b{display:block;color:var(--accent)}footer{font-size:13px;color:var(--muted);padding:12px 0}button{background:var(--accent);color:#fff;border:0;border-radius:6px;padding:9px 14px;font:inherit;cursor:pointer}button:focus-visible{outline:3px solid #bb6620;outline-offset:3px}
+@media(max-width:700px){.wrap{padding:18px 12px}header,section{padding:22px 18px}.cards{grid-template-columns:1fr}th,td{padding:10px}h2{font-size:22px}}
+@media print{body{background:#fff;font-size:10pt}.wrap{max-width:none;padding:0}nav,button{display:none}header,section{border-radius:0;padding:16px;border-color:#aaa}.cards{grid-template-columns:repeat(3,1fr)}h2,h3{break-after:avoid}tr,.card{break-inside:avoid}.table-wrap{overflow:visible}th,td{min-width:0;font-size:9pt;padding:7px}a{color:inherit}footer{border-top:1px solid #aaa}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+<div class="eyebrow">GROUPWARE ASSISTANT / REFERENCE REVIEW</div>
+<h1>그룹웨어 자동화의 다음 단계<span>공식 레퍼런스 비교 · 적용한 개선 · 후속 검증 기준</span></h1>
+<p>현재 파일 기반 업무 도우미의 복구와 자료 최신성을 먼저 개선했습니다. 실제 업무 시스템과 연결하기 위한 수집 완전성·권한 회수·중복 실행 방지는 별도 설계로 정리했습니다.</p>
+<p class="meta">조사·구현 기준일 2026-10-23 · 자동화 문서 7종 + 제품 자료 2종 + 첨부 형식 자료 3종 · 로컬 Node 24 / Windows · 공개 배포용</p>
+<button type="button" id="print">인쇄 / PDF 저장</button>
+</header>
+<nav aria-label="보고서 목차"><a href="#decision">01 판단</a><a href="#references">02 레퍼런스 비교</a><a href="#implemented">03 구현</a><a href="#contracts">04 후속 설계</a><a href="#priorities">05 우선순위</a><a href="#verification">06 검증</a><a href="#followup">07 후속 작업</a><a href="#attachments">08 첨부 검색</a><a href="#completion-gates">09 완료 조건</a></nav>
+<main>
+<aside class="note"><strong>2026-10-23 검색 화면 수정 및 확인</strong><p>직접 넣은 문서와 가져온 공지의 검색 범위·건수를 구분합니다. 빈 내 문서에서는 파일 추가 또는 실제 수집 자료로 전환하도록 안내하며, 근거가 없을 때 AI 요약 영역을 표시하지 않습니다. 브라우저에서 빈 자료, 결과 없음, 수집 공지 검색 성공을 각각 확인했습니다. 현재 규정·서식 문서는 0건이며 그룹웨어 전체 문서 검색과 상시 자동 수집은 아직 연결되지 않았습니다.</p></aside>
+<aside class="note"><strong>2026-10-23 최신 진행 · 로그인 화면 조회 성공</strong><p>사용자가 선택한 앱 내 브라우저에서 결재 대기·10월 일정·공지사항을 조회하고 공지 10건과 본문 1건을 로컬 업무도우미에 연결했습니다. 예제와 구분되는 자료 종류, 조회 범위, 전체/부분/미조회 건수, 조회 시각을 표시하며 공지 본문 검색이 가능합니다. 이번 변경 후 Node 테스트 102개가 통과했습니다.</p><p>현재 연결은 조회 시점의 사본입니다. 상시 자동 수집, 전체 공지·첨부 수집, 독립 실행 커넥터와 다른 물리 PC 검증은 남아 있습니다. 아래의 브라우저 장애·테스트 수 기록은 각 이전 단계의 이력입니다. 실제 사용자·공지 제목·본문은 공개 보고서에 포함하지 않습니다.</p></aside>
+<section id="decision">
+<h2><span class="num">01 / DECISION</span>무엇을 적용했는가</h2>
+<div class="cards"><div class="card"><strong>7개 문서</strong>Microsoft · Temporal · n8n · OWASP 공식 자료</div><div class="card"><strong>82개 테스트</strong>Node 73개 + Python 9개</div><div class="card"><strong>파일 자동화</strong>실시간 조회·업무 변경 커넥터는 미구현</div></div>
+<p>현재 규모에서는 기존 Node.js 실행기를 유지하고 오류 분류·확인 간격 조절·재시작 재검증을 적용하는 편이 적절하다고 판단했습니다. 외부 워크플로 엔진 설치·운영이 꼭 필요한지는 장시간 승인 대기, 다중 작업자, 외부 시스템 연동 요구가 구체화된 뒤 평가합니다. 이는 이번 프로젝트에 대한 설계 판단입니다.</p>
+<p class="note warn">아래는 다른 플랫폼의 공식 설계 문서를 분석한 결과입니다. Amaranth 10의 API·이벤트·서비스 계정 지원 여부나 기관의 계약을 확인한 자료가 아닙니다. 실제 그룹웨어 운영 자동화가 완성되었다는 뜻도 아닙니다.</p>
+<p class="small">방법: 공식 문서 검색 → 해당 페이지 본문 확인 → 현재 코드의 차이 확인 → 필요한 패턴만 구현 → 장애 주입·재시작 테스트. 운영 구축 사례의 성과나 비용 절감률은 검증하지 않았습니다. 제한된 공개 검색만으로 제품 API가 없다고 판정하지 않았습니다.</p>
+</section>
+<section id="references">
+<h2><span class="num">02 / REFERENCES</span>출처와 적용 판단</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>공식 출처</th><th>확인한 내용</th><th>현재 코드에 대한 판단</th><th>반영 범위</th></tr></thead>
+<tbody>
+<tr><td><a href="https://learn.microsoft.com/en-us/graph/delta-query-overview">R1 · Microsoft Graph<br>Delta query</a></td><td>추가·수정·삭제 추적. 빈 결과에도 nextLink가 있을 수 있고, 페이지 순회를 완료해야 deltaLink를 얻음.</td><td>부분 목록을 전체 자료로 교체하지 않고, 수집 확정 뒤 체크포인트를 저장하도록 설계.</td><td><span class="badge">기반 구현</span><br>정규화 페이지 전체·증분 수집 구현. 실제 API 어댑터는 미구현.</td></tr>
+<tr><td><a href="https://learn.microsoft.com/en-us/graph/throttling">R2 · Microsoft Graph<br>Throttling</a></td><td>429에서 즉시 반복하지 않고 Retry-After를 따름. 헤더가 없을 때 지수형 대기를 권고.</td><td>재시도 정책과 오류 유형을 분리. 현재는 로컬 파일 오류에 대기 간격 조절만 적용.</td><td><span class="badge">부분 적용</span><br>HTTP 429·Retry-After 처리는 미구현.</td></tr>
+<tr><td><a href="https://docs.temporal.io/encyclopedia/retry-policies">R3 · Temporal<br>Retry policies</a></td><td>초기 간격·증가 계수·최대 간격·재시도 제외 오류를 구분하는 정책. 실패 가능한 작업을 분리.</td><td>일시적 IO 오류와 잘못된 입력·권한·저장 공간 문제에 서로 다른 복구 안내와 간격 적용.</td><td><span class="badge">적용</span><br>자체 파일 실행기에 반영. Temporal 도입은 아님.</td></tr>
+<tr><td><a href="https://github.com/temporalio/documentation/blob/main/docs/develop/python/best-practices/error-handling.mdx">R4 · Temporal 공식 문서 소스<br>Idempotent activities</a></td><td>성공 통지 전 작업자 중단으로 작업이 다시 실행될 수 있으므로 중복 실행에 견디도록 설계.</td><td>기존 해시 기반 중복 보고서 억제에 재시작 검증을 추가. 미래 변경 작업에는 원문 결과 확인과 서버의 중복 방지 계약 필요.</td><td><span class="badge">부분 적용</span><br>로컬 중복 억제는 exactly-once 보장이 아님.</td></tr>
+<tr><td><a href="https://docs.n8n.io/build/flow-logic/handle-errors-gracefully.md">R5 · n8n<br>Error workflows</a></td><td>실패 실행을 조사하고 Error Trigger로 오류 처리 흐름을 별도 구성. 여러 흐름에서 공통 처리 가능.</td><td>오류 코드를 구조화하고 실행 ID·사용자 복구 안내를 연결. 같은 실패의 반복 로그를 억제.</td><td><span class="badge">적용</span><br>로컬 상태·감사 기록에 반영. 외부 알림 발송 없음.</td></tr>
+<tr><td><a href="https://learn.microsoft.com/en-us/power-automate/desktop-flows/errors">R6 · Power Automate<br>Desktop flow errors</a></td><td>설계·실행 시점 오류와 작업·블록 단위 오류 처리 및 재시도 설정을 구분.</td><td>입력 수정이 필요한 오류와 일시 파일 오류를 구분. 단계별 복구 절차를 문서화.</td><td><span class="badge">적용</span><br>브라우저 제어 해제나 권한 오류를 자동 우회하는 방식으로 사용하지 않음.</td></tr>
+<tr><td><a href="https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html">R7 · OWASP<br>Prompt injection prevention</a></td><td>외부 문서의 간접 지시, 최소 권한, 출력 검증, 중요 작업의 사람 검토를 다룸.</td><td>문서 텍스트를 명령으로 실행하지 않는 기존 경계를 유지. 모델에 도구·인증값을 제공하지 않음.</td><td><span class="badge">기존 설계 확인</span><br>JSON·출처 ID 검사는 의미적 사실 검증이나 완전한 공격 방어가 아님.</td></tr>
+</tbody></table></div>
+<p class="small">출처는 2026-10-22에 확인한 공개 문서이며 변경될 수 있습니다. R4는 공식 저장소의 문서 원본입니다. 모든 패턴을 동일 제품의 실제 지원 기능으로 해석하지 않습니다.</p>
+</section>
+<section id="implemented">
+<h2><span class="num">03 / IMPLEMENTED</span>이번에 바뀐 실제 동작</h2>
+<div class="table-wrap"><table><thead><tr><th>상황</th><th>이전</th><th>변경 후</th></tr></thead><tbody>
+<tr><td>일시 파일 잠금</td><td>고정 간격 확인, 포괄적 오류 표시</td><td>일시 IO 오류를 분류하고 대기 증가. 기본 60초 설정은 실패 후 120 → 240 → 480 → 900초. 성공 시 원래 주기 복귀.</td></tr>
+<tr><td>잘못된 사용자·조직·시각</td><td>오류 문구는 있었으나 구조화된 복구 상태가 없음</td><td>오류 코드·복구 안내·연속 실패 수·다음 확인 시각 제공. 수정된 입력을 찾기 위한 기본 주기 유지.</td></tr>
+<tr><td>프로세스 재시작</td><td>저장된 자료와 보고서가 일치하면 현재 입력 확인 전에도 보고서 제공 가능</td><td>이번 프로세스에서 입력 파일을 성공적으로 확인할 때까지 보고서 다운로드 보류. 입력 누락·손상 시 계속 보류.</td></tr>
+<tr><td>현재보다 과거인 내보내기</td><td>유효 시간 범위 안이면 최신 자료를 덮어쓸 수 있음</td><td>동일 사용자·조직·출처의 과거 exportedAt을 거부. 재시작 뒤에도 저장된 자료 기준으로 검사.</td></tr>
+<tr><td>정기 작업이 오래 걸림</td><td>고정 타이머가 실행 중에도 호출</td><td>실행 종료 후 다음 타이머 예약. 실행 중 중지·재시작에도 다음 타이머는 하나.</td></tr>
+<tr><td>보고서 생성·실패 조사</td><td>작업·시각·결과 중심</td><td>실행 ID와 오류 코드 추가. 같은 오류가 이어질 때 중복 실패 기록 억제. 임의 오류 원문·본문은 기록 제외.</td></tr>
+</tbody></table></div>
+<div class="flow" aria-label="파일 확인의 처리 순서"><span><b>1. 검증</b>형식·범위·신선도·시간 역행</span><span><b>2. 반영</b>해시 비교·전체 자료 교체</span><span><b>3. 보고</b>당일·최신 스냅샷·완료 기록</span><span><b>4. 재확인</b>성공은 기본 주기<br>일시 오류는 대기 증가</span></div>
+<p>수동 실행은 대기를 생략하되 진행 중인 실행은 공유합니다. 다음 자동 확인까지 입력 파일 변경을 감지하지 못하는 구간은 남습니다. 보고서·감사 파일을 하나의 트랜잭션으로 저장하지 않으므로 프로세스 중단 시 누락 기록 복원이나 정확히 한 번 실행을 보장하지 않습니다.</p>
+<p>구현: <code>src/recovery.mjs</code>, <code>src/automation.mjs</code>, <code>src/store.mjs</code>, <code>public/app.js</code>. 운영 조치는 <a href="automation-recovery.md">오류 코드와 복구 절차</a>를 참고하세요.</p>
+</section>
+<section id="contracts">
+<h2><span class="num">04 / DESIGN</span>실제 연동 전에 필요한 계약</h2>
+<p class="note">아래는 실제 제품 연동의 요구 조건입니다. 페이지 완전성·삭제·권한 회수는 정규화 입력 모듈로 구현했고, 실제 API·서버 권한·변경 실행은 남아 있습니다. 수집 URL이나 데이터 필드를 추측해 호출하지 않습니다.</p>
+<div class="table-wrap"><table><thead><tr><th>설계 대상</th><th>요구 동작</th><th>반드시 재현할 실패</th></tr></thead><tbody>
+<tr><td>완전한 조회</td><td>페이지를 임시 수집하고 마지막 페이지·중복·건수 검증 후 게시. 자료 확정 후에만 체크포인트 이동.</td><td>빈 중간 페이지, 마지막 페이지 실패, 중복 페이지, 잘못된 전체 건수</td></tr>
+<tr><td>권한과 삭제</td><td>사용자·조직·조회 조건을 동기화 상태에 묶음. 권한 회수·삭제를 검색·요약·첨부에도 반영.</td><td>계정 전환, 403, 문서 삭제, 토큰 무효, 오래된 요약 재노출</td></tr>
+<tr><td>외부 요청 복구</td><td>계약상 지원하는 대기 지시를 우선. 세션 만료는 인증 복구로 분리. 브라우저 제어 해제는 중단.</td><td>429, 타임아웃, 연결 중단, 만료된 세션</td></tr>
+<tr><td>업무 변경</td><td>계획·검토·승인 범위·최신 상태 재조회·서버 중복 방지·결과 확인을 연결.</td><td>성공 후 응답 유실, 이중 클릭, 문서 버전 충돌, 승인 만료</td></tr>
+<tr><td>AI 근거 평가</td><td>문장별 원문 위치·버전 연결. 허용된 자료 표본으로 근거 충족과 수정량 평가.</td><td>문서 속 실행 지시, 유효 ID를 붙인 허위 주장, 근거 없는 답변</td></tr>
+</tbody></table></div>
+<p>n8n은 외부 연결과 오류 흐름이 많아질 때, Temporal은 장시간 작업 복구·작업자 분산이 필요할 때 평가할 후보입니다. Power Automate는 데스크톱 연동을 검토할 후보입니다. 이번에 이 도구들을 설치하거나 비용·라이선스·조직 적합성을 비교 검증하지 않았습니다.</p>
+</section>
+<section id="priorities">
+<h2><span class="num">05 / PRIORITIES</span>다음 고도화의 우선순위</h2>
+<div class="table-wrap"><table><thead><tr><th>순서</th><th>과제</th><th>선행 조건과 완료 기준</th></tr></thead><tbody>
+<tr><td>P0 · 반영</td><td>파일 자동화 복구·보고서 최신성</td><td>51개 자동 테스트 통과. 실제 UI 렌더링·로그인 트리거 검증은 남음.</td></tr>
+<tr><td>P1 · 다음</td><td>결재·문서·일정 읽기 커넥터</td><td>공식 연동·계정 범위·정상 조회 계약 확보. 표본 원문 건수·상태·기한 일치, 부분 게시 0건, 삭제·권한 회수 반영.</td></tr>
+<tr><td>P2</td><td>첨부 추출과 근거 검색</td><td>PDF/XLSX/HWPX 로컬 추출·위치·버전 검사 구현. 실제 기관 표본·OCR·구형 HWP·의미 평가 남음.</td></tr>
+<tr><td>P3</td><td>승인된 초안 저장 1종</td><td>테스트 가능한 변경 계약. 응답 유실·재요청에서도 중복 생성이 없고 결과 재조회가 가능할 것.</td></tr>
+<tr><td>도입 이후</td><td>효과 측정</td><td>작업 시간·사용자 수정 시간·누락률·근거 오류율·중복 변경 건수를 실제 표본으로 측정.</td></tr>
+</tbody></table></div>
+<p>우선순위는 현재 근거와 구현 의존성에 따른 판단입니다. 업무량·절감률·완료 일정은 아직 측정하지 않았습니다. 기존 제품 내장 AI와 중복되는 기능은 도입 여부를 확인한 뒤 범위를 조정합니다.</p>
+</section>
+<section id="verification">
+<h2><span class="num">06 / VERIFICATION</span>검증 결과와 남은 한계</h2>
+<ul><li><code>npm run check</code>와 <code>npm test</code>: 로컬 Node 24 / Windows에서 문법 검사 및 <strong>Node 73개 테스트 통과</strong>. 첨부용 Python 9개도 통과.</li><li>새 회귀 검사: 입력 미확인 보고서 차단, 과거 자료 거부·복구, 오류 분류·대기 상한, 실행 중 중지·재시작, 완료 감사 실패 후 재시도, 감사 데이터 최소화.</li><li>확인 간격은 주입한 타이머로 검증했습니다. 실제 수분 대기 부하 시험이나 운영 서버 장애 시험은 아닙니다.</li><li>실제 그룹웨어 API·기관 자료의 AI 품질·Windows 실제 로그인 트리거·전체 UI 시각 검증은 미완료입니다. 합성 자료의 실제 LLM 추론은 2026-10-23 확인했습니다. 예약 작업 수동 실행과 로컬 UI 일부 동작은 후속 검증했습니다.</li><li>보고서는 외부 스크립트·폰트·이미지 없이 열 수 있습니다. HTML 구조·링크·스크립트 문법 검사와 브라우저 시각 검증은 구분합니다.</li></ul>
+<p><a href="https://github.com/sysmetrix/groupware/pull/1">구현 Draft PR #1</a> · <a href="https://github.com/sysmetrix/groupware/actions">커밋별 CI 결과</a> · <a href="verification.md">상세 검증 절차</a> · <a href="live-integration.md">실제 연동 계획</a> · <a href="other-computers.md">다른 PC 업데이트</a></p>
+<p class="note">구현은 <code>codex/groupware-assistant-mvp</code> 브랜치에 있습니다. main 병합은 별도입니다. GitHub는 코드·문서를 공유하며 PC별 로그인·업무자료·기관별 원본 분석 보고서는 포함하지 않습니다.</p>
+</section>
+<section id="followup">
+<h2><span class="num">07 / FOLLOW-UP</span>앞서 남긴 작업의 진행 결과</h2>
+<p>2026-10-22 후속 작업에서 정규화 페이지 수집 기반과 재현 가능한 진단 도구를 추가했습니다. 실제 제품 API를 구현했다고 표시하지 않습니다.</p>
+<div class="table-wrap"><table><thead><tr><th>남았던 과제</th><th>이번 결과</th><th>여전히 필요한 것</th></tr></thead><tbody>
+<tr><td>페이지 완전성·증분 처리</td><td>전체/증분 계약, 빈 중간 페이지·누락·중복·건수·커서 검사, 삭제·ACL 회수, 검증된 출력 이후 체크포인트 확정, 파일 잠금 구현. 합성 9개 테스트와 CLI 통과.</td><td>실제 인증·제품 API 어댑터, 서버 토큰 만료·429·권한 검증</td></tr>
+<tr><td>Windows 자동 실행</td><td>임시 작업 등록, Interactive/Limited 주체·로그온 트리거 확인, Start-ScheduledTask로 서버 HTTP 응답 확인, 임시 작업 제거.</td><td>실제 로그아웃·로그인 시점의 실행</td></tr>
+<tr><td>브라우저 기능·반응형</td><td>합성 검색·근거 없음·100원 금액 차이·본문 없는 감사 목록·일부 Tab 포커스 확인. 검색 화면 390/768/1440px DOM 가로 넘침 없음.</td><td>스크린샷·전 화면 시각·다운로드/가져오기 E2E. 캡처·다운로드 시간 초과 후 제어 해제로 중단</td></tr>
+<tr><td>로컬 AI 추론</td><td>doctor:model 명령과 합성 근거 추론 검사 옵션 추가. 이전 검증 당시 모델 미설정. 2026-10-23 실제 합성 추론 완료.</td><td>사용할 로컬 모델 설치·선택과 실제 추론·의미 품질 평가</td></tr>
+<tr><td>공식 연동·내장 AI</td><td>공급사 근태리더기 연동 안내와 ONE AI 프롬프트 자료 검토.</td><td>기관 라이선스·활성 기능, 결재·문서·일정 API 계약</td></tr>
+</tbody></table></div>
+<p>제품 참고: <a href="https://helpdesk.douzone.com/common/board/fileDownloadProc.do?attachSeq=383">더존 근태리더기 연동 안내</a>는 특정 장비 연동의 근거이며 범용 조회 API 명세가 아닙니다. <a href="https://www.douzone.com/html/event/250417/data/Amaranth%2010%20ONE%20AI%20Prompt%20Guide.pdf">ONE AI 주요 프롬프트 모음집</a>은 내장 기능 비교의 출발점이며 기관의 실제 활성화 증거가 아닙니다.</p>
+<p>커스텀 구현은 완전한 수집·출처/버전·기관 서식과 수치 대조에 우선 집중합니다. 범용 요약·작성 기능은 내장 AI와 실제 표본으로 비교한 뒤 범위를 결정합니다.</p>
+<p><a href="sync-contract.md">수집 계약·CLI</a> · <a href="followup-verification.md">후속 검증과 재현 절차</a></p>
+<p class="note">출력과 체크포인트는 별도 파일이라 단일 트랜잭션이 아닙니다. 중간 종료 시 이전 체크포인트에서 재실행해야 합니다. 새 수집 모듈은 실제 그룹웨어 접근 권한을 증명하지 않으며, 앱의 실시간 연결 표시는 계속 false입니다.</p>
+</section>
+<section id="attachments">
+<h2><span class="num">08 / ATTACHMENTS</span>첨부 문서 추출과 위치가 있는 검색 근거</h2>
+<p>로컬 PDF·XLSX·HWPX를 읽어 기존 문서에 검색용 텍스트를 연결했습니다. 원본 파일은 수정하지 않으며 추출 결과 JSON을 가져와 사용합니다. 그룹웨어에서 첨부를 자동 수집하거나 초안 금액을 자동 판정하는 기능은 아닙니다.</p>
+<div class="table-wrap"><table><thead><tr><th>형식</th><th>검색·인용 위치</th><th>지원 한계</th></tr></thead><tbody>
+<tr><td>텍스트 PDF</td><td>물리적 페이지 번호</td><td>텍스트 레이어만 추출. OCR·표 복원·읽기 순서 보장 없음. 텍스트 없는 페이지는 경고.</td></tr>
+<tr><td>XLSX</td><td>시트명·셀 주소</td><td>셀 원시값, 수식은 식 자체만 표시. 수식 계산·날짜/통화 서식 복원 없음. 숨긴 시트 제외.</td></tr>
+<tr><td>HWPX</td><td>본문 순서의 구역·XML 문단 순번</td><td>목차의 서식 항목과 본문을 구분. 표 안 문단 추출. 실제 쪽 번호나 표 좌표는 아님.</td></tr>
+</tbody></table></div>
+<p>추출 파일 SHA-256, 원문 버전·갱신 시각, 추출 시각과 경고를 저장합니다. 원문 버전/시각이 달라지면 가져오기를 거부합니다. 부모 문서의 조직·사용자·게시 상태·시행 기간을 먼저 필터링하고, 삭제·권한 회수가 입력에 반영되면 첨부 근거도 검색에서 제외합니다. 첨부 자체의 서버 권한과 소속은 자동 검증하지 않습니다.</p>
+<h3>다른 PC에서 실행</h3>
+<p>기본 앱은 Node 24로 실행합니다. 첨부 기능만 Python 환경과 <code>requirements-attachments.txt</code>를 추가 설치하고 <code>ATTACHMENT_PYTHON</code>에 해당 PC의 실행 파일을 지정합니다. 원본 자료와 추출 JSON은 Git 제외 폴더 <code>data/</code>에 보관합니다.</p>
+<p><code>npm run attach:extract -- data/source.json doc-001 data/approved.pdf evidence-01 data/with-attachments.json</code></p>
+<p>출력 JSON을 데이터 연결에서 가져옵니다. CLI 실행만으로 현재 앱 자료가 교체되지는 않습니다. 검색 결과와 AI 인용에 위치·경고가 표시되며 원문 링크는 부모 문서로 연결됩니다.</p>
+<h3>공식 레퍼런스의 적용</h3>
+<ul><li><a href="https://tech.hancom.com/hwpxformat/">한컴 HWPX 포맷 구조</a>: ZIP/XML, content.hpf의 목차 순서, Contents 경로와 header 항목을 추출기에 반영했습니다.</li>
+<li><a href="https://learn.microsoft.com/en-us/office/open-xml/spreadsheet/how-to-retrieve-the-values-of-cells-in-a-spreadsheet">Microsoft Open XML 셀 읽기</a>: 공유 문자열·셀 형식과 위치를 구분했습니다.</li>
+<li><a href="https://pypdf.readthedocs.io/en/stable/user/extract-text.html">pypdf 텍스트 추출</a>: 텍스트 레이어 추출과 OCR·메모리 한계를 구분했습니다.</li></ul>
+<h3>검증 결과와 남은 범위</h3>
+<p>로컬 Windows에서 <strong>Node 68개 + Python 9개 테스트 통과</strong>. 합성 PDF/XLSX/HWPX, 암호화·외부 참조·중복 ZIP·텍스트 한도, CLI 추출→JSON→검색·원본 보존, 문서 버전 변경·권한 회수·삭제, AI 인용 ID 계약을 확인했습니다. Python 3.14·pypdf 6.21.2를 사용했습니다.</p>
+<p>파일 20 MiB, PDF 100쪽, 첨부당 1,000단위, 문서별 첨부 텍스트 300,000자, 전체 JSON 5 MiB로 제한합니다. CLI 시간 제한은 30초입니다. 이 제한이 완전한 메모리 격리를 뜻하지는 않습니다.</p>
+<p class="note warn">실제 기관 첨부 표본·새 UI의 브라우저 시각 검증은 미완료입니다. 합성 자료의 실제 LLM 추론은 후속 절에서 검증했습니다. 구형 HWP/XLS·OCR·기관 규정 판단·실제 금액 대조도 남아 있습니다. 서버 권한 변경을 자동 감지하지 않으며 수동 입력 메타데이터를 사용합니다.</p>
+<p><a href="attachments.md">첨부 설치·실행·데이터 계약</a> · <a href="https://github.com/sysmetrix/groupware/pull/1">PR #1</a> · <a href="https://github.com/sysmetrix/groupware/actions">커밋별 CI</a></p>
+</section>
+<section id="completion-gates"><h2><span class="num">09 / COMPLETION</span>2026-10-23 구현 진척과 머지 조건</h2>
+<p>요청한 순서는 모든 작업의 구현·검증 후 머지입니다. 실제 연동·기관 규칙·초안 저장이 남아 있으므로 PR #1은 Draft로 유지합니다. 테스트 통과만으로 전체 완료를 선언하지 않습니다.</p>
+<div class="table-wrap"><table><thead><tr><th>항목</th><th>이번 결과</th><th>남은 검증</th></tr></thead><tbody>
+<tr><td>첨부 금액 대조</td><td>검색한 첨부의 단일 정수 단위를 선택하고 원 단위 의미를 확인한 뒤 본문과 비교. 서버가 현재 근거를 재조회하고 자료 교체·권한·문서 버전·해시 변경을 거부.</td><td>실제 기관 표본, 합계·통화·서식 의미, 기관 규칙</td></tr>
+<tr><td>실제 로컬 AI</td><td>Ollama 0.40.8·Qwen3 4B를 로컬 전용으로 설치. 합성 브리핑 추론, 금액 근거 유지·문서 속 잘못된 지시·근거 없음 사례 통과. GPU 메모리/초기 로딩 문제를 처리 묶음 64와 별도 로딩으로 해결.</td><td>기관 표본의 의미 정확도, 다양한 공격·긴 문서·다른 PC 성능</td></tr>
+<tr><td>자동 테스트</td><td>Node 73개·Python 9개 통과. 실제 모델 합성 검사 3종은 별도로 기록.</td><td>새 UI 시각/E2E·실제 로그인 트리거</td></tr>
+<tr><td>실제 그룹웨어</td><td>정규화 입력 처리 기반 유지. 재개 승인 후에도 공간 수명 오류 재현.</td><td>브라우저 재개, 공식 API/정상 요청 계약, 계정 범위, 삭제·세션 만료·429 검증</td></tr>
+<tr><td>기관 규정·초안 저장</td><td>규칙과 API를 추측해 운영에 적용하지 않음.</td><td>승인된 규정·서식·테스트 대상과 저장 계약, 승인·중복 방지·결과 재조회</td></tr>
+</tbody></table></div>
+<p>공식 출처: <a href="https://docs.ollama.com/windows">Ollama Windows CLI</a> · <a href="https://ollama.com/library/qwen3:4b">Qwen3 4B</a> · <a href="https://docs.ollama.com/faq">로컬 전용 모드</a>. 실행 파일 배포 SHA-256을 확인했습니다. 모델·실행 파일·설정은 Git에서 제외합니다.</p>
+<p><a href="completion-gates.md">전체 완료 조건</a> · <a href="local-model.md">모델 설치·재현 방법</a> · <a href="https://github.com/sysmetrix/groupware/pull/1">Draft PR #1</a></p>
+<p class="note">모델 실행 스크립트는 127.0.0.1 바인딩과 클라우드 비활성화로 설정했습니다. .env 설정을 반영하려면 기존 업무 도우미 서버를 재시작해야 합니다. PC 재시작 후 모델 서버도 다시 실행해야 합니다. 실제 업무자료를 모델 검증에 사용하지 않았습니다.</p>
+<h3 id="document-library">실제 파일을 직접 사용하는 내 문서 — 2026-10-23</h3>
+<p>합성 예제 요약만으로는 실무 효용이 없다는 사용자 피드백을 반영했습니다. 첫 실행은 빈 내 문서 화면으로 바꾸고 예제 결재·일정은 합성 자료임을 명시했습니다. PDF·XLSX·HWPX를 화면에서 선택하면 원본 보관, 내용 추출·열람, 키워드 검색, 원본 다운로드, 선택한 정수 근거의 금액 대조까지 이어집니다. JSON 작성이나 별도 추출 CLI는 필요하지 않습니다.</p>
+<p>자료는 이 PC의 data/library에 별도로 보관합니다. 그룹웨어 스냅샷을 교체해도 유지되며, 같은 파일은 중복 등록하지 않습니다. 삭제 확인 후 보관본과 검색 내용을 제거합니다. 사용자 PC의 원래 파일은 변경하지 않습니다. 직접 넣은 문서는 기관의 현행 규정이나 서버 권한이 확인된 자료가 아닙니다.</p>
+<p>설치: Python 3.10 이상(검증 3.14)과 Node 24 → <code>npm run setup:documents</code> → <code>npm start</code>. 사용: 내 문서 → 파일 선택 → 문서 넣기·내용 추출 → 내 문서 검색. AI 없이도 검색·원본 확인·금액 대조가 가능합니다. 로컬 AI는 검색된 근거를 요약합니다.</p>
+<p>로컬 검증은 Node 77개·Python 9개 통과입니다. 실제 형식의 합성 PDF/XLSX/HWPX를 HTTP로 업로드해 추출·검색·금액 대조·원본 바이트 일치·삭제를 확인했습니다. 이는 실제 기관 표본이나 브라우저 시각 검증을 대신하지 않습니다.</p>
+<p class="note warn">실제 그룹웨어 자동 조회는 미완료입니다. 사용자의 새 작업 공간 재개 승인 후 생성은 성공했지만 다음 동일 공간 호출에서 Task space does not exist가 재현됐습니다. 오류를 다른 공간이나 도구로 우회하지 않았습니다. 로그인·조회 계약·기관 규칙·초안 저장 검증이 남아 있어 전체 완료/머지로 처리하지 않습니다.</p>
+<h3 id="runtime-recovery">병렬 후속 작업: 저장 복구와 실행 관리</h3>
+<p>문서 저장 복구와 Windows 실행 관리를 병렬로 진행하고 통합했습니다. 삭제 중 원본 제거 실패 시 목록을 복원하고, 중단 후 남은 앱 소유 미참조 파일은 다시 시작하거나 업로드할 때 정리합니다. 손상된 개인 문서 색인은 정리 전에 거부하며 다운로드는 크기·해시를 확인합니다.</p>
+<p>데이터 연결 화면에 서버 실행, 모델 설치, 메모리 로딩, GPU 사용량을 구분해 표시합니다. 읽기 전용 상태 확인은 모델을 로딩하지 않습니다. <code>npm run services:status</code>, <code>npm run services:start</code>, <code>npm run services:stop</code>으로 Windows 관리 실행을 제어합니다. 이 명령이 소유한 프로세스만 종료하며 기존 별도 서버는 인수하지 않습니다.</p>
+<p>분리된 Windows 테스트에서 실제 프로세스 시작·상태·종료, 하위 프로세스 종료, 다른 프로그램의 포트 보호, 잘못된 PID 시작 시각 거부를 확인했습니다. 로컬 전체 검증은 Node 89개·Python 9개 통과입니다. Linux에서는 Windows 전용 검증 1개를 제외합니다. 새 UI의 브라우저 시각 검증은 아직 완료하지 못했습니다.</p>
+<p class="note warn">실제 그룹웨어 연결은 여전히 미완료입니다. 공식 브라우저 업데이트가 error 9를 반환했고, 사용자가 완전히 재시작한 뒤 한 번의 호출 안에서 공간 생성 직후 첫 이동부터 같은 오류가 발생했습니다. 반복 재로그인이나 추측한 API로 해결했다고 표시하지 않습니다.</p>
+<p>후속 순서: 브라우저 공간 유지 또는 공식 조회 계약 확보 → 실제 결재·일정 요청 관찰 → 읽기 커넥터 → 원문 건수·상태 대조 → 기관 규정·첨부 평가 → 승인된 초안 저장 → 다른 PC 통합 검증 → 머지. 현재 첫 단계에 외부 의존성이 남아 있습니다.</p>
+<h3 id="desktop-control">버튼으로 시작·종료하는 Windows 프로그램</h3>
+<p>실행 관리자 보완: .env의 앱·모델 포트를 해석해 시작 명령에 전달합니다. 원격 모델 주소·충돌 포트·실행 중 서버와 다른 포트는 시작 전에 거부하며, 잘못된 설정으로 바뀌어도 기존 소유 서버의 종료는 가능합니다. PowerShell 명령을 직접 쓸 때는 포트 인자를 별도로 지정합니다. 설정값이나 비밀값은 진단 출력에 포함하지 않습니다.</p>
+<p>브라우저 재확인: 기본 페이지의 생성과 다음 호출에서 동일 공간 재사용은 성공했습니다. 이후 그룹웨어 이동 시 공간이 소실되고 목록이 빈 배열로 바뀌었습니다. 로그인 화면에 도달했다는 증거는 없으며, 특정 주소가 원인이라고 확정하지 않았습니다. 사용자 화면 캡처만으로 이 오류가 해결되는 것은 아닙니다. 실제 화면 자동화와 머지는 브라우저 제어 복구 후 검증해야 합니다.</p>
+<p>연결 방향 갱신: 사용자가 공식 그룹웨어 API가 없다고 확인했습니다. 후속 연결은 로그인된 화면의 정상 조작과, 존재가 확인되는 경우 내보내기를 이용합니다. API 명세 확보를 사용자 선행 과제로 요구하지 않습니다. 브라우저 작업 공간 목록이 비어 있어 현재는 제어 복구와 실제 화면 관찰이 선행되어야 합니다.</p>
+<p>후속 설치 검증: 설치·업데이트 과정에 실행 관리자 빌드와 바로가기 갱신을 통합하고, 사용 중 실행 파일의 교체를 거부합니다. <code>npm run verify:pc</code>는 설정·문서 추출 환경·아이콘·분리된 합성 HTTP 흐름·모델 설치 상태를 검사해 로컬 HTML/JSON 결과를 생성합니다. AI 미설정은 SKIP, 설치되지 않은 설정 모델은 FAIL로 구분합니다. 같은 PC의 한글·공백 경로에 GitHub를 새로 복제해 Node 89개·Python 9개 테스트와 빌드를 통과했습니다. 다른 물리 PC·실제 로그인·기관 표본·실제 조회 연결은 여전히 미완료입니다.</p>
+<p>2026-10-23 UI 갱신: Fluent 2의 표면 계층과 상태 색상을 참고해 녹색 헤더, 두 서비스 카드, 벡터 아이콘, 둥근 버튼, 실행 기록으로 재구성했습니다. 서비스 상태에 따라 시작·종료·열기 버튼을 활성화하며 키보드 포커스를 표시합니다. Windows DPI 인식과 기본 창 제어를 유지합니다. <a href="https://fluent2.microsoft.design/elevation/">디자인 참고: Fluent 2</a></p>
+<p>바탕화면의 Groupware AI Control에서 로컬 LLM·업무 도우미 각각 시작/종료, 모두 시작/종료, 업무 도우미 열기, 상태 새로고침을 제공합니다. 창만 닫기와 모두 종료 후 닫기를 구분하며 X 버튼에서도 종료 방식을 선택합니다. 실행·종료는 기존 소유 프로세스 검증을 사용합니다.</p>
+<p><code>npm run setup:control</code>로 실행 파일과 바탕화면 바로가기를 생성합니다. .NET Framework의 Windows Forms를 사용하므로 추가 GUI 패키지가 필요하지 않습니다. 실행 파일은 data/control-panel에 두고 Git에는 소스와 설치 절차를 공유합니다. 모델 서버 시작과 GPU 모델 로딩은 별개이며 첫 AI 요청 때 모델을 로딩합니다.</p>
+<p>모델 파일·업무 문서는 종료해도 삭제되지 않습니다. 처리 중 문서 작업을 마친 뒤 종료합니다. 별도 실행된 서버는 인수하지 않으며 상태에 명시합니다. 실제 그룹웨어 조회 연결의 미완료 상태는 변하지 않습니다.</p>
+</section></main>
+<footer>Groupware Assistant · 2026-10-22 · 공식 출처의 관찰과 프로젝트의 설계 판단을 구분한 공개 보고서</footer>
+</div>
+<script>document.getElementById('print').addEventListener('click',()=>window.print());</script>
+</body>
+</html>
