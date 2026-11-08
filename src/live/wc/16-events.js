@@ -24,6 +24,7 @@
       case 'coachNext': coachNext(); break;
       case 'coachEnd': endCoach(); break;
       case 'paneOpenMain': { const x = selectedAction(); if (x) openItem(x); else { const info = paneInfo(); if (info.url) openUrl(info.url, {title: info.title}); } break; }
+      case 'pvFile': { const c = S.mailDet && S.mailDet[el.dataset.uid]; const f = c && c.files[Number(el.dataset.i)]; if (!f) break; el.disabled = true; try { const u = await GW.mailAttachmentPreview({uid: el.dataset.uid, sn: f.sn, account: c.account}); openUrl(u, {title: '미리보기: ' + f.name}); } catch (err) { toast('미리보기를 열지 못했습니다: ' + err.message); } el.disabled = false; break; }
       case 'dlFile': downloadMailFile(el.dataset.uid, Number(el.dataset.i), el); break;
       case 'dlAll': { const c = S.mailDet[el.dataset.uid]; el.disabled = true; let ok = 0; for (let i = 0; i < c.files.length; i++) { if (await downloadMailFile(el.dataset.uid, i, root.querySelector('[data-act="dlFile"][data-uid="' + CSS.escape(el.dataset.uid) + '"][data-i="' + i + '"]'))) ok++; } el.disabled = false; toast('첨부 ' + ok + '/' + c.files.length + '개를 받았습니다. 브라우저 다운로드 폴더를 확인하세요.'); break; }
       case 'bodyToggle': S.bodyOpen = !S.bodyOpen; renderPane(); break;

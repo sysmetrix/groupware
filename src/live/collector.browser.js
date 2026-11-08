@@ -20,7 +20,7 @@
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
   const READ_ONLY = new Set([
-    '/mail/mail000A01', '/mail/mail000A03', '/mail/mail003A01', '/mail/mail002A01', '/mail/mail002A37',
+    '/mail/mail000A01', '/mail/mail000A03', '/mail/mail003A01', '/mail/mail002A01', '/mail/mail002A37', '/ecm/ecm001A07',
     '/ea/api/getMenuCountInfo', '/ea/ea036A02', '/ea/ea025A04', '/ea/ea023A02', '/ea/ea027A02',
     '/ea/ea038A09', '/ea/ea038A15',
     '/board/APIHandler/ViewBoardArtList', '/board/APIHandler/getBoardReadCnt',
@@ -448,6 +448,16 @@
       readUrl: str(dm.url, 500), account: str(dm.email, 120), files, bigFiles, bigUntil, text: mask(plain, 4000), wasUnread: seen !== true};
   }
   // Download one normal mail attachment (the same request the groupware read view makes; no state change).
+  // Convert one mail attachment into a Synap document-viewer URL (HWP, PDF, xlsx …; read-only).
+  async function mailAttachmentPreview({uid, sn, account = ''} = {}) {
+    if (!uid || !sn || !account) throw new GwError('BAD_ARG', '미리보기 정보가 없습니다.');
+    const ctx = context();
+    const client = findClient();
+    const res = await client.post('/ecm/ecm001A07', {fileSn: sn, authKeyMap: JSON.stringify({email: account, muid: String(uid), empSeq: String(ctx.empSeq)}), moduleGbn: 'MAIL'});
+    const r = typeof res === 'string' ? JSON.parse(res) : res;
+    if (!r || r.resultCode !== 0 || !r.resultData) throw new GwError('API_ERROR', (r && r.resultMsg) || '문서 변환 실패');
+    return String(r.resultData);
+  }
   async function mailAttachment({uid, sn, account = ''} = {}) {
     if (!uid || !sn) throw new GwError('BAD_ARG', '첨부 정보가 없습니다.');
     const ctx = context();
@@ -456,7 +466,7 @@
     let timer;
     try {
       const res = await Promise.race([
-        client.post('/mail/mail002A37', {fileSn: sn, authKeyMap: JSON.stringify({email: account, muid: String(uid), empSeq: String(ctx.empSeq)}), moduleGbn: 'MAIL'}, {filedownload: true, contextType: 'application/x-www-form-urlencoded'}),
+        client.post('/mail/mail002A37', '/ecm/ecm001A07', {fileSn: sn, authKeyMap: JSON.stringify({email: account, muid: String(uid), empSeq: String(ctx.empSeq)}), moduleGbn: 'MAIL'}, {filedownload: true, contextType: 'application/x-www-form-urlencoded'}),
         new Promise((_, reject) => { timer = setTimeout(() => reject(new GwError('TIMEOUT', '첨부 받기 시간 초과')), 120000); }),
       ]);
       if (!(res instanceof ArrayBuffer) || res.byteLength < 1) throw new GwError('API_ERROR', '첨부를 받지 못했습니다.');
@@ -591,7 +601,7 @@
   }
 
   window.BWYFGW = Object.freeze({
-    version: VERSION, collect, call, search, budgetCatalog, budgetProject, budgetLedger, budgetMonthly, attendanceDays, routingHistory, submittedRange, approvalPage, docPreview, frequentForms, findReply, mailDetail, mailAttachment, saveBlob,
+    version: VERSION, collect, call, search, budgetCatalog, budgetProject, budgetLedger, budgetMonthly, attendanceDays, routingHistory, submittedRange, approvalPage, docPreview, frequentForms, findReply, mailDetail, mailAttachment, mailAttachmentPreview, saveBlob,
     context: () => { const c = context(); return {name: c.name, deptName: c.deptName, compName: c.compName, duty: c.duty, position: c.position}; },
     readOnlyEndpoints: () => [...READ_ONLY], routes: ROUTES, links: LINKS, searchLabels: SEARCH_LABELS, defaults: DEFAULTS,
   });

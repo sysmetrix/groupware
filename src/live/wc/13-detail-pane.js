@@ -11,10 +11,11 @@
     const info = paneInfo();
     const ph = $('#ph');
     const keepScroll = ph.querySelector('.in') ? ph.scrollTop : 0;
-    ph.className = 'ph' + (S.pane.url ? '' : ' min');
+    const isViewer = S.pane.url && /ecm001A07|SynapDocViewServer/.test(decodeURIComponent(S.pane.url));
+    ph.className = 'ph' + (S.pane.url ? (isViewer ? ' viewer' : '') : ' min');
     const x = selectedAction();
     const st = x ? stateOf(x) : '';
-    ph.innerHTML = `<div class="top"><button class="btn sm" data-act="closePane" title="오른쪽 창을 닫고 목록으로 (Esc)">${ic('back')}목록으로</button><span class="sp"></span>${S.pane.url ? `<button class="btn sm ghost" data-act="paneExpand" title="${S.pane.expanded ? '목록과 나란히 보기' : '원래 화면을 넓게 보기'}">${ic('expand')}${S.pane.expanded ? '나란히' : '넓게'}</button><a class="btn sm ghost" href="${esc(S.pane.url)}" target="_blank" rel="noopener" title="새 창으로 열기">${ic('ext')}새 창</a>` : ''}</div>
+    ph.innerHTML = `<div class="top"><button class="btn sm" data-act="closePane" title="오른쪽 창을 닫고 목록으로 (Esc)">${ic('back')}목록으로</button><span class="sp"></span>${isViewer ? '<span class="muted">문서 미리보기</span>' : ''}${S.pane.url ? `<button class="btn sm ghost" data-act="paneExpand" title="${S.pane.expanded ? '목록과 나란히 보기' : '원래 화면을 넓게 보기'}">${ic('expand')}${S.pane.expanded ? '나란히' : '넓게'}</button><a class="btn sm ghost" href="${esc(S.pane.url)}" target="_blank" rel="noopener" title="새 창으로 열기">${ic('ext')}새 창</a>` : ''}</div>
 <div class="in"><div class="box warn" id="dirtyNote" style="display:${S.pane.dirty ? 'block' : 'none'};margin:0 0 10px">${ic('alert')} 원래 화면에 입력 중입니다. 보내기·저장·상신 전에 다른 곳으로 옮기면 먼저 여쭤봅니다.</div>
 ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.headline ? `<b class="${['overdue', 'urgent'].includes(st) ? 'err' : ''}">${esc(x.headline)}</b>` : ''}</div>` : ''}<div class="t">${esc(info.title || '')}</div>${info.body || ''}</div>`;
     ph.scrollTop = keepScroll;
@@ -135,7 +136,7 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
     if (S.sel && (S.sel.uid === m.uid || (S.sel.key || '').endsWith(':' + m.uid))) renderPane();
   }
   // The groupware's own document viewer (HWP·PDF·엑셀 등), same request the mail read view makes.
-  const previewUrl = (c, uid, f) => '/#popup?' + new URLSearchParams({authKeyMap: JSON.stringify({email: c.account, muid: String(uid), empSeq: String(S.raw.principal.empSeq)}), fileSn: f.sn, moduleGbn: 'MAIL', path: '/ecm/ecm001A07', pathSeq: '700', callComp: 'UAA0700', popupUUID: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()))}).toString();
+  const previewUrl = (c, uid, f) => '/#popup?' + new URLSearchParams({authKeyMap: JSON.stringify({email: `link@${(c.account || '').split('@')[1] || location.hostname.replace(/^gw\./, '')}`, muid: String(uid), empSeq: '-1'}), fileSn: f.sn, moduleGbn: 'MAIL', path: '/ecm/ecm001A07', pathSeq: '700', callComp: 'UAA0700', popupUUID: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()))}).toString();
   async function downloadMailFile(uid, i, btn) {
     const c = S.mailDet && S.mailDet[uid];
     const f = c && c.files[i];
@@ -163,7 +164,7 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
     const n = c.files.length + c.bigFiles.length;
     const fileRow = (name, size, btn) => `<div class="file"><span class="ext ${esc(extOf(name))}">${esc((extOf(name) || 'file').toUpperCase().slice(0, 4))}</span><div class="nm"><b title="${esc(name)}">${esc(name)}</b><span>${esc(size)}</span></div>${btn}</div>`;
     const rows = [
-      ...c.files.map((f, i) => fileRow(f.name, kb(f.size), `${c.account ? `<button class="btn sm ghost" data-act="openUrl" data-url="${esc(previewUrl(c, m.uid, f))}" data-title="미리보기: ${esc(f.name)}" title="내려받지 않고 바로 보기">${ic('eye')}미리보기</button>` : ''}<button class="btn sm" data-act="dlFile" data-uid="${esc(m.uid)}" data-i="${i}">${ic('down')}받기</button>`)),
+      ...c.files.map((f, i) => fileRow(f.name, kb(f.size), `${c.account ? `<button class="btn sm ghost" data-act="pvFile" data-uid="${esc(m.uid)}" data-i="${i}" title="내려받지 않고 바로 보기">${ic('eye')}미리보기</button>` : ''}<button class="btn sm" data-act="dlFile" data-uid="${esc(m.uid)}" data-i="${i}">${ic('down')}받기</button>`)),
       ...c.bigFiles.map(f => fileRow(f.name, `${f.size} · 대용량${c.bigUntil ? ` · ${c.bigUntil}까지 받을 수 있음` : ''}`, `<a class="btn sm" href="${esc(f.href)}" target="_blank" rel="noopener">${ic('down')}받기</a>`)),
     ];
     const text = c.text ? c.text.replace(/대용량 파일첨부[\s\S]*?보관\)/, '').trim() : '';
@@ -215,7 +216,7 @@ ${mailFilesBox(m)}
     if (!S.sel) S.sel = {type: 'frame', title: title || '그룹웨어 화면', url};
     S.pane.url = url; S.pane.extract = null;
     // Full groupware screens (근태신청, 메일함, 결재작성) need width: open the pane wide.
-    if (/ecm001A07/.test(decodeURIComponent(url))) { S.pane.expanded = true; }
+    if (/ecm001A07|SynapDocViewServer/.test(decodeURIComponent(url))) { S.pane.expanded = true; }
     else if (!/#\/?popup\?/.test(url)) { S.pane.expanded = true; toast('그룹웨어 전체 화면이라 처리 창을 넓게 열었습니다. 왼쪽 메뉴나 "목록 보기"로 돌아갑니다.'); }
     else S.pane.expanded = false;
     renderPane();
