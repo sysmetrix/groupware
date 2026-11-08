@@ -438,16 +438,18 @@
     const files = arr(mime.fileList).map(f => ({name: str(f.originalFileName, 200) + (f.fileExtsn && !String(f.originalFileName || '').toLowerCase().endsWith('.' + String(f.fileExtsn).toLowerCase()) ? '.' + f.fileExtsn : ''), size: num(f.fileSize), ext: str(f.fileExtsn, 10), sn: String(f.fileSn || '')}));
     const plain = dec(String(mime.body?.plain || '').replace(/&nbsp;/g, ' ')).replace(/\s+/g, ' ').trim();
     return {uid: String(uid), subject: str(dm.subject, 300), from: dec(str(dm.from, 200)), to: dec(str(dm.to, 2000)), cc: dec(str(dm.cc, 2000)), date: str(dm.date, 20),
-      readUrl: str(dm.url, 500), files, bigFiles, bigUntil, text: mask(plain, 4000), wasUnread: seen !== true};
+      readUrl: str(dm.url, 500), account: str(dm.email, 120), files, bigFiles, bigUntil, text: mask(plain, 4000), wasUnread: seen !== true};
   }
   // Download one normal mail attachment (the same request the groupware read view makes; no state change).
-  async function mailAttachment({uid, sn, name = 'attachment'} = {}) {
+  async function mailAttachment({uid, sn, account = ''} = {}) {
     if (!uid || !sn) throw new GwError('BAD_ARG', '첨부 정보가 없습니다.');
+    const ctx = context();
+    if (!account) throw new GwError('BAD_ARG', '메일 계정 정보가 없습니다. 메일 상세를 먼저 불러오세요.');
     const client = findClient();
     let timer;
     try {
       const res = await Promise.race([
-        client.post('/mail/mail002A37', {fileSn: sn, authKeyMap: JSON.stringify({email: 'link@bwyf.or.kr', muid: String(uid), empSeq: '-1'}), moduleGbn: 'MAIL'}, {filedownload: true, contextType: 'application/x-www-form-urlencoded'}),
+        client.post('/mail/mail002A37', {fileSn: sn, authKeyMap: JSON.stringify({email: account, muid: String(uid), empSeq: String(ctx.empSeq)}), moduleGbn: 'MAIL'}, {filedownload: true, contextType: 'application/x-www-form-urlencoded'}),
         new Promise((_, reject) => { timer = setTimeout(() => reject(new GwError('TIMEOUT', '첨부 받기 시간 초과')), 120000); }),
       ]);
       if (!(res instanceof ArrayBuffer) || res.byteLength < 1) throw new GwError('API_ERROR', '첨부를 받지 못했습니다.');

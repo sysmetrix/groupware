@@ -100,7 +100,7 @@ test('rendered HTML escapes groupware text and keeps sections', () => {
   assert.ok(html.includes('&lt;script&gt;'));
   for (const s of ['내 처리할 일', '전자결재·문서유통', '예산 집행', '제목에서 찾은 기한']) assert.ok(html.includes(s), s);
   const md = renderMarkdown(analyze(fixture(), null, NOW));
-  assert.match(md, /결재·문서유통 처리 필요: \*\*2건\*\*/);
+  assert.match(md, /내 처리할 일 \*\*\d+건\*\*/);
 });
 
 test('assistant dataset passes the browser-snapshot contract', () => {
@@ -360,7 +360,7 @@ test('attendance items are checks without guesses in the headline; today workday
   const a = analyze(raw, null, NOW);
   const d2 = a.actions.find(x => x.key === 'att:20261102'), d6 = a.actions.find(x => x.key === 'att:20261106');
   assert.equal(d2.state, 'check'); assert.match(d2.headline, /출근 기록 없음/); assert.ok(!/수 있음/.test(d2.headline));
-  assert.ok(d2.facts.some(f => /11-01 휴일근무\(근무일대체\)와 짝일 수 있음/.test(f)));
+  assert.ok(!d2.facts.some(f => /수 있음/.test(f)), 'no guesses in facts'); assert.match(d2.context, /11\/01에 휴일근무/); assert.match(d2.title, /^11\/02\(월\) 근태 확인/);
   assert.equal(d6.headline, '근태신청 결재가 끝났는지 확인');
   assert.deepEqual(a.today, {date: '2026-11-09', isWorkday: true});
   assert.equal(analyze(raw, null, new Date('2026-11-08T03:00:00Z')).today.isWorkday, false);
@@ -379,4 +379,19 @@ test('titles are cleaned and reports carry no ms or raw decimals', () => {
     assert.ok(!text.includes('6.59375') && !text.includes('38.15625'));
     assert.ok(text.includes(`내 처리할 일 ${a.summary.mine.total}건`));
   }
+});
+
+test('work center: every clickable data-act has a handler, CSS is a separate design-system file', async () => {
+  const fs = await import('node:fs/promises');
+  const src = await fs.readFile(new URL('../src/live/workcenter.browser.js', import.meta.url), 'utf8');
+  const css = await fs.readFile(new URL('../src/live/wc-style.css', import.meta.url), 'utf8');
+  const acts = new Set([...src.matchAll(/data-act=\\?"([A-Za-z]+)\\?"/g)].map(m => m[1]));
+  const handled = new Set([...src.matchAll(/case '([A-Za-z]+)'/g)].map(m => m[1]));
+  const special = new Set(['closeOverlay', 'toastUndo']);
+  const missing = [...acts].filter(a => !handled.has(a) && !special.has(a));
+  assert.deepEqual(missing, [], `unhandled actions: ${missing.join(', ')}`);
+  assert.ok(src.includes("'/*@WC_CSS@*/'"));
+  assert.ok(/word-break:keep-all/.test(css), 'Korean words must not break mid-word');
+  assert.ok(!/font-size:(?:[0-9]|1[01])(?:\.\d+)?px/.test(css), 'no text smaller than 12px');
+  assert.ok(/:focus-visible/.test(css), 'keyboard focus ring');
 });

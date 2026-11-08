@@ -270,11 +270,11 @@ function judge(a, now) {
     const x = a.att || {};
     const absent = /결근|미출근/.test(x.result || '');
     if (x.applied || (/미인정/.test(x.result || '') && x.item)) headline = '근태신청 결재가 끝났는지 확인';
-    else if (absent) headline = `출근 기록 없음 · 근태 상태 '${x.result}${x.status ? `(${x.status})` : ''}'`;
+    else if (absent) headline = '출근 기록 없음 · 쉰 날이면 근태신청 필요';
     else headline = `근태 '${x.result}' 확인`;
     if (x.item) facts.push(x.item);
-    if (x.status) facts.push(`상태 ${x.status}`);
-    if (x.nearSwap) facts.push(`${fmtYmd(x.nearSwap).slice(5)} 휴일근무(근무일대체)와 짝일 수 있음`);
+    if (x.status) facts.push(`그룹웨어 표시: ${x.result}${x.status ? `(${x.status})` : ''}`);
+    a.context = x.nearSwap ? `${fmtYmd(x.nearSwap).slice(5).replace('-', '/')}에 휴일근무(근무일대체) 기록이 있습니다. 그 대체로 쉰 날이면 "정상입니다"를 누르세요.` : '';
   } else if (a.base === 'mailAnswered' || a.base === 'conflictAnswered') {
     state = 'confirm';
     headline = effDate ? `${dueTxt}${left < 0 ? '였음' : ''} · 답장함 → 제출 끝났는지 확인` : '답장함 → 제출 끝났는지 확인';
@@ -407,7 +407,7 @@ export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6, roles 
 
   // Attendance (cross-checked with approved leave and 근무일대체)
   const anomalies = attendanceAnomalies(d.attendance?.days || [], {now, leaves: d.leave?.history || upcoming});
-  for (const x of anomalies) push({key: `att:${x.date}`, type: 'attendance', base: x.priority === 'high' ? 'attHigh' : 'attMedium', att: x, ref: {date: x.date}, area: '근태', kind: '근태 확인 필요', title: `${fmtYmd(x.date)} 출결 '${x.result}'${x.status ? ` (${x.status})` : ''}${x.item ? ` · ${x.item}` : ''}`, detail: x.advice, when: fmtYmd(x.date), url: d.attendance?.requestUrl || d.attendance?.url, listUrl: d.attendance?.url, isNew: false});
+  for (const x of anomalies) push({key: `att:${x.date}`, type: 'attendance', base: x.priority === 'high' ? 'attHigh' : 'attMedium', att: x, ref: {date: x.date}, area: '근태', kind: '근태 확인 필요', title: `${fmtYmd(x.date).slice(5).replace('-', '/')}(${'일월화수목금토'[new Date(fmtYmd(x.date) + 'T00:00:00Z').getUTCDay()]}) 근태 확인${x.item ? ` · ${x.item}` : ''}`, detail: x.advice, when: fmtYmd(x.date), url: d.attendance?.requestUrl || d.attendance?.url, listUrl: d.attendance?.url, isNew: false});
 
   // Score -> level. Only the top `maxHigh` can be 긴급 so that red stays meaningful.
   // Is this mine to do, or just something I can see? (참고 = 나와 직접 관련 적음)
@@ -504,9 +504,9 @@ export function renderMarkdown(a) {
   if (a.sessionExpired) lines.push('', '> 로그인 세션이 만료되어 일부 자료를 읽지 못했습니다. 다시 로그인 후 실행하세요.');
   if (a.failed.length) lines.push('', `> 실패한 모듈: ${a.failed.map(f => `${f.name}(${f.error})`).join(', ')}`);
   lines.push('', '## 한눈에 보기', '');
-  lines.push(`- 결재·문서유통 처리 필요: **${s.approvalAction}건** (결재대기 ${s.pending ?? '-'}, 부서접수대기 ${s.deptWaiting ?? '-'}, 배부대기 ${s.distWaiting ?? '-'}) · 발송대기 ${s.sendWaiting ?? '-'}`);
+  lines.push(`- 내 처리할 일 **${s.mine?.total ?? 0}건** (급함 ${s.mine?.urgent ?? 0} · 할 일 ${s.mine?.todo ?? 0} · 확인 필요 ${s.mine?.check ?? 0} · 끝났는지 확인 ${s.mine?.confirm ?? 0}) · 참고 ${s.ref ?? 0}건`);
   lines.push(`- 내 상신문서 진행 중 ${s.inProgressSubmitted}건, 반려/회수 ${s.rejectedSubmitted}건 · 임시보관 ${s.drafts ?? '-'}건 · 미열람 열람문서 ${s.viewingUnread ?? '-'}건`);
-  lines.push(`- 안 읽은 메일 ${s.mailUnread}건 · 안 읽은 공지 ${s.noticeUnread ?? '-'}건 · 남은 연차 ${fmtDays(s.leaveRemaining)}`);
+  lines.push(`- 내 처리할 일 중 결재 ${s.mine?.byArea?.결재 ?? 0}건 · 메일 ${s.mine?.byArea?.메일 ?? 0}건 · 근태 ${s.mine?.byArea?.근태 ?? 0}건 · 남은 연차 ${fmtDays(s.leaveRemaining)}`);
   if (a.newSince) lines.push(`- 지난 실행(${kstText(a.newSince.since)}) 이후 새 메일 ${a.newSince.mails}건, 새 공지 ${a.newSince.notices}건, 새 결재·문서 ${a.newSince.docs}건`);
   lines.push('', `## 내 처리할 일 ${s.mine?.total ?? 0}건`, '');
   const mineL = a.actions.filter(x => x.scope !== 'ref'), refL = a.actions.filter(x => x.scope === 'ref');
@@ -565,7 +565,7 @@ tr.unread td:first-child{font-weight:600}tr.total td{font-weight:700}tr.lv-항 t
 </style></head><body><main>
 <h1>그룹웨어 업무 브리핑</h1><div class="muted">${esc(kstText(a.collectedAt))} KST 기준 · ${esc(a.principal.name)} ${esc(a.principal.duty || '')} · ${esc(a.principal.deptName)} · 읽기 전용</div>
 ${a.sessionExpired ? '<p class="warn"><b>로그인 세션이 만료되어 일부 자료를 읽지 못했습니다.</b> 그룹웨어에 다시 로그인한 뒤 실행하세요.</p>' : ''}${a.failed.length ? `<p class="warn">실패한 모듈: ${a.failed.map(f => esc(`${f.name}(${f.message || f.error})`)).join(', ')}</p>` : ''}
-<div class="cards">${card('결재·접수·배부 처리', s.approvalAction + '건', `결재대기 ${s.pending ?? '-'} · 부서접수 ${s.deptWaiting ?? '-'} · 배부 ${s.distWaiting ?? '-'}`, s.approvalAction ? 'alert' : '')}${card('발송 대기', (s.sendWaiting ?? '-') + '건', '문서유통 > 발송함')}${card('내 상신 진행', s.inProgressSubmitted + '건', `반려/회수 ${s.rejectedSubmitted} · 임시보관 ${s.drafts ?? '-'}`, s.rejectedSubmitted ? 'alert' : '')}${card('안 읽은 메일', s.mailUnread + '건', `받은메일함 전체 ${s.inboxTotal ?? '-'}`, s.mailUnread ? 'alert' : '')}${card('안 읽은 공지', (s.noticeUnread ?? '-') + '건', `미열람 열람문서 ${s.viewingUnread ?? '-'}`)}${card('남은 연차', fmtDays(s.leaveRemaining), lv ? `부여 ${fmtDays(lv.granted)} · 사용 ${fmtDays(lv.used)}` : '')}</div>
+<div class="cards">${card('내 처리할 일', s.mine.total + '건', `급함 ${s.mine.urgent} · 할 일 ${s.mine.todo}`, s.mine.urgent ? 'alert' : '')}${card('확인 필요', s.mine.check + '건', '근태 등 직접 확인')}${card('끝났는지 확인', s.mine.confirm + '건', '답장한 기한 메일 등')}${card('참고', s.ref + '건', '부서 접수·배부, 공지, 받은 자료')}${card('남은 연차', fmtDays(s.leaveRemaining), lv ? `받은 연차 ${fmtDays(lv.granted)} · 쓴 연차 ${fmtDays(lv.used)}` : '')}</div>
 ${a.newSince ? `<p class="muted">지난 실행(${esc(kstText(a.newSince.since))}) 이후: 새 메일 ${a.newSince.mails}건 · 새 공지 ${a.newSince.notices}건 · 새 결재·문서 ${a.newSince.docs}건</p>` : ''}
 <h2>내 처리할 일 ${s.mine.total}건 <span class="muted">급함 ${s.mine.urgent} · 할 일 ${s.mine.todo} · 확인 ${s.mine.check + s.mine.confirm} · 참고 ${s.ref}건</span></h2>${actionRows ? `<table><tr><th>상태</th><th>영역</th><th>내용</th><th>일시</th></tr>${actionRows}</table>` : '<p class="muted">지금 내가 처리할 일이 없습니다.</p>'}${refRows ? `<h3>참고 ${s.ref}건 <span class="muted">나와 직접 관련 적은 항목</span></h3><table><tr><th>제목</th><th>일시</th></tr>${refRows}</table>` : ''}
 ${a.deadlines.length ? `<h2>제목에서 찾은 기한</h2><table><tr><th>날짜</th><th></th><th>제목</th><th>출처</th></tr>${deadlineRows}</table><p class="muted">제목의 "~11.20.", "11월 20일까지" 같은 표현을 자동으로 읽은 값입니다. 본문 기한은 원문에서 확인하세요.</p>` : ''}
