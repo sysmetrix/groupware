@@ -7,6 +7,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import crypto from 'node:crypto';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = path.join(root, 'build', 'live');
@@ -47,8 +48,11 @@ await fs.writeFile(path.join(outDir, 'gw-live.js'), bundle);
 const guard = `if(location.origin!=='https://gw.bwyf.or.kr'){alert('그룹웨어(gw.bwyf.or.kr)에 로그인한 화면에서 눌러 주세요.');return;}`;
 // Install bookmark: carries the whole bundle once, stores it, then opens the work center.
 const install = 'javascript:' + encodeURIComponent(`(function(){${guard}var s=${JSON.stringify(bundle)};try{(0,eval)(s);}catch(e){alert('업무센터를 불러오지 못했습니다: '+e.message);return;}try{window.BWYFGW_WC.install(s);}catch(e){}window.BWYFGW_WC.open();})();`);
-// Launch bookmark: tiny; uses the copy stored by the install bookmark.
-const mini = 'javascript:' + encodeURIComponent(`(function(){${guard}if(window.BWYFGW_WC&&window.BWYFGW_WC.version){window.BWYFGW_WC.open();return;}var s=localStorage.getItem('bwyfgw:wc:src');if(!s){alert('먼저 "GW 업무센터 설치" 북마크를 한 번 눌러 주세요.');return;}(0,eval)(s);window.BWYFGW_WC.open();})();`);
+// Launch bookmark: tiny; runs the copy stored by the install bookmark only if its SHA-256 matches this build
+// (protects against a changed or outdated copy in localStorage).
+const hash = crypto.createHash('sha256').update(bundle, 'utf8').digest('hex');
+const wcVersion = (workcenter.match(/const VERSION = '([^']+)'/) || [])[1] || '';
+const mini = 'javascript:' + encodeURIComponent(`(function(){${guard}if(window.BWYFGW_WC&&window.BWYFGW_WC.version===${JSON.stringify(wcVersion)}){window.BWYFGW_WC.open();return;}var s=localStorage.getItem('bwyfgw:wc:src');if(!s){alert('먼저 "GW 업무센터 설치" 북마크를 한 번 눌러 주세요.');return;}crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)).then(function(b){var h=Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,'0');}).join('');if(h!==${JSON.stringify(hash)}){alert('저장된 업무센터가 이 북마크와 버전이 다르거나 바뀌었습니다. 설치 페이지에서 두 북마크를 다시 끌어다 놓고 "설치"를 한 번 누르세요.');return;}(0,eval)(s);window.BWYFGW_WC.open();});})();`);
 await fs.writeFile(path.join(outDir, 'bookmarklet.txt'), install);
 await fs.writeFile(path.join(outDir, 'bookmarklet-mini.txt'), mini);
 const attr = s => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
@@ -77,4 +81,5 @@ if (copyIdx > 0 && process.argv[copyIdx + 1]) {
   await fs.mkdir(dest, {recursive: true});
   await fs.copyFile(path.join(outDir, 'gw-live.js'), path.join(dest, 'gw-live.js'));
 }
-console.log(JSON.stringify({bundle: path.join(outDir, 'gw-live.js'), bundleKB: Math.round(bundle.length / 1024), installKB: Math.round(install.length / 1024), miniKB: Math.round(mini.length / 1024), exported}));
+await fs.writeFile(path.join(outDir, 'gw-live.sha256'), hash);
+console.log(JSON.stringify({bundle: path.join(outDir, 'gw-live.js'), bundleKB: Math.round(bundle.length / 1024), installKB: Math.round(install.length / 1024), miniKB: Math.round(mini.length / 1024), sha256: hash.slice(0, 12), exported}));

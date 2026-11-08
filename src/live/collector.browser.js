@@ -15,7 +15,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '2.0.0';
+  const VERSION = '3.0.0';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
@@ -30,6 +30,7 @@
     '/nonprofit/NCC0610/0BN00002', '/nonprofit/popup/0BN00001',
     '/event/event02A01',
     '/gw/APIHandler/gw018A02',
+    '/ea/ea059A02',
   ]);
 
   // Left-menu ids of 전자결재(비영리) observed in getMenuCountInfo (2026-11-08).
@@ -76,6 +77,10 @@
       if (kind === 'sendWaiting') Object.assign(p, {isSend: 'Y'});
       return `${ORIGIN}/#popup?${qs(p)}`;
     },
+    // Mail compose (re = 답장, reall = 전체 답장, fw = 전달, plain = 새 메일). Nothing is sent until the user presses 보내기.
+    compose: (kind, mail) => `${ORIGIN}/#popup?${qs({MicroModuleCode: 'mail', callComp: 'UDAP001', mailKind: kind, uid: mail && mail.uid, mbox: mail && mail.box, popType: 'Y', moduleSeq: '700'})}`,
+    // New approval draft with a given form (nothing is saved until 임시저장/상신).
+    draft: formId => `${ORIGIN}/#popup?${qs({MicroModuleCode: 'ea', tiKeyCode: formId, callComp: 'UCAP001'})}`,
     article: a => `${ORIGIN}/#/popup?${qs({callComp: 'UFAP003', art_seq_no: a.id, cat_seq_no: a.cat, cat_type: a.catType || 'L', alarm_yn: 'Y', MicroModuleCode: 'board', externalYn: 'Y'})}`,
     file: fileId => `${ORIGIN}/#/popup?${qs({MicroModuleCode: 'ecm', callComp: 'UQAP001', pageCode: 'UQAP029', uid: fileId, targetObjectType: 'FL'})}`,
     route: r => ORIGIN + '/' + r,
@@ -182,7 +187,7 @@
 
   const toDoc = (r, kind = '') => {
     const doc = {
-      kind, docId: str(r.diKeyCode, 30), tiKeyCode: str(r.tiKeyCode, 30), diSeqNum: str(r.diSeqNum, 30),
+      kind, docId: str(r.diKeyCode, 30), tiKeyCode: str(r.tiKeyCode, 30), diSeqNum: str(r.diSeqNum, 30), form: str(r.tiName, 60),
       title: mask(r.diTitle, 300), status: str(r.diStatusName || r.rsStatusName || r.rsFlagName, 60), statusCode: str(r.diStatus || r.rsStatus, 10),
       drafter: str(r.diEmpName, 40), drafterDept: str(r.diDeptName, 60), approver: str(r.diKyulJaeUserName, 40),
       sender: str(r.riSendOrgName || r.orgDept || r.riSendDeptName, 100), sendOrg: str(r.riSendOrgName, 60), sendDept: str(r.riSendDeptName, 60), sendDeptCode: str(r.riSendDeptCode, 20),
@@ -282,7 +287,7 @@
     return arr(rows).map(r => ({
       date: str(r.atDt, 8), weekday: num(r.weekDc), workType: str(r.workTpNm, 20), result: str(r.attresultNm, 20), item: str(r.atNm, 30), status: str(r.worktmStNm, 10),
       come: str(r.comeTm, 4), leave: str(r.leaveTm, 4), recognizedMin: r.appworkTm === null || r.appworkTm === undefined ? null : num(r.appworkTm),
-      holiday: String(r.holiFg) !== '1', applied: r.appformYn === 'Y', lateMin: num(r.latecomeworkTm), earlyLeaveMin: num(r.fastleaveworkTm),
+      holiday: r.holiFg ? String(r.holiFg) !== '1' : /휴일/.test(r.attresultNm || ''), applied: r.appformYn === 'Y', lateMin: num(r.latecomeworkTm), earlyLeaveMin: num(r.fastleaveworkTm),
     })).sort((a, b) => a.date.localeCompare(b.date));
   }
 
@@ -362,8 +367,11 @@
     if (kw.length < 2) throw new GwError('BAD_QUERY', '검색어를 두 글자 이상 입력하세요.');
     context();
     const groups = {};
+    // The search API filters by date only with YYYY-MM-DD (checked 2026-11-08).
+    const dash = s => /^\d{8}$/.test(s) ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}` : (s || '');
+    const fromD = dash(from), toD = dash(to) || (fromD ? `${kstParts().y}-${kstParts().m}-${kstParts().d}` : '');
     await Promise.all(types.filter(t => SEARCH_TYPES[t]).map(async type => {
-      const body = {header: {}, body: {tsearchKeyword: kw, tsearchSubKeyword: '', boardType: SEARCH_TYPES[type], fromDate: from, toDate: to, dateDiv: '', detailSearchYn: from || to ? 'Y' : 'N', selectDiv: 'S', orderDiv: 'B', syncTime: 'N', pageIndex: page, hrSearchYn: 'N', hrEmpSeq: '', pageSize, webMobileDiv: 'W'}};
+      const body = {header: {}, body: {tsearchKeyword: kw, tsearchSubKeyword: '', boardType: SEARCH_TYPES[type], fromDate: fromD, toDate: toD, dateDiv: '', detailSearchYn: fromD ? 'Y' : 'N', selectDiv: 'S', orderDiv: 'B', syncTime: 'N', pageIndex: page, hrSearchYn: 'N', hrEmpSeq: '', pageSize, webMobileDiv: 'W'}};
       try {
         const d = await call('/gw/APIHandler/gw018A02', body, {timeoutMs: 20000});
         const items = arr(d && d.resultgrid).map(x => normalizeSearch(type, x, kw)).filter(Boolean);
@@ -378,13 +386,13 @@
   function normalizeSearch(type, x, kw) {
     if (type === 'doc') {
       const form = str(ml(x.formNm), 60);
-      const doc = {type, docId: str(x.docId || x.pkSeq, 30), docNo: str(x.docNo, 60), title: mask(x.docTitle, 300), form: form === 'temporary' ? '접수문서' : form, date: str(x.docDate, 20), drafter: str(ml(x.userNm), 40), dept: str(ml(x.deptNm), 60), files: arr(x.fileList).map(f => ({id: str(f.filePath || f.fileId, 60), name: str(f.orignlFileName || f.fileName, 160)})), snippet: snippetAround(x.docContents, kw)};
+      const doc = {type, docId: str(x.docId || x.pkSeq, 30), docNo: str(x.docNo, 60), title: mask(x.docTitle, 300), form: form === 'temporary' ? '접수문서' : form, date: str(x.docDate, 20), drafter: str(ml(x.userNm), 40), dept: str(ml(x.deptNm), 60), files: arr(x.fileList).map(f => ({id: str(f.filePath || f.fileId, 60), name: str(f.orignlFileName || f.fileName, 160)})), snippet: snippetAround(x.docContents, kw), text: mask(x.docContents, 6000)};
       doc.url = LINKS.doc(doc);
       return doc;
     }
     if (type === 'mail') return {type, uid: str(x.muid, 30), box: str(x.boxName, 30), subject: mask(x.subject, 300), from: str(x.fromAddrName, 60), to: str(x.toAddrName, 60), date: str(x.rfc822date, 20), size: num(x.size), snippet: snippetAround(x.mailBody, kw)};
     if (type === 'board') {
-      const a = {type, id: str(x.artSeqNo || x.pkSeq, 20), cat: str(x.catSeqNo, 20), catType: str(x.catType || 'L', 4), catTitle: str(ml(x.catTitle), 60), title: mask(x.artTitle, 300), writer: str(ml(x.mbrNick), 40), date: str(x.writeDate, 20), files: arr(x.fileList).map(f => ({id: str(f.fileId || f.filePath, 60), name: str(f.orignlFileName || f.fileName, 160)})), snippet: snippetAround(x.artContent, kw)};
+      const a = {type, id: str(x.artSeqNo || x.pkSeq, 20), cat: str(x.catSeqNo, 20), catType: str(x.catType || 'L', 4), catTitle: str(ml(x.catTitle), 60), title: mask(x.artTitle, 300), writer: str(ml(x.mbrNick), 40), date: str(x.writeDate, 20), files: arr(x.fileList).map(f => ({id: str(f.fileId || f.filePath, 60), name: str(f.orignlFileName || f.fileName, 160)})), snippet: snippetAround(x.artContent, kw), text: mask(x.artContent, 6000)};
       a.url = LINKS.article(a);
       return a;
     }
@@ -424,6 +432,64 @@
     return {from, to, dist: dist.filter(r => r.toDept), dept: dept.filter(r => r.toEmp), fetchedAt: new Date().toISOString()};
   }
 
+  // Next pages of an approval list (더 보기).
+  async function approvalPage(kind, page = 2, {days = 92, size = 30} = {}) {
+    const def = APPROVAL_LISTS.find(d => d.key === kind);
+    if (!def) throw new GwError('BAD_QUERY', `알 수 없는 목록: ${kind}`);
+    const ctx = context();
+    const now = new Date();
+    const from = ymd(addDays(now, -days)), to = ymd(now);
+    const body = {...approvalBase(ctx, from, to, size), page: String(page), nMenuID: def.menu, pageCode: def.page, periodPicker: def.period, sortField: def.period, topSort: def.period, ...(def.extra || {})};
+    const {list, total} = firstList(await call(def.api, body));
+    return {kind, page, total, docs: list.map(r => toDoc(r, kind))};
+  }
+
+  // Preview of an approval document from the search index: no popup is opened, so no 열람 record.
+  async function docPreview({docNo = '', title = ''} = {}) {
+    // Search by document number when there is one (fast and exact); otherwise by title.
+    const tries = (docNo ? [docNo] : [title && title.replace(/[\[\]()「」『』]/g, ' ').trim().slice(0, 40)]).filter(t => t && t.length >= 2);
+    for (const q of tries) {
+      const r = await search(q, {types: ['doc'], pageSize: 10}).catch(() => null);
+      const items = r && r.groups.doc ? r.groups.doc.items : [];
+      const hit = items.find(x => docNo && x.docNo === docNo) || items.find(x => title && x.title.replace(/\s/g, '') === title.replace(/\s/g, ''));
+      if (hit) return {found: true, ...hit};
+    }
+    return {found: false};
+  }
+
+  // Forms I actually use (from my submitted documents) + the foundation's recommended forms.
+  async function frequentForms({days = 180} = {}) {
+    const ctx = context();
+    const now = new Date();
+    const from = ymd(addDays(now, -days)), to = ymd(now);
+    const [mine, rec] = await Promise.all([
+      call('/ea/ea038A09', {...approvalBase(ctx, from, to, 200), nMenuID: '11000300', pageCode: 'UCA1020', periodPicker: 'diWriteDate', sortField: 'diWriteDate', topSort: 'diWriteDate', searchSts: '002'}).then(d => firstList(d).list).catch(() => []),
+      call('/ea/ea059A02', {}).catch(() => []),
+    ]);
+    const count = new Map();
+    for (const r of mine) {
+      const id = str(r.tiKeyCode, 40), name = str(r.tiName, 60);
+      if (!id || !name || name === '-' || id === '0000000001') continue;
+      const e = count.get(id) || {formId: id, name, count: 0, last: ''};
+      e.count++; if (str(r.diWriteDate, 20) > e.last) e.last = str(r.diWriteDate, 20);
+      count.set(id, e);
+    }
+    for (const f of arr(rec)) { const id = str(f.form_id, 40); if (id && !count.has(id)) count.set(id, {formId: id, name: str(f.form_name, 60), count: 0, last: '', recommended: true}); }
+    return [...count.values()].sort((a, b) => b.count - a.count).map(f => ({...f, url: LINKS.draft(f.formId)}));
+  }
+
+  // Executed amount per month for one budget code (and its children) — 12 parallel calls.
+  async function budgetMonthly({project, code, year} = {}) {
+    if (!project) throw new GwError('BAD_QUERY', '프로젝트 코드가 필요합니다.');
+    const ctx = context();
+    const y = Number(year || kstParts().y);
+    const months = Array.from({length: 12}, (_, i) => String(i + 1).padStart(2, '0'));
+    const res = await Promise.all(months.map(m => call('/nonprofit/NCC0610/0BN00002', {bgtFrYm: `${y}${m}`, bgtToYm: `${y}${m}`, bgtBeforeFrYm: '', bgtBeforeToYm: '', bgtStartFrYm: `${y}0101`, summaryYn: 'N', abgtFg: '1', divCds: `${ctx.erpCompSeq}|`, mgtCds: `${project}|`, bottomCds: '', mgtBottomList: [], bgtCnt: '1', abdocuFg: '1', acctdefFg: 'N001', abdocuDtFg: '1', grFg: '0', zeroFg: '2', divFg: '8', sumRtFg: '2', ctrCd05: '3', ctrCd10: '1', optionBN03: '1', optionBN10: '1', optionBN11: '0', optionBN14: '0', pOptionBn15: '0', coCd: ctx.erpCompSeq, gisu: String(y - 2014), empCd: ctx.erpEmpSeq, gisuFrDt: `${y}0101`, gisuToDt: `${y}1231`}, {timeoutMs: 30000})
+      .then(d => { const rows = arr(d && d.printList).map(budgetRow); const sel = code ? rows.filter(r => r.path.split('|').includes(code)) : rows; return {month: m, rows: sel}; })
+      .catch(e => ({month: m, error: e.code}))));
+    return {project, code, year: y, months: res};
+  }
+
   async function submittedRange({days = 7, size = 100} = {}) {
     const ctx = context();
     const now = new Date();
@@ -460,7 +526,7 @@
   }
 
   window.BWYFGW = Object.freeze({
-    version: VERSION, collect, call, search, budgetProject, budgetLedger, attendanceDays, routingHistory, submittedRange,
+    version: VERSION, collect, call, search, budgetProject, budgetLedger, budgetMonthly, attendanceDays, routingHistory, submittedRange, approvalPage, docPreview, frequentForms,
     context: () => { const c = context(); return {name: c.name, deptName: c.deptName, compName: c.compName, duty: c.duty, position: c.position}; },
     readOnlyEndpoints: () => [...READ_ONLY], routes: ROUTES, links: LINKS, searchLabels: SEARCH_LABELS, defaults: DEFAULTS,
   });

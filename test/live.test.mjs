@@ -66,7 +66,7 @@ test('analyze ranks actions, filters noise and finds deadlines', () => {
   assert.equal(a.actions[0].priority, 'high');
   assert.ok(a.actions.some(x => x.kind === '열람문서' && x.title === '열람 안내'));
   assert.ok(!a.actions.some(x => x.title === '읽은 열람'));
-  assert.ok(a.actions.some(x => x.kind === '회신 여부 확인' && x.title.startsWith('회의 참석')));
+  assert.ok(a.actions.some(x => x.kind === '답장했는지 확인' && x.title.startsWith('회의 참석')));
   assert.ok(!a.actions.some(x => x.title === '예약된 글'), 'reserved own post is not an unread notice');
   assert.deepEqual(a.deadlines.map(x => x.date), ['2026-11-12', '2026-11-20', '2026-11-20']);
   assert.equal(a.newSince, null);
@@ -187,7 +187,8 @@ test('analyze turns attendance anomalies into actions with stable keys', () => {
   const a = analyze(raw, null, NOW);
   const x = a.actions.find(y => y.type === 'attendance');
   assert.equal(x.key, 'att:20261102');
-  assert.equal(x.priority, 'high');
+  assert.equal(x.kind, '근태 확인 필요');
+  assert.ok(['high', 'medium'].includes(x.priority));
   assert.ok(a.actions.every(y => typeof y.key === 'string' && y.key.length > 3), 'every action has a key');
 });
 
@@ -253,4 +254,20 @@ test('bundle build includes collector, analysis and lazy work center', async () 
   for (const s of ['window.BWYFGW =', 'window.BWYFGW_REPORT', 'window.BWYFGW_WC', 'recommendRouting']) assert.ok(bundle.includes(s), s);
   const mini = await fs.readFile(new URL('../build/live/bookmarklet-mini.txt', import.meta.url), 'utf8');
   assert.ok(mini.length < 2000, 'launch bookmark stays small');
+});
+
+test('deadline mails: unanswered ones rise, answered ones stay low, leave-day conflicts are flagged', () => {
+  const raw = fixture();
+  raw.data.leave.upcoming = [{start: '20261112', end: '20261112', kind: '대체휴가', days: 1, title: '대체휴가', approved: true}];
+  raw.data.mail.inbox.records.push({uid: '7', box: 'INBOX', subject: '자료 회신 요청(~11/12)', from: '정답장', date: '2026-11-08 09:00:00', seen: true, answered: true, forwarded: false, attach: false, preview: ''});
+  const a = analyze(raw, null, NOW);
+  const open = a.actions.find(x => x.type === 'mail' && x.title === '자료 제출 요청(~11/12)');
+  const answered = a.actions.find(x => x.ref && x.ref.uid === '7');
+  assert.equal(open.kind, '기한 있는 메일');
+  assert.equal(answered.kind, '기한 있는 메일(답장함)');
+  assert.equal(answered.priority, 'low');
+  const conflict = a.actions.find(x => x.type === 'conflict');
+  assert.ok(conflict, 'deadline on a leave day is flagged');
+  assert.ok(conflict.score > open.score);
+  assert.ok(a.actions.filter(x => x.priority === 'high').length <= 6);
 });
