@@ -33,6 +33,9 @@
       case 'coach': startCoach(); break;
       case 'coachNext': coachNext(); break;
       case 'coachEnd': endCoach(); break;
+      case 'autoFillMail': autoFillMail(v); break;
+      case 'autoFillDraft': autoFillDraft(v); break;
+      case 'autoFillAtt': autoFillAtt(); break;
       case 'paneOpenMain': { const x = selectedAction(); if (x) openItem(x); else { const info = paneInfo(); if (info.url) openUrl(info.url, {title: info.title}); } break; }
       case 'pvFile': { const c = S.mailDet && S.mailDet[el.dataset.uid]; const f = c && c.files[Number(el.dataset.i)]; if (!f) break; el.disabled = true; try { const u = await GW.mailAttachmentPreview({uid: el.dataset.uid, sn: f.sn, account: c.account}); openUrl(u, {title: '미리보기: ' + f.name}); } catch (err) { toast('미리보기를 열지 못했습니다: ' + err.message); } el.disabled = false; break; }
       case 'dlFile': downloadMailFile(el.dataset.uid, Number(el.dataset.i), el); break;

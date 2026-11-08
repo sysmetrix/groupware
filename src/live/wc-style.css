@@ -194,3 +194,29 @@ main{container-type:inline-size}
 .wc:not(.nopane) .row{grid-template-columns:24px 1fr auto auto}.wc:not(.nopane) .row .qa{grid-column:auto;justify-content:flex-end;margin-top:0}
 @container (max-width:680px){.row{grid-template-columns:24px 1fr auto!important}.row .qa{grid-column:2/4!important;justify-content:flex-start!important}}
 .ph.viewer .in{display:none}.ph.viewer{max-height:none;border-bottom:1px solid var(--line)}
+
+/* Auto-fill Service Bar */
+.autofill-bar{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--sel);
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+.autofill-bar .lbl{
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 700;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.autofill-bar .btn{
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12.5px;
+  background: var(--card);
+}
