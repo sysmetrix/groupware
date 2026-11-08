@@ -44,10 +44,10 @@
       <ol style="line-height:2;padding-left:20px;margin:0 0 10px">
         <li>아래 버튼을 눌러 구글 AI 스튜디오를 엽니다. 구글 로그인이 되어 있어야 합니다.<br><a class="btn primary" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">${ic('ext')}API 키 발급 페이지 열기</a></li>
         <li>화면의 <b>“API 키 만들기(Create API key)”</b> 버튼을 누릅니다. 프로젝트를 고르라고 하면 <b>“새 프로젝트에서 API 키 만들기”</b>를 선택합니다.</li>
-        <li>만들어진 키(<b>AIza</b>로 시작하는 긴 글자) 옆의 <b>복사</b> 아이콘을 누릅니다.</li>
+        <li>만들어진 키(<b>AIza</b> 또는 <b>AQ.</b>로 시작하는 긴 글자) 옆의 <b>복사</b> 아이콘을 누릅니다.</li>
         <li>여기에 붙여넣고 <b>연결 시험</b>을 누릅니다.</li>
       </ol>
-      <div style="display:flex;gap:8px"><input id="aiKey" class="inp" style="flex:1;height:40px" type="password" placeholder="AIza 로 시작하는 키 붙여넣기" autocomplete="off" aria-label="Gemini API 키"><button class="btn primary" data-act="aiSaveKey">연결 시험</button></div>
+      <div style="display:flex;gap:8px"><input id="aiKey" class="inp" style="flex:1;height:40px" type="password" placeholder="AIza 또는 AQ. 로 시작하는 키 붙여넣기" autocomplete="off" aria-label="Gemini API 키"><button class="btn primary" data-act="aiSaveKey">연결 시험</button></div>
       ${msg ? `<div class="box warn" style="margin-top:10px">${esc(msg)}</div>` : ''}
       <div class="muted" style="font-size:12px;margin-top:10px">키는 이 PC의 브라우저에만 저장되며 업무센터 밖으로 보내지 않습니다(구글 호출에만 사용). 키가 새어 나갔다고 느끼면 같은 페이지에서 삭제하고 새로 만드세요.</div>`);
   }
@@ -63,7 +63,7 @@
   }
   async function aiSaveKey() {
     const key = (($('#aiKey') || {}).value || '').trim();
-    if (!R.isGeminiKey(key)) { aiSetup('키 형식이 맞지 않습니다. AIza 로 시작하는 39자 안팎의 글자를 그대로 붙여넣으세요(앞뒤 공백 없이).'); return; }
+    if (!R.isGeminiKey(key)) { aiSetup('키 형식이 맞지 않습니다. AIza 또는 AQ. 로 시작하는 긴 글자를 그대로 붙여넣으세요(앞뒤 공백, 줄바꿈 없이).'); return; }
     $('#overlay').innerHTML = aiShell('<div class="muted"><span class="spin"></span> 연결을 시험하고 있습니다…</div>');
     try {
       const list = await aiRequest('models?pageSize=100', null, key);

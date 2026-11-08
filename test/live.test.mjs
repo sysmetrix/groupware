@@ -598,7 +598,7 @@ test('payment entry check: cards/transfers vs planned amount, duplicates, bad in
 
 test('ai helpers: key format and context excludes mail bodies, clips long text', () => {
   assert.equal(isGeminiKey('AIzaSyD-abcdefghijklmnopqrstuvwxyz012345'), true);
-  assert.equal(isGeminiKey('sk-abc'), false); assert.equal(isGeminiKey(''), false);
+  assert.equal(isGeminiKey('AQ.Ab8RN6Jabcdefghijklmnopqrstuvwxyz0123456789'), true); assert.equal(isGeminiKey('AQ.short'), false); assert.equal(isGeminiKey('sk-abc'), false); assert.equal(isGeminiKey(''), false);
   const ctx = buildAiContext({name: '서원하', mine: [{state: '급함', title: 'x'.repeat(200), headline: '답장 필요', deadline: '11/09 16:00'}], todayAway: [{name: '김', label: '연차'}], now: new Date('2026-11-09T10:00:00+09:00')});
   assert.match(ctx, /2026-11-09 10:00/); assert.match(ctx, /김\(연차\)/); assert.ok(ctx.split('\n').every(l => l.length < 220));
 });

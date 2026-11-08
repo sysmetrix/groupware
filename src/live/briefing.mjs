@@ -980,7 +980,8 @@ export const maskAccount = a => { const s = String(a || '').replace(/\D/g, ''); 
 // ---------------------------------------------------------------------------
 // AI 도우미(Gemini): 키 형식 검증, 보낼 업무 요약 만들기(메일 본문은 보내지 않는다)
 // ---------------------------------------------------------------------------
-export const isGeminiKey = k => /^AIza[0-9A-Za-z_-]{30,60}$/.test(String(k || '').trim());
+// 키 형식: 예전 AIza..., 새 형식 AQ.... 둘 다 허용(공백 없는 20자 이상)
+export const isGeminiKey = k => /^(AIza|AQ\.)[0-9A-Za-z._-]{16,300}$/.test(String(k || '').trim());
 export function buildAiContext({name = '', mine = [], deadlines = [], todayAway = [], ownProblems = [], leave = null, now = new Date()} = {}) {
   const k = kstNow(now);
   const clip = (s, n) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, n);
