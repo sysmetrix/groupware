@@ -177,7 +177,7 @@ input[type=checkbox]{border-color:var(--muted)}
 .seg button:not(.on){opacity:.7;color:var(--muted)}
 .teambar .seg button.on::before{content:"✓ ";font-weight:700}
 .legend{gap:14px;font-size:12px;color:var(--muted)}
-.legend i{background:currentColor!important;border-radius:50%!important}
+.legend i{border-radius:50%!important}
 nav a.on{box-shadow:none;background:var(--sel)}
 nav a{margin:1px 0}
 /* ---- review pass: accessibility ---- */
@@ -200,3 +200,16 @@ main>.cal,main>.teambar,main>.tprob{max-width:none}
 .teamhome .trow{display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid var(--line);font-size:13px}
 
 .trow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--line);font-size:13px}
+
+.att .c.part{border-style:dashed}
+nav a:focus:not(:focus-visible){background:transparent}
+input[type=date],select.inp{color-scheme:light;font-family:inherit}
+.wc.dark input[type=date],.wc.dark select.inp{color-scheme:dark}
+.cal .ev{height:auto}
+
+/* 홈: 오늘 타임라인 */
+.tl{margin:10px 0 6px}.tl .tkb{position:relative;height:16px;font-size:12px;color:var(--muted)}.tl .tk{position:absolute;transform:translateX(-50%)}
+.tl .trk{position:relative;height:22px;border-radius:8px;background:var(--soft);border:1px solid var(--line);overflow:hidden}
+.tl .sg{position:absolute;top:3px;bottom:3px;border-radius:5px;opacity:.9}
+.tl .nw{position:absolute;top:0;bottom:0;width:2px;background:var(--hi);box-shadow:0 0 0 2px var(--hi-soft)}
+.tll{display:flex;flex-direction:column;gap:3px;font-size:13px;margin-top:6px}

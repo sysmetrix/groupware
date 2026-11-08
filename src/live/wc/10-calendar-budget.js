@@ -31,7 +31,7 @@ ${teamDayPanel()}
     const sc = S.raw.data.schedule;
     for (const e of sc?.events || []) out.push({date: ymd8(e.start), text: `${e.allDay ? '' : dtm12(e.start).slice(11) + ' '}${e.title}`, tag: e.calendar || '일정', cls: 'e'});
     for (const h of sc?.holidays || []) out.push({date: ymd8(h.date), text: h.title, tag: '휴일', cls: 'h'});
-    const teamOn = Object.values(S.team || {}).some(t => t.rows);
+    const teamOn = !!(S.team && S.team[monthKey()] && S.team[monthKey()].cal);
     if (!teamOn) for (const u of S.raw.data.leave?.history || S.raw.data.leave?.upcoming || []) out.push({date: ymd8(u.start), text: `${u.kind}${u.days ? ' ' + fmtDays(u.days) : ''}`, tag: '내 휴가', cls: 'l'});
     for (const d of S.a.deadlines) { const ow = d.key && S.a.actions.find(a => a.key === d.key); const hot = !ow || (isMine(ow) && ['overdue', 'urgent', 'todo'].includes(stateOf(ow))); out.push({date: d.date, text: `${d.time ? d.time + ' ' : ''}${d.title}`, tag: hot ? `기한 · ${d.source}` : `기한(확인용) · ${d.source}`, cls: hot ? 'd' : 'h', key: d.key, url: d.url}); }
     for (const x of S.a.actions.filter(x => x.type === 'attendance')) out.push({date: String(x.when).slice(0, 10), text: x.headline || x.title, tag: '근태 확인', cls: 'a', key: x.key});
@@ -47,7 +47,9 @@ ${teamDayPanel()}
   function monthKey() { const b = new Date(); b.setDate(1); b.setMonth(b.getMonth() + S.cal.offset); return `${b.getFullYear()}${String(b.getMonth() + 1).padStart(2, '0')}`; }
   function ensureTeam(mk) {
     S.team = S.team || {};
-    if (S.team[mk] || !GW.teamAttendance || !allowed('teamAttendance')) return;
+    const cur = S.team[mk], todayKey = R.kstNow(new Date()).date;
+    if (cur && (cur.busy || (cur.asOf === todayKey && Date.now() - (cur.at || 0) < 10 * 60000 && cur.user === currentKey))) return; // 같은 날 10분 이내 자료만 재사용
+    if (!GW.teamAttendance || !allowed('teamAttendance')) return;
     const lastD = new Date(Number(mk.slice(0, 4)), Number(mk.slice(4)), 0).getDate();
     const todayY = R.kstNow(new Date()).date.replace(/-/g, '');
     const monthEnd = mk + String(lastD).padStart(2, '0');
@@ -57,7 +59,7 @@ ${teamDayPanel()}
     const past = mk + '01' <= yest ? GW.teamAttendance({from: mk + '01', to: monthEnd < yest ? monthEnd : yest}) : Promise.resolve([]);
     const planned = monthEnd >= todayY && GW.teamPlanned ? GW.teamPlanned().then(p => R.expandPlanned(p.apps, {fromYmd: mk + '01', toYmd: monthEnd, todayYmd: todayY, meCd: p.me})).catch(() => []) : Promise.resolve([]);
     Promise.all([past, planned])
-      .then(([rows, fut]) => { const all = [...rows, ...fut]; S.team[mk] = {busy: false, rows: all, err: '', cal: R.buildTeamCalendar(all, new Date()), at: Date.now(), planned: fut.length}; })
+      .then(([rows, fut]) => { const all = [...rows, ...fut]; S.team[mk] = {busy: false, rows: all, err: '', cal: R.buildTeamCalendar(all, new Date()), at: Date.now(), asOf: todayY === R.kstNow(new Date()).date.replace(/-/g, '') ? R.kstNow(new Date()).date : todayY, user: currentKey, planned: fut.length}; })
       .catch(e => { S.team[mk] = {busy: false, rows: null, err: String(e.message || e).slice(0, 80)}; logError('team', e.message); })
       .finally(() => { if (S.view === 'calendar' || S.view === 'today') renderMain(); });
   }

@@ -17,14 +17,16 @@
     const leaveDays = new Set();
     for (const u of lv?.history || []) if (u.approved && u.days >= 1) leaveDays.add(u.start);
     const t8 = today().replace(/-/g, '');
+    // 이미 근태신청이 올라가 결재 중인 날은 '확인 필요'(빨강)가 아니라 '결재 대기'로 보여 준다(목록과 같은 판정)
+    const waitDays = new Set(S.a.actions.filter(x => x.type === 'attendance' && stateOf(x) === 'wait').map(x => String(x.when).slice(0, 10).replace(/-/g, '')));
     const cells = [];
     for (let i = 0; i < startDow; i++) cells.push('<div></div>');
     for (let dnum = 1; dnum <= last; dnum++) {
       const d8 = `${month}${String(dnum).padStart(2, '0')}`;
       const r = byDate.get(d8);
       const worked = r && (!!r.come || (/정상/.test(r.result) && !/휴일/.test(r.result)));
-      const cls = !r ? 'off' : bad.has(d8) ? 'bad' : leaveDays.has(d8) ? 'lv' : worked ? (/정상/.test(r.result) ? 'okd' : 'part') : r.holiday || /휴일/.test(r.result) ? 'off' : 'part';
-      const label = !r ? '' : bad.has(d8) ? '확인 필요' : leaveDays.has(d8) ? '휴가' : worked ? (r.come ? `${hm4(r.come)} 출근` : '근무') : r.holiday || /휴일/.test(r.result) ? '휴일' : r.result;
+      const cls = !r ? 'off' : bad.has(d8) && waitDays.has(d8) ? 'part' : bad.has(d8) ? 'bad' : leaveDays.has(d8) ? 'lv' : worked ? (/정상/.test(r.result) ? 'okd' : 'part') : r.holiday || /휴일/.test(r.result) ? 'off' : 'part';
+      const label = !r ? '' : bad.has(d8) && waitDays.has(d8) ? '결재 대기' : bad.has(d8) ? '확인 필요' : leaveDays.has(d8) ? '휴가' : worked ? (r.come ? `${hm4(r.come)} 출근` : '근무') : r.holiday || /휴일/.test(r.result) ? '휴일' : r.result;
       cells.push(`<div class="c ${cls} ${st.day === d8 ? 'sel' : ''} ${d8 === t8 ? 'today' : ''}" role="button" tabindex="0" data-act="attDay" data-v="${d8}" title="${esc(r ? `${r.result} ${r.item || ''} ${r.status || ''}` : '')}"><b>${dnum}</b>${d8 === t8 ? ' <span class="muted">오늘</span>' : ''}<div class="muted" style="font-size:12px">${esc(label)}</div>${r && r.item ? `<div style="font-size:12px">${esc(r.item)}</div>` : ''}</div>`);
     }
     const selRow = st.day ? byDate.get(st.day) : null;

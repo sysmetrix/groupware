@@ -15,7 +15,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '5.6.0';
+  const VERSION = '5.7.0';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
@@ -346,10 +346,22 @@
     return {conflict: d && d.reservationYn === 'Y', limit: d && d.limitYn === 'Y'};
   }
   // 예약 등록: 입력 검증, 과거 시간 거부, 중복·한도 확인 후에만 저장한다. 성공 여부는 서버 응답(successTf)으로 판단한다.
+  const loadedEmpSeq = (() => { try { return context().empSeq; } catch { return ''; } })();
+  let reserveBusy = false;
   async function reserveResource({resSeq, title, start, end}) {
+    // 사용자가 방금 직접 클릭한 경우에만 실행한다(페이지 스크립트가 몰래 부르는 것을 막는다). 동시에 두 번 실행되지 않게 잠근다.
+    if (!(navigator.userActivation && navigator.userActivation.isActive)) throw new GwError('NO_GESTURE', '화면에서 직접 누른 경우에만 예약할 수 있습니다');
+    if (reserveBusy) throw new GwError('BUSY', '이미 예약을 처리하고 있습니다');
+    reserveBusy = true;
+    try { return await reserveResourceInner({resSeq, title, start, end}); } finally { reserveBusy = false; }
+  }
+  async function reserveResourceInner({resSeq, title, start, end}) {
     const ctx = context();
     if (!/^\d+$/.test(String(resSeq))) throw new GwError('BAD_INPUT', '자원 번호가 올바르지 않습니다');
-    if (!/^\d{12}$/.test(String(start)) || !/^\d{12}$/.test(String(end)) || end <= start || start.slice(0, 8) !== end.slice(0, 8)) throw new GwError('BAD_INPUT', '시작·종료 시각이 올바르지 않습니다(같은 날, 종료가 시작보다 뒤)');
+    if (!/^\d{8}(?:[01]\d|2[0-3])[0-5]\d$/.test(String(start)) || !/^\d{8}(?:[01]\d|2[0-3])[0-5]\d$/.test(String(end)) || end <= start || start.slice(0, 8) !== end.slice(0, 8)) throw new GwError('BAD_INPUT', '시작·종료 시각이 올바르지 않습니다(같은 날, 종료가 시작보다 뒤)');
+    { const d = new Date(Date.UTC(+start.slice(0, 4), +start.slice(4, 6) - 1, +start.slice(6, 8))); if (d.toISOString().slice(0, 10).replace(/-/g, '') !== start.slice(0, 8)) throw new GwError('BAD_INPUT', '존재하지 않는 날짜입니다'); if (d.getTime() - Date.now() > 90 * 86400000) throw new GwError('BAD_INPUT', '90일 이후는 예약할 수 없습니다'); }
+    const known = await resourceList().catch(() => []);
+    if (!known.some(r => r.resSeq === String(resSeq) && r.useYn !== 'N')) throw new GwError('BAD_INPUT', '예약할 수 없는 자원입니다');
     const nowK = ymd() + new Intl.DateTimeFormat('en-GB', {timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hour12: false}).format(new Date()).replace(':', '');
     if (start < nowK) throw new GwError('BAD_INPUT', '이미 지난 시각은 예약할 수 없습니다');
     const name = str(title, 100);
@@ -360,9 +372,20 @@
     if (chk.conflict) throw new GwError('CONFLICT', '같은 시간에 이미 예약이 있습니다');
     if (chk.limit) throw new GwError('LIMIT', '예약 한도를 넘었습니다');
     const u = ctx;
+    if (!u.empSeq || String(u.empSeq) !== String(loadedEmpSeq)) throw new GwError('IDENTITY', '로그인 정보가 바뀌었습니다. 새로고침 후 다시 시도하세요');
     const body = {resSeq: String(resSeq), reqText: name, apprYn: detail.apprYn, alldayYn: 'N', startDate: start, endDate: end, descText: '', resSubscriberList: [{groupSeq: u.groupSeq, compSeq: u.compSeq, deptSeq: u.deptSeq, empSeq: u.empSeq}], uidList: '', repeatType: '10', repeatEndDay: '', linkSchList: [], newSchList: []};
     if (!WRITE_ALLOWED.has('/schres/rs121A06')) throw new GwError('NOT_ALLOWED', '쓰기 허용 목록 오류');
-    const r = await transport('/schres/rs121A06', body, {timeoutMs: 20000});
+    let r;
+    try { r = await transport('/schres/rs121A06', body, {timeoutMs: 20000}); }
+    catch (e) {
+      // 응답이 늦어도 서버에는 저장됐을 수 있다: 같은 시간·제목의 내 예약이 있는지 다시 조회해 확인한다(다시 눌러 중복 예약하지 않도록)
+      if (e && e.code === 'TIMEOUT') {
+        const chk = await resourceBookings({from: start.slice(0, 8), to: start.slice(0, 8), resSeqs: [resSeq]}).catch(() => []);
+        if (chk.some(b => b.start === start && b.end === end && b.title === name)) return {ok: true, resSeq: String(resSeq), start, end, title: name, needsApproval: detail.apprYn === 'Y', verifiedAfterTimeout: true};
+        throw new GwError('UNKNOWN', '응답이 늦어 저장 여부를 확인하지 못했습니다. 그룹웨어 자원 화면에서 확인한 뒤 다시 시도하세요');
+      }
+      throw e;
+    }
     if (!r || Number(r.successTf) !== 1) throw new GwError('SAVE_FAILED', '서버가 예약을 저장하지 못했습니다');
     return {ok: true, resSeq: String(resSeq), start, end, title: name, needsApproval: detail.apprYn === 'Y'};
   }
@@ -552,7 +575,7 @@
     let timer;
     try {
       const res = await Promise.race([
-        client.post('/mail/mail002A37', '/ecm/ecm001A07', {fileSn: sn, authKeyMap: JSON.stringify({email: account, muid: String(uid), empSeq: String(ctx.empSeq)}), moduleGbn: 'MAIL'}, {filedownload: true, contextType: 'application/x-www-form-urlencoded'}),
+        client.post('/mail/mail002A37', {fileSn: sn, authKeyMap: JSON.stringify({email: account, muid: String(uid), empSeq: String(ctx.empSeq)}), moduleGbn: 'MAIL'}, {filedownload: true, contextType: 'application/x-www-form-urlencoded'}),
         new Promise((_, reject) => { timer = setTimeout(() => reject(new GwError('TIMEOUT', '첨부 받기 시간 초과')), 120000); }),
       ]);
       if (!(res instanceof ArrayBuffer) || res.byteLength < 1) throw new GwError('API_ERROR', '첨부를 받지 못했습니다.');

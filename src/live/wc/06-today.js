@@ -50,13 +50,12 @@
   ${areas.length > 2 ? `<div class="seg" role="tablist">${areas.map(([a, n]) => `<button role="tab" aria-selected="${f.area === a}" class="${f.area === a ? 'on' : ''}" data-act="area" data-v="${a}">${n}<span class="c">${acnt(a)}</span></button>`).join('')}</div>` : ''}
   <label class="srch-in" style="flex:1;min-width:160px;display:flex"><input class="inp grow" id="qfilter" placeholder="목록에서 검색" value="${esc(f.q)}" aria-label="목록에서 검색"></label>
   ${f.level !== 'all' ? `<button class="chip on" data-act="stateFilter" data-v="all">${esc(STATE_GROUP[f.level] || '')} ${ic('x')}</button>` : ''}
-  <button class="chip" data-act="openAi" title="오늘 업무 우선순위 정리, 질문">${ic('doc')}AI 도우미</button>
   <button class="chip ${f.showHidden ? 'on' : ''}" data-act="showHidden" title="이 화면에서 숨기거나 내일로 미룬 항목">${ic('eye')}숨긴 항목 ${hiddenN}</button>
 </div>
 
 <div id="batch">${batchBar()}</div>
 <div id="qlist">${queueRows()}</div>
-${tab === 'mine' ? teamHomeCard() : ''}`;
+${tab === 'mine' ? homeDayCard() + teamHomeCard() : ''}`;
   }
 
   const queueRows = () => {
@@ -70,7 +69,7 @@ ${tab === 'mine' ? teamHomeCard() : ''}`;
         return `<div class="list"><div class="empty"><div class="ill">${ic('check', 'style="width:36px;height:36px;color:var(--ok)"')}</div><b>부서 참고 공문이 없습니다</b></div></div>`;
       }
       return `<div class="box tip" style="margin-top:0;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">
-        <div>${ic('info')} 부서 접수·배부 등 부서 문서담당자가 처리하는 공문입니다. 내 업무라면 각 줄의 [⋯] 메뉴에서 <b>"내 일로 지정"</b>을 누르세요.</div>
+        <div>${ic('alert')} 부서 접수·배부 등 부서 문서담당자가 처리하는 공문입니다. 내 업무라면 각 줄의 [⋯] 메뉴에서 <b>"내 일로 지정"</b>을 누르세요.</div>
         <button class="btn sm" data-act="setTodayTab" data-v="mine">← 내 할 일로 돌아가기</button>
       </div>
       <div class="list" role="list">${refs.map(x => actionRow(x, true)).join('')}</div>`;
@@ -86,7 +85,7 @@ ${tab === 'mine' ? teamHomeCard() : ''}`;
     const empty = !mine.length ? `<div class="list"><div class="empty"><div class="ill">${ic('check', 'style="width:36px;height:36px;color:var(--ok)"')}</div><b>${S.filter.showHidden ? '숨긴 항목이 없습니다' : S.a.failed.length ? '일부 자료를 읽지 못했습니다' : S.filter.q || lvl !== 'all' || S.filter.area !== 'all' ? '조건에 맞는 항목이 없습니다' : '지금 처리할 일이 없습니다'}</b>${S.a.failed.length ? '목록이 비어 보일 수 있습니다. 위의 "다시 시도"를 눌러 주세요.' : '새 일이 들어오면 여기에 바로 나타납니다.'}</div></div>` : '';
     
     const refCount = all.filter(x => !isMine(x)).length;
-    const refFooter = refCount > 0 ? `<div style="margin-top:16px;text-align:center;padding:12px;background:var(--bg-subtle);border-radius:var(--r);border:1px dashed var(--line2);font-size:13.5px;color:var(--muted)">
+    const refFooter = refCount > 0 ? `<div style="margin-top:16px;text-align:center;padding:12px;background:var(--soft);border-radius:var(--r);border:1px dashed var(--line2);font-size:13.5px;color:var(--muted)">
       부서 접수·배부 등 참고 공문이 <b>${refCount}건</b> 있습니다.
       <button class="btn sm primary" data-act="setTodayTab" data-v="ref" style="margin-left:8px">참고 공문 확인하기</button>
     </div>` : '';
@@ -127,7 +126,7 @@ ${tab === 'mine' ? teamHomeCard() : ''}`;
       actionBtns.push(`<button class="btn sm" data-act="markDone" data-k="${esc(x.key)}" title="대체휴무 등으로 확인된 날이면 목록에서 제외합니다">${ic('check')}확인 완료</button>`);
     }
     const openLabel = x.type === 'mail' ? '메일 보기' : x.type === 'attendance' ? '근태신청' : '원문 열기';
-    actionBtns.push(`<button class="btn sm primary" data-act="quickOpen" data-k="${esc(x.key)}" title="${openLabel}">${ic('ext')}${openLabel}</button>`);
+    { const waiting = st === 'wait'; const lab = waiting ? '진행 보기' : openLabel; actionBtns.push(`<button class="btn sm ${waiting ? '' : 'primary'}" data-act="quickOpen" data-k="${esc(x.key)}" title="${lab}">${ic('ext')}${lab}</button>`); }
     actionBtns.push(`<button class="btn sm ghost icon" data-act="rowMenu" data-k="${esc(x.key)}" aria-label="추가 옵션">${ic('more')}</button>`);
 
     return `<div class="row ${S.sel && S.sel.key === x.key ? 'sel' : ''} ${isHidden(x.key) || isSnoozed(x.key) ? 'hid' : ''} ${S.multi.has(x.key) ? 'multi' : ''}" role="listitem" tabindex="0" data-act="selAction" data-k="${esc(x.key)}" title="클릭하여 상세 보기 (열린 상태에서 다시 누르면 닫힘)">

@@ -439,7 +439,7 @@ test('safe draft links: interlocked forms (36, 40, 1007, 1012) route to safe mod
   assert.ok(stdUrl.includes('tiKeyCode=mg_20160303185413307'), 'general form opens direct draft popup');
 });
 // ---- 기안 패턴(조직 서식 학습) ----
-import {patternTokens, buildPatternModel, predictDraftMeta, formatRunRef, planToResultTitle, buildResultBody, textWidthPt, buildPlanSkeleton, moneyKo, buildPaymentProposalBody, pendingPayments, sha256Hex, chainAudit, verifyAudit, normalizePolicy, featureAllowed, purgeExpired, compareVersions, maskSensitive, classifyTeamRow, buildTeamCalendar, checkPaymentEntry, maskAccount, isGeminiKey, buildAiContext, expandPlanned, freeSlots, validateBooking, timeOptions, bookingSpanOnDay} from '../src/live/briefing.mjs';
+import {patternTokens, buildPatternModel, predictDraftMeta, formatRunRef, planToResultTitle, buildResultBody, textWidthPt, buildPlanSkeleton, moneyKo, buildPaymentProposalBody, pendingPayments, sha256Hex, chainAudit, verifyAudit, normalizePolicy, featureAllowed, purgeExpired, compareVersions, maskSensitive, classifyTeamRow, buildTeamCalendar, checkPaymentEntry, maskAccount, isGeminiKey, buildAiContext, expandPlanned, freeSlots, validateBooking, timeOptions, bookingSpanOnDay, buildDayTimeline, stalledSubmitted, wrapUpModel} from '../src/live/briefing.mjs';
 
 const PLAN_BODY = ['1. 가나부-1613(2026. 3. 4.)호와 관련입니다.', '2. 2026년『시험 사업』을 다음과 같이 운영하고자 합니다.', '  가. 사 업 명: 2026년『시험 사업』', '  나. 운영일정: 2026. 11. 1.(일) 14:00~16:30', '  다. 운영장소: 시험센터 2층', '  라. 참가인원: 연 40명(실 40명) ※ 선착순 접수', '  마. 주요내용: 아주 긴 설명이 이어지는 항목입니다 아주 긴 설명이 이어지는 항목입니다 아주 긴 설명이 이어지는 항목입니다 아주 긴 설명이 이어지는 항목입니다', '  바. 소요예산: 비예산', '', '붙임  운영계획서 1부.  끝.'].join('\r\n');
 
@@ -633,4 +633,41 @@ test('resource booking helpers: free slots, multi-day spans, validation', () => 
   assert.equal(ok.ok, true); assert.equal(ok.start12, '202611100900'); assert.equal(ok.end12, '202611101200');
   assert.equal(validateBooking({title: 'a', date: '2026-11-10', start: '09:00', end: '14:00', now, limitMin: 240}).ok, false);
   assert.equal(timeOptions({from: '09:00', to: '10:00', step: 30}).join(','), '09:00,09:30,10:00');
+});
+
+test('review v5.6 fixes: planned range clip, half-day keys, strict amounts, real dates, ai deadline object, null safety', () => {
+  const nov = {fromYmd: '20261101', toYmd: '20261130', todayYmd: '20261109'};
+  const am = {empCd: '1', korNm: '가', atNm: '오전반차', startDt: '20261110', endDt: '20261110', startTm: '0900', endTm: '1300', appDt: 'a', appSq: '1', approState: '1'};
+  const pm = {...am, atNm: '오후반차', startTm: '1400', endTm: '1800'};
+  assert.equal(expandPlanned([am, pm], nov).length, 2);
+  assert.ok(expandPlanned([{empCd: '1', korNm: '가', atNm: '연차', startDt: '20260901', endDt: '20261231', appDt: 'b', appSq: '2', approState: '1'}], nov).length > 0);
+  const trip = expandPlanned([{empCd: '1', korNm: '가', atNm: '관외출장', startDt: '20261113', endDt: '20261116', appDt: 'c', appSq: '3', approState: '1'}], nov);
+  assert.deepEqual(trip.map(x => x.date), ['20261113', '20261114', '20261115', '20261116']);
+  const now = new Date('2026-11-09T10:00:00+09:00');
+  for (const amount of ['-100', '1e6', '1.5']) assert.equal(checkPaymentEntry({cards: [{merchant: 'A', approval: '1', date: '20261105', amount}]}, 0, now).ok, false);
+  assert.equal(checkPaymentEntry({cards: [{merchant: 'A', amount: '100', date: '20260230'}]}, 0, now).ok, false);
+  assert.equal(validateBooking({title: 'x', date: '2026-11-31', start: '10:00', end: '11:00', now}).ok, false);
+  assert.equal(validateBooking({title: 'x', date: '2026-11-20', start: '25:00', end: '26:00', now}).ok, false);
+  assert.match(buildAiContext({mine: [{deadline: {date: '2026-11-10', time: '16:00'}}]}), /2026-11-10 16:00/);
+  assert.doesNotThrow(() => { expandPlanned([null]); bookingSpanOnDay(null, '20261109'); buildAiContext({mine: null}); buildTeamCalendar([{item: '연차', date: '20261109'}, {item: '연차', date: '20261109'}]); });
+  assert.equal(classifyTeamRow({item: '시간외근무', mine: true, date: '20261110', appStart: '1800', appEnd: '2000'}, now).kind, 'ot');
+});
+
+test('home day helpers: timeline clipping, stalled submissions, wrap-up reminder', () => {
+  const now = new Date('2026-11-09T17:40:00+09:00');
+  const tl = buildDayTimeline([
+    {start: '202611090700', end: '202611091000', label: '일찍 시작', kind: 'etc'},
+    {start: '202611091300', end: '202611091800', label: '차량', kind: 'car'},
+    {start: '202611091900', end: '202611092100', label: '저녁', kind: 'etc'},
+    {start: '202611080900', end: '202611080930', label: '어제', kind: 'etc'},
+    {start: '202611090000', end: '202611092359', label: '종일', kind: 'etc', allDay: true},
+  ], '20261109', now);
+  assert.deepEqual(tl.segs.map(s => [s.a, s.z]), [[480, 600], [780, 1080]]);
+  assert.equal(tl.nowMin, 17 * 60 + 40); assert.equal(tl.allDay.length, 1);
+  const docs = [{title: '가', status: '결재중(이승봉)', date: '2026-11-04 10:00:00'}, {title: '나', status: '결재완료(이은경)', date: '2026-10-01 10:00:00'}, {title: '다', status: '결재중(이은경)', date: '2026-11-09 08:00:00'}, {title: '라', status: '반려(이승봉)', date: '2026-10-20 10:00:00'}];
+  const s = stalledSubmitted(docs, now);
+  assert.equal(s.length, 1); assert.equal(s[0].who, '이승봉'); assert.equal(s[0].age, 5);
+  const w = wrapUpModel({now, ownOtToday: {from: '18:00', to: '21:00'}});
+  assert.equal(w.active, true); assert.match(w.otReminder, /18:00~21:00/);
+  assert.equal(wrapUpModel({now: new Date('2026-11-09T10:00:00+09:00')}).active, false);
 });

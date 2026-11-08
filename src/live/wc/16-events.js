@@ -54,7 +54,7 @@
     case 'resGo': resGo(); break;
     case 'resFree': resFree(el.dataset.s, el.dataset.e); break;
     case 'resCheck': resCheck(); break;
-    case 'resBook': resBook(); break;
+    case 'resBook': resBook(e); break;
     case 'resCancelForm': resCancelForm(); break;
     case 'resReload': { const s = resState(); s.err = ''; s.list = null; s.bookings = null; renderMain(); resLoad(true); break; }
     case 'openAi': openAi(); break;
@@ -265,6 +265,8 @@
     if (t.id === 'bproj' && t.value !== '__custom') { S.budget.custom = false; const [p, f] = t.value.split('|'); S.budget.project = p; S.budget.filter = f; loadBudget(); }
     if (t.id === 'bCatProj') { S.budget.project = t.value; S.budget.filter = ''; loadBudget(); }
     if (t.id === 'bq') renderMain();
+    if (t.id === 'resDate') resGo();
+    if (t.id === 'resTitle' || t.id === 'resStart' || t.id === 'resEnd') { resSyncForm(); const rs = resState(); if (rs.check) { rs.rev++; rs.check = null; renderMain(); } }
     if (t.classList && t.classList.contains('setc')) saveSettingField(t);
     if (t.dataset && t.dataset.b) saveBudgetRows();
   });

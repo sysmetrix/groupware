@@ -896,7 +896,7 @@ export function classifyTeamRow(r, now = new Date()) {
   let kind = '';
   if (/휴가|연차|반차|병가|공가|대체휴가|보상휴가/.test(item)) kind = 'leave';
   else if (/출장|교육/.test(item)) kind = 'trip';
-  else if (/연장근무|휴일근무|조기근무/.test(item)) kind = 'ot';
+  else if (/연장근무|휴일근무|조기근무|시간외\s*근무/.test(item)) kind = 'ot';
   if (!kind) return null;
   const base = {kind, label: item, name: r.name, dept: r.dept, date: r.date, mine: !!r.mine, emp: r.emp};
   if (kind !== 'ot') return {...base, state: 'info', detail: ''};
@@ -925,7 +925,7 @@ export function buildTeamCalendar(rows = [], now = new Date()) {
     if (c.kind === 'ot' && (c.state === 'miss' || c.state === 'short')) problems.push(c);
   }
   const order = {ot: 0, leave: 1, trip: 2};
-  for (const d of Object.keys(byDate)) byDate[d].sort((a, b) => (b.mine - a.mine) || (order[a.kind] - order[b.kind]) || a.name.localeCompare(b.name, 'ko'));
+  for (const d of Object.keys(byDate)) byDate[d].sort((a, b) => (b.mine - a.mine) || (order[a.kind] - order[b.kind]) || String(a.name ?? '').localeCompare(String(b.name ?? ''), 'ko'));
   problems.sort((a, b) => (b.mine - a.mine) || b.date.localeCompare(a.date));
   return {byDate, problems, depts: [...new Set(rows.map(r => r.dept).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ko'))};
 }
@@ -942,6 +942,9 @@ export function teamHomeSummary(cal, now = new Date()) {
 // ---------------------------------------------------------------------------
 // 지출 확인: 건의/품의 금액 대비 실제로 쓴 내역(법인카드 승인, 계좌이체)을 사용자에게 먼저 묻고 대조한다.
 // ---------------------------------------------------------------------------
+// 입력 금액은 숫자(쉼표·원 허용)만 인정한다. '-100', '1e6', '1.5'는 거부.
+const strictWon = s => { const t = String(s ?? '').replace(/[,\s]|원$/g, ''); return /^\d+$/.test(t) && Number.isSafeInteger(Number(t)) && Number(t) > 0 ? Number(t) : 0; };
+const validYmd = s => { const t = String(s || '').replace(/\D/g, ''); if (t.length !== 8) return false; const d = new Date(Date.UTC(+t.slice(0, 4), +t.slice(4, 6) - 1, +t.slice(6))); return d.toISOString().slice(0, 10).replace(/-/g, '') === t; };
 export function checkPaymentEntry(entry = {}, planned = 0, now = new Date()) {
   const today = kstNow(now).date.replace(/-/g, '');
   const errors = [], warns = [];
@@ -951,21 +954,21 @@ export function checkPaymentEntry(entry = {}, planned = 0, now = new Date()) {
   if (!cards.length && !trans.length) errors.push('법인카드 사용 내역이나 계좌이체 내역을 한 건 이상 입력하세요');
   cards.forEach((r, i) => {
     const n = `카드 ${i + 1}번`;
-    if (!parseWon(r.amount)) errors.push(`${n}: 금액을 입력하세요`);
+    if (!strictWon(r.amount)) errors.push(`${n}: 금액은 숫자만 입력하세요(예: 120000)`);
     if (!String(r.merchant || '').trim()) errors.push(`${n}: 가맹점(사용처)을 입력하세요`);
-    if (d8(r.date).length !== 8) errors.push(`${n}: 사용일을 8자리(예: 20261105)로 입력하세요`);
+    if (!validYmd(r.date)) errors.push(`${n}: 사용일을 실제 날짜 8자리(예: 20261105)로 입력하세요`);
     else if (d8(r.date) > today) errors.push(`${n}: 사용일이 오늘 이후입니다`);
     if (!String(r.approval || '').trim()) warns.push(`${n}: 승인번호가 비어 있습니다(영수증과 대조하려면 입력 권장)`);
   });
   trans.forEach((r, i) => {
     const n = `이체 ${i + 1}번`;
-    if (!parseWon(r.amount)) errors.push(`${n}: 금액을 입력하세요`);
+    if (!strictWon(r.amount)) errors.push(`${n}: 금액은 숫자만 입력하세요(예: 120000)`);
     if (!String(r.payee || '').trim()) errors.push(`${n}: 받는 사람(예금주·업체)을 입력하세요`);
     if (!String(r.bank || '').trim()) errors.push(`${n}: 은행을 입력하세요`);
     if (String(r.account || '').replace(/\D/g, '').length < 8) errors.push(`${n}: 계좌번호를 확인하세요(숫자 8자리 이상)`);
     if (d8(r.date).length !== 8) warns.push(`${n}: 이체(예정)일이 비어 있거나 형식이 다릅니다`);
   });
-  const cardTotal = cards.reduce((a, r) => a + parseWon(r.amount), 0), transTotal = trans.reduce((a, r) => a + parseWon(r.amount), 0);
+  const cardTotal = cards.reduce((a, r) => a + strictWon(r.amount), 0), transTotal = trans.reduce((a, r) => a + strictWon(r.amount), 0);
   const total = cardTotal + transTotal, diff = planned ? total - planned : 0;
   if (planned && diff > 0) errors.push(`입력 합계 ${total.toLocaleString('en-US')}원이 건의·품의 금액 ${planned.toLocaleString('en-US')}원보다 ${diff.toLocaleString('en-US')}원 많습니다(초과 집행)`);
   else if (planned && diff < 0) warns.push(`입력 합계가 건의·품의 금액보다 ${(-diff).toLocaleString('en-US')}원 적습니다(잔액)`);
@@ -983,11 +986,12 @@ export const maskAccount = a => { const s = String(a || '').replace(/\D/g, ''); 
 // 키 형식: 예전 AIza..., 새 형식 AQ.... 둘 다 허용(공백 없는 20자 이상)
 export const isGeminiKey = k => /^(AIza|AQ\.)[0-9A-Za-z._-]{16,300}$/.test(String(k || '').trim());
 export function buildAiContext({name = '', mine = [], deadlines = [], todayAway = [], ownProblems = [], leave = null, now = new Date()} = {}) {
+  mine = Array.isArray(mine) ? mine : []; deadlines = Array.isArray(deadlines) ? deadlines : []; todayAway = Array.isArray(todayAway) ? todayAway : []; ownProblems = Array.isArray(ownProblems) ? ownProblems : [];
   const k = kstNow(now);
   const clip = (s, n) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, n);
   const lines = [`오늘: ${k.date} ${String(k.hh).padStart(2, '0')}:${String(k.mm).padStart(2, '0')} (KST)`, name ? `사용자: ${clip(name, 20)} (부천여성청소년재단 전략경영실)` : ''];
   lines.push(`내가 처리할 일 ${mine.length}건:`);
-  mine.slice(0, 40).forEach((x, i) => lines.push(`${i + 1}. [${clip(x.state, 8)}] ${clip(x.title, 70)}${x.headline ? ' - ' + clip(x.headline, 60) : ''}${x.deadline ? ' (마감 ' + clip(x.deadline, 16) + ')' : ''}`));
+  (Array.isArray(mine) ? mine : []).slice(0, 40).forEach((x, i) => { const dl = x.deadline && typeof x.deadline === 'object' ? [x.deadline.date, x.deadline.time].filter(Boolean).join(' ') : x.deadline; lines.push(`${i + 1}. [${clip(x.state, 8)}] ${clip(x.title, 70)}${x.headline ? ' - ' + clip(x.headline, 60) : ''}${dl ? ' (마감 ' + clip(dl, 16) + ')' : ''}`); });
   if (deadlines.length) { lines.push('다가오는 기한:'); deadlines.slice(0, 15).forEach(d => lines.push(`- ${d.date}${d.time ? ' ' + d.time : ''} ${clip(d.title, 60)}`)); }
   if (todayAway.length) lines.push(`오늘 자리 비운 직원: ${todayAway.slice(0, 20).map(x => clip(x.name, 10) + '(' + clip(x.label, 10) + ')').join(', ')}`);
   if (ownProblems.length) lines.push(`내 시간외 퇴근 지문 확인 필요: ${ownProblems.slice(0, 8).map(x => x.date + ' ' + x.state).join(', ')}`);
@@ -1004,17 +1008,19 @@ export function expandPlanned(apps = [], {fromYmd, toYmd, todayYmd, meCd = ''} =
   const toDay = s => Math.floor(Date.parse(fmtYmd(s) + 'T00:00:00Z') / 86400000);
   const ymdOf = n => new Date(n * 86400000).toISOString().slice(0, 10).replace(/-/g, '');
   const seen = new Set();
-  for (const a of apps) {
+  for (const a of Array.isArray(apps) ? apps : []) {
+    if (!a) continue;
     const s = String(a.startDt || a.atDt || ''), e = String(a.endDt || a.startDt || a.atDt || '');
     if (!/^\d{8}$/.test(s) || !/^\d{8}$/.test(e)) continue;
-    const key = [a.empCd, a.appDt, a.appSq, s, e, a.atNm].join('|');
+    const key = [a.empCd, a.appDt, a.appSq, s, e, a.atNm, a.startTm, a.endTm].join('|');
     if (seen.has(key)) continue; seen.add(key);
     if (a.deleteReqYn === 'Y' || a.docdelYn === 'N') continue;
-    const multi = s !== e;
-    for (let d = toDay(s); d <= toDay(e) && d - toDay(s) < 62; d++) {
+    const leaveLike = /휴가|연차|반차|병가|공가|보상|대체/.test(String(a.atNm || ''));
+    // 조회 범위와 오늘로 먼저 잘라서(수개월짜리 신청도 안전하게) 하루씩 펼친다
+    const lo = Math.max(toDay(s), toDay(String(fromYmd)), toDay(String(todayYmd))), hi = Math.min(toDay(e), toDay(String(toYmd)));
+    for (let d = lo; d <= hi; d++) {
       const ymd = ymdOf(d), dow = new Date(d * 86400000).getUTCDay();
-      if (ymd < todayYmd || ymd < fromYmd || ymd > toYmd) continue; // 오늘부터는 지문 기록이 아직 없어 신청 현황으로 채운다
-      if (multi && (dow === 0 || dow === 6)) continue;
+      if (leaveLike && s !== e && (dow === 0 || dow === 6)) continue; // 여러 날 휴가는 주말을 쉬는 날로 세지 않는다(출장·휴일근무는 주말도 포함)
       out.push({emp: String(a.empCd || ''), name: a.korNm || a.empNm || '', dept: a.deptNm || '', date: ymd, item: a.atNm || '', appStart: a.startTm || '', appEnd: a.endTm || '', come: '', leave: '', result: '', mine: !!meCd && String(a.empCd) === String(meCd), pending: String(a.approState) !== '1'});
     }
   }
@@ -1028,6 +1034,7 @@ const toMin = hhmm => { const m = String(hhmm || '').match(/^(\d{2}):?(\d{2})$/)
 export const minToHm = n => `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
 // 예약 한 건(YYYYMMDDHHmm 시작·끝)이 지정한 날과 겹치는 분 구간을 돌려준다(여러 날 예약도 처리).
 export function bookingSpanOnDay(b, ymd) {
+  if (!b) return null;
   const s = String(b.start || ''), e = String(b.end || '');
   if (!/^\d{12}$/.test(s) || !/^\d{12}$/.test(e)) return null;
   if (s.slice(0, 8) > ymd || e.slice(0, 8) < ymd) return null;
@@ -1046,12 +1053,57 @@ export function timeOptions({from = '07:00', to = '22:00', step = 30} = {}) { co
 export function validateBooking({title = '', date = '', start = '', end = '', now = new Date(), limitMin = 0} = {}) {
   const errors = [];
   if (!String(title).trim()) errors.push('예약명을 입력하세요');
-  if (!/^\d{8}$/.test(String(date).replace(/-/g, ''))) errors.push('날짜를 선택하세요');
-  const a = toMin(start), z = toMin(end);
+  if (!validYmd(String(date).replace(/-/g, ''))) errors.push('날짜를 선택하세요');
+  const hmOk = s => /^([01]\d|2[0-3]):?[0-5]\d$/.test(String(s || ''));
+  const a = hmOk(start) ? toMin(start) : null, z = hmOk(end) ? toMin(end) : null;
   if (a === null || z === null) errors.push('시작·종료 시각을 선택하세요');
   else if (z <= a) errors.push('종료 시각이 시작보다 뒤여야 합니다');
   else if (limitMin > 0 && z - a > limitMin) errors.push(`최대 ${limitMin / 60}시간까지만 예약할 수 있습니다`);
   const k = kstNow(now), today = k.date.replace(/-/g, ''), d8 = String(date).replace(/-/g, '');
   if (a !== null && (d8 < today || (d8 === today && a < k.hh * 60 + k.mm))) errors.push('이미 지난 시각은 예약할 수 없습니다');
   return {ok: errors.length === 0, errors, start12: d8 + String(start).replace(':', ''), end12: d8 + String(end).replace(':', '')};
+}
+
+// ---------------------------------------------------------------------------
+// 홈: 오늘 타임라인, 내 상신문서 결재 지연, 퇴근 정리
+// ---------------------------------------------------------------------------
+const DAY_LO = 8 * 60, DAY_HI = 19 * 60;
+// items: {start:'YYYYMMDDHHmm', end, label, kind}. 오늘과 겹치는 구간만 08:00~19:00 안으로 잘라 돌려준다.
+export function buildDayTimeline(items = [], ymd, now = new Date()) {
+  const segs = [], allDay = [];
+  for (const it of Array.isArray(items) ? items : []) {
+    if (!it) continue;
+    if (it.allDay) { if (String(it.start || '').slice(0, 8) <= ymd && String(it.end || it.start || '').slice(0, 8) >= ymd) allDay.push({label: it.label, kind: it.kind}); continue; }
+    const sp = bookingSpanOnDay({start: it.start, end: it.end}, ymd);
+    if (!sp) continue;
+    const a = Math.max(DAY_LO, sp[0]), z = Math.min(DAY_HI, sp[1]);
+    if (z <= a) continue;
+    segs.push({a, z, from: minToHm(sp[0]), to: minToHm(sp[1] === 1440 ? 1439 : sp[1]), label: it.label, kind: it.kind || 'etc'});
+  }
+  segs.sort((x, y) => x.a - y.a || x.z - y.z);
+  const k = kstNow(now), nowMin = k.date.replace(/-/g, '') === ymd ? k.hh * 60 + k.mm : null;
+  return {segs, allDay, lo: DAY_LO, hi: DAY_HI, nowMin: nowMin !== null && nowMin >= DAY_LO && nowMin <= DAY_HI ? nowMin : null};
+}
+// 내 상신문서 중 결재가 끝나지 않았는데 오래 머문 것. 상태 문구 예: "결재중(이승봉)"
+export function stalledSubmitted(docs = [], now = new Date(), {days = 2} = {}) {
+  const today = dayNumber(kstNow(now).date);
+  const out = [];
+  for (const d of Array.isArray(docs) ? docs : []) {
+    if (!d) continue;
+    const st = String(d.status || '');
+    if (/결재완료|완료|반려|회수|종결|시행|접수|임시/.test(st) || !st) continue;
+    const m = String(d.date || '').match(/^(\d{4}-\d{2}-\d{2})/);
+    if (!m) continue;
+    const age = today - dayNumber(m[1]);
+    if (age < days) continue;
+    const who = (st.match(/\(([^)]+)\)/) || [])[1] || '';
+    out.push({title: String(d.title || '').slice(0, 80), docNo: d.docNo || '', form: d.form || '', status: st, who, age, date: m[1], url: d.url || ''});
+  }
+  return out.sort((a, b) => b.age - a.age);
+}
+// 퇴근 정리(17:30 이후): 오늘 시간외 신청이 있으면 퇴근 지문 알림, 내일 일정·부재
+export function wrapUpModel({now = new Date(), ownOtToday = null, tomorrowItems = [], tomorrowAway = [], pendingMine = 0} = {}) {
+  const k = kstNow(now);
+  const active = k.hh * 60 + k.mm >= 17 * 60 + 30;
+  return {active, otReminder: ownOtToday ? `오늘 시간외 신청(${ownOtToday.from}~${ownOtToday.to})이 있습니다. 퇴근 전 지문을 꼭 찍으세요.` : '', tomorrow: (Array.isArray(tomorrowItems) ? tomorrowItems : []).slice(0, 6), away: (Array.isArray(tomorrowAway) ? tomorrowAway : []).slice(0, 8), pendingMine};
 }

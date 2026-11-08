@@ -74,7 +74,7 @@
     b.innerHTML = parts.join('');
   }
   const MODNAME = {mail: '메일', approval: '전자결재', notice: '공지', schedule: '일정', attendance: '근태', leave: '연차', budget: '예산', alerts: '알림'};
-  const VIEW_ICON = {today: 'inbox', overview: 'chart', approval: 'doc', mail: 'mail', search: 'search', board: 'board', calendar: 'cal', budget: 'wallet', attendance: 'clock', resource: 'cal', report: 'report', settings: 'gear'};
+  const VIEW_ICON = {today: 'inbox', overview: 'chart', approval: 'doc', mail: 'mail', search: 'search', board: 'board', calendar: 'cal', budget: 'wallet', attendance: 'clock', resource: 'car', report: 'report', settings: 'gear'};
   function renderNav() {
     const u = S.a ? S.a.unknown : {};
     const mine = S.a ? mineVisible() : [];

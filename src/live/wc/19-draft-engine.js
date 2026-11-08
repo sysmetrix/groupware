@@ -149,7 +149,7 @@
   const allDlgs = d => [...d.querySelectorAll('.obtdialog.open, ._isDialog')];
   const waitFor = async (pred, ms = 8000, step = 150) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { let r; try { r = pred(); } catch {} if (r) return r; await wait(step); } return null; };
   // 자동 기입 중에는 상신·결재·임시저장·보내기·삭제 같은 비가역 버튼을 코드 레벨에서 막는다
-  const DENY_BTN = /^(결재\s*상신|결재상신|상신하기|상신|결재|임시저장|저장|보관|보내기|발송|전송|회수|삭제|기안|승인|반려|전결|대결)(\(\w\))?$/;
+  const DENY_BTN = /^(결재\s*상신|결재상신|상신하기|상신|결재|결재요청|승인요청|일괄결재|임시저장|저장|보관|보내기|발송|전송|회수|삭제|삭제하기|기안|승인|반려|전결|대결|접수|배부|제출|확정)(\(\w\))?$/;
   const AUTO = {running: false, allow: false, blocked: []};
   function installGuard(win) {
     if (win.__wcGuard) return;
@@ -308,6 +308,8 @@
     const bad0 = preflight(f, spec);
     if (bad0) return [{name: '사전점검', ok: false, detail: bad0}];
     installGuard(w); AUTO.running = true; AUTO.blocked = [];
+    window.addEventListener('beforeunload', () => { AUTO.running = false; }, {once: true});
+    setTimeout(() => { AUTO.running = false; }, 180000); // 어떤 이유로든 3분 뒤에는 반드시 풀린다(사람이 직접 상신·저장할 수 있어야 함)
     let halted = false;
     const run = async (name, fn) => {
       if (halted) { steps.push({name, ok: false, detail: '앞 단계의 팝업이 정리되지 않아 중단했습니다'}); return; }

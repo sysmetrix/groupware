@@ -74,7 +74,7 @@
       <h3>복사해서 지출결의서에 붙여넣기</h3>
       <div class="acts" style="margin-top:0">${cp('제목', p.expenseTitle)}${cp('참조문서', p.ref || p.docNo)}${cp('금액(한글)', R.moneyKo(res.total))}${cp('카드 내역 전체', cardLines.join('\n'))}${cp('이체 내역 전체', transLines.join('\n'))}</div>
       ${cardLines.length ? `<h3>카드</h3>${cardLines.map(l => `<div class="trow"><span>${esc(l)}</span><button class="btn sm ghost" data-act="copy" data-v="${esc(l)}">복사</button></div>`).join('')}` : ''}
-      ${transLines.length ? `<h3>계좌이체</h3>${transLines.map(l => `<div class="trow"><span>${esc(l.replace(/(\d{3,})(\d{4})/, (m, a, b) => '*'.repeat(a.length) + b))}</span><button class="btn sm ghost" data-act="copy" data-v="${esc(l)}">복사</button></div>`).join('')}` : ''}
+      ${transLines.length ? `<h3>계좌이체</h3>${transLines.map((l, ti) => `<div class="trow"><span>${esc(res.trans[ti].payee + ' ' + res.trans[ti].bank + ' ' + R.maskAccount(res.trans[ti].account) + ' ' + expWon(R.parseWon(res.trans[ti].amount)) + (res.trans[ti].date ? ' ' + res.trans[ti].date : '') + (res.trans[ti].memo ? ' ' + res.trans[ti].memo : ''))}</span><button class="btn sm ghost" data-act="copy" data-v="${esc(l)}">복사</button></div>`).join('')}` : ''}
       <div class="acts" style="margin-top:14px"><button class="btn primary" data-act="openUrl" data-url="${esc(GW.links.route(GW.routes.draft))}" data-title="결재작성">${ic('ext')}결재작성에서 지출결의서 열기</button><button class="btn" data-act="openRec">${ic('play')}기록기로 입력 기록·재생</button><button class="btn ghost" data-act="expClose">닫기</button></div>
       <div class="muted" style="font-size:12px;margin-top:8px">상신·결재는 하지 않습니다. 계좌번호는 화면에서만 가리고 복사에는 전체가 들어가며, 저장되는 기록에는 끝 4자리만 남습니다.</div>`);
   }

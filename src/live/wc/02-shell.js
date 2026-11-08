@@ -7,7 +7,7 @@
   const root = host.attachShadow({mode: 'open'});
   const fab = document.createElement('div');
   fab.id = 'bwyfgw-wc-fab';
-  fab.setAttribute('role', 'button'); fab.tabIndex = 0;
+  fab.setAttribute('role', 'button'); fab.tabIndex = 0; fab.style.touchAction = 'none';
   fab.setAttribute('aria-label', '통합 업무센터 열기');
   fab.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
   fab.title = '통합 업무센터 열기 (Alt+G)';
@@ -53,7 +53,8 @@
   fab.addEventListener('pointermove', e => { if (!dragSt) return; const dx = e.clientX - dragSt.x, dy = e.clientY - dragSt.y; if (!dragSt.moved && Math.hypot(dx, dy) < 6) return; dragSt.moved = true; fab.classList.add('drag'); fab.style.left = Math.max(4, Math.min(innerWidth - fab.offsetWidth - 4, dragSt.l + dx)) + 'px'; fab.style.top = Math.max(4, Math.min(innerHeight - fab.offsetHeight - 4, dragSt.t + dy)) + 'px'; fab.style.right = 'auto'; fab.style.bottom = 'auto'; });
   const endDrag = () => { if (!dragSt) return; const m = dragSt.moved; dragSt = null; fab.classList.remove('drag'); if (!m) return; wasDrag = true; setTimeout(() => { wasDrag = false; }, 50); const r = fab.getBoundingClientRect(); const side = (r.left + r.width / 2) < innerWidth / 2 ? 'left' : 'right'; fab.style.transition = 'left .25s,right .25s'; if (side === 'left') { fab.style.left = '22px'; fab.style.right = 'auto'; } else { fab.style.left = 'auto'; fab.style.right = '22px'; } setTimeout(() => { fab.style.transition = ''; }, 300); try { localStorage.setItem('bwyfgw:fabpos', JSON.stringify({top: Math.round(r.top), side})); } catch {} };
   fab.addEventListener('pointerup', endDrag); fab.addEventListener('pointercancel', endDrag);
-  fab.addEventListener('dblclick', () => { try { localStorage.removeItem('bwyfgw:fabpos'); } catch {} fab.style.cssText = ''; });
+  fab.addEventListener('dblclick', e => { if (!e.altKey) return; e.stopPropagation(); try { localStorage.removeItem('bwyfgw:fabpos'); } catch {} fab.style.top = ''; fab.style.left = ''; fab.style.right = ''; fab.style.bottom = ''; });
+  window.addEventListener('resize', () => { const r = fab.getBoundingClientRect(); if (r.bottom > innerHeight - 4) fab.style.top = Math.max(4, innerHeight - r.height - 8) + 'px'; });
   fab.addEventListener('mousemove', e => { const r = fab.getBoundingClientRect(); fab.style.setProperty('--mx', (e.clientX - r.left) + 'px'); fab.style.setProperty('--my', (e.clientY - r.top) + 'px'); });
   fab.innerHTML = '<span class="lg"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><path d="m14 17 2 2 4-4"/></svg></span><span class="t">업무센터</span>';
   // One-time bubble after closing: tells where the work center went.
@@ -67,6 +68,7 @@
   const WC_CSS = '/*@WC_CSS@*/';
   // One small line-icon set (stroke icons, 24px grid) so every screen uses the same visual language.
   const ICONS = {
+    car: '<path d="M5 17h14M5 17a2 2 0 1 1-4 0m22 0a2 2 0 1 1-4 0M3 17v-5l2-5h14l2 5v5"/><path d="M3 12h18"/>',
     home: '<path d="M3 11 12 4l9 7"/><path d="M5 10v10h5v-6h4v6h5V10"/>',
     inbox: '<path d="M4 13h4l2 3h4l2-3h4"/><path d="M5 5h14l1 8v6H4v-6z"/>',
     doc: '<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M10 13h6M10 17h6"/>',
