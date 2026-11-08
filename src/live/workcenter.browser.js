@@ -1062,6 +1062,8 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
     delete S.mailDetBusy[m.uid];
     if (S.sel && (S.sel.uid === m.uid || (S.sel.key || '').endsWith(':' + m.uid))) renderPane();
   }
+  // The groupware's own document viewer (HWP·PDF·엑셀 등), same request the mail read view makes.
+  const previewUrl = (c, uid, f) => '/#popup?' + new URLSearchParams({authKeyMap: JSON.stringify({email: c.account, muid: String(uid), empSeq: String(S.raw.principal.empSeq)}), fileSn: f.sn, moduleGbn: 'MAIL', path: '/ecm/ecm001A07', pathSeq: '700', callComp: 'UAA0700', popupUUID: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()))}).toString();
   async function downloadMailFile(uid, i, btn) {
     const c = S.mailDet && S.mailDet[uid];
     const f = c && c.files[i];
@@ -1089,7 +1091,7 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
     const n = c.files.length + c.bigFiles.length;
     const fileRow = (name, size, btn) => `<div class="file"><span class="ext ${esc(extOf(name))}">${esc((extOf(name) || 'file').toUpperCase().slice(0, 4))}</span><div class="nm"><b title="${esc(name)}">${esc(name)}</b><span>${esc(size)}</span></div>${btn}</div>`;
     const rows = [
-      ...c.files.map((f, i) => fileRow(f.name, kb(f.size), `<button class="btn sm" data-act="dlFile" data-uid="${esc(m.uid)}" data-i="${i}">${ic('down')}받기</button>`)),
+      ...c.files.map((f, i) => fileRow(f.name, kb(f.size), `${c.account ? `<button class="btn sm ghost" data-act="openUrl" data-url="${esc(previewUrl(c, m.uid, f))}" data-title="미리보기: ${esc(f.name)}" title="내려받지 않고 바로 보기">${ic('eye')}미리보기</button>` : ''}<button class="btn sm" data-act="dlFile" data-uid="${esc(m.uid)}" data-i="${i}">${ic('down')}받기</button>`)),
       ...c.bigFiles.map(f => fileRow(f.name, `${f.size} · 대용량${c.bigUntil ? ` · ${c.bigUntil}까지 받을 수 있음` : ''}`, `<a class="btn sm" href="${esc(f.href)}" target="_blank" rel="noopener">${ic('down')}받기</a>`)),
     ];
     const text = c.text ? c.text.replace(/대용량 파일첨부[\s\S]*?보관\)/, '').trim() : '';
