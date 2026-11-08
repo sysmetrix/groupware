@@ -94,10 +94,10 @@ await stage('안전 규칙', async () => {
   if (!eps.length) warns.push('READ_ONLY 허용 목록을 찾지 못함');
   for (const e of eps) if (/save|insert|update|delete|remove|submit|approve|send|regist|create|modify|apply/i.test(e)) fails.push(`읽기 전용 목록에 쓰기로 보이는 주소: ${e}`);
   const eng = await read('src/live/wc/19-draft-engine.js');
-  const deny = (eng.match(/const DENY_BTN = \/\^\(([^)]*)\)\$\//) || [])[1] || '';
+  const deny = (eng.match(/const DENY_BTN = .*/) || [''])[0];
   for (const w of ['상신', '결재', '임시저장', '삭제', '발송']) if (!deny.includes(w)) fails.push(`비가역 버튼 차단 목록에 '${w}' 없음`);
   const rec = await read('src/live/wc/20-recorder.js');
-  const rd = (rec.match(/const REC_DANGER = \/\^\(([^)]*)\)\$\//) || [])[1] || '';
+  const rd = (rec.match(/const REC_DANGER = .*/) || [''])[0];
   for (const w of ['상신', '결재', '삭제', '발송']) if (!rd.includes(w)) fails.push(`기록기 위험 버튼 목록에 '${w}' 없음`);
   if (!/recorderPlayConfirm/.test(await read('src/live/briefing.mjs'))) fails.push('기록기 재생 확인 정책 누락');
   // 라이브 코드의 모든 외부 호스트: 허용 목록만

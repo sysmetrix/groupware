@@ -103,8 +103,8 @@ export function attendanceAnomalies(days = [], {now = new Date(), leaves = []} =
   for (const r of days) {
     if (!r || r.holiday || /휴일/.test(r.result || '')) continue;
     if (r.date === today && k.hh < 18) continue; // the day is not over yet
-    // 출근 지문은 판정하지 않는다: 퇴근 지문이 있고 '이상근태'가 출근 지문 누락 때문일 때는 제외
-    if (/이상/.test(r.result || '') && !/결근|지각|조퇴|미인정|미퇴근/.test(r.result || '') && !r.come && r.leave) continue;
+    // 출근 지문은 판정하지 않는다: 퇴근 지문이 있고 출근 지문 누락(이상근태/미출근/지각)만 문제인 날은 제외
+    if (/이상|미출근|지각/.test(r.result || '') && !/결근|조퇴|미인정|미퇴근/.test(r.result || '') && !r.come && r.leave) continue;
     const bad = /결근|지각|조퇴|미인정|미출근|미퇴근|이상/.test(r.result || '');
     if (!bad) continue;
     if (r.applied && r.status === '승인') continue; // covered by an approved request (외출·반차 등)
@@ -650,7 +650,7 @@ function metaOf(e) { return {binder: e.binder, open: e.open || PAT_DEFAULT.open,
 export function predictDraftMeta(model, {title = '', sourceDocNo = '', sourceTitle = ''} = {}) {
   const es = (model && model.entries) || [];
   if (sourceDocNo || sourceTitle) {
-    const src = es.find(e => (sourceDocNo && e.docNo === sourceDocNo) || (sourceTitle && e.title === sourceTitle));
+    const src = sourceDocNo ? es.find(e => e.docNo === sourceDocNo) : es.find(e => sourceTitle && e.title === sourceTitle);
     if (src) return {...metaOf(src), basis: `근거 문서(${src.docNo || src.title})의 기록물철·기본항목을 그대로 사용`, confidence: 'source'};
   }
   const tk = patternTokens(sourceTitle || title);
@@ -779,8 +779,11 @@ export function buildPaymentProposalBody(baseBody = '', {ref = '', title = '', a
   if (tail < 0) return null;
   const subject = String(title).replace(/\s*지급\s*건의$/, '').trim();
   const lines = [`1. ${ref}호와 관련입니다.`, `2. ${subject} 지급을 다음과 같이 건의합니다.`, ...src.slice(tail)];
-  const k = lines.findIndex(l => /^ {2}가\.\s(?:지급|지출)예정금액:/.test(l));
-  if (k >= 0 && amount) lines[k] = lines[k].replace(/:\s*.*$/, `: ${moneyKo(amount)}`);
+  // 금액 항목이 정확히 하나가 아니거나 금액이 올바르지 않으면 옛 금액이 남지 않도록 만들지 않는다.
+  if (!Number.isSafeInteger(amount) || amount <= 0) return null;
+  const ks = lines.flatMap((l, i) => (/^ {2}[가-하]\.\s+(?:지급|지출)예정금액\s*[:：]/.test(l) ? [i] : []));
+  if (ks.length !== 1) return null;
+  lines[ks[0]] = lines[ks[0]].replace(/[:：]\s*.*$/, `: ${moneyKo(amount)}`);
   const hang = lines.map(l => /^ {2}[가-하]\.\s/.test(l) && textWidthPt(l) > HANG_LIMIT_PT);
   return {lines, text: lines.join('\r\n'), hang, notes: ['지급계획(표)에는 지급처·내역을 직접 입력하세요.']};
 }
@@ -796,7 +799,7 @@ export function expenseTitleOf(d) {
 export function pendingPayments(docs = []) {
   const own = docs.filter(d => d && d.binder && !/^접수문서/.test(d.binder));
   const used = new Set();
-  for (const e of own.filter(isExpense)) for (const r of e.refs || []) { const m = String(r).match(/^(\S+?)\(/); if (m) used.add(m[1]); }
+  for (const e of own.filter(isExpense)) for (const r of e.refs || []) { const m = String(r).match(/^\s*([^()]+?)\s*\(/); if (m) used.add(m[1].trim()); }
   const todo = own.filter(d => (isProposal(d) || (isPurchase(d) && !isExpense(d))) && !used.has(d.docNo));
   return todo.sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).map(d => ({id: d.id, docNo: d.docNo, title: d.title, kind: isProposal(d) ? '지급 건의' : '물품매입 품의', expenseForm: isProposal(d) ? '지출결의서(기안포함)(A10)' : '지출결의서(기안미포함)(A10)', expenseTitle: expenseTitleOf(d), binder: d.binder, amount: proposalAmount(d), date: d.date, ref: formatRefDoc(d.runday || '', d.title)}));
 }
@@ -844,7 +847,7 @@ export function verifyAudit(list = []) {
   }
   return {ok: true, checked: list.length, legacy: 0};
 }
-export const POLICY_FEATURES = ['briefing', 'draftResult', 'draftPlan', 'draftPay', 'draftGoods', 'recorder', 'aiConsole', 'updateCheck'];
+export const POLICY_FEATURES = ['briefing', 'teamAttendance', 'draftResult', 'draftPlan', 'draftPay', 'draftGoods', 'recorder', 'aiConsole', 'updateCheck'];
 export const DEFAULT_POLICY = {orgName: '', enabled: true, message: '', features: Object.fromEntries(POLICY_FEATURES.map(f => [f, true])), retentionDays: 90, requireAckVersion: '', recorderPlayConfirm: true, license: ''};
 // 관리자가 배포 폴더의 policy.js로 지정한 값을 검증·보정한다(알 수 없는 값은 무시, 안전한 쪽으로 기본값).
 export function normalizePolicy(p) {
@@ -887,7 +890,6 @@ const hmMin = s => { const m = String(s || '').match(/^(\d{2})(\d{2})$/); return
 const hmFmt = s => (String(s || '').length === 4 ? `${s.slice(0, 2)}:${s.slice(2)}` : '');
 export function classifyTeamRow(r, now = new Date()) {
   const item = String(r.item || '');
-  const k = kstNow(now), today = k.date.replace(/-/g, ''), nowMin = k.hh * 60 + (k.mm || 0);
   let kind = '';
   if (/휴가|연차|반차|병가|공가|대체휴가|보상휴가/.test(item)) kind = 'leave';
   else if (/출장|교육/.test(item)) kind = 'trip';
@@ -895,22 +897,24 @@ export function classifyTeamRow(r, now = new Date()) {
   if (!kind) return null;
   const base = {kind, label: item, name: r.name, dept: r.dept, date: r.date, mine: !!r.mine, emp: r.emp};
   if (kind !== 'ot') return {...base, state: 'info', detail: ''};
-  const s = hmMin(r.appStart), e = hmMin(r.appEnd), come = hmMin(r.come), leave = hmMin(r.leave);
+  const s = hmMin(r.appStart), e = hmMin(r.appEnd), leave = hmMin(r.leave);
   const span = `${hmFmt(r.appStart)}~${hmFmt(r.appEnd)}`;
-  if (/조기근무/.test(item)) {
-    if (r.date > today || (r.date === today && nowMin < (s ?? 0))) return {...base, state: 'wait', detail: `신청 ${span}`};
-    if (come === null) return {...base, state: 'miss', detail: `신청 ${span} · 출근 지문 없음`};
-    if (s !== null && come > s) return {...base, state: 'short', detail: `신청 ${span} · 출근 ${hmFmt(r.come)} (${come - s}분 늦음)`};
-    return {...base, state: 'ok', detail: `신청 ${span} · 출근 ${hmFmt(r.come)}`};
-  }
-  if (r.date > today || (r.date === today && e !== null && nowMin < e)) return {...base, state: 'wait', detail: `신청 ${span}${leave !== null ? ` · 현재 지문 ${hmFmt(r.leave)}` : ''}`};
+  if (s === null || e === null) return {...base, state: 'wait', detail: '신청 시각 확인 필요'};
+  // 날짜 경계: 신청 종료가 시작보다 이르거나 24:00이면 다음 날 새벽까지로 본다. 지문에는 날짜가 없어 24시간 넘는 근무는 판별하지 못한다.
+  const midnight = dayNumber(fmtYmd(r.date)) * 1440;
+  const cross = e < s || e === 1440;
+  const end = midnight + e + (e < s ? 1440 : 0);
+  const current = Math.floor(now.getTime() / 60000) + 540;
+  if (current < end) return {...base, state: 'wait', detail: `신청 ${span}${leave !== null ? ` · 현재 지문 ${hmFmt(r.leave)}` : ''}`};
   if (leave === null) return {...base, state: 'miss', detail: `신청 ${span} · 퇴근 지문 없음`};
-  if (e !== null && leave < e) return {...base, state: 'short', detail: `신청 ${span} · 퇴근 지문 ${hmFmt(r.leave)} (신청 종료보다 ${e - leave}분 일찍)`};
-  return {...base, state: 'ok', detail: `신청 ${span} · 퇴근 지문 ${hmFmt(r.leave)}`};
+  const actual = midnight + leave + (cross && leave < s ? 1440 : 0);
+  const early = actual < end;
+  return {...base, state: early ? 'short' : 'ok', detail: `신청 ${span} · 퇴근 지문 ${hmFmt(r.leave)}${early ? ` (신청 종료보다 ${end - actual}분 일찍)` : ''}`};
 }
 export function buildTeamCalendar(rows = [], now = new Date()) {
   const byDate = {}, problems = [];
-  for (const r of rows) {
+  const expanded = rows.flatMap(r => String(r.item || '').split(/\s*[,;/+·]\s*/).filter(Boolean).map(item => ({...r, item})));
+  for (const r of expanded) {
     const c = classifyTeamRow(r, now);
     if (!c) continue;
     (byDate[c.date] = byDate[c.date] || []).push(c);

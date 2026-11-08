@@ -21,12 +21,12 @@
         // Legacy migration: if per-user storage is empty, check legacy global key for 'default' or initial run
         if (v === null && currentKey !== 'default') {
           const old = localStorage.getItem('bwyfgw:wc:' + k);
-          if (old !== null) { v = old; localStorage.setItem(p + k, old); }
+          if (old !== null) { v = old; localStorage.setItem(p + k, old); localStorage.removeItem('bwyfgw:wc:' + k); } // 한 번만 이관하고 원본은 지워 다른 사용자에게 넘어가지 않게 한다
         }
         return v === null ? d : JSON.parse(v);
       } catch { return d; }
     },
-    set(k, v) { try { localStorage.setItem(getPrefix() + k, JSON.stringify(v)); } catch {} },
+    set(k, v) { if (currentKey === 'default' && /^(patterns|macros|actionHistory)$/.test(k)) return; try { localStorage.setItem(getPrefix() + k, JSON.stringify(v)); } catch {} },
     del(k) { try { localStorage.removeItem(getPrefix() + k); } catch {} },
   };
   function switchUserStorage(newEmpKey) {

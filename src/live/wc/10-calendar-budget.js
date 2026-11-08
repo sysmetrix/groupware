@@ -18,7 +18,7 @@
       cells.push(`<div class="c ${iso === t0 ? 'today' : ''} ${dow === 0 || its.some(x => x.cls === 'h') ? 'sun' : dow === 6 ? 'sat' : ''}" data-drop-date="${iso}" ${tm.length ? `data-act="calDay" data-v="${d8}"` : ''}><div class="dn">${dnum}${iso === t0 ? ' <span class="bdg todo" style="height:18px">오늘</span>' : ''}</div>${tm.slice(0, 4).map(teamChip).join('')}${tm.length > 4 ? `<span class="muted" style="font-size:12px">+${tm.length - 4}명</span>` : ''}${its.slice(0, tm.length ? 2 : 4).map(it => `<span class="ev ${it.cls}" ${it.todo ? `draggable="true" data-drag="todo:${esc(it.todo)}"` : ''} data-act="calItem" data-k="${esc(it.key || '')}" data-url="${esc(it.url || '')}" title="${esc(it.tag + ' · ' + it.text)}">${esc(it.text)}</span>`).join('')}${its.length > (tm.length ? 2 : 4) ? `<span class="muted">외 ${its.length - (tm.length ? 2 : 4)}건</span>` : ''}</div>`);
     }
     const upcoming = items.filter(x => x.date >= t0 && x.cls !== 'h').sort((a, b) => a.date.localeCompare(b.date)).slice(0, 12);
-    const legend = [['e', '일정'], ['l', '내 휴가'], ['d', '기한'], ['a', '근태 확인·출장'], ['t', '내 할 일(끌어서 날짜 변경)'], ['h', '휴일'], ['tl', '직원 휴가'], ['tt', '직원 출장·교육'], ['to', '시간외 퇴근 확인됨'], ['tw', '시간외 퇴근 지문 확인 필요']];
+    const legend = [['e', '일정'], ['l', '내 휴가'], ['d', '기한'], ['a', '근태 확인·출장'], ['t', '내 할 일(끌어서 날짜 변경)'], ['h', '휴일'], ['tl', '직원 휴가'], ['tt', '직원 출장·교육'], ['to', '시간외 퇴근 확인됨'], ['tw', '시간외 퇴근 지문 확인 필요'], ['n', '칩 기호: ✓ 퇴근 지문 확인 · ✗ 지문 없음 · ! 신청 종료 전 퇴근']];
     return `${pgh(`${y}년 ${mo + 1}월`, '', `<button class="btn sm icon" data-act="calPrev" aria-label="이전 달">${ic('back')}</button><button class="btn sm" data-act="calToday">이번 달</button><button class="btn sm icon" data-act="calNext" aria-label="다음 달" style="transform:scaleX(-1)">${ic('back')}</button><a class="btn sm" href="${esc(S.raw.data.schedule?.url || '')}" target="_blank" rel="noopener">${ic('ext')}그룹웨어 일정</a>`)}
 ${teamBar(y, mo)}
 <div class="legend">${legend.map(([c, n]) => `<span><i class="ev ${c}" style="display:inline-block;margin:0;padding:0;width:12px;height:12px"></i>${n}</span>`).join('')}</div>
@@ -47,7 +47,7 @@ ${teamDayPanel()}
   function monthKey() { const b = new Date(); b.setDate(1); b.setMonth(b.getMonth() + S.cal.offset); return `${b.getFullYear()}${String(b.getMonth() + 1).padStart(2, '0')}`; }
   function ensureTeam(mk) {
     S.team = S.team || {};
-    if (S.team[mk] || !GW.teamAttendance) return;
+    if (S.team[mk] || !GW.teamAttendance || !allowed('teamAttendance')) return;
     const lastD = new Date(Number(mk.slice(0, 4)), Number(mk.slice(4)), 0).getDate();
     S.team[mk] = {busy: true, rows: null, err: ''};
     GW.teamAttendance({from: mk + '01', to: mk + String(lastD).padStart(2, '0')})
@@ -79,7 +79,7 @@ ${teamDayPanel()}
     return `<div class="teambar"><div class="seg">${lay.map(([k, n]) => `<button class="${cfg.layers[k] ? 'on' : ''}" data-act="calLayer" data-v="${k}">${n}</button>`).join('')}</div>
       <div class="seg"><button class="${!cfg.dept ? 'on' : ''}" data-act="calDept" data-v="">전체 부서</button>${te.depts.map(d => `<button class="${cfg.dept === d ? 'on' : ''}" data-act="calDept" data-v="${esc(d)}">${esc(d.replace(/청소년센터|여성청소년센터/, m => m))}</button>`).join('')}</div>
       <label class="chk"><input type="checkbox" data-act="calMine" ${cfg.mine ? 'checked' : ''}> 내 것만</label>${status}</div>
-      ${cfg.layers.ot && t.rows ? (pr.length ? `<div class="box warn tprob"><b>시간외 퇴근 지문 확인 필요 ${pr.length}건</b> <span class="muted">(신청 종료 시각과 퇴근 지문 대조 · 출근 지문은 보지 않음)</span>${pr.slice(0, 4).map(p => `<div class="tp ${p.mine ? 'me' : ''}" role="button" tabindex="0" data-act="calDay" data-v="${p.date}"><span class="bdg ${p.state === 'miss' ? 'urgent' : 'check'}">${p.state === 'miss' ? '지문 없음' : '일찍 퇴근'}</span> <b>${esc(p.name)}</b>${p.mine ? ' (나)' : ''} <span class="muted">${esc(p.date.slice(4, 6))}/${esc(p.date.slice(6))} · ${esc(p.detail)}</span></div>`).join('')}${pr.length > 8 ? `<div class="muted">외 ${pr.length - 8}건은 날짜를 눌러 확인하세요</div>` : ''}</div>` : '<div class="box tip tprob"><b>시간외 신청일의 퇴근 지문이 모두 정상입니다</b></div>') : ''}`;
+      ${cfg.layers.ot && t.rows ? (pr.length ? `<div class="box warn tprob"><b>시간외 퇴근 지문 확인 필요 ${pr.length}건</b> <span class="muted">(신청 종료 시각과 퇴근 지문 대조 · 출근 지문은 보지 않음)</span>${pr.slice(0, 4).map(p => `<div class="tp ${p.mine ? 'me' : ''}" role="button" tabindex="0" data-act="calDay" data-v="${p.date}"><span class="bdg ${p.state === 'miss' ? 'urgent' : 'check'}">${p.state === 'miss' ? '지문 없음' : '일찍 퇴근'}</span> <b>${esc(p.name)}</b>${p.mine ? ' (나)' : ''} <span class="muted">${esc(p.date.slice(4, 6))}/${esc(p.date.slice(6))} · ${esc(p.detail)}</span></div>`).join('')}${pr.length > 8 ? `<div class="muted">외 ${pr.length - 8}건은 날짜를 눌러 확인하세요</div>` : ''}</div>` : `<div class="box tip tprob"><b>${cfg.mine ? '내 시간외 신청일의 퇴근 지문이 정상입니다' : cfg.dept ? esc(cfg.dept) + ' 시간외 신청일의 퇴근 지문이 정상입니다' : '시간외 신청일의 퇴근 지문이 모두 정상입니다'}</b>${cfg.mine ? ' <span class="muted">(직원 전체 확인은 "내 것만"을 끄세요)</span>' : ''}</div>`) : ''}`;
   }
   function teamDayPanel() {
     const cfg = teamCfg(), d8 = cfg.day;

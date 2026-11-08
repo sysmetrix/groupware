@@ -555,8 +555,28 @@ test('team calendar: classify leave/trip/overtime and check leave-work fingerpri
   assert.equal(classifyTeamRow(row({item: '사외교육'}), now).kind, 'trip');
   assert.equal(classifyTeamRow(row({item: '오후반차'}), now).kind, 'leave');
   assert.equal(classifyTeamRow(row({item: '외출'}), now), null);                // 외출·조퇴는 표시하지 않음
-  assert.equal(classifyTeamRow(row({item: '조기근무', appStart: '0700', appEnd: '0900', come: '0648', leave: ''}), now).state, 'ok');
+  assert.equal(classifyTeamRow(row({item: '조기근무', appStart: '0700', appEnd: '0900', come: '', leave: '1805'}), now).state, 'ok'); // 출근 지문 없이도 퇴근만 본다
   assert.equal(classifyTeamRow(row({item: '조기근무', appStart: '0700', appEnd: '0900', come: '', leave: ''}), now).state, 'miss');
   const cal = buildTeamCalendar([row({leave: '2000', mine: true}), row({name: '다라', item: '연차', date: '20261105'})], now);
   assert.equal(cal.problems.length, 1); assert.equal(cal.byDate['20261105'].length, 2); assert.equal(cal.byDate['20261105'][0].mine, true);
+});
+
+test('review fixes: midnight overtime, combined items, amount safety, docNo priority, spaced refs', () => {
+  const now = new Date('2026-11-09T20:00:00+09:00');
+  const row = o => ({date: '20261108', name: '가나', dept: 'X', item: '연장근무', appStart: '2200', appEnd: '0200', come: '', leave: '2300', ...o});
+  assert.equal(classifyTeamRow(row(), now).state, 'short');                               // 자정 넘김: 02:00 전에 퇴근
+  assert.equal(classifyTeamRow(row({date: '20261109', leave: ''}), now).state, 'wait');    // 아직 끝나지 않음
+  assert.equal(classifyTeamRow(row({appEnd: '2400', leave: '0010'}), now).state, 'ok');
+  assert.notEqual(classifyTeamRow(row({appEnd: ''}), now).state, 'ok');                    // 종료 시각 없으면 정상으로 보지 않음
+  const c = buildTeamCalendar([row({item: '오후반차(보상), 연장근무', appStart: '1800', appEnd: '2100', leave: ''})], now);
+  assert.deepEqual(c.byDate['20261108'].map(z => z.kind).sort(), ['leave', 'ot']);
+  assert.equal(c.problems.length, 1);
+  const base = '1. a호와 관련입니다.\r\n2. x\r\n  가. 지급예정금액 : 금900,000원(금구십만원)\r\n  나. 지급계획';
+  assert.match(buildPaymentProposalBody(base, {amount: 450000}).text, /금450,000원/);
+  assert.equal(buildPaymentProposalBody(base, {amount: 0}), null);
+  assert.equal(buildPaymentProposalBody('  가. 결제방법: 카드', {amount: 1000}), null);
+  const m = buildPatternModel([{docNo: 'A-1', title: '동명', binder: '오답철'}, {docNo: 'A-2', title: '동명', binder: '정답철'}]);
+  assert.equal(predictDraftMeta(m, {sourceDocNo: 'A-2', sourceTitle: '동명'}).binder, '정답철');
+  assert.equal(pendingPayments([{docNo: 'A-1', title: '회의비 지급 건의', form: '일반기안문', binder: 'X'}, {binder: 'X', form: '지출결의서(기안포함)', refs: ['A-1 (2026. 11. 8.)']}]).length, 0);
+  assert.equal(attendanceAnomalies([{date: '20261108', result: '미출근', come: '', leave: '1800', holiday: false}], {now}).length, 0);
 });

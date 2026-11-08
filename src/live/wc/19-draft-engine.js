@@ -149,20 +149,20 @@
   const allDlgs = d => [...d.querySelectorAll('.obtdialog.open, ._isDialog')];
   const waitFor = async (pred, ms = 8000, step = 150) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { let r; try { r = pred(); } catch {} if (r) return r; await wait(step); } return null; };
   // 자동 기입 중에는 상신·결재·임시저장·보내기·삭제 같은 비가역 버튼을 코드 레벨에서 막는다
-  const DENY_BTN = /^(상신|결재|임시저장|보내기|발송|회수|삭제|기안|승인|반려|전결)$/;
-  const AUTO = {running: false, blocked: []};
+  const DENY_BTN = /^(결재\s*상신|결재상신|상신하기|상신|결재|임시저장|저장|보관|보내기|발송|전송|회수|삭제|기안|승인|반려|전결|대결)(\(\w\))?$/;
+  const AUTO = {running: false, allow: false, blocked: []};
   function installGuard(win) {
     if (win.__wcGuard) return;
     win.__wcGuard = true;
     const block = e => {
-      if (!AUTO.running) return;
-      const b = e.target && e.target.closest && e.target.closest('button,a,[role=button],.topBtn');
-      const t = ((b && b.innerText) || '').trim();
-      if (b && DENY_BTN.test(t)) { e.stopImmediatePropagation(); e.preventDefault(); AUTO.blocked.push(t); }
+      if (!AUTO.running || AUTO.allow) return;
+      const b = e.target && e.target.closest && e.target.closest('button,a,[role=button],.topBtn,.OBTButton,input[type=button],input[type=submit]');
+      const t = [b && b.innerText, b && b.value, b && b.getAttribute && b.getAttribute('aria-label'), b && b.title].map(x => String(x || '').replace(/\s+/g, '')).find(x => x && DENY_BTN.test(x)) || '';
+      if (b && t) { e.stopImmediatePropagation(); e.preventDefault(); AUTO.blocked.push(t); }
     };
-    ['click', 'mousedown', 'mouseup', 'dblclick'].forEach(n => win.addEventListener(n, block, true));
+    ['click', 'mousedown', 'mouseup', 'pointerdown', 'pointerup', 'dblclick'].forEach(n => win.addEventListener(n, block, true));
     const oc = win.HTMLElement.prototype.click;
-    win.HTMLElement.prototype.click = function () { if (AUTO.running && DENY_BTN.test((this.innerText || '').trim())) { AUTO.blocked.push((this.innerText || '').trim()); return; } return oc.call(this); };
+    win.HTMLElement.prototype.click = function () { if (AUTO.running && !AUTO.allow && DENY_BTN.test((this.innerText || '').replace(/\s+/g, ''))) { AUTO.blocked.push((this.innerText || '').trim()); return; } return oc.call(this); };
   }
   const btnIn = (root, re) => [...root.querySelectorAll('button, [role=button]')].find(b => re.test((b.innerText || '').trim()));
 
@@ -213,7 +213,7 @@
     await wait(500);
     btnIn(dlg, /^반영$/)?.click();
     const closed = !!(await waitFor(() => !dlgOf(d), 5000));
-    if (!closed) allDlgs(d).forEach(x => btnIn(x, /취소|닫기/)?.click());
+    if (!closed) allDlgs(d).forEach(x => btnIn(x, /^(취소|닫기)$/)?.click());
     return {ok: closed, detail: closed ? '내결재라인 “기본” 반영' : '결재라인 창을 닫지 못해 취소했습니다(직접 지정 필요)'};
   }
 
@@ -308,7 +308,7 @@
     const run = async (name, fn) => {
       if (halted) { steps.push({name, ok: false, detail: '앞 단계의 팝업이 정리되지 않아 중단했습니다'}); return; }
       try { const r = await fn(); steps.push({name, ok: !!r.ok, detail: r.detail || ''}); } catch (e) { steps.push({name, ok: false, detail: e.message}); }
-      if (allDlgs(d).length) { allDlgs(d).forEach(x => btnIn(x, /취소|닫기/)?.click()); await wait(500); if (allDlgs(d).length) halted = true; }
+      if (allDlgs(d).length) { allDlgs(d).forEach(x => btnIn(x, /^(취소|닫기)$/)?.click()); await wait(500); if (allDlgs(d).length) halted = true; }
     };
     await run('제목', async () => {
       const inp = d.querySelector('input[placeholder="제목을 입력해주세요"]');
@@ -350,6 +350,7 @@
 
   // ---------- 결과보고: 계획서를 이어받아 작성 ----------
   async function startResultFromPlan(planDocId) {
+    if (gated('draftResult')) return;
     closeOverlay();
     const plan = patLoad().docs[planDocId];
     if (!plan) { toast('선택한 계획서 정보를 찾지 못했습니다.'); return; }
@@ -428,6 +429,7 @@
   }
 
   async function payRun() {
+    if (gated('draftPay')) return;
     const base = S.pay && patLoad().docs[S.pay.baseId];
     let title = ($('#payTitle') || {}).value?.trim() || '';
     const amount = R.parseWon(($('#payAmt') || {}).value);
@@ -457,6 +459,7 @@
       ${plans.map(p => `<div class="cmd-preset" role="button" tabindex="0" data-act="goodsRun" data-id="${esc(p.id)}"><b>${esc(p.title)}</b><div class="muted" style="font-size:12px">${esc(p.docNo)} · 기록물철 ${esc(p.binder)}</div></div>`).join('')}</div></div>`;
   }
   async function goodsRun(planId) {
+    if (gated('draftGoods')) return;
     const plan = patLoad().docs[planId];
     if (!plan) return;
     const base = String(plan.title).replace(/\s*(운영|참가)\s*계획(\(안\))?$/, '').trim();

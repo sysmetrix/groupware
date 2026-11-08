@@ -4,7 +4,7 @@
   // ---------- 관리자 정책 (확장 폴더의 policy.js가 window.BWYFGW_POLICY로 지정) ----------
   const POLICY = R.normalizePolicy(window.BWYFGW_POLICY);
   const NOTICE_VER = '1';
-  const FEATURE_NAME = {briefing: '업무 브리핑', draftResult: '결과보고 기안', draftPlan: '계획서 기안', draftPay: '지급 건의 기안', draftGoods: '물품매입 기안', recorder: '기록기', aiConsole: 'AI 지시창', updateCheck: '업데이트 확인'};
+  const FEATURE_NAME = {briefing: '업무 브리핑', teamAttendance: '직원 근태 달력', draftResult: '결과보고 기안', draftPlan: '계획서 기안', draftPay: '지급 건의 기안', draftGoods: '물품매입 기안', recorder: '기록기', aiConsole: 'AI 지시창', updateCheck: '업데이트 확인'};
   function allowed(f) { return R.featureAllowed(POLICY, f); }
   // 막힌 기능이면 안내하고 true를 돌려준다. 호출부는 true면 바로 return 한다.
   function gated(f) {
@@ -39,7 +39,8 @@
       clearTimeout(tm);
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const j = await r.json();
-      const info = {at: Date.now(), latest: String(j.tag_name || '').replace(/^v/, ''), url: j.html_url || ''};
+      const tag = String(j.tag_name || '').replace(/^v/, '');
+      const info = {at: Date.now(), latest: /^\d+\.\d+\.\d+$/.test(tag) ? tag : '', url: /^https:\/\/github\.com\/sysmetrix\//.test(j.html_url || '') ? j.html_url : ''};
       store.set('updateInfo', info);
       return info;
     } catch (e) { const info = {at: Date.now(), latest: '', url: '', err: String(e.message || e).slice(0, 80)}; store.set('updateInfo', info); return info; }
