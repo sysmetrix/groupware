@@ -68,9 +68,16 @@
     try {
       const list = await aiRequest('models?pageSize=100', null, key);
       const names = (list.models || []).filter(m => (m.supportedGenerationMethods || []).includes('generateContent')).map(m => m.name.replace(/^models\//, ''));
-      const pick = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-latest'].find(n => names.includes(n)) || names.find(n => /flash/.test(n) && !/(preview|exp|lite|thinking|image|tts)/.test(n)) || names[0];
-      if (!pick) throw new Error('사용할 수 있는 모델이 없습니다');
-      await aiRequest(`models/${pick}:generateContent`, {contents: [{parts: [{text: '연결 시험입니다. "연결됨" 두 글자만 답하세요.'}]}]}, key);
+      // 최신 flash 모델부터 차례로 시험한다(구형은 신규 사용자에게 막혀 있을 수 있음)
+      const ver = n => (n.match(/gemini-(\d+(?:\.\d+)?)/) || [0, 0])[1] * 1;
+      const cands = [...new Set(names.filter(n => /^gemini-[\d.]+-flash$/.test(n)).sort((a, b) => ver(b) - ver(a)).concat(names.filter(n => /flash/.test(n) && !/(preview|exp|thinking|image|tts|live|audio)/.test(n))))].slice(0, 6);
+      if (!cands.length) throw new Error('사용할 수 있는 모델이 없습니다');
+      let pick = '', lastErr = null;
+      for (const m of cands) {
+        try { await aiRequest(`models/${m}:generateContent`, {contents: [{parts: [{text: '연결 시험입니다. "연결됨" 두 글자만 답하세요.'}]}]}, key); pick = m; break; }
+        catch (e) { lastErr = e; if (e.status === 400 && /API key|key not valid/i.test(e.message) || e.status === 403) throw e; }
+      }
+      if (!pick) throw lastErr || new Error('모델 연결에 실패했습니다');
       store.set('ai', {key, model: pick});
       toast(`AI 도우미가 연결되었습니다 (${pick})`);
       openAi();
@@ -86,13 +93,14 @@
     const out = $('#aiOut');
     if (out) out.innerHTML = '<span class="muted"><span class="spin"></span> 생각하는 중…</span>';
     try {
-      const j = await aiRequest(`models/${c.model || 'gemini-2.5-flash'}:generateContent`, {systemInstruction: {parts: [{text: R.AI_SYSTEM}]}, contents: [{role: 'user', parts: [{text: `[내 업무 요약]\n${aiContext()}\n\n[질문]\n${q}`}]}], generationConfig: {temperature: 0.3, maxOutputTokens: 900}}, c.key);
+      const j = await aiRequest(`models/${c.model || 'gemini-flash-latest'}:generateContent`, {systemInstruction: {parts: [{text: R.AI_SYSTEM}]}, contents: [{role: 'user', parts: [{text: `[내 업무 요약]\n${aiContext()}\n\n[질문]\n${q}`}]}], generationConfig: {temperature: 0.3, maxOutputTokens: 900}}, c.key);
       const text = (j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts || []).map(p => p.text || '').join('').trim();
       if (!text) throw new Error('답변이 비어 있습니다(안전 필터 또는 사용량 제한일 수 있습니다)');
       if ($('#aiOut')) $('#aiOut').innerHTML = aiRich(text) + '<div class="muted" style="font-size:12px;margin-top:8px">AI 답변은 참고용입니다. 마감·금액은 원문으로 확인하세요.</div>';
       logActionRecord({command: 'AI 질문: ' + q.slice(0, 60), type: 'AI', target: '', summary: 'AI 도우미 답변을 받았습니다(실행 없음).', steps: [], verified: true});
     } catch (e) {
       logError('aiAsk', e.message);
+      if (/no longer available|not found/i.test(e.message)) { store.set('ai', {key: c.key, model: ''}); }
       const msg = e.status === 429 ? '무료 사용량을 잠시 다 썼습니다. 1분 뒤 다시 시도하세요.' : e.status === 400 || e.status === 403 ? '키가 거절되었습니다. "키 바꾸기"로 다시 연결하세요.' : e.name === 'AbortError' ? '응답이 늦습니다. 잠시 뒤 다시 시도하세요.' : '답을 받지 못했습니다: ' + e.message.slice(0, 120);
       if ($('#aiOut')) $('#aiOut').innerHTML = `<span style="color:var(--hi)">${esc(msg)}</span>`;
     }
