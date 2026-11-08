@@ -239,8 +239,16 @@ function scoreAction(a, now) {
   return {score: s, why};
 }
 
-export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6} = {}) {
+// Mail that only hands over material is reference, not a task, unless it also asks for something.
+const SHARE_WORDS = /공유|드립니다|드려요|보내드|송부|전달드|참고|안내드/;
+const ASK_WORDS = /요청|회신|제출|검토|작성|부탁|바랍니다|주시기|주세요|의견|취합|협조|확인\s*(부탁|요망|바랍|해\s*주)|마감|기한|까지/;
+// Who handles department-level work. Default: not me (the dept 문서담당 does it) unless the settings say so.
+export const DEFAULT_ROLES = {deptReceiver: false, distributor: false, sender: false};
+export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6, roles = DEFAULT_ROLES} = {}) {
   const d = raw?.data || {};
+  const me = raw?.principal?.name || '';
+  const myLogin = String(raw?.principal?.loginId || '').toLowerCase();
+  const role = {...DEFAULT_ROLES, ...(roles || {})};
   const prevMail = new Set(prev?.mailUids || []);
   const prevDocs = new Set(Object.values(prev?.docIds || {}).flat());
   const prevNotices = new Set(prev?.noticeIds || []);
@@ -267,7 +275,7 @@ export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6} = {}) 
     for (const doc of l.docs) {
       const k = `doc:${key}:${doc.docId}`;
       const deadline = addDeadline(doc.title, l.label, doc.url || docLink(raw, l), k);
-      push({key: k, type: 'doc', base: key, ref: {kind: key, docId: doc.docId}, area: '결재', kind: l.label, title: doc.title, detail: [verb, doc.sender || doc.drafter, doc.docNo, doc.attachments ? `첨부 ${doc.attachments}` : ''].filter(Boolean).join(' · '), when: doc.date, waitDays: ageDays(doc.date, now), bizWait: bizDays(doc.date, now), deadline, url: doc.url || docLink(raw, l), listUrl: l.url, isNew: hasPrev && !prevDocs.has(`${key}:${doc.docId}`)});
+      push({key: k, type: 'doc', base: key, ref: {kind: key, docId: doc.docId}, drafter: doc.drafter || '', toEmp: doc.toEmp || '', area: '결재', kind: l.label, title: doc.title, detail: [verb, doc.sender || doc.drafter, doc.docNo, doc.attachments ? `첨부 ${doc.attachments}` : ''].filter(Boolean).join(' · '), when: doc.date, waitDays: ageDays(doc.date, now), bizWait: bizDays(doc.date, now), deadline, url: doc.url || docLink(raw, l), listUrl: l.url, isNew: hasPrev && !prevDocs.has(`${key}:${doc.docId}`)});
     }
   };
   docAction('pending', '내 결재 차례');
@@ -288,8 +296,10 @@ export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6} = {}) 
   const uniqueMails = mails.filter(m => { const k = `${m.box}:${m.uid}`; if (seenUid.has(k)) return false; seenUid.add(k); return true; });
   const unreadMails = uniqueMails.filter(m => !m.seen && !NOISE_WORDS.test(m.subject));
   const recentAction = uniqueMails.filter(m => m.seen && !m.answered && !m.forwarded && ageDays(m.date, now) <= 3 && ACTION_WORDS.test(m.subject) && !NOISE_WORDS.test(m.subject) && !/^re:|^회신:|^답장:/i.test(m.subject.trim()));
+  const fromMe = m => (me && m.from === me) || (myLogin && String(m.fromEmail || '').toLowerCase().startsWith(myLogin + '@'));
   for (const m of uniqueMails) {
     const k = `mail:${m.box}:${m.uid}`;
+    if (fromMe(m)) continue; // mails I sent to myself are notes, not tasks
     // "Re:/FW:" mails are replies to a request (often my own): not my deadline.
     const isReplyMail = /^\s*(re|fw|fwd|회신|답장|전달)\s*[:：]/i.test(m.subject || '');
     if (isReplyMail) {
@@ -299,8 +309,14 @@ export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6} = {}) 
     const dl = ageDays(m.date, now) <= 30 ? addDeadline(m.subject, '메일', d.mail?.url, k, m.preview) : null;
     const hasDeadline = dl && dl.dday >= -1 && dl.dday <= 7 && !NOISE_WORDS.test(m.subject);
     const unread = !m.seen && !NOISE_WORDS.test(m.subject);
-    const replyCheck = recentAction.includes(m);
-    if (!unread && !hasDeadline && !replyCheck) continue;
+    const asks = ASK_WORDS.test(`${m.subject} ${m.preview || ''}`);
+    const shareOnly = SHARE_WORDS.test(m.subject) && !ASK_WORDS.test(m.subject);
+    const replyCheck = recentAction.includes(m) && asks && !shareOnly;
+    if (!unread && !hasDeadline && !replyCheck) {
+      // Material handed over to me: keep as reference (attachments are often what I need).
+      if (shareOnly && ageDays(m.date, now) <= 7) push({key: k, type: 'mail', base: 'mailShared', ref: {box: m.box, uid: m.uid}, area: '메일', kind: '받은 자료', title: m.subject || '(제목 없음)', detail: `${m.from} · 읽음${m.attach || /첨부/.test(m.preview || '') ? ' · 첨부' : ''}`, when: m.date, url: d.mail.url, scope: 'ref', refReason: '자료를 공유한 메일(할 일 요청 없음)', isNew: false});
+      continue;
+    }
     const replied = m.answered || m.forwarded;
     // A deadline mail I already answered is most likely done: keep it visible but low.
     const base = hasDeadline ? (replied ? 'mailAnswered' : 'mailDeadline') : unread ? (ACTION_WORDS.test(m.subject) ? 'mailUnreadAsk' : m.box === 'INBOX' ? 'mailUnread' : 'mailOther') : 'mailReply';
@@ -346,8 +362,21 @@ export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6} = {}) 
   for (const x of anomalies) push({key: `att:${x.date}`, type: 'attendance', base: x.priority === 'high' ? 'attHigh' : 'attMedium', ref: {date: x.date}, area: '근태', kind: '근태 확인 필요', title: `${fmtYmd(x.date)} 출결 '${x.result}'${x.status ? ` (${x.status})` : ''}${x.item ? ` · ${x.item}` : ''}`, detail: x.advice, when: fmtYmd(x.date), url: d.attendance?.requestUrl || d.attendance?.url, listUrl: d.attendance?.url, isNew: false});
 
   // Score -> level. Only the top `maxHigh` can be 긴급 so that red stays meaningful.
-  for (const a of actions) { const {score, why} = scoreAction(a, now); a.score = score; a.why = why; }
-  actions.sort((a, b) => b.score - a.score || String(a.when).localeCompare(String(b.when)));
+  // Is this mine to do, or just something I can see? (참고 = 나와 직접 관련 적음)
+  for (const a of actions) {
+    if (a.scope) continue;
+    let ref = '';
+    if (a.base === 'deptWaiting' && !role.deptReceiver && !(me && a.toEmp === me)) ref = '부서 접수는 부서 문서담당이 처리(설정에서 내 업무로 바꿀 수 있음)';
+    else if (a.base === 'distWaiting' && !role.distributor) ref = '배부는 문서 배부 담당이 처리(설정에서 내 업무로 바꿀 수 있음)';
+    else if (a.base === 'sendWaiting' && !role.sender && !(me && a.drafter === me)) ref = `${a.drafter || '다른 직원'} 기안 문서의 발송 대기`;
+    else if (a.base === 'viewing') ref = '열람용으로 받은 문서';
+    else if (a.base === 'notice') ref = '전체 공지';
+    else if (a.base === 'leave') ref = '예정 안내';
+    a.scope = ref ? 'ref' : 'mine';
+    if (ref) a.refReason = ref;
+  }
+  for (const a of actions) { const {score, why} = scoreAction(a, now); a.score = a.scope === 'ref' ? Math.min(score, 39) : score; a.why = why; }
+  actions.sort((a, b) => (a.scope === 'ref') - (b.scope === 'ref') || b.score - a.score || String(a.when).localeCompare(String(b.when)));
   let highs = 0;
   for (const a of actions) {
     let level = a.score >= 70 ? 'high' : a.score >= 40 ? 'medium' : 'low';

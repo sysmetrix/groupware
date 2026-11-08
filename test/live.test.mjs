@@ -307,3 +307,19 @@ test('routing ignores organisation names in titles', () => {
   const rec = recommendRouting({title: '2026년 10월 부천시청소년센터 4DAY 실시 결과 보고', sendOrg: '부천여성청소년재단', sendDeptCode: '5'}, hist);
   assert.equal(rec.length, 0, 'same centre name alone is not a topic match');
 });
+test('relevance: department work and shared material go to reference, self mail is dropped', () => {
+  const raw = fixture();
+  raw.principal = {...(raw.principal || {}), name: '서원하', loginId: 'sysmetrix'};
+  raw.data.mail.inbox.records.push(
+    {uid: '901', box: 'INBOX', subject: '[정리] 내게 쓴 메모', from: '서원하', fromEmail: 'sysmetrix@bwyf.or.kr', date: '2026-11-08 10:00:00', seen: false, answered: false, forwarded: false, attach: false, preview: ''},
+    {uid: '902', box: 'INBOX', subject: '3개년 결과보고서 드립니다.', from: '장지숙', fromEmail: '016023@bwyf.or.kr', date: '2026-11-07 10:00:00', seen: true, answered: false, forwarded: false, attach: false, preview: '대용량 파일첨부 2개'},
+  );
+  const a = analyze(raw, null, NOW);
+  assert.ok(!a.actions.some(x => x.ref && x.ref.uid === '901'), 'self mail dropped');
+  const shared = a.actions.find(x => x.ref && x.ref.uid === '902');
+  assert.equal(shared.scope, 'ref');
+  assert.equal(shared.kind, '받은 자료');
+  for (const x of a.actions.filter(x => ['deptWaiting', 'distWaiting', 'notice', 'viewing'].includes(x.base))) { assert.equal(x.scope, 'ref', x.key); assert.notEqual(x.priority, 'high'); }
+  const b = analyze(raw, null, NOW, {roles: {deptReceiver: true, distributor: true}});
+  for (const x of b.actions.filter(x => ['deptWaiting', 'distWaiting'].includes(x.base))) assert.equal(x.scope, 'mine', x.key);
+});
