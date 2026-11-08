@@ -353,6 +353,240 @@ ${mailFilesBox(m)}
     }, 4500);
   }
 
+  
+  // ---------- Interactive Plan-to-Result Auto-Creation Engine ----------
+  async function getPendingPlansList() {
+    try {
+      const sub = await GW.submittedRange({days: 365, size: 250});
+      const docs = sub.docs || [];
+      const normalDocs = docs.filter(d => d.form === '일반기안문' || d.tiKeyCode === 'mg_20160303185413307');
+
+      const plans = [];
+      const results = [];
+
+      const cleanCore = s => String(s || '')
+        .replace(/^2026년도?\s*/, '')
+        .replace(/^[『「"']+|[』」"']+$/g, '')
+        .replace(/운영계획.*|참가계획.*|실시계획.*|추진계획.*|계획.*|\(안\)/, '')
+        .replace(/운영\s*결과보고.*|참가\s*결과보고.*|결과보고.*|실시\s*결과.*|결과.*|추진실적.*/, '')
+        .trim();
+
+      for (const d of normalDocs) {
+        const t = d.title;
+        if (/계획|운영계획|참가계획|실시계획/.test(t) && !/결과/.test(t)) {
+          plans.push({ docId: d.docId, title: t, core: cleanCore(t), docNo: d.docNo, date: d.date });
+        } else if (/결과|실적|실시\s*결과/.test(t)) {
+          results.push({ docId: d.docId, title: t, core: cleanCore(t), docNo: d.docNo, date: d.date });
+        }
+      }
+
+      // Filter out plans that already have a result report
+      return plans.filter(p => {
+        return !results.some(r => r.core && (p.core.includes(r.core) || r.core.includes(p.core)));
+      });
+    } catch {
+      return [];
+    }
+  }
+
+  async function openResultPlanPicker() {
+    closeOverlay();
+    S.paletteOpen = true;
+
+    $('#overlay').innerHTML = `
+      <div class="modal" data-act="closeOverlay">
+        <div class="dlg" data-stop="1" style="width:min(680px,94vw);padding:22px 24px" role="dialog" aria-label="결과보고 대상 계획서 선택">
+          <button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button>
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+            <div class="cmd-logo">${ic('doc')}</div>
+            <div>
+              <h2 style="margin:0;font-size:18px">어떤 계획서의 결과보고를 작성할까요?</h2>
+              <div class="muted">이미 결과보고가 완료된 문서는 제외하고, 아직 결과보고를 올리지 않은 기안 문서 목록입니다.</div>
+            </div>
+          </div>
+
+          <div id="planPickerList" style="max-height:360px;overflow:auto;display:flex;flex-direction:column;gap:8px">
+            <div class="mi muted"><span class="spin"></span> 생산된 운영계획서 목록을 분석하고 있습니다…</div>
+          </div>
+
+          <div class="acts" style="margin-top:16px;justify-content:space-between;border-top:1px solid var(--line);padding-top:12px">
+            <button class="btn sm" data-act="quickDraft" data-t="result" data-custom="1">직접 새로 작성하기</button>
+            <button class="btn sm ghost" data-act="closeHelp">닫기 (Esc)</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const pending = await getPendingPlansList();
+    const listEl = $('#planPickerList');
+    if (!listEl) return;
+
+    if (!pending.length) {
+      listEl.innerHTML = `<div class="empty"><div class="ill">${ic('check')}</div><b>미작성된 결과보고 대상 계획서가 없습니다</b>모든 계획서의 결과보고가 이미 상신되었거나 새로 작성할 계획입니다.</div>`;
+      return;
+    }
+
+    listEl.innerHTML = pending.map((p, idx) => `
+      <div class="cmd-preset" role="button" tabindex="0" data-act="selectPlanForResult" data-id="${esc(p.docId)}" data-no="${esc(p.docNo)}" data-title="${esc(p.title)}" data-date="${esc(p.date)}" style="display:flex;align-items:flex-start;gap:12px">
+        <span class="bdg tag" style="margin-top:2px;flex:0 0 auto">계획 #${idx + 1}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:14.5px;color:var(--fg)">${esc(p.title)}</div>
+          <div class="muted" style="font-size:12px;margin-top:4px">${esc(p.docNo || '-')} · 기안일자: ${esc(p.date ? p.date.slice(0, 10) : '-')}</div>
+        </div>
+        <button class="btn sm primary" style="flex:0 0 auto;margin-left:auto">결과보고 작성</button>
+      </div>
+    `).join('');
+  }
+
+  async function startResultFromPlan(planDocId, planDocNo, planTitle, planDate) {
+    closeOverlay();
+    toast(`"${planTitle.slice(0, 20)}…" 계획서를 바탕으로 결과보고서를 자동 생성합니다.`);
+    
+    // 1. Fetch preview of original plan doc
+    let planText = '';
+    try {
+      const p = await GW.docPreview({docNo: planDocNo, title: planTitle});
+      if (p && p.found) planText = p.text || '';
+    } catch {}
+
+    // 2. Open general draft popup
+    const formKey = 'mg_20160303185413307';
+    const formName = '일반기안문';
+    const url = GW.links.draft(formKey, formName);
+    openUrl(url, {title: `결과보고: ${planTitle}`});
+    S.pane.expanded = true;
+
+    // 3. Format result title and body
+    let resultTitle = planTitle;
+    if (/운영계획/.test(resultTitle)) resultTitle = resultTitle.replace(/운영계획.*/, '운영 결과보고');
+    else if (/참가계획|참가\s*계획/.test(resultTitle)) resultTitle = resultTitle.replace(/참가\s*계획.*/, '참가 결과보고');
+    else if (/실시계획|추진계획|시행계획/.test(resultTitle)) resultTitle = resultTitle.replace(/(?:실시|추진|시행)?계획.*/, '추진 결과보고');
+    else if (/계획/.test(resultTitle)) resultTitle = resultTitle.replace(/계획.*/, '결과보고');
+    else resultTitle = resultTitle + ' 결과보고';
+
+    // Parse strict items from plan text
+    const extractItem = (labelRegex) => {
+      const m = planText.match(labelRegex);
+      if (!m) return '';
+      let val = m[1].trim();
+      val = val.split(/\s+[가-하]\s*\.|\s+붙임|\s+끝\s*\./)[0].trim();
+      return val;
+    };
+
+    const eventName = planTitle.replace(/^2026년도?\s*/, '').replace(/운영계획.*|참가계획.*|계획.*|\(안\)/, '').trim();
+    const dateVal = extractItem(/[가-하]\s*\.\s*(?:행\s*사\s*명|사\s*업\s*명)[^\n]*?[가-하]\s*\.\s*(?:일\s*시|기\s*간|운영일정)\s*[:：]\s*([^\n]+)/) || extractItem(/(?:일\s*시|기\s*간|운영일정)\s*[:：]\s*([^\n]+)/);
+    const placeVal = extractItem(/(?:장\s*소|운영장소)\s*[:：]\s*([^\n]+)/);
+    const targetVal = extractItem(/(?:대\s*상|참가대상)\s*[:：]\s*([^\n]+)/);
+    const scaleVal = extractItem(/(?:인\s*원|참가인원|규\s*모)\s*[:：]\s*([^\n]+)/);
+    const contentVal = extractItem(/(?:주요내용|내\s*용)\s*[:：]\s*([^\n]+)/);
+    const budgetVal = extractItem(/(?:소요예산|예\s*산)\s*[:：]\s*([^\n]+)/);
+
+    const cleanDateStr = planDate ? planDate.slice(0, 10).replace(/-/g, '. ') + '.' : '';
+    const refClause = planDocNo ? `${planDocNo}(${cleanDateStr}) 호와 관련입니다.` : '관련 방침에 의거합니다.';
+
+    const formattedBody = `1. ${refClause}
+2. 2026년 ${eventName} 추진 결과를 다음과 같이 보고합니다.
+  가. 사 업 명: 2026년 ${eventName}
+  나. 일    시: ${dateVal || '계획 일정에 따른 추진 완료'}
+  다. 장    소: ${placeVal || '관내 지정 장소'}
+  라. 대    상: ${targetVal || '해당 대상자 및 시민'}
+  마. 참가인원: ${scaleVal || '계획 인원 달성'}
+  바. 주요내용: ${contentVal || '세부 실행 계획에 따른 추진 및 운영 완료'}
+  사. 소요예산: ${budgetVal || '비예산 (자체 인력 및 인프라 활용)'}
+
+붙임  결과보고서 1부.  끝.`;
+
+    setTimeout(() => {
+      autoFillSpecificDraft({
+        titleText: resultTitle,
+        targetBinder: '기획일반',
+        bodyText: formattedBody
+      });
+    }, 4500);
+  }
+
+  async function autoFillSpecificDraft({titleText, targetBinder = '기획일반', bodyText}) {
+    const f = $('#frame iframe');
+    const d = f?.contentDocument;
+    if (!d) return;
+
+    // 1. Fill title
+    const titleInput = d.querySelector('input[placeholder="제목을 입력해주세요"]');
+    if (titleInput && titleText) {
+      try {
+        const nativeSetter = Object.getOwnPropertyDescriptor(f.contentWindow.HTMLInputElement.prototype, 'value')?.set;
+        if (nativeSetter) nativeSetter.call(titleInput, titleText);
+        else titleInput.value = titleText;
+      } catch {
+        titleInput.value = titleText;
+      }
+      titleInput.dispatchEvent(new Event('input', {bubbles: true}));
+      titleInput.dispatchEvent(new Event('change', {bubbles: true}));
+    }
+
+    // Also update card in left list
+    try {
+      const leftCandidate = Array.from(d.querySelectorAll('*')).find(el => el.children.length === 0 && (el.innerText || '').trim() === '제목을 입력해주세요.');
+      if (leftCandidate) leftCandidate.innerText = titleText;
+    } catch {}
+
+    // 2. Select default radios: 공개(001), 일반문서(000), 내부결재(000)
+    const pubRadio = [...d.querySelectorAll('input[type="radio"]')].find(rd => rd.value === '001');
+    if (pubRadio) { pubRadio.checked = true; pubRadio.dispatchEvent(new Event('change', {bubbles: true})); }
+    const normRadios = [...d.querySelectorAll('input[type="radio"]')].filter(rd => rd.value === '000');
+    normRadios.forEach(rd => { rd.checked = true; rd.dispatchEvent(new Event('change', {bubbles: true})); });
+
+    // 3. Automated Binder Selection (기록물철)
+    const binderInput = d.querySelector('input[placeholder*="기록물철"]');
+    const binderBtn = binderInput?.parentElement?.querySelector('button');
+    if (binderBtn && (!binderInput.value || binderInput.value.trim() === '')) {
+      binderBtn.click();
+      await new Promise(r => setTimeout(r, 600));
+      const dialog = d.querySelector('.obtdialog.open, ._isDialog');
+      if (dialog) {
+        const target = Array.from(dialog.querySelectorAll('*')).find(el => el.children.length === 0 && (el.innerText || '').trim() === targetBinder);
+        if (target) {
+          target.click();
+          target.dispatchEvent(new MouseEvent('dblclick', {bubbles: true}));
+        } else {
+          const first = Array.from(dialog.querySelectorAll('*')).find(el => el.children.length === 0 && (el.innerText || '').trim() === '기획일반');
+          if (first) { first.click(); first.dispatchEvent(new MouseEvent('dblclick', {bubbles: true})); }
+        }
+      }
+    }
+
+    // 4. Automated Approval Line (기안 서원하 -> 전결 이은경 실장)
+    const lineBtn = [...d.querySelectorAll('.topBtn, button')].find(b => b.innerText.trim() === '결재라인지정');
+    if (lineBtn) {
+      lineBtn.click();
+      await new Promise(r => setTimeout(r, 1000));
+      const dialog = d.querySelector('.obtdialog.open, ._isDialog');
+      if (dialog) {
+        const siljang = Array.from(dialog.querySelectorAll('*')).find(el => el.children.length === 0 && (el.innerText || '').includes('이은경'));
+        if (siljang) {
+          siljang.click();
+          siljang.dispatchEvent(new MouseEvent('dblclick', {bubbles: true}));
+        }
+        await new Promise(r => setTimeout(r, 400));
+        const applyBtn = Array.from(dialog.querySelectorAll('button, input[type="button"]')).find(b => b.innerText.trim() === '반영' || b.innerText.trim() === '확인');
+        if (applyBtn) applyBtn.click();
+      }
+    }
+
+    // 5. Inject HWP body via HwpCtrl
+    try {
+      const hwpFrame = d.querySelector('#formCtrl_1, iframe[src*="hwpBuild"]');
+      const hwpWin = hwpFrame?.contentWindow;
+      const ctrl = hwpWin?.HwpCtrl;
+      if (ctrl && typeof ctrl.PutFieldText === 'function') {
+        ctrl.PutFieldText('doc_name', titleText);
+        ctrl.PutFieldText('_F_CONTENTS_', bodyText);
+      }
+    } catch {}
+
+    toast('✓ 계획서에 매칭된 결과보고서가 결재 직전 상태로 완성되었습니다. 확인 후 [결재]를 누르세요.');
+  }
+
   async function autoFillDraft(templateType) {
     const f = $('#frame iframe');
     const d = f?.contentDocument;

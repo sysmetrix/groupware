@@ -335,12 +335,20 @@
     }
 
     // Case C: Draft Documents (결과보고, 운영계획, 예산품의)
-    if (isResultDraft || isPlanDraft || isBudgetDraft) {
-      const type = isResultDraft ? 'result' : isPlanDraft ? 'plan' : 'budget';
-      const typeName = isResultDraft ? '결과보고서' : isPlanDraft ? '운영계획서' : '예산집행품의서';
+    if (isResultDraft) {
+      setStep('step1', '1. 생산된 운영계획서 목록 및 결과보고 매칭 이력 조회 중…', true);
+      await new Promise(r => setTimeout(r, 600));
+      closeOverlay();
+      openResultPlanPicker();
+      return;
+    }
+
+    if (isPlanDraft || isBudgetDraft) {
+      const type = isPlanDraft ? 'plan' : 'budget';
+      const typeName = isPlanDraft ? '운영계획서' : '예산집행품의서';
 
       setStep('step1', '1. 일반기안문 양식 및 세션 데이터 로드 완료', true);
-      setStep('step2', `2. ${typeName} 4단계 행정 서식 및 제목 생성 완료`, true);
+      setStep('step2', `2. ${typeName} 행정 서식 및 제목 생성 완료`, true);
       setStep('step3', '3. HWP 웹 에디터 및 공개/일반/내부결재 메타데이터 자동 기입 중…');
 
       closeOverlay();
