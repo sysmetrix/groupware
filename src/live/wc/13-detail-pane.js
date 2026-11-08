@@ -15,7 +15,7 @@
     ph.className = 'ph' + (S.pane.url ? (isViewer ? ' viewer' : '') : ' min');
     const x = selectedAction();
     const st = x ? stateOf(x) : '';
-    ph.innerHTML = `<div class="top"><button class="btn sm" data-act="closePane" title="오른쪽 창을 닫고 목록으로 (Esc)">${ic('back')}목록으로</button><span class="sp"></span>${isViewer ? '<span class="muted">문서 미리보기</span>' : ''}${S.pane.url ? `<button class="btn sm ghost" data-act="paneExpand" title="${S.pane.expanded ? '목록과 나란히 보기' : '원래 화면을 넓게 보기'}">${ic('expand')}${S.pane.expanded ? '나란히' : '넓게'}</button><a class="btn sm ghost" href="${esc(S.pane.url)}" target="_blank" rel="noopener" title="새 창으로 열기">${ic('ext')}새 창</a>` : ''}</div>
+    ph.innerHTML = `<div class="top"><button class="btn sm ghost" data-act="closePane" title="상세 창 닫기 (Esc)">${ic('x')}닫기</button><span class="sp"></span>${isViewer ? '<span class="muted">문서 미리보기</span>' : ''}${S.pane.url ? `<button class="btn sm ghost" data-act="paneExpand" title="${S.pane.expanded ? '목록과 나란히 보기' : '원래 화면을 넓게 보기'}">${ic('expand')}${S.pane.expanded ? '나란히' : '넓게'}</button><a class="btn sm ghost" href="${esc(S.pane.url)}" target="_blank" rel="noopener" title="새 창으로 열기">${ic('ext')}새 창</a>` : ''}</div>
 <div class="in"><div class="box warn" id="dirtyNote" style="display:${S.pane.dirty ? 'block' : 'none'};margin:0 0 10px">${ic('alert')} 원래 화면에 입력 중입니다. 보내기·저장·상신 전에 다른 곳으로 옮기면 먼저 여쭤봅니다.</div>
 ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.headline ? `<b class="${['overdue', 'urgent'].includes(st) ? 'err' : ''}">${esc(x.headline)}</b>` : ''}</div>` : ''}<div class="t">${esc(info.title || '')}</div>${info.body || ''}</div>`;
     ph.scrollTop = keepScroll;
@@ -199,6 +199,16 @@ ${mailFilesBox(m)}
   const findMail = (box, uid) => [...(S.raw.data.mail?.inbox.records || []), ...(S.raw.data.mail?.otherUnseen || [])].find(m => m.box === box && m.uid === uid);
 
   function selectAction(key, {keepPane = false} = {}) {
+    if (!keepPane && S.sel && S.sel.key === key) {
+      if (!leavePane()) return;
+      S.sel = null; S.pane.url = ''; S.pane.expanded = false;
+      if (S.view === 'today') {
+        root.querySelectorAll('.row.sel').forEach(r => r.classList.remove('sel'));
+        renderNav();
+      } else renderMain();
+      renderPane();
+      return;
+    }
     if (!keepPane && S.sel && S.sel.key !== key && !leavePane()) return;
     S.sel = {type: 'action', key};
     if (!keepPane) { S.pane.url = ''; S.pane.extract = null; S.pane.preview = null; }

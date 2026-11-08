@@ -3,16 +3,19 @@
   // ---------- events ----------
   root.addEventListener('click', async e => {
     const path = e.composedPath();
-    const el = path.find(n => n && n.dataset && n.dataset.act);
-    if (!el) return;
-    const act = el.dataset.act, v = el.dataset.v;
     const hasStop = path.some(n => n && n.dataset && n.dataset.stop);
-    // 1. If user clicks outside any open dialog / menu / palette / coach / help, close it immediately
+    const actEl = path.find(n => n && n.dataset && n.dataset.act);
+    const act = actEl ? actEl.dataset.act : '';
+    const v = actEl ? actEl.dataset.v : '';
+
+    // 1. If any overlay, dropdown menu, modal, or coachmark is open, clicking outside it closes it IMMEDIATELY
     if ((S.menuOpen || S.paletteOpen || S.helpOpen || S.coach) && !hasStop) {
       if (!['menuNew', 'menuBell', 'menuView', 'help', 'openPalette'].includes(act)) {
         closeOverlay();
       }
     }
+    if (!actEl) return;
+    const el = actEl;
     if (act === 'closeOverlay' && hasStop) return;
     if (el.tagName === 'A' && el.getAttribute('href') === '#') e.preventDefault();
     switch (act) {
@@ -23,9 +26,10 @@
       case 'home': goHome(); break;
       case 'apOpen': { e.stopPropagation(); const d = findDoc(el.dataset.kind, el.dataset.id) || (S.apMore[el.dataset.kind] || []).find(x => x.docId === el.dataset.id); if (!d || !leavePane()) break; S.sel = {type: 'doc', kind: el.dataset.kind, docId: d.docId}; S.pane.url = ''; renderMain(); openUrl(d.url, {title: d.title, unread: d.unread}); break; }
       case 'copyErrors': copyText((S.errors || []).map(x => `${new Date(x.at).toISOString()} ${x.where}: ${x.msg}`).join('\n')); break;
+      case 'setTodayTab': S.todayTab = v; S.filter.level = 'all'; renderMain(); break;
       case 'stateFilter': S.filter.level = S.filter.level === v || v === 'all' ? 'all' : v; renderMain(); break;
       case 'rowMenu': e.stopPropagation(); openMenu('row:' + el.dataset.k, el); break;
-      case 'markDone': e.stopPropagation(); { pushUndo('끝냄'); S.hidden[el.dataset.k] = Date.now(); saveLocal(); afterMark(); toastUndo(el.dataset.k.startsWith('att:') ? '정상으로 표시했습니다. 그룹웨어 기록이 3일 뒤에도 그대로면 다시 보여 드립니다.' : '끝난 일로 표시했습니다. 그룹웨어에 아직 남아 있으면 하루 뒤 다시 보여 드립니다.'); } break;
+      case 'markDone': e.stopPropagation(); { pushUndo('끝냄'); S.hidden[el.dataset.k] = Date.now(); saveLocal(); afterMark(); toastUndo(el.dataset.k.startsWith('att:') ? '확인 완료 처리했습니다. 그룹웨어 기록이 3일 뒤에도 그대로면 다시 보여 드립니다.' : '처리 완료되었습니다. 그룹웨어에 아직 남아 있으면 하루 뒤 다시 보여 드립니다.'); } break;
       case 'coach': startCoach(); break;
       case 'coachNext': coachNext(); break;
       case 'coachEnd': endCoach(); break;

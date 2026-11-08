@@ -6,6 +6,11 @@
   function vApproval() {
     const lists = S.a.approval.lists, counts = S.a.approval.counts;
     const tabs = [['pending', '결재 대기'], ['deptWaiting', '부서 접수 대기'], ['distWaiting', '배부 대기'], ['sendWaiting', '발송 대기'], ['viewing', '열람문서'], ['submitted', '내 상신문서']];
+    // Automatically select the first tab that has documents if the active tab is empty
+    if (!lists[S.apTab] || !lists[S.apTab].docs || lists[S.apTab].docs.length === 0) {
+      const firstWithDocs = tabs.find(([k]) => lists[k] && lists[k].docs && lists[k].docs.length > 0);
+      if (firstWithDocs) S.apTab = firstWithDocs[0];
+    }
     const l = lists[S.apTab];
     const more = S.apMore[S.apTab] || [];
     const docs = l && !l.error ? [...l.docs, ...more] : [];
