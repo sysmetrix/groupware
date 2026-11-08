@@ -342,7 +342,7 @@ kbd{font:11px monospace;border:1px solid var(--line);border-bottom-width:2px;bor
     {id: 'board', label: '할 일 보드'}, {id: 'calendar', label: '일정 달력'}, {id: 'budget', label: '예산 집행'}, {id: 'attendance', label: '근태·연차'},
     {id: 'report', label: '보고서'}, {id: 'settings', label: '설정'},
   ];
-  const go = v => { S.view = v; S.multi.clear(); render(); };
+  const go = v => { S.view = v; S.multi.clear(); S.pane.expanded = false; render(); };
   // Hidden items come back after 24h if the groupware still lists them (숨겼지만 아직 남음).
   const resurfaced = k => isHidden(k) && Date.now() - S.hidden[k] > 86400_000;
   const visibleActions = () => S.a ? S.a.actions.filter(x => S.filter.showHidden ? (isHidden(x.key) || isSnoozed(x.key)) : ((!isHidden(x.key) || resurfaced(x.key)) && !isSnoozed(x.key))) : [];
@@ -456,7 +456,7 @@ ${tile('발송·반려', (s.sendWaiting ?? 0) + s.rejectedSubmitted + '건', `�
     return `<div class="row ${S.sel && S.sel.key === x.key ? 'sel' : ''} ${isHidden(x.key) || isSnoozed(x.key) ? 'hid' : ''} ${S.multi.has(x.key) ? 'multi' : ''}" data-act="selAction" data-k="${esc(x.key)}">
 <div><input type="checkbox" data-act="multi" data-k="${esc(x.key)}" ${S.multi.has(x.key) ? 'checked' : ''} title="여러 개 선택(Shift로 범위)"></div>
 <div><span class="pill ${x.priority}" title="${esc(['점수 ' + x.score, ...(x.why || [])].join(' · '))}">${PRI[x.priority]}</span>${S.newKeys.has(x.key) ? '<br><span class="pill new">새</span>' : ''}</div>
-<div><div class="t">${esc(x.title)}</div><div class="d">${dl}${plan}${stale ? '<span class="pill high">숨겼지만 아직 남음</span>' : ''}${esc(x.area)} · ${esc(x.kind)} · ${esc(x.detail)}</div></div>
+<div><div class="t">${esc(x.title)}</div><div class="d">${x.leaveConflict ? `<span class="pill ${x.leaveConflict.answered ? 'medium' : 'solid'}" title="마감일이 내 휴가일입니다">⚠ 휴가일 마감 · ${esc(x.leaveConflict.before.slice(5))}까지${x.leaveConflict.passed ? '(지남)' : ''}</span>` : ''}${dl}${plan}${stale ? '<span class="pill high">숨겼지만 아직 남음</span>' : ''}${esc(x.area)} · ${esc(x.kind)} · ${esc(x.detail)}</div></div>
 <div class="w">${esc(String(x.when).slice(5, 16))}${isSnoozed(x.key) ? '<br>미룸' : ''}${isHidden(x.key) ? '<br>숨김' : ''}</div>
 <div class="qa"><button class="btn sm" data-act="quickOpen" data-k="${esc(x.key)}" title="처리 창에 열기">열기</button><button class="btn sm" data-act="quickHide" data-k="${esc(x.key)}" title="이 화면에서 숨기기 (X)">숨기기</button><button class="btn sm" data-act="quickSnooze" data-k="${esc(x.key)}" title="내일 오전 8시까지 (S)">내일</button><button class="btn sm" data-act="quickTodo" data-k="${esc(x.key)}" title="할 일 보드에 추가 (T)">할 일</button></div></div>`;
   }
@@ -995,7 +995,8 @@ ${S.weekly ? `<h3>주간 업무 실적 초안 <button class="btn sm primary" dat
     if (!S.sel) S.sel = {type: 'frame', title: title || '그룹웨어 화면', url};
     S.pane.url = url; S.pane.extract = null;
     // Full groupware screens (근태신청, 메일함, 결재작성) need width: open the pane wide.
-    if (!/#\/?popup\?/.test(url)) { S.pane.expanded = true; toast('그룹웨어 전체 화면이라 처리 창을 넓게 열었습니다. "목록 보기"로 돌아갑니다.'); }
+    if (!/#\/?popup\?/.test(url)) { S.pane.expanded = true; toast('그룹웨어 전체 화면이라 처리 창을 넓게 열었습니다. 왼쪽 메뉴나 "목록 보기"로 돌아갑니다.'); }
+    else S.pane.expanded = false;
     renderPane();
   }
   // Would opening this item record a read/열람 in the groupware?

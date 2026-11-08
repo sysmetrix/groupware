@@ -328,8 +328,14 @@ export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6} = {}) 
     const owner = actions.find(a => a.key === dl.key);
     const answered = owner && owner.base === 'mailAnswered'; // keep the warning, but lower
     if (owner) { // fold the warning into the item itself instead of a second row
-      owner.leaveConflict = {date: dl.date, kind: u.kind, answered};
-      owner.detail += ` · ⚠ 마감일(${dl.date.slice(5)})에 ${u.kind}${answered ? ' · 제출까지 끝났는지 확인' : ' · 전날까지 처리'}`;
+      // Real deadline = the last working day before the leave (weekends and other leave days skipped).
+      let n = dayNumber(dl.date) - 1;
+      while (n > dayNumber(dl.date) - 14) { const iso = new Date(n * 86400000).toISOString().slice(0, 10); const w = new Date(n * 86400000).getUTCDay(); if (w !== 0 && w !== 6 && !offDays.has(iso)) break; n--; }
+      const before = new Date(n * 86400000).toISOString().slice(0, 10);
+      const passed = dday(before, now) < 0;
+      const wd = '일월화수목금토'[new Date(n * 86400000).getUTCDay()];
+      owner.leaveConflict = {date: dl.date, kind: u.kind, answered, before, passed};
+      owner.detail += ` · 마감일(${dl.date.slice(5)})이 ${u.kind} → 실제로는 ${before.slice(5)}(${wd})까지${passed ? '였음' : ''}`;
       continue;
     }
     push({key: `conflict:${dl.date}:${dl.key || dl.title.slice(0, 20)}`, type: 'conflict', base: answered ? 'conflictAnswered' : 'conflict', ref: {key: dl.key}, area: '기한', kind: '휴가일 마감', title: dl.title, detail: `${dl.date.slice(5)}${dl.time ? ' ' + dl.time : ''} 마감인데 그날 ${u.kind}${answered ? ' · 답장은 했음, 제출까지 끝났는지 확인' : ' · 전날까지 처리하세요'}`, when: dl.date, deadline: {date: dl.date, time: dl.time, dday: dl.dday}, url: dl.url, isNew: false});

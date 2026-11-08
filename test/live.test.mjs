@@ -269,6 +269,7 @@ test('deadline mails: unanswered ones rise, answered ones stay low, leave-day co
   assert.ok(answered.score < open.score);
   assert.ok(open.leaveConflict, 'deadline on a leave day is flagged on the item itself');
   assert.ok(open.why.includes('휴가일 마감'));
+  assert.equal(open.leaveConflict.before, '2026-11-11', 'real deadline is the working day before the leave');
   assert.ok(!a.actions.some(x => x.type === 'conflict' && x.title === open.title), 'no duplicate conflict row');
   assert.ok(a.actions.filter(x => x.priority === 'high').length <= 6);
 });
