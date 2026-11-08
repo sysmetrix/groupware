@@ -355,14 +355,6 @@ ${mailFilesBox(m)}
     const d = f?.contentDocument;
     if (!d) { toast('기안문 화면이 열려 있지 않습니다.'); return; }
 
-    if (templateType === 'lineGuide') {
-      // Open approval line modal
-      const lineBtn = [...d.querySelectorAll('.topBtn')].find(b => b.innerText.trim() === '결재라인지정');
-      if (lineBtn) lineBtn.click();
-      toast('결재라인 대화상자가 열렸습니다. 부서 표준: 기안(서원하 차장) → 중간(부장) → 전결(실장)');
-      return;
-    }
-
     const sel = S.sel;
     const item = sel && sel.type === 'action' ? selectedAction() : null;
     const myName = (S.raw && S.raw.principal && S.raw.principal.name) || '서원하';
@@ -372,9 +364,11 @@ ${mailFilesBox(m)}
 
     let titleText = '';
     let bodyHtml = '';
+    let targetBinder = '기획일반';
 
     if (templateType === 'result' || templateType === 'oneClick') {
-      titleText = `${baseTitle} 결과보고`;
+      titleText = `2026년『${baseTitle}』운영 결과보고`;
+      targetBinder = '기획일반';
       const t = S.budget.table;
       const head = t && t.rows && t.rows[0];
       const budgetSnippet = head ? `<p>&nbsp; 다. 소요 예산: ${esc(head.name)} 집행 ${won(head.executed)}원 (집행률 ${pct(head.rate)})</p>` : '';
@@ -393,7 +387,8 @@ ${budgetSnippet}
 <p>&nbsp; 가. 추진 성과 공유 및 부서 간 업무 연계 활성화</p>
 <p>&nbsp; 나. 개선 사항 차기 실행 계획 반영 및 체계적 이력 관리</p>`;
     } else if (templateType === 'plan') {
-      titleText = `${baseTitle} 운영계획(안)`;
+      titleText = `2026년『${baseTitle}』운영계획(안)`;
+      targetBinder = '기획일반';
       bodyHtml = `
 <p><b>1. 기본 방침</b></p>
 <p>&nbsp; 가. 2026년도 재단 전략 목표 및 ${esc(myDept)} 운영 지침 준수</p>
@@ -409,8 +404,22 @@ ${budgetSnippet}
 <p><br></p>
 <p><b>4. 행정 사항</b></p>
 <p>&nbsp; 가. 관련 부서 업무 협조 및 기한 준수</p>`;
+    } else if (templateType === 'goods') {
+      titleText = `2026년「${baseTitle}」운영물품 구입`;
+      targetBinder = '예산 및 자금배정';
+      bodyHtml = `
+<p><b>1. 구입 목적</b></p>
+<p>&nbsp; 가. 2026년 ${esc(baseTitle)} 추진에 따른 원활한 행사 진행 및 운영 물품 확보</p>
+<p><br></p>
+<p><b>2. 물품 내역</b></p>
+<p>&nbsp; 가. 품명: 행사 진행 물품 및 홍보 다과류</p>
+<p>&nbsp; 나. 소요 예산: 관련 사업비 예산 범위 내 집행</p>
+<p>&nbsp; 다. 납품 기한: ${esc(todayStr)}까지</p>
+<p><br></p>
+<p>위와 같이 물품을 매입(구입)하고자 하오니 재가하여 주시기 바랍니다.</p>`;
     } else if (templateType === 'budget') {
-      titleText = `${S.budget.table?.rows?.[0]?.name?.replace(/^[○●·\s]+/, '') || '사업'} 예산 집행 품의`;
+      titleText = `2026년「${S.budget.table?.rows?.[0]?.name?.replace(/^[○●·\s]+/, '') || '사업'}」예산 집행 품의`;
+      targetBinder = '예산 및 자금배정';
       const t = S.budget.table;
       const head = t && t.rows && t.rows[0];
       const leaves = (t && t.rows ? t.rows.filter(r => r.level === '세') : []).slice(0, 6);
@@ -433,21 +442,66 @@ ${budgetSnippet}
 <p>위와 같이 예산을 집행하고자 하오니 재가하여 주시기 바랍니다.</p>`;
     }
 
-    // 1. Fill title
+    // 1. Fill title using nativeValueSetter (guarantees React / Amaranth 10 binding)
     const titleInput = d.querySelector('input[placeholder="제목을 입력해주세요"]');
     if (titleInput && titleText) {
-      titleInput.value = titleText;
+      try {
+        const nativeSetter = Object.getOwnPropertyDescriptor(f.contentWindow.HTMLInputElement.prototype, 'value')?.set;
+        if (nativeSetter) nativeSetter.call(titleInput, titleText);
+        else titleInput.value = titleText;
+      } catch {
+        titleInput.value = titleText;
+      }
       titleInput.dispatchEvent(new Event('input', {bubbles: true}));
       titleInput.dispatchEvent(new Event('change', {bubbles: true}));
     }
 
-    // 2. Set default radios: 공개, 일반, 내부결재
+    // 2. Select default radios: 공개(001), 일반문서(000), 내부결재(000)
     const pubRadio = [...d.querySelectorAll('input[type="radio"]')].find(rd => rd.value === '001');
     if (pubRadio) { pubRadio.checked = true; pubRadio.dispatchEvent(new Event('change', {bubbles: true})); }
     const normRadios = [...d.querySelectorAll('input[type="radio"]')].filter(rd => rd.value === '000');
     normRadios.forEach(rd => { rd.checked = true; rd.dispatchEvent(new Event('change', {bubbles: true})); });
 
-    // 3. Inject HWP body
+    // 3. Automated Binder Selection (기록물철)
+    const binderInput = d.querySelector('input[placeholder*="기록물철"]');
+    const binderBtn = binderInput?.parentElement?.querySelector('button');
+    if (binderBtn && (!binderInput.value || binderInput.value.trim() === '')) {
+      binderBtn.click();
+      await new Promise(r => setTimeout(r, 600));
+      const dialog = d.querySelector('.obtdialog.open, ._isDialog');
+      if (dialog) {
+        const target = Array.from(dialog.querySelectorAll('*')).find(el => el.children.length === 0 && (el.innerText || '').trim() === targetBinder);
+        if (target) {
+          target.click();
+          target.dispatchEvent(new MouseEvent('dblclick', {bubbles: true}));
+        } else {
+          // fallback to first item
+          const first = Array.from(dialog.querySelectorAll('*')).find(el => el.children.length === 0 && (el.innerText || '').trim() === '기획일반');
+          if (first) { first.click(); first.dispatchEvent(new MouseEvent('dblclick', {bubbles: true})); }
+        }
+      }
+    }
+
+    // 4. Automated Approval Line Selection (기안: 서원하 -> 중간: 이승봉 -> 전결: 이은경)
+    const lineBtn = [...d.querySelectorAll('.topBtn, button')].find(b => b.innerText.trim() === '결재라인지정');
+    if (lineBtn) {
+      lineBtn.click();
+      await new Promise(r => setTimeout(r, 1000));
+      const dialog = d.querySelector('.obtdialog.open, ._isDialog');
+      if (dialog) {
+        // find [실장]이은경
+        const siljang = Array.from(dialog.querySelectorAll('*')).find(el => el.children.length === 0 && (el.innerText || '').includes('이은경'));
+        if (siljang) {
+          siljang.click();
+          siljang.dispatchEvent(new MouseEvent('dblclick', {bubbles: true}));
+        }
+        await new Promise(r => setTimeout(r, 400));
+        const applyBtn = Array.from(dialog.querySelectorAll('button, input[type="button"]')).find(b => b.innerText.trim() === '반영' || b.innerText.trim() === '확인');
+        if (applyBtn) applyBtn.click();
+      }
+    }
+
+    // 5. Inject HWP body HTML
     let injected = false;
     const walk = (doc) => {
       if (!doc) return;
@@ -464,8 +518,45 @@ ${budgetSnippet}
     };
     walk(d);
 
-    if (injected) toast('✓ 제목·본문·메타데이터가 결재 직전 상태로 자동 완성되었습니다. 상단의 [결재]를 누르시면 상신됩니다.');
-    else toast('에디터를 찾지 못했습니다.');
+    toast('✓ 제목·기록물철·결재선·표준본문이 결재 직전 상태로 완성되었습니다. 확인 후 [결재]를 누르세요.');
+  }
+
+  function autoStartDraft(type) {
+    closeOverlay();
+    const isGoods = type === 'goods';
+    const formKey = isGoods ? 'mg_20160313172845987' : 'mg_20160303185413307';
+    const formName = isGoods ? '물품매입(수리제조)품의 및 요구서' : '일반기안문';
+    const url = GW.links.draft(formKey, formName);
+    openUrl(url, {title: `새 기안: ${formName}`});
+    S.pane.expanded = true;
+    toast(`${formName} 양식을 열고 서식·기록물철·결재선을 자동 기입하는 중…`);
+    setTimeout(() => {
+      autoFillDraft(type);
+    }, 4500);
+  }
+
+  function quickAttendanceApplication(type) {
+    closeOverlay();
+    const todayKst = R.kstNow(new Date());
+    const todayLabel = `${todayKst.date}(${todayKst.weekday})`;
+    let reasonText = '';
+    let formTitle = '';
+
+    if (type === 'trip') {
+      formTitle = '관내출장신청';
+      reasonText = `${todayLabel} 재단 주요 현안 및 업무 추진을 위한 관내출장`;
+    } else if (type === 'leave') {
+      formTitle = '휴가신청';
+      reasonText = `${todayLabel} 개인 용무에 따른 연차 휴가 사용`;
+    } else if (type === 'overtime') {
+      formTitle = '휴일/시간외근무신청';
+      reasonText = `${todayLabel} 재단 당면 주요 과제 완수를 위한 시간외/휴일근무`;
+    }
+
+    copyText(reasonText);
+    openUrl(GW.links.route(GW.routes.attendanceRequest), {title: `근태신청: ${formTitle}`});
+    S.pane.expanded = true;
+    toast(`✓ ${formTitle} 준비 완료: 신청 사유("${reasonText.slice(0, 20)}…")가 복사되었습니다. 근태신청 화면에서 사유란에 붙여넣기(Ctrl+V) 후 [신청]하세요.`);
   }
 
   async function autoFillMail(templateType) {
@@ -555,21 +646,10 @@ ${budgetSnippet}
       return `<div class="autofill-bar"><span class="lbl">${ic('star')} 회신 자동 기입:</span><button class="btn sm" data-act="autoFillMail" data-v="confirm">✉️ 확인 회신문</button><button class="btn sm" data-act="autoFillMail" data-v="submit">✉️ 자료 제출 회신문</button><button class="btn sm" data-act="autoFillMail" data-v="extend">✉️ 기한 연장 요청</button></div>`;
     }
     if (isDraft) {
-      return `<div class="autofill-bar"><span class="lbl">${ic('star')} 결재 직전 자동 완성:</span><button class="btn sm primary" data-act="autoFillDraft" data-v="oneClick">⚡ 원클릭 결재 완성</button><button class="btn sm" data-act="autoFillDraft" data-v="result">📝 결과보고</button><button class="btn sm" data-act="autoFillDraft" data-v="plan">📝 운영계획</button><button class="btn sm" data-act="autoFillDraft" data-v="budget">📊 실시간 예산표 삽입</button><button class="btn sm ghost" data-act="autoFillDraft" data-v="lineGuide" title="결재라인지정 대화상자를 열고 결재선 안내">👥 결재라인 가이드</button></div>`;
+      return `<div class="autofill-bar"><span class="lbl">${ic('star')} 결재 직전 자동 완성:</span><button class="btn sm primary" data-act="autoFillDraft" data-v="oneClick">⚡ 원클릭 결재 완성</button><button class="btn sm" data-act="autoFillDraft" data-v="plan">📝 운영계획</button><button class="btn sm" data-act="autoFillDraft" data-v="result">📝 결과보고</button><button class="btn sm" data-act="autoFillDraft" data-v="goods">📦 물품구입</button><button class="btn sm" data-act="autoFillDraft" data-v="budget">📊 예산품의</button></div>`;
     }
     if (isAtt) {
       return `<div class="autofill-bar"><span class="lbl">${ic('star')} 근태 도우미:</span><button class="btn sm" data-act="autoFillAtt">📅 대체휴무 사유 복사</button></div>`;
     }
     return '';
-  }
-
-  function autoStartDraft(type) {
-    closeOverlay();
-    const url = GW.links.draft('mg_20160303185413307', '일반기안문');
-    openUrl(url, {title: '새 기안: 일반기안문'});
-    S.pane.expanded = true;
-    toast('기안문 양식을 열고 서식을 결재 직전 상태로 자동 기입하는 중…');
-    setTimeout(() => {
-      autoFillDraft(type);
-    }, 4500);
   }

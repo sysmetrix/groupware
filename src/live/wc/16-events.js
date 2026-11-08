@@ -40,6 +40,7 @@
       case 'clearHistory': store.del('actionHistory'); openActionHistory(); toast('작업 내역을 비웠습니다.'); break;
       case 'mailToDraft': mailToDraft(el.dataset.uid); break;
       case 'quickDraft': autoStartDraft(el.dataset.t); break;
+      case 'quickAtt': quickAttendanceApplication(el.dataset.t); break;
       case 'autoFillMail': autoFillMail(v); break;
       case 'autoFillDraft': autoFillDraft(v); break;
       case 'autoFillAtt': autoFillAtt(); break;

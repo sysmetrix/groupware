@@ -74,28 +74,22 @@
     if (S.menuOpen === which) { closeOverlay(); return; }
     S.menuOpen = which; S.paletteOpen = false; S.helpOpen = false; S.coach = null;
     if (which === 'new') {
-      $('#overlay').innerHTML = `<div class="menu" data-stop="1" style="min-width:340px">
-        <div class="mh">⚡ 결재 직전 자동 완성 기안</div>
-        <div class="mi" data-act="quickDraft" data-t="result">📝 결과보고서 기안 (서식·예산 자동 완성)</div>
-        <div class="mi" data-act="quickDraft" data-t="plan">📝 운영계획서 기안 (4단계 서식 자동 완성)</div>
-        <div class="mi" data-act="quickDraft" data-t="budget">📊 예산집행품의서 기안 (실시간 잔액표 삽입)</div>
+      $('#overlay').innerHTML = `<div class="menu" data-stop="1" style="min-width:380px">
+        <div class="mh">⚡ 전자결재 기안 (제목·기록물철·결재선·본문 풀 자동 완성)</div>
+        <div class="mi" data-act="quickDraft" data-t="plan">📝 <b>일반기안문</b> (운영계획서 자동 기입)</div>
+        <div class="mi" data-act="quickDraft" data-t="result">📝 <b>일반기안문</b> (결과보고서·실시간 예산)</div>
+        <div class="mi" data-act="quickDraft" data-t="goods">📦 <b>물품매입품의서</b> (운영물품 구입 품의)</div>
+        <div class="mi" data-act="quickDraft" data-t="budget">📊 <b>예산집행품의서</b> (실시간 잔액표 삽입)</div>
 
-        <div class="mh">🚗 근태·출장·휴가 신청</div>
-        <div class="mi" data-act="openUrl" data-url="${esc(GW.links.route(GW.routes.attendanceRequest))}" data-title="근태신청">🚗 관내·관외 출장신청</div>
-        <div class="mi" data-act="openUrl" data-url="${esc(GW.links.route(GW.routes.attendanceRequest))}" data-title="근태신청">🌴 연차·반차·대체휴가 신청</div>
+        <div class="mh">🚗 근태·출장·휴가 연동 신청 (공식 근태관리 화면)</div>
+        <div class="mi" data-act="quickAtt" data-t="trip">🚗 <b>관내·관외 출장신청</b> (사유 자동 준비)</div>
+        <div class="mi" data-act="quickAtt" data-t="leave">🌴 <b>연차·반차·대체휴가</b> (사유 자동 준비)</div>
+        <div class="mi" data-act="quickAtt" data-t="overtime">⏰ <b>휴일근무·시간외근무</b> (일자 자동 파싱)</div>
 
-        <div class="mh">일반 결재 양식</div>
-        <div id="formList"><div class="mi muted"><span class="spin"></span> 양식을 읽는 중…</div></div>
-        <div class="mi" data-act="openUrl" data-url="${esc(GW.links.route(GW.routes.draft))}" data-title="결재작성">📂 전체 결재 양식함에서 고르기</div>
-
-        <div class="mh">메일 작성</div>
+        <div class="mh">📂 전체 양식 및 메일</div>
+        <div class="mi" data-act="openUrl" data-url="${esc(GW.links.route(GW.routes.draft))}" data-title="결재작성">📂 전자결재 전체 양식함에서 고르기</div>
         <div class="mi" data-act="openUrl" data-url="${esc(GW.links.compose('plain'))}" data-title="새 메일 쓰기">✉ 새 메일 쓰기</div>
       </div>`;
-      const list = await loadForms();
-      const fl = $('#formList');
-      // Filter out interlocked ERP/HR forms so user never encounters "연동본문 데이터 조회 실패"
-      const safeForms = (list || []).filter(f => f.isStandalone !== false).slice(0, 5);
-      if (fl) fl.innerHTML = safeForms.map(f => `<div class="mi" data-act="openUrl" data-url="${esc(f.url)}" data-title="새 기안: ${esc(f.name)}">📝 ${esc(f.name)} <span class="muted">${f.count ? `${f.count}번 사용` : '추천'}</span></div>`).join('') || '<div class="mi muted">자주 쓰는 일반 기안문이 없습니다.</div>';
     } else if (which.startsWith('row:')) {
       const key = which.slice(4);
       const x = S.a.actions.find(a => a.key === key);
