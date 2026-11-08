@@ -118,11 +118,14 @@ export function attendanceAnomalies(days = [], {now = new Date(), leaves = []} =
 // Honest numbers: "비슷한 문서 n건 중 k건".
 const STOP = /^(20\d{2}년?|\d+월?|안내|요청|알림|관련|제출|협조|실시|결과|계획|참석|회신|보고|개최|운영|및|등|위한|대한|부천|부천시|경기도|경기|재단|여성청소년재단|부천여성청소년재단|협조요청|참여|프로그램|사업)$/;
 const tokens = t => new Set(String(t || '').replace(/[\[\]()「」『』【】<>"'“”‘’·,.:;!?~\-_/]/g, ' ').split(/\s+/).filter(w => w.length >= 2 && !STOP.test(w)));
+// Organisation names in titles ("부천시청소년센터 10월 …") say who sent it, not what it is about.
+const ORG_WORD = /(센터|재단|협의회|교육청|교육지원청|시청|구청|도청|본부|사무소|복지관|여성회관)$/;
+const topicTokens = (title, orgs = []) => { const drop = new Set(orgs.flatMap(o => [...tokens(o)])); return new Set([...tokens(title)].filter(w => !drop.has(w) && !ORG_WORD.test(w))); };
 export function recommendRouting(doc, history = [], {target = 'toDept', limit = 3} = {}) {
   const out = [];
   out.group = null; out.similar = 0;
   if (!doc || !history.length) return out;
-  const want = tokens(doc.title);
+  const want = topicTokens(doc.title, [doc.sendOrg, doc.sendDept, doc.sender]);
   // Rare words count more than words that appear in many past titles (IDF).
   const df = new Map();
   const byDoc = new Map();
@@ -133,12 +136,12 @@ export function recommendRouting(doc, history = [], {target = 'toDept', limit = 
     e.targets.add(h[target]);
     byDoc.set(key, e);
   }
-  for (const e of byDoc.values()) for (const w of tokens(e.title)) df.set(w, (df.get(w) || 0) + 1);
+  for (const e of byDoc.values()) for (const w of topicTokens(e.title, [e.sendOrg, e.from])) df.set(w, (df.get(w) || 0) + 1);
   const N = Math.max(1, byDoc.size);
   const idf = w => Math.log(1 + N / (df.get(w) || 1));
   const similar = [];
   for (const e of byDoc.values()) {
-    const have = tokens(e.title);
+    const have = topicTokens(e.title, [e.sendOrg, e.from]);
     let overlap = 0, weight = 0;
     for (const w of want) if (have.has(w)) { overlap++; weight += idf(w); }
     const sameDept = !!(doc.sendDeptCode && doc.sendDeptCode === e.sendDeptCode);
@@ -230,6 +233,7 @@ function scoreAction(a, now) {
     s += biz >= 3 ? 22 : Math.min(12, biz * 4);
     if (waited >= 2) why.push(biz >= 3 ? `근무일 ${biz}일 대기` : `${waited}일 대기`);
   }
+  if (a.leaveConflict) { s += a.leaveConflict.answered ? 4 : 24; why.push('휴가일 마감'); }
   if (URGENT_WORDS.test(a.title)) { s += 20; why.push('긴급 표현'); }
   if (PROMO_WORDS.test(a.title) && !REQUEST_WORDS.test(a.title)) { s -= 22; why.push('홍보·안내성'); }
   return {score: s, why};
@@ -323,6 +327,11 @@ export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6} = {}) 
     if (!u || dl.dday < 0) continue;
     const owner = actions.find(a => a.key === dl.key);
     const answered = owner && owner.base === 'mailAnswered'; // keep the warning, but lower
+    if (owner) { // fold the warning into the item itself instead of a second row
+      owner.leaveConflict = {date: dl.date, kind: u.kind, answered};
+      owner.detail += ` · ⚠ 마감일(${dl.date.slice(5)})에 ${u.kind}${answered ? ' · 제출까지 끝났는지 확인' : ' · 전날까지 처리'}`;
+      continue;
+    }
     push({key: `conflict:${dl.date}:${dl.key || dl.title.slice(0, 20)}`, type: 'conflict', base: answered ? 'conflictAnswered' : 'conflict', ref: {key: dl.key}, area: '기한', kind: '휴가일 마감', title: dl.title, detail: `${dl.date.slice(5)}${dl.time ? ' ' + dl.time : ''} 마감인데 그날 ${u.kind}${answered ? ' · 답장은 했음, 제출까지 끝났는지 확인' : ' · 전날까지 처리하세요'}`, when: dl.date, deadline: {date: dl.date, time: dl.time, dday: dl.dday}, url: dl.url, isNew: false});
   }
 

@@ -267,9 +267,9 @@ test('deadline mails: unanswered ones rise, answered ones stay low, leave-day co
   assert.match(answered.kind, /답장함/);
   assert.notEqual(answered.priority, 'high');
   assert.ok(answered.score < open.score);
-  const conflict = a.actions.find(x => x.type === 'conflict');
-  assert.ok(conflict, 'deadline on a leave day is flagged');
-  assert.ok(conflict.score > open.score);
+  assert.ok(open.leaveConflict, 'deadline on a leave day is flagged on the item itself');
+  assert.ok(open.why.includes('휴가일 마감'));
+  assert.ok(!a.actions.some(x => x.type === 'conflict' && x.title === open.title), 'no duplicate conflict row');
   assert.ok(a.actions.filter(x => x.priority === 'high').length <= 6);
 });
 
@@ -299,4 +299,9 @@ test('routing ignores common place words and needs a meaningful topic match', ()
   const rec = recommendRouting({title: '[협조] 2026 부천 미래+클 공유학교 성과 공유회 운영계획 안내 및 참여 협조', sendOrg: '경기도부천교육지원청', sendDeptCode: '9'}, hist);
   assert.equal(rec.length, 0);
   assert.equal(rec.group, null);
+});
+test('routing ignores organisation names in titles', () => {
+  const hist = ['9월 수입내역 보고', '청소년 동아리 발표회 안내', '시설 안전점검 결과'].map((t, i) => ({title: `부천시청소년센터 ${t}`, sendOrg: '부천여성청소년재단', sendDeptCode: '5', toDept: '청소년정책팀', date: `2026-10-0${i + 1} 10:00:00`}));
+  const rec = recommendRouting({title: '2026년 10월 부천시청소년센터 4DAY 실시 결과 보고', sendOrg: '부천여성청소년재단', sendDeptCode: '5'}, hist);
+  assert.equal(rec.length, 0, 'same centre name alone is not a topic match');
 });

@@ -9,7 +9,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '3.1.0';
+  const VERSION = '3.1.1';
   let api = null;
   const lazy = {
     version: VERSION,
@@ -485,7 +485,7 @@ ${tile('발송·반려', (s.sendWaiting ?? 0) + s.rejectedSubmitted + '건', `�
     if (!p) return '';
     const head = p.rows[0], el = S.a.budget.elapsedPct;
     const leaves = p.rows.filter(r => r.level === '세').slice(0, 5);
-    const bar = (r, y, label) => `<g class="hit" data-act="goBudgetCode" data-v="${esc(r.code)}"><text x="96" y="${y + 10}" font-size="10" text-anchor="end" fill="currentColor">${esc(label.slice(0, 9))}<title>${esc(r.name)}</title></text><rect x="100" y="${y + 1}" width="150" height="11" rx="3" fill="#e7ebf2"/><rect x="100" y="${y + 1}" width="${Math.min(150, r.rate * 1.5)}" height="11" rx="3" fill="${r.rate < el - 30 ? '#e37400' : '#1a73e8'}"><title>${esc(r.name)} 집행 ${pct(r.rate)} (예산 ${won(r.budget)}원)</title></rect><line x1="${100 + el * 1.5}" x2="${100 + el * 1.5}" y1="${y - 1}" y2="${y + 14}" stroke="#1d2330" stroke-width="1.5"><title>연간 경과율 ${el}%</title></line><text x="254" y="${y + 10}" font-size="10" fill="currentColor">${Math.round(r.rate)}%</text></g>`;
+    const bar = (r, y, label) => `<g class="hit" data-act="goBudgetCode" data-v="${esc(r.code)}"><text x="96" y="${y + 10}" font-size="9.5" text-anchor="end" fill="currentColor">${esc(label.length > 10 ? label.slice(0, 9) + '…' : label)}<title>${esc(r.name)}</title></text><rect x="100" y="${y + 1}" width="150" height="11" rx="3" fill="#e7ebf2"/><rect x="100" y="${y + 1}" width="${Math.min(150, r.rate * 1.5)}" height="11" rx="3" fill="${r.rate < el - 30 ? '#e37400' : '#1a73e8'}"><title>${esc(r.name)} 집행 ${pct(r.rate)} (예산 ${won(r.budget)}원)</title></rect><line x1="${100 + el * 1.5}" x2="${100 + el * 1.5}" y1="${y - 1}" y2="${y + 14}" stroke="#1d2330" stroke-width="1.5"><title>연간 경과율 ${el}%</title></line><text x="254" y="${y + 10}" font-size="10" fill="currentColor">${Math.round(r.rate)}%</text></g>`;
     const short = shortLabels(leaves.map(r => r.name));
     const rows = [bar(head, 0, head.name), ...leaves.map((r, i) => bar(r, (i + 1) * 18, short[i]))].join('');
     return `<div class="chart"><div class="ct"><span>예산 ${esc(p.project)} ${esc(p.filter)}</span><span class="muted">세로선 = 연간 경과 ${el}%</span></div><svg viewBox="0 0 280 ${(leaves.length + 1) * 18}" width="100%" height="${(leaves.length + 1) * 18}">${rows}</svg></div>`;
@@ -506,7 +506,8 @@ ${tile('발송·반려', (s.sendWaiting ?? 0) + s.rejectedSubmitted + '건', `�
     const first = days[0].date;
     const off = new Date(Number(first.slice(0, 4)), Number(first.slice(4, 6)) - 1, 1).getDay();
     const pos = r => off + Number(r.date.slice(6)) - 1;
-    const cells = days.map(r => { const i = pos(r); const cls = bad.has(r.date) ? '#f28b82' : r.holiday || /휴일/.test(r.result) ? '#dadce0' : /정상/.test(r.result) ? '#81c995' : '#fdd663'; return `<rect class="hit" data-act="goAttendanceDay" data-v="${r.date}" x="${(i % 7) * 38}" y="${Math.floor(i / 7) * 30}" width="34" height="26" rx="5" fill="${cls}"><title>${esc(`${ymd8(r.date)} ${r.result} ${r.item} ${r.status}`)}</title></rect><text x="${(i % 7) * 38 + 17}" y="${Math.floor(i / 7) * 30 + 17}" font-size="10.5" text-anchor="middle" fill="#1d2330" pointer-events="none">${Number(r.date.slice(6))}</text>`; }).join('');
+    const worked = r => !!r.come || (/정상/.test(r.result) && !/휴일/.test(r.result));
+    const cells = days.map(r => { const i = pos(r); const cls = bad.has(r.date) ? '#f28b82' : worked(r) ? (/정상/.test(r.result) ? '#81c995' : '#fdd663') : r.holiday || /휴일/.test(r.result) ? '#dadce0' : '#fdd663'; return `<rect class="hit" data-act="goAttendanceDay" data-v="${r.date}" x="${(i % 7) * 38}" y="${Math.floor(i / 7) * 30}" width="34" height="26" rx="5" fill="${cls}"><title>${esc(`${ymd8(r.date)} ${r.result} ${r.item} ${r.status}`)}</title></rect><text x="${(i % 7) * 38 + 17}" y="${Math.floor(i / 7) * 30 + 17}" font-size="10.5" text-anchor="middle" fill="#1d2330" pointer-events="none">${Number(r.date.slice(6))}</text>`; }).join('');
     const h = (Math.floor(pos(days[days.length - 1]) / 7) + 1) * 30;
     return `<div class="chart"><div class="ct"><span>이번 달 근태</span><span class="muted">빨강 = 확인 필요</span></div><svg viewBox="0 0 266 ${h}" width="100%" height="${h}">${cells}</svg></div>`;
   }
@@ -784,7 +785,8 @@ ${ledger ? `<h3>결의 내역 · ${esc(ledger.name || ledger.bgtCd)} <span class
     for (let dnum = 1; dnum <= last; dnum++) {
       const d8 = `${month}${String(dnum).padStart(2, '0')}`;
       const r = byDate.get(d8);
-      const cls = !r ? 'off' : bad.has(d8) ? 'bad' : r.holiday || /휴일/.test(r.result) ? 'off' : leaveDays.has(d8) ? 'lv' : /정상/.test(r.result) ? 'okd' : 'part';
+      const worked = r && (!!r.come || (/정상/.test(r.result) && !/휴일/.test(r.result)));
+      const cls = !r ? 'off' : bad.has(d8) ? 'bad' : leaveDays.has(d8) ? 'lv' : worked ? (/정상/.test(r.result) ? 'okd' : 'part') : r.holiday || /휴일/.test(r.result) ? 'off' : 'part';
       cells.push(`<div class="c ${cls} ${st.day === d8 ? 'sel' : ''}" data-act="attDay" data-v="${d8}" title="${esc(r ? `${r.result} ${r.item} ${r.status}` : '')}"><b>${dnum}</b>${r ? `<div>${esc(r.result)}</div><div class="muted">${esc(r.item || '')}${r.come ? ' ' + hm4(r.come) : ''}</div>` : ''}</div>`);
     }
     const selRow = st.day ? byDate.get(st.day) : null;
@@ -868,7 +870,7 @@ ${S.weekly ? `<h3>주간 업무 실적 초안 <button class="btn sm primary" dat
   function watchDirty(f, url) {
     const seen = new WeakSet();
     const mark = () => { if (S.pane.url === url && !S.pane.dirty) { S.pane.dirty = true; const b = $('#dirtyNote'); if (b) b.style.display = 'block'; } };
-    const attach = doc => { if (!doc || seen.has(doc)) return; seen.add(doc); ['input', 'keydown', 'paste', 'drop'].forEach(ev => doc.addEventListener(ev, e => { if (ev !== 'keydown' || (e.key && e.key.length === 1)) mark(); }, true)); };
+    const attach = doc => { if (!doc || seen.has(doc)) return; seen.add(doc); ['input', 'change', 'keydown', 'paste', 'drop'].forEach(ev => doc.addEventListener(ev, e => { if (ev !== 'keydown' || (e.key && e.key.length === 1)) mark(); }, true)); };
     const scan = () => { if (!f.isConnected || S.pane.url !== url) return false; try { const walk = doc => { attach(doc); for (const i of doc.querySelectorAll('iframe')) { try { walk(i.contentDocument); } catch {} } }; walk(f.contentDocument); } catch {} return true; };
     scan();
     const t = setInterval(() => { if (!scan()) clearInterval(t); }, 1500);
@@ -992,6 +994,8 @@ ${S.weekly ? `<h3>주간 업무 실적 초안 <button class="btn sm primary" dat
     if (unread && !confirm(`아직 읽지 않은 ${what}입니다. 처리 창에 열면 그룹웨어에 읽음(열람)으로 기록될 수 있습니다. 열까요?`)) return;
     if (!S.sel) S.sel = {type: 'frame', title: title || '그룹웨어 화면', url};
     S.pane.url = url; S.pane.extract = null;
+    // Full groupware screens (근태신청, 메일함, 결재작성) need width: open the pane wide.
+    if (!/#\/?popup\?/.test(url)) { S.pane.expanded = true; toast('그룹웨어 전체 화면이라 처리 창을 넓게 열었습니다. "목록 보기"로 돌아갑니다.'); }
     renderPane();
   }
   // Would opening this item record a read/열람 in the groupware?
@@ -1057,6 +1061,8 @@ ${S.weekly ? `<h3>주간 업무 실적 초안 <button class="btn sm primary" dat
     else if (x.type === 'mail') S.pane.url = ''; // 답장·전달·메일함 중 고르게 한다
     else if (marksRead(x)) { S.pane.url = ''; f.gate = true; }
     else S.pane.url = x.url;
+    S.pane.expanded = !!(S.pane.url && !/#\/?popup\?/.test(S.pane.url));
+    if (!f.started) f.started = new Date();
     render();
   }
   function focusBar() {
@@ -1067,7 +1073,7 @@ ${S.weekly ? `<h3>주간 업무 실적 초안 <button class="btn sm primary" dat
     const x = S.a.actions.find(a => a.key === k);
     const label = x && x.type === 'doc' ? '처리했음 → 확인하고 다음' : x && x.type === 'mail' ? '답장했음 → 보낸메일 확인하고 다음' : '직접 확인했음 → 다음';
     const gate = f.gate ? `<div class="box warn" style="margin:0 10px 6px">이 항목은 열면 그룹웨어에 읽음(열람)으로 기록됩니다. <button class="btn sm primary" data-act="focusOpenGate">열고 처리하기</button> <button class="btn sm" data-act="focusSkip">열지 않고 건너뛰기</button></div>` : '';
-    const summary = [cnt('done') ? `처리 확인 ${cnt('done')}` : '', cnt('manual') ? `직접 확인 ${cnt('manual')}` : '', cnt('remain') ? `아직 남음 ${cnt('remain')}` : '', cnt('unsent') ? `답장 못 찾음 ${cnt('unsent')}` : ''].filter(Boolean).join(' · ');
+    const summary = [cnt('done') ? `처리 확인 ${cnt('done')}` : '', cnt('manual') ? `직접 확인 ${cnt('manual')}` : '', cnt('remain') ? `아직 남음 ${cnt('remain')}` : '', cnt('hadReply') ? `이전 답장만 ${cnt('hadReply')}` : '', cnt('unsent') ? `답장 못 찾음 ${cnt('unsent')}` : ''].filter(Boolean).join(' · ');
     return `${gate}<div class="fbar"><span class="prog">연속 처리 ${f.i + 1} / ${f.keys.length}${summary ? ' · ' + summary : ''}</span><button class="btn sm" data-act="focusPrev" ${f.i === 0 || f.busy ? 'disabled' : ''}>◀ 이전</button><button class="btn sm" data-act="focusSkip" ${f.busy ? 'disabled' : ''}>건너뛰기</button><button class="btn ok" data-act="focusNext" ${f.busy ? 'disabled' : ''}>${f.busy ? '<span class="spin"></span> 확인 중…' : label}</button><button class="btn sm" data-act="focusStop" ${f.busy ? 'disabled' : ''}>끝내기</button></div>`;
   }
   async function focusNext(verify = true) {
@@ -1087,7 +1093,10 @@ ${S.weekly ? `<h3>주간 업무 실적 초안 <button class="btn sm primary" dat
       } else if (verify && x && x.type === 'mail') {
         const m = findMail(x.ref.box, x.ref.uid);
         const r = await GW.findReply({subject: m ? m.subject : x.title, since: m ? m.date : ''});
-        if (r.found) { pushUndo('연속 처리 확인'); f.results[k] = 'done'; S.hidden[k] = Date.now(); saveLocal(); toast(`✓ 보낸메일함에서 답장을 찾았습니다 (${r.date.slice(5, 16)}).`); }
+        const k0 = R.kstNow(f.started || new Date());
+        const startText = `${k0.date} ${String(k0.hh).padStart(2, '0')}:${String(k0.mm).padStart(2, '0')}`;
+        if (r.found && r.date.slice(0, 16) >= startText) { pushUndo('연속 처리 확인'); f.results[k] = 'done'; S.hidden[k] = Date.now(); saveLocal(); toast(`✓ 방금 보낸 답장을 보낸메일함에서 찾았습니다 (${r.date.slice(5, 16)}).`); }
+        else if (r.found) { f.results[k] = 'hadReply'; toast(`이전에 보낸 답장(${r.date.slice(5, 16)})만 있습니다. 제출까지 끝났는지 확인하세요. 목록에 남겨 둡니다.`); }
         else { f.results[k] = 'unsent'; toast('보낸메일함에서 이 메일의 답장을 찾지 못했습니다. 목록에 남겨 둡니다.'); }
       } else if (verify && x) { pushUndo('연속 처리 확인'); f.results[k] = 'manual'; S.hidden[k] = Date.now(); saveLocal(); }
     } catch (e) { f.results[k] = 'unknown'; toast('확인하지 못했습니다: ' + e.message); }
@@ -1103,7 +1112,7 @@ ${S.weekly ? `<h3>주간 업무 실적 초안 <button class="btn sm primary" dat
     S.focus = null; S.pane.url = ''; S.sel = null; S.pane.dirty = false;
     if (S.raw) { const a = R.analyze(S.raw, store.get('state', null)); applyUrgentWords(a); S.a = a; }
     render();
-    toast(`연속 처리 끝: 그룹웨어에서 처리 확인 ${cnt('done')}건${cnt('manual') ? ` · 직접 확인 ${cnt('manual')}건` : ''}${cnt('remain') ? ` · 아직 남음 ${cnt('remain')}건` : ''}${cnt('unsent') ? ` · 답장 못 찾음 ${cnt('unsent')}건` : ''}${cnt('skip') ? ` · 건너뜀 ${cnt('skip')}건` : ''}.`);
+    toast(`연속 처리 끝: 그룹웨어에서 처리 확인 ${cnt('done')}건${cnt('manual') ? ` · 직접 확인 ${cnt('manual')}건` : ''}${cnt('remain') ? ` · 아직 남음 ${cnt('remain')}건` : ''}${cnt('hadReply') ? ` · 이전 답장만 ${cnt('hadReply')}건` : ''}${cnt('unsent') ? ` · 답장 못 찾음 ${cnt('unsent')}건` : ''}${cnt('skip') ? ` · 건너뜀 ${cnt('skip')}건` : ''}.`);
     refresh({silent: true});
   }
   function stopFocus() { if (!S.focus || S.focus.busy) return; if (!leavePane()) return; finishFocus(); }
@@ -1232,7 +1241,7 @@ ${S.weekly ? `<h3>주간 업무 실적 초안 <button class="btn sm primary" dat
     switch (act) {
       case 'refresh': refresh(); break;
       case 'applyRefresh': S.pendingRefresh = false; render(); break;
-      case 'relogin': location.reload(); break;
+      case 'relogin': if (!S.pane.dirty || confirm('처리 창에 입력 중인 내용이 있습니다. 그룹웨어를 새로 고치면 사라집니다. 계속할까요?')) location.reload(); break;
       case 'close': close(); break;
       case 'view': go(v); break;
       case 'help': toggleHelp(); break;
@@ -1289,7 +1298,7 @@ ${S.weekly ? `<h3>주간 업무 실적 초안 <button class="btn sm primary" dat
       case 'mailFilter': S.mailFilter = v; renderMain(); break;
       case 'mailGroup': S.mailGroup = !S.mailGroup; renderMain(); break;
       case 'selMail': if (!leavePane()) break; S.sel = {type: 'mail', box: el.dataset.box, uid: el.dataset.uid}; S.pane.url = ''; renderMain(); renderPane(); break;
-      case 'selMailSearch': { const it = (S.mailSearch.res && S.mailSearch.res.groups.mail.items || []).find(x => x.uid === el.dataset.uid); if (it) { S.sel = {type: 'search', item: it}; S.pane.url = ''; renderPane(); } break; }
+      case 'selMailSearch': { if (!leavePane()) break; const it = (S.mailSearch.res && S.mailSearch.res.groups.mail.items || []).find(x => x.uid === el.dataset.uid); if (it) { S.sel = {type: 'search', item: it}; S.pane.url = ''; renderPane(); } break; }
       case 'clearMailSearch': S.mailSearch = {kw: '', res: null}; renderMain(); break;
       case 'stype': S.search.types = S.search.types.includes(v) ? S.search.types.filter(t => t !== v) : [...S.search.types, v]; renderMain(); break;
       case 'doSearch': S.search.kw = ($('#sq') || {}).value?.trim() || S.search.kw; S.search.period = ($('#speriod') || {}).value || ''; runSearch(); break;
