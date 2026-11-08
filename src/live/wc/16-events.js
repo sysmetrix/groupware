@@ -48,6 +48,12 @@
         break;
       }
       case 'openPay': openPaymentHub(); break;
+    case 'openAi': openAi(); break;
+    case 'aiSetup': aiSetup(); break;
+    case 'aiSaveKey': aiSaveKey(); break;
+    case 'aiAsk': aiAsk(el.dataset.q); break;
+    case 'aiForget': aiForget(); break;
+    case 'aiClose': aiClose(); break;
     case 'expOpen': expOpen(el.dataset.id); break;
     case 'expAdd': expAdd(el.dataset.kind); break;
     case 'expDel': expDel(el.dataset.kind, +el.dataset.i); break;

@@ -850,7 +850,7 @@ export function verifyAudit(list = []) {
   }
   return {ok: true, checked: list.length, legacy: 0};
 }
-export const POLICY_FEATURES = ['briefing', 'teamAttendance', 'draftResult', 'draftPlan', 'draftPay', 'draftGoods', 'recorder', 'aiConsole', 'updateCheck'];
+export const POLICY_FEATURES = ['briefing', 'teamAttendance', 'aiAssistant', 'draftResult', 'draftPlan', 'draftPay', 'draftGoods', 'recorder', 'aiConsole', 'updateCheck'];
 export const DEFAULT_POLICY = {orgName: '', enabled: true, message: '', features: Object.fromEntries(POLICY_FEATURES.map(f => [f, true])), retentionDays: 90, requireAckVersion: '', recorderPlayConfirm: true, license: ''};
 // 관리자가 배포 폴더의 policy.js로 지정한 값을 검증·보정한다(알 수 없는 값은 무시, 안전한 쪽으로 기본값).
 export function normalizePolicy(p) {
@@ -920,6 +920,7 @@ export function buildTeamCalendar(rows = [], now = new Date()) {
   for (const r of expanded) {
     const c = classifyTeamRow(r, now);
     if (!c) continue;
+    if (c.kind === 'ot' && !c.mine) continue; // 다른 직원의 시간외·지문은 표시하지 않는다(내 것만)
     (byDate[c.date] = byDate[c.date] || []).push(c);
     if (c.kind === 'ot' && (c.state === 'miss' || c.state === 'short')) problems.push(c);
   }
@@ -975,3 +976,21 @@ export function checkPaymentEntry(entry = {}, planned = 0, now = new Date()) {
   return {ok: errors.length === 0, errors, warns, cardTotal, transTotal, total, planned, diff, cards, trans};
 }
 export const maskAccount = a => { const s = String(a || '').replace(/\D/g, ''); return s.length > 4 ? '*'.repeat(s.length - 4) + s.slice(-4) : s; };
+
+// ---------------------------------------------------------------------------
+// AI 도우미(Gemini): 키 형식 검증, 보낼 업무 요약 만들기(메일 본문은 보내지 않는다)
+// ---------------------------------------------------------------------------
+export const isGeminiKey = k => /^AIza[0-9A-Za-z_-]{30,60}$/.test(String(k || '').trim());
+export function buildAiContext({name = '', mine = [], deadlines = [], todayAway = [], ownProblems = [], leave = null, now = new Date()} = {}) {
+  const k = kstNow(now);
+  const clip = (s, n) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, n);
+  const lines = [`오늘: ${k.date} ${String(k.hh).padStart(2, '0')}:${String(k.mm).padStart(2, '0')} (KST)`, name ? `사용자: ${clip(name, 20)} (부천여성청소년재단 전략경영실)` : ''];
+  lines.push(`내가 처리할 일 ${mine.length}건:`);
+  mine.slice(0, 40).forEach((x, i) => lines.push(`${i + 1}. [${clip(x.state, 8)}] ${clip(x.title, 70)}${x.headline ? ' - ' + clip(x.headline, 60) : ''}${x.deadline ? ' (마감 ' + clip(x.deadline, 16) + ')' : ''}`));
+  if (deadlines.length) { lines.push('다가오는 기한:'); deadlines.slice(0, 15).forEach(d => lines.push(`- ${d.date}${d.time ? ' ' + d.time : ''} ${clip(d.title, 60)}`)); }
+  if (todayAway.length) lines.push(`오늘 자리 비운 직원: ${todayAway.slice(0, 20).map(x => clip(x.name, 10) + '(' + clip(x.label, 10) + ')').join(', ')}`);
+  if (ownProblems.length) lines.push(`내 시간외 퇴근 지문 확인 필요: ${ownProblems.slice(0, 8).map(x => x.date + ' ' + x.state).join(', ')}`);
+  if (leave && leave.remaining !== undefined && leave.remaining !== null) lines.push(`남은 연차: ${leave.remaining}일`);
+  return lines.filter(Boolean).join('\n');
+}
+export const AI_SYSTEM = '당신은 한국 공공기관(부천여성청소년재단 전략경영실) 차장의 업무 비서입니다. 아래 업무 요약만 근거로 답하고, 없는 사실은 지어내지 말고 "자료에 없음"이라고 말하세요. 한국어 존댓말, 이모지 금지, 짧고 구체적으로. 우선순위를 말할 때는 마감과 상태를 근거로 들고, 결재·상신·삭제 같은 실행은 제안만 하고 대신 하지 않습니다.';

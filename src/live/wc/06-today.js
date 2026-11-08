@@ -50,6 +50,7 @@
   ${areas.length > 2 ? `<div class="seg" role="tablist">${areas.map(([a, n]) => `<button role="tab" aria-selected="${f.area === a}" class="${f.area === a ? 'on' : ''}" data-act="area" data-v="${a}">${n}<span class="c">${acnt(a)}</span></button>`).join('')}</div>` : ''}
   <label class="srch-in" style="flex:1;min-width:160px;display:flex"><input class="inp grow" id="qfilter" placeholder="목록에서 검색" value="${esc(f.q)}" aria-label="목록에서 검색"></label>
   ${f.level !== 'all' ? `<button class="chip on" data-act="stateFilter" data-v="all">${esc(STATE_GROUP[f.level] || '')} ${ic('x')}</button>` : ''}
+  <button class="chip" data-act="openAi" title="오늘 업무 우선순위 정리, 질문">${ic('doc')}AI 도우미</button>
   <button class="chip ${f.showHidden ? 'on' : ''}" data-act="showHidden" title="이 화면에서 숨기거나 내일로 미룬 항목">${ic('eye')}숨긴 항목 ${hiddenN}</button>
 </div>
 
