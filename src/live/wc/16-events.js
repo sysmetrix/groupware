@@ -6,9 +6,15 @@
     const el = path.find(n => n && n.dataset && n.dataset.act);
     if (!el) return;
     const act = el.dataset.act, v = el.dataset.v;
-    if (act === 'closeOverlay' && path.some(n => n && n.dataset && n.dataset.stop)) return;
+    const hasStop = path.some(n => n && n.dataset && n.dataset.stop);
+    // 1. If user clicks outside any open dialog / menu / palette / coach / help, close it immediately
+    if ((S.menuOpen || S.paletteOpen || S.helpOpen || S.coach) && !hasStop) {
+      if (!['menuNew', 'menuBell', 'menuView', 'help', 'openPalette'].includes(act)) {
+        closeOverlay();
+      }
+    }
+    if (act === 'closeOverlay' && hasStop) return;
     if (el.tagName === 'A' && el.getAttribute('href') === '#') e.preventDefault();
-    if (S.menuOpen && !path.some(n => n && n.dataset && n.dataset.stop) && !['menuNew', 'menuBell'].includes(act)) closeOverlay();
     switch (act) {
       case 'refresh': refresh(); break;
       case 'applyRefresh': S.pendingRefresh = false; render(); break;

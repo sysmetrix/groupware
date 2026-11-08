@@ -62,7 +62,7 @@
 <button class="stat" id="meta" data-act="refresh" title="지금 다시 읽기 (R)"></button>
 <button class="hb" data-act="menuNew" title="새 메일·새 기안·근태신청">${ic('plus')}새로 만들기</button>
 <button class="hb icon" data-act="menuBell" id="bell" title="새로 들어온 항목" aria-label="알림">${ic('bell')}</button>
-<button class="hb icon" data-act="menuView" title="도움말·보기 설정" aria-label="도움말과 보기 설정">${ic('help')}</button>
+<button class="hb" data-act="help" title="사용법·단축키 (?)">${ic('help')}도움말</button>
 <button class="hb back" data-act="close" title="업무센터를 접고 원래 그룹웨어 화면으로 (화면 위 가운데 '업무센터' 버튼이나 Alt+G로 다시 열기)">${ic('back')}그룹웨어로 돌아가기</button></header>
 <div class="band" id="band" role="status" aria-live="polite"></div><nav id="nav" aria-label="업무센터 메뉴"></nav><main id="main" tabindex="-1"></main><div class="split" id="split" title="끌어서 오른쪽 창 너비 조절"></div><aside id="pane" aria-label="선택한 항목"></aside><div id="overlay"></div></div>`;
   const $ = sel => root.querySelector(sel);

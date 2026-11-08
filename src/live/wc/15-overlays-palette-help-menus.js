@@ -72,7 +72,7 @@
   }
   async function openMenu(which, anchor) {
     if (S.menuOpen === which) { closeOverlay(); return; }
-    S.menuOpen = which; S.paletteOpen = false; S.helpOpen = false;
+    S.menuOpen = which; S.paletteOpen = false; S.helpOpen = false; S.coach = null;
     if (which === 'new') {
       $('#overlay').innerHTML = `<div class="menu" data-stop="1"><div class="mh">새로 만들기 (처리 창에 열림, 저장·발송 전까지 아무것도 남지 않음)</div><div class="mi" data-act="openUrl" data-url="${esc(GW.links.compose('plain'))}" data-title="새 메일 쓰기">✉ 새 메일 쓰기</div><div class="mh">새 기안 · 내가 자주 쓰는 양식</div><div id="formList"><div class="mi muted"><span class="spin"></span> 양식을 읽는 중…</div></div><div class="mi" data-act="openUrl" data-url="${esc(GW.links.route(GW.routes.draft))}" data-title="결재작성">전체 양식에서 고르기</div><div class="mi" data-act="openUrl" data-url="${esc(GW.links.route(GW.routes.attendanceRequest))}" data-title="근태신청">근태신청(휴가·출장·대체)</div></div>`;
       const list = await loadForms();
@@ -122,7 +122,7 @@
     const top = below ? r.bottom - hr.top + 12 : Math.max(12, r.top - hr.top - 190);
     $('#overlay').innerHTML = `<div class="coach-hole" style="left:${r.left - hr.left - 6}px;top:${r.top - hr.top - 6}px;width:${r.width + 12}px;height:${r.height + 12}px"></div><div class="coach" role="dialog" aria-label="${esc(step.title)}" style="left:${left}px;top:${top}px"><div class="st">${S.coach.i + 1} / ${COACH.length}</div><b>${esc(step.title)}</b><div>${esc(step.text)}</div><div class="acts"><button class="btn primary" data-act="coachNext">${S.coach.i === COACH.length - 1 ? '시작하기' : '다음'}</button><button class="btn ghost" style="color:#fff" data-act="coachEnd">건너뛰기</button></div></div>`;
   }
-  function closeOverlay() { S.paletteOpen = false; S.helpOpen = false; S.menuOpen = ''; $('#overlay').innerHTML = ''; }
+  function closeOverlay() { S.paletteOpen = false; S.helpOpen = false; S.menuOpen = ''; S.coach = null; $('#overlay').innerHTML = ''; }
   const fontStep = n => { const order = ['s', 'm', 'l', 'xl']; const i = Math.max(0, Math.min(3, order.indexOf(S.settings.fontSize) + n)); S.settings.fontSize = order[i]; saveLocal(); applyLook(); };
   const toggleTheme = () => { S.settings.theme = S.settings.theme === 'dark' ? 'light' : 'dark'; saveLocal(); applyLook(); };
 
