@@ -73,7 +73,7 @@ export async function loadWc(root) {
   const parts = [];
   for (const f of files) { const raw = await fs.readFile(path.join(dir, f), 'utf8'); parts.push({file: f, raw, code: stripNonCode(raw)}); }
   const read = async p => fs.readFile(path.join(root, 'src', 'live', p), 'utf8');
-  return {parts, workcenter: await read('workcenter.browser.js'), collector: await read('collector.browser.js'), briefing: await read('briefing.mjs')};
+  return {parts, workcenter: await read('workcenter.browser.js'), collector: await read('collector.browser.js'), briefing: [await read('briefing.mjs'), ...(await Promise.all(['home-model.mjs', 'chat.mjs'].map(f => read(f).catch(() => ''))))].join('\n')};
 }
 
 // 선언된 이름 모으기 (함수, 변수, 매개변수, 구조분해)

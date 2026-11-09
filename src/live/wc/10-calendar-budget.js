@@ -52,7 +52,7 @@ ${teamDayPanel()}
     const owner = currentKey;
     const p = GW.teamPlanned().then(r => { const out = {apps: r.apps, me: r.me, idx: R.appInfoIndex(r.apps)}; if (S.appsC && S.appsC.p === p) S.appsC.data = out; return out; });
     S.appsC = {at: Date.now(), user: owner, p, data: null};
-    p.then(() => { if (owner === currentKey && S.open && ['attendance', 'calendar', 'today'].includes(S.view) && !S.focus) render(); }, e => logError('apps', e.message));
+    p.then(() => { if (owner === currentKey && S.open && ['attendance', 'calendar', 'today', 'home'].includes(S.view) && !S.focus) render(); }, e => logError('apps', e.message));
     return p;
   }
   const myAppInfos = d8 => { const dt = S.appsC && S.appsC.user === currentKey && S.appsC.data; return dt ? (dt.idx[`${dt.me}|${d8}`] || []) : null; };
@@ -78,7 +78,7 @@ ${teamDayPanel()}
     Promise.all([past, planned, appsP])
       .then(([rows, fut, ap]) => { if (owner !== currentKey) return; const all = [...rows, ...fut]; S.team[mk] = {busy: false, rows: all, err: '', cal: R.buildTeamCalendar(all, new Date(), ap && ap.idx), at: Date.now(), asOf: todayY === R.kstNow(new Date()).date.replace(/-/g, '') ? R.kstNow(new Date()).date : todayY, user: currentKey, planned: fut.length}; })
       .catch(e => { if (owner !== currentKey) return; S.team[mk] = {busy: false, rows: null, err: String(e.message || e).slice(0, 80), at: Date.now(), user: currentKey}; logError('team', e.message); })
-      .finally(() => { if (S.view === 'calendar' || S.view === 'today') renderMain(); });
+      .finally(() => { if (S.view === 'calendar' || S.view === 'today' || S.view === 'home') renderMain(); });
   }
   // 부서 필터 기본값은 내 부서(전략경영실). 사용자가 '전체 부서'나 다른 부서를 고르면 그 선택을 따른다.
   const myDept = () => (S.raw && S.raw.principal && S.raw.principal.deptName) || '전략경영실';

@@ -46,7 +46,7 @@
     hidden: store.get('hidden', store.get('done', {})), snooze: store.get('snooze', {}), plan: store.get('plan', {}),
     todos: migrateTodos(store.get('todos', [])), newKeys: new Set(store.get('newKeys', [])), activity: store.get('activity', []), seenActivity: store.get('seenActivity', 0),
     history: store.get('history', []), routing: store.get('routing', null), forms: store.get('forms', null),
-    raw: null, a: null, view: 'today', loading: false, error: '', lastRefresh: null, pendingRefresh: false,
+    raw: null, a: null, view: 'home', loading: false, error: '', lastRefresh: null, pendingRefresh: false,
     filter: {area: 'all', level: 'all', q: '', onlyNew: false, showHidden: false}, multi: new Set(), lastClickKey: '',
     apTab: 'pending', apMore: {}, apPages: {}, apBusy: {}, apEpoch: 0, mailFilter: 'all', mailGroup: false,
     sel: null, pane: {url: '', mounted: '', expanded: false, extract: null, preview: null},
@@ -79,7 +79,7 @@
     S.focus = null; S.multi.clear(); S.undo = []; S.raw = null; S.a = null;
     previewCache.clear(); routingFailAt = 0; S.mailDet = {}; S.mailDetBusy = {}; S.bodyOpen = false;
     S.search = {kw: '', types: ['doc', 'mail', 'board', 'file', 'person'], period: '', res: null, busy: false, more: {}};
-    S.mailSearch = {kw: '', res: null}; S.team = {}; S.appsC = null; S.res = null; S.expBar = null; S.aiHist = [];
+    S.mailSearch = {kw: '', res: null}; S.team = {}; S.appsC = null; S.chat = null; S.res = null; S.expBar = null; S.aiHist = [];
     S.att = {month: '', rows: null, busy: false, seq: (S.att?.seq || 0) + 1, day: ''};
     S.budget = {project: '', filter: '', table: null, ledger: null, monthly: null, month: '', busy: false, q: '', seq: (S.budget?.seq || 0) + 1};
     if (typeof $ === 'function') { const frame = $('#frame'); if (frame) frame.replaceChildren(); const overlay = $('#overlay'); if (overlay) overlay.replaceChildren(); }

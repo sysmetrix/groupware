@@ -14,7 +14,7 @@ import {testEnv, verdict} from './lib/test-results.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = new Set(process.argv.slice(2));
 const FAST = args.has('--fast'), AS_JSON = args.has('--json');
-const BUDGET = {bundleKB: 700, wcFileLines: 600, minFontPx: 12};
+const BUDGET = {bundleKB: 840, wcFileLines: 600, minFontPx: 12};
 const node = process.execPath;
 const sh = (cmd, a, opt = {}) => spawnSync(cmd, a, {cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, ...opt});
 
@@ -29,7 +29,7 @@ async function stage(name, fn) {
 // Standalone files. The src/live/wc fragments are bodies of boot(), so checkLiveSyntax parses them in that shape
 // and also parses the assembled bundle.
 const liveFiles = async () => {
-  return [path.join(root, 'src', 'live', 'collector.browser.js'), path.join(root, 'src', 'live', 'workcenter.browser.js'), path.join(root, 'src', 'live', 'briefing.mjs'),
+  return [path.join(root, 'src', 'live', 'collector.browser.js'), path.join(root, 'src', 'live', 'workcenter.browser.js'), path.join(root, 'src', 'live', 'briefing.mjs'), path.join(root, 'src', 'live', 'home-model.mjs'), path.join(root, 'src', 'live', 'chat.mjs'),
     path.join(root, 'scripts', 'live-build.mjs'), path.join(root, 'scripts', 'harness.mjs'), path.join(root, 'scripts', 'graph.mjs'),
     path.join(root, 'scripts', 'check.mjs'), path.join(root, 'scripts', 'lib', 'test-results.mjs')];
 };
@@ -157,7 +157,7 @@ await stage('안전 규칙', async () => {
   const okHosts = /^(gw\.bwyf\.or\.kr|api\.github\.com|github\.com|www\.w3\.org|localhost|127\.0\.0\.1|generativelanguage\.googleapis\.com|aistudio\.google\.com|calendar\.google\.com)$/;
   for (const h of hosts) if (!okHosts.test(h)) warns.push(`허용 목록에 없는 외부 주소: ${h}`);
   // 글자 크기 12px 미만 금지 (접근성)
-  const css = (await read('src/live/wc-style.css')) + (await read('src/live/wc-theme.css'));
+  const css = (await read('src/live/wc-style.css')) + (await read('src/live/wc-theme.css')) + (await read('src/live/wc-home.css')) + (await read('src/live/wc-chat.css'));
   for (const x of css.matchAll(/font-size:\s*(\d+(?:\.\d+)?)px/g)) if (+x[1] < BUDGET.minFontPx) { fails.push(`글자 크기 ${x[1]}px < ${BUDGET.minFontPx}px`); break; }
   return {fails, warns, info: `읽기 전용 주소 ${eps.length}개, 외부 호스트 ${hosts.size}개`};
 });

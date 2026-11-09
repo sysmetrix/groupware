@@ -270,6 +270,21 @@
       case 'resetRouting': S.routing = null; store.del('routing'); toast('추천 이력을 지웠습니다.'); break;
       case 'resetAll': if (confirm('이 브라우저에 저장된 내 업무센터 설정·할 일·표시를 모두 지울까요? (그룹웨어 자료는 바뀌지 않습니다)')) { const p = getPrefix(); for (const k of Object.keys(localStorage)) if (k.startsWith(p)) localStorage.removeItem(k); for (const k of Object.keys(localStorage)) if (k.startsWith('bwyfgw:wc:migrated:') && localStorage.getItem(k) === currentKey) localStorage.removeItem('bwyfgw:wc:' + k.slice('bwyfgw:wc:migrated:'.length)); reloadUserState(); clearUserViews(); localBaseline = localValues(); schedule(); applyLook(); refresh(); } break;
       case 'toastUndo': undo(); root.querySelector('.toast')?.remove(); break;
+      case 'homeTile':
+      case 'homeNext':
+      case 'homeOpenToday':
+      case 'chatChip':
+      case 'chatSend':
+      case 'chatStop':
+      case 'chatClear':
+      case 'chatConfirm':
+      case 'chatCancel':
+      case 'chatSetupAi':
+      case 'chatFocus':
+      case 'chatOpenItem':
+      case 'chatNav':
+      case 'navMore':
+        HOME_ACTS[act](actEl, v, e); break; // 홈·채팅 화면의 처리기 등록소(29~30번 조각)
       default: break;
     }
   });

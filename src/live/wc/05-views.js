@@ -2,8 +2,8 @@
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
   // ---------- views ----------
   const VIEWS = [
-    {id: 'today', label: '오늘 할 일'}, {id: 'approval', label: '결재·문서유통'}, {id: 'mail', label: '메일'}, {id: 'search', label: '통합검색'},
-    {id: 'board', label: '할 일 보드'}, {id: 'calendar', label: '일정 달력'}, {id: 'gcal', label: '구글 일정'}, {id: 'budget', label: '예산 집행'}, {id: 'attendance', label: '근태·연차'}, {id: 'resource', label: '자원 예약'},
+    {id: 'home', label: '홈'}, {id: 'today', label: '할 일 목록'}, {id: 'approval', label: '결재·문서유통'}, {id: 'mail', label: '메일'}, {id: 'calendar', label: '일정 달력'}, {id: 'attendance', label: '근태·연차'},
+    {id: 'search', label: '통합검색'}, {id: 'board', label: '할 일 보드'}, {id: 'gcal', label: '구글 일정'}, {id: 'budget', label: '예산 집행'}, {id: 'resource', label: '자원 예약'},
     {id: 'overview', label: '현황 차트'}, {id: 'report', label: '보고서'}, {id: 'settings', label: '설정'},
   ];
   // Charts: shown on big screens, folded on laptops unless the user chose otherwise.
@@ -16,7 +16,7 @@
     closeOverlay();
     S.sel = null; S.pane.url = ''; S.pane.expanded = false; S.multi.clear();
     S.filter = {...S.filter, area: 'all', level: 'all', onlyNew: false, q: '', showHidden: false};
-    S.view = 'today';
+    S.view = 'home';
     render();
     const mm = $('#main'); if (mm) mm.scrollTop = 0;
   }
@@ -74,7 +74,7 @@
     b.innerHTML = parts.join('');
   }
   const MODNAME = {mail: '메일', approval: '전자결재', notice: '공지', schedule: '일정', attendance: '근태', leave: '연차', budget: '예산', alerts: '알림'};
-  const VIEW_ICON = {today: 'inbox', overview: 'chart', approval: 'doc', mail: 'mail', search: 'search', board: 'board', calendar: 'cal', gcal: 'gcal', budget: 'wallet', attendance: 'clock', resource: 'car', report: 'report', settings: 'gear'};
+  const VIEW_ICON = {home: 'inbox', today: 'inbox', overview: 'chart', approval: 'doc', mail: 'mail', search: 'search', board: 'board', calendar: 'cal', gcal: 'gcal', budget: 'wallet', attendance: 'clock', resource: 'car', report: 'report', settings: 'gear'};
   function renderNav() {
     const u = S.a ? S.a.unknown : {};
     const mine = S.a ? mineVisible() : [];
@@ -89,7 +89,8 @@
       calendar: S.a ? (() => { const n = mine.filter(x => x.deadline && x.deadline.dday >= 0 && x.deadline.dday <= 7).length; return {n, cls: n ? 'mine' : ''}; })() : null,
     };
     const item = (v, i) => { const c = counts[v.id]; return `<a data-act="view" data-v="${v.id}" class="${S.view === v.id ? 'on' : ''}" role="link" tabindex="0" aria-current="${S.view === v.id ? 'page' : 'false'}" title="${esc(v.label)}${i < 9 ? ` (숫자키 ${i + 1})` : ''}">${ic(VIEW_ICON[v.id])}<span class="lb">${esc(v.label)}</span>${c && c.n !== '' && c.n !== 0 ? `<span class="n ${c.cls || ''}" title="${v.id === 'today' ? '내 처리할 일' : v.id === 'board' ? '보드의 남은 카드' : v.id === 'calendar' ? '7일 안에 기한이 있는 내 처리할 일' : '내 처리할 일 중 이 영역'}">${c.n}</span>` : ''}</a>`; };
-    $('#nav').innerHTML = VIEWS.slice(0, 9).map(item).join('') + '<div class="sep"></div>' + VIEWS.slice(9).map((v, i) => item(v, i + 9)).join('')
+    const primary = VIEWS.slice(0, 6), more = VIEWS.slice(6), moreOpen = !!S.settings.navMore || more.some(v => v.id === S.view);
+    $('#nav').innerHTML = primary.map(item).join('') + '<div class="sep"></div>' + `<a data-act="navMore" role="button" tabindex="0" aria-expanded="${moreOpen}" class="navmore">${ic('board')}<span class="lb">더보기 ${moreOpen ? '▴' : '▾'}</span></a>` + (moreOpen ? more.map((v, i) => item(v, i + 6)).join('') : '')
       + `<div class="foot"><a data-act="help" role="link" tabindex="0">${ic('help')}<span class="lb">사용법</span></a><a data-act="coach" role="link" tabindex="0">${ic('play')}<span class="lb">처음 안내</span></a><a data-act="openChangelog" role="link" tabindex="0" title="버전과 업데이트 내역">${ic('doc')}<span class="lb">v${VERSION} 업데이트 내역</span></a></div>`;
   }
   function boardCount() { return (S.a ? S.a.actions.filter(x => onBoard(x) && bucketOfAction(x) !== 'done').length : 0) + S.todos.filter(t => bucketOfTodo(t) !== 'done').length; }
@@ -97,7 +98,8 @@
     const el = $('#main');
     if (!S.a) { el.innerHTML = S.error && S.error !== 'SESSION' ? `<div class="empty"><div class="ill">${ic('alert')}</div><b>자료를 읽지 못했습니다</b>${esc(S.error)}<div class="acts" style="justify-content:center"><button class="btn primary" data-act="refresh">다시 시도</button></div></div>` : `<div class="pgh"><h1>그룹웨어 자료를 읽는 중입니다</h1><span class="spin"></span></div><div class="list">${'<div class="sk row"></div>'.repeat(6)}</div>`; return; }
     const scroll = el.scrollTop;
-    const fn = {today: vToday, overview: vOverview, approval: vApproval, mail: vMail, search: vSearch, board: vBoard, calendar: vCalendar, gcal: vGcal, budget: vBudget, attendance: vAttendance, resource: vResource, report: vReport, settings: vSettings}[S.view] || vToday;
+    if (S.view === 'home' && typeof homePartialRefresh === 'function' && homePartialRefresh()) return; // 홈이 이미 그려져 있으면 입력창을 건드리지 않고 요약만 갱신
+    const fn = {home: vHome, today: vToday, overview: vOverview, approval: vApproval, mail: vMail, search: vSearch, board: vBoard, calendar: vCalendar, gcal: vGcal, budget: vBudget, attendance: vAttendance, resource: vResource, report: vReport, settings: vSettings}[S.view] || vToday;
     el.innerHTML = fn();
     el.scrollTop = scroll;
     if (S.view === 'report') { const f = $('#briefFrame'); if (f) f.srcdoc = R.renderHtml(S.a); }

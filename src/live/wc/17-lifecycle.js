@@ -10,7 +10,7 @@
     backArmed = false;
     if (S.helpOpen || S.paletteOpen || S.menuOpen) { closeOverlay(); armBack(); return; }
     if (S.focus || S.pane.url || S.sel) { if (S.focus) stopFocus(); else if (leavePane()) { S.sel = null; S.pane.url = ''; S.pane.expanded = false; render(); } armBack(); return; }
-    if (S.view !== 'today') { go('today'); armBack(); return; }
+    if (S.view !== 'home') { go('home'); armBack(); return; }
     if (S.pane.dirty && !leavePane()) { armBack(); return; }
     close();
   };

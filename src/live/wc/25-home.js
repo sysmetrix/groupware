@@ -16,7 +16,7 @@
         h.items = out;
       } catch (e) { logError('homeRes', e.message); }
       h.busy = false; h.at = Date.now();
-      if (S.view === 'today') renderMain();
+      if (S.view === 'today' || S.view === 'home') renderMain();
     })();
   }
 

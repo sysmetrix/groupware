@@ -5,6 +5,9 @@
 
   const AI_HOST = 'https://generativelanguage.googleapis.com/v1beta';
   const aiCfg = () => store.get('ai', {key: '', model: ''});
+  // 채팅 엔진이 쓰는 연결 상태: 키가 형식에 맞고 관리자 정책이 허용할 때만 AI 모드
+  const aiReady = () => { const k = aiCfg().key; return !!k && R.isGeminiKey(k) && allowed('aiAssistant'); };
+  const aiModelName = () => aiCfg().model || 'gemini-flash-latest';
   const aiShell = body => `<div class="modal"><div class="dlg" data-stop="1" style="width:min(780px,96vw);padding:24px 26px;max-height:90vh;overflow:auto" role="dialog" aria-label="AI 도우미"><button class="btn icon ghost x" data-act="aiClose" aria-label="닫기">${ic('x')}</button>${body}</div></div>`;
   const aiRich = s => esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/^[ \t]*[*-] /gm, '• ').replace(/\n/g, '<br>');
 
@@ -80,7 +83,8 @@
       if (!pick) throw lastErr || new Error('모델 연결에 실패했습니다');
       store.set('ai', {key, model: pick});
       toast(`AI 도우미가 연결되었습니다 (${pick})`);
-      openAi();
+      closeOverlay();
+      if (typeof chatRefresh === 'function') chatRefresh();
     } catch (e) {
       logError('aiSaveKey', e.message);
       aiSetup(e.status === 400 || e.status === 403 ? '키가 거절되었습니다. 키를 다시 복사해 붙여넣거나 새 키를 만들어 보세요. (' + e.message.slice(0, 80) + ')' : '연결하지 못했습니다: ' + e.message.slice(0, 120));

@@ -1,0 +1,94 @@
+/* GW 통합 업무센터 · AI 채팅 전용 스타일. 접두 ch- (채팅). 색은 wc 변수만 쓴다. 글자 12px 이상, 버튼·칩은 높이 40px 안팎,
+   모션은 prefers-reduced-motion에서 끈다. CLASS INDEX: ch ch-log ch-empty(-t) ch-msg ch-user ch-ai ch-sys ch-err ch-bubble ch-tools ch-tool(-run/-ok/-err)
+   ch-cards ch-card(-list/-kpi/-nav/-note/-time/-confirm) ch-card-t ch-card-empty ch-card-more ch-ul ch-li(-t/-s/-b/-btn) ch-kpi ch-time ch-rows ch-warn ch-result
+   ch-risk-low/high ch-done ch-actions ch-btn(-primary/-ghost/-danger) ch-chips ch-chip ch-composer ch-input ch-send ch-stop ch-foot ch-mode ch-link ch-dots ch-sr ch-tone-* */
+.ch{display:flex;flex-direction:column;gap:10px;padding:14px;border:1px solid var(--line);border-radius:18px;background:var(--card);box-shadow:var(--sh)}
+.ch-log{display:flex;flex-direction:column;gap:12px;max-height:min(50vh,520px);min-height:96px;overflow-y:auto;padding:4px 2px;scroll-behavior:smooth}
+.ch-log:focus-visible{outline-offset:-2px}
+.ch-empty{padding:18px 8px;text-align:center;color:var(--muted)}
+.ch-empty-t{font-size:18px;font-weight:800;color:var(--fg);margin-bottom:4px}
+.ch-empty p{margin:0;font-size:14px;line-height:1.6}
+
+.ch-msg{display:flex;flex-direction:column;gap:6px;max-width:100%}
+.ch-user{align-items:flex-end}
+.ch-user .ch-bubble{background:var(--accent);color:#fff;border-radius:16px 16px 4px 16px;padding:9px 14px;max-width:min(80%,640px);font-size:15px;line-height:1.55;overflow-wrap:anywhere}
+.wc.dark .ch-user .ch-bubble{background:var(--accent-soft);color:var(--fg);border:1px solid var(--line2)}
+.ch-ai .ch-bubble,.ch-sys .ch-bubble{font-size:15px;line-height:1.65;overflow-wrap:anywhere;padding:2px 2px 0;max-width:min(100%,720px)}
+.ch-sys .ch-bubble{color:var(--muted)}
+.ch-err .ch-bubble{color:var(--hi)}
+.ch-tools{display:flex;flex-wrap:wrap;gap:6px}
+.ch-tool{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border:1px solid var(--line);border-radius:999px;background:var(--soft);color:var(--muted);font-size:12px}
+.ch-tool-ok{color:var(--ok)}.ch-tool-err{color:var(--hi)}
+.ch-dots{display:inline-flex;gap:4px;align-items:center;height:22px}
+.ch-dots i{width:7px;height:7px;border-radius:50%;background:var(--muted);animation:chdot 1.2s ease-in-out infinite}
+.ch-dots i:nth-child(2){animation-delay:.15s}.ch-dots i:nth-child(3){animation-delay:.3s}
+@keyframes chdot{0%,60%,100%{opacity:.25;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
+
+/* 카드 */
+.ch-cards{display:flex;flex-direction:column;gap:8px;max-width:min(100%,720px)}
+.ch-card{padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--bg);font-size:14px}
+.wc.dark .ch-card{background:var(--soft)}
+.ch-card-t{font-weight:700;margin-bottom:6px;font-size:14px}
+.ch-card-empty,.ch-card-more{color:var(--muted);font-size:13px}
+.ch-ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.ch-li{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;padding:7px 0;border-bottom:1px dashed var(--line);font-size:14px;text-align:left}
+.ch-ul li:last-child .ch-li,.ch-ul li:last-child.ch-li{border-bottom:0}
+.ch-li-btn{width:100%;border:0;background:none;cursor:pointer;color:inherit;min-height:40px;border-bottom:1px dashed var(--line);border-radius:6px}
+.ch-li-btn:hover{background:var(--soft)}
+.ch-li-t{font-weight:600;overflow-wrap:anywhere}
+.ch-li-s{color:var(--muted);font-size:13px;overflow-wrap:anywhere}
+.ch-li-b{margin-left:auto;display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:6px;font-size:12px;font-weight:700;background:var(--soft);color:var(--muted)}
+.ch-li-b.ch-tone-urgent{background:var(--hi-soft);color:var(--hi)}.ch-li-b.ch-tone-todo{background:var(--accent-soft);color:var(--accent)}
+.ch-time{display:inline-block;min-width:88px;color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
+.ch-card-kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px;padding:8px}
+.ch-kpi{display:flex;flex-direction:column;padding:8px 10px;border-radius:10px;background:var(--card);border:1px solid var(--line)}
+.ch-kpi b{font-size:22px;line-height:1.2}.ch-kpi span{font-size:12px;color:var(--muted)}
+.ch-kpi.ch-tone-urgent b{color:var(--hi)}.ch-kpi.ch-tone-todo b{color:var(--accent)}.ch-kpi.ch-tone-ok b{color:var(--ok)}
+.ch-card-nav{display:inline-flex;align-items:center;gap:6px;width:auto;min-height:40px;cursor:pointer;color:var(--accent);font-weight:700;border-color:var(--line2)}
+.ch-card-nav:hover{border-color:var(--accent)}
+.ch-card-note{line-height:1.6}
+.ch-card-note.ch-tone-warn{background:var(--md-soft);border-color:transparent;color:var(--fg)}
+.ch-card-note.ch-tone-ok{background:var(--ok-soft);border-color:transparent}
+.ch-card-note.ch-tone-info{background:var(--accent-soft);border-color:transparent}
+
+/* 확인 카드 */
+.ch-card-confirm{border-width:1.5px;border-color:var(--accent);background:var(--card)}
+.ch-card-confirm.ch-risk-high{border-color:var(--hi);background:var(--hi-soft)}
+.ch-card-confirm.ch-done{border-style:dashed;border-color:var(--line2);background:var(--bg)}
+.ch-rows{margin:0 0 8px;display:flex;flex-direction:column;gap:3px}
+.ch-rows>div{display:flex;gap:10px}
+.ch-rows dt{flex:0 0 72px;color:var(--muted);font-size:13px}
+.ch-rows dd{margin:0;flex:1;min-width:0;overflow-wrap:anywhere}
+.ch-warn{margin:4px 0 8px;padding:8px 10px;border-radius:8px;background:var(--md-soft);color:var(--fg);font-size:13px;line-height:1.55}
+.ch-risk-high .ch-warn{background:var(--card);border:1px solid var(--hi)}
+.ch-result{margin-top:4px;color:var(--muted);font-size:14px}
+.ch-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.ch-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:40px;padding:0 16px;border-radius:10px;border:1px solid var(--line2);background:var(--card);color:var(--fg);font-size:14px;font-weight:600;cursor:pointer}
+.ch-btn:hover{border-color:var(--accent)}
+.ch-btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.wc.dark .ch-btn-primary{background:#f2f3fa;border-color:#f2f3fa;color:#0b0d18}
+.ch-btn-danger{background:var(--hi);border-color:var(--hi);color:#fff}
+.wc.dark .ch-btn-danger{color:#1a0b0b}
+.ch-btn-ghost{background:transparent}
+
+/* 추천 질문 + 입력창 */
+.ch-chips{display:flex;gap:8px;flex-wrap:wrap}
+.ch-chips:empty{display:none}
+.ch-chip{min-height:36px;padding:0 14px;border:1px solid var(--line2);border-radius:999px;background:var(--card);color:var(--fg);font-size:13px;cursor:pointer;transition:border-color .15s ease,background .15s ease}
+.ch-chip:hover{border-color:var(--accent);background:var(--accent-soft)}
+.ch-composer{display:flex;align-items:flex-end;gap:8px;padding:8px 8px 8px 14px;border:1.5px solid var(--line2);border-radius:16px;background:var(--bg);transition:border-color .15s ease,box-shadow .15s ease}
+.wc.dark .ch-composer{background:var(--soft)}
+.ch-composer:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.ch .ch-input{width:auto;border-radius:0;box-shadow:none;height:30px;min-height:30px;display:block;flex:1;min-width:0;border:0;outline:0;resize:none;background:transparent;color:var(--fg);font:inherit;font-size:15px;line-height:1.55;padding:6px 0;max-height:168px}
+.ch-input::placeholder{color:var(--muted)}
+.ch-send,.ch-stop{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 16px;border:0;border-radius:12px;background:var(--accent);color:#fff;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap}
+.wc.dark .ch-send{background:#f2f3fa;color:#0b0d18}
+.ch-stop{background:var(--hi)}.wc.dark .ch-stop{color:#1a0b0b}
+.ch-send:hover,.ch-stop:hover{filter:brightness(1.08)}
+.ch-foot{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted);padding:0 4px}
+.ch-mode-ai{color:var(--ok)}
+.ch-link{border:0;background:none;color:var(--accent);font-size:12px;cursor:pointer;padding:2px 0;text-decoration:underline}
+.ch-sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
+@container (max-width:560px){.ch{padding:10px;border-radius:14px}.ch-send span,.ch-stop span{display:none}.ch-rows dt{flex-basis:60px}}
+@media (prefers-reduced-motion:reduce){.ch-dots i{animation:none;opacity:.6}.ch-log{scroll-behavior:auto}.ch-chip,.ch-composer{transition:none}}

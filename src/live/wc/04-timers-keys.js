@@ -35,6 +35,7 @@
     if (S.paletteOpen && $('#palq')) { paletteKey(e); return; }
     if (S.coach) { if (e.key === 'Enter' || e.key === 'ArrowRight') { e.preventDefault(); coachNext(); } return; }
     if (!typing && (e.key === 'Enter' || e.key === ' ') && t.dataset && t.dataset.act && t.tagName !== 'BUTTON' && t.tagName !== 'A' || (!typing && (e.key === 'Enter' || e.key === ' ') && t.tagName === 'A' && !t.href)) { e.preventDefault(); t.click(); return; }
+    if (typing && t.id === 'chInput') { chatKey(e, t); return; } // AI 채팅 입력창: Enter 전송, Shift+Enter 줄바꿈, 위 화살표로 직전 질문
     if (typing) {
       if (e.key !== 'Enter') return;
       if (t.id === 'cmdPrompt') { e.preventDefault(); executeCommandWorkflow(t.value); return; }
@@ -53,7 +54,7 @@
     const c = e.code;
     if (c === 'KeyD' && e.shiftKey) { e.preventDefault(); toggleTheme(); toast(S.settings.theme === 'dark' ? '다크 모드' : '라이트 모드'); return; }
     if (c === 'Slash' && e.shiftKey) { toggleHelp(); return; }
-    if (c === 'Slash') { e.preventDefault(); $('#gsearch').focus(); return; }
+    if (c === 'Slash') { e.preventDefault(); const ci = S.view === 'home' && $('#chInput'); (ci || $('#gsearch')).focus(); return; }
     if (c === 'KeyH') { goHome(); return; }
     if (c === 'KeyR') { refresh(); return; }
     if (c === 'KeyF') { startFocus(); return; }
