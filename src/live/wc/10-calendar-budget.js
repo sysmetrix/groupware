@@ -48,7 +48,7 @@ ${teamDayPanel()}
   function ensureTeam(mk) {
     S.team = S.team || {};
     const cur = S.team[mk], todayKey = R.kstNow(new Date()).date;
-    if (cur && (cur.busy || (cur.asOf === todayKey && Date.now() - (cur.at || 0) < 10 * 60000 && cur.user === currentKey))) return; // 같은 날 10분 이내 자료만 재사용
+    if (cur && (cur.busy || (cur.asOf === todayKey && Date.now() - (cur.at || 0) < 10 * 60000 && cur.user === currentKey) || (cur.err && Date.now() - (cur.at || 0) < 10 * 60000))) return; // 실패도 10분 동안은 자동 재조회하지 않는다(새로 읽기 버튼으로 재시도) // 같은 날 10분 이내 자료만 재사용
     if (!GW.teamAttendance || !allowed('teamAttendance')) return;
     const lastD = new Date(Number(mk.slice(0, 4)), Number(mk.slice(4)), 0).getDate();
     const todayY = R.kstNow(new Date()).date.replace(/-/g, '');
@@ -60,7 +60,7 @@ ${teamDayPanel()}
     const planned = monthEnd >= todayY && GW.teamPlanned ? GW.teamPlanned().then(p => R.expandPlanned(p.apps, {fromYmd: mk + '01', toYmd: monthEnd, todayYmd: todayY, meCd: p.me})).catch(() => []) : Promise.resolve([]);
     Promise.all([past, planned])
       .then(([rows, fut]) => { const all = [...rows, ...fut]; S.team[mk] = {busy: false, rows: all, err: '', cal: R.buildTeamCalendar(all, new Date()), at: Date.now(), asOf: todayY === R.kstNow(new Date()).date.replace(/-/g, '') ? R.kstNow(new Date()).date : todayY, user: currentKey, planned: fut.length}; })
-      .catch(e => { S.team[mk] = {busy: false, rows: null, err: String(e.message || e).slice(0, 80)}; logError('team', e.message); })
+      .catch(e => { S.team[mk] = {busy: false, rows: null, err: String(e.message || e).slice(0, 80), at: Date.now(), user: currentKey}; logError('team', e.message); })
       .finally(() => { if (S.view === 'calendar' || S.view === 'today') renderMain(); });
   }
   // 부서 필터 기본값은 내 부서(전략경영실). 사용자가 '전체 부서'나 다른 부서를 고르면 그 선택을 따른다.
@@ -175,7 +175,7 @@ ${t && !t.error ? `${summary}${leaves.length ? `<div class="cards" style="margin
 <table><tr><th>과목</th><th class="num">예산</th><th class="num">집행</th><th class="num">잔액</th><th class="num">집행률</th><th></th></tr>${rows.map(r => `<tr class="lv-${esc(r.level)} ${r.level === '세' || (!b.filter && r.level === '항') ? 'click' : ''} ${ledger && ledger.bgtCd === r.code ? 'sel' : ''}" ${r.level === '세' ? `data-act="ledger" data-code="${esc(r.code)}"` : !b.filter && r.level === '항' ? `data-act="bPick" data-p="${esc(b.project)}" data-f="${esc(r.code)}"` : ''}><td title="과목 코드 ${esc(r.code)}">${esc(String(r.name).replace(/^[○●·\s]+/, ''))} ${flag(r)}</td><td class="num">${won(r.budget)}</td><td class="num">${won(r.executed)}</td><td class="num">${won(r.balance)}</td><td class="num">${pct(r.rate)}<div class="rate"><i class="${r.balance < 0 ? 'over' : r.rate < el - 35 ? 'low' : ''}" style="width:${Math.min(100, Math.max(0, r.rate))}%"></i><b style="left:${el}%"></b></div></td><td class="nowrap">${!b.filter && r.level === '항' ? `<button class="btn sm ghost" data-act="bPin" data-p="${esc(b.project)}" data-f="${esc(r.code)}" data-l="${esc(r.name)}" title="내 관심 사업에 추가">${ic('star')}</button>` : ''}</td></tr>`).join('')}</table>
 ${leaves.length > 1 ? `<p><button class="btn" data-act="ledgerAll">${esc(head ? head.name : '')} 전체 결의 내역 보기 (세목 ${leaves.filter(r => r.executed > 0).length}개)</button></p>` : ''}
 ${t.total ? `<p class="muted">참고: ${esc((curCat && curCat.name) || t.project)} 전체(인건비 포함) 예산 ${won(t.total.budget)}원 · 집행 ${won(t.total.executed)}원 · ${pct(t.total.rate)}</p>` : ''}` : (b.busy ? `<div class="list">${'<div class="sk row"></div>'.repeat(5)}</div>` : '')}
-${ledger ? `<h3>결의 내역 · ${esc(ledger.name || ledger.bgtCd)} <span class="muted">${ledger.rows ? `${lrows.length}건${b.month ? ` (${Number(b.month)}월)` : ''}` : ''}</span>${b.month ? '<button class="btn sm" data-act="budgetMonthClear">모든 달</button>' : ''}${ledger.rows ? ` <button class="btn sm" data-act="csvLedger">${ic('down')}엑셀(CSV)</button>` : ''}</h3>${ledger.error ? `<p class="err">${esc(ledger.error)}</p>` : ledger.rows ? `<table><tr><th>결의일</th>${multiLedger ? '<th>세목</th>' : ''}<th>적요</th><th class="num">금액</th><th>문서번호</th><th>작성</th><th>전표</th></tr>${lrows.map(r => `<tr class="click" data-act="ledgerRow" data-i="${ledger.rows.indexOf(r)}"><td class="nowrap">${esc(ymd8(r.date))}</td>${multiLedger ? `<td class="muted">${esc(r.name.replace(/^○\s*/, '').slice(0, 18))}</td>` : ''}<td>${esc(r.desc)}</td><td class="num">${won(r.amount)}</td><td class="nowrap">${esc(r.docNo)}</td><td class="nowrap">${esc(r.writer)}</td><td class="nowrap muted">${esc(r.slip)}</td></tr>`).join('')}<tr class="lv-관"><td colspan="${multiLedger ? 3 : 2}">${b.month ? `${Number(b.month)}월 합계 <span class="muted">(연간 ${esc(ledger.check)})</span>` : esc(ledger.check)}</td><td class="num">${won(lrows.reduce((s, r) => s + r.amount, 0))}</td><td colspan="3"></td></tr></table>` : '<p><span class="spin"></span></p>'}` : ''}`;
+${ledger ? `<h3>결의 내역 · ${esc(ledger.name || ledger.bgtCd)} <span class="muted">${ledger.rows ? `${lrows.length}건${b.month ? ` (${Number(b.month)}월)` : ''}` : ''}</span>${b.month ? '<button class="btn sm" data-act="budgetMonthClear">모든 달</button>' : ''}${ledger.rows ? ` <button class="btn sm" data-act="csvLedger">${ic('down')}엑셀(CSV)</button>` : ''}</h3>${ledger.error ? `<p class="err">${esc(ledger.error)}</p>` : ledger.rows ? `<table><tr><th>결의일</th>${multiLedger ? '<th>세목</th>' : ''}<th>적요</th><th class="num">금액</th><th>문서번호</th><th>작성</th><th>전표</th></tr>${lrows.map(r => `<tr class="click" data-act="ledgerRow" data-i="${ledger.rows.indexOf(r)}"><td class="nowrap">${esc(ymd8(r.date))}</td>${multiLedger ? `<td class="muted">${esc(r.name.replace(/^○\s*/, '').slice(0, 18))}</td>` : ''}<td>${esc(r.desc)}</td><td class="num">${won(r.amount)}</td><td class="nowrap">${r.docNo ? `<button class="btn sm ghost" data-act="findDocNo" data-no="${esc(r.docNo)}" data-t="${esc(r.desc || '')}" title="결재문서 바로 찾아 열기">${esc(r.docNo)}</button>` : ''}</td><td class="nowrap">${esc(r.writer)}</td><td class="nowrap muted">${esc(r.slip)}</td></tr>`).join('')}<tr class="lv-관"><td colspan="${multiLedger ? 3 : 2}">${b.month ? `${Number(b.month)}월 합계 <span class="muted">(연간 ${esc(ledger.check)})</span>` : esc(ledger.check)}</td><td class="num">${won(lrows.reduce((s, r) => s + r.amount, 0))}</td><td colspan="3"></td></tr></table>` : '<p><span class="spin"></span></p>'}` : ''}`;
   }
   async function loadBudget() {
     const b = S.budget;
@@ -197,7 +197,7 @@ ${ledger ? `<h3>결의 내역 · ${esc(ledger.name || ledger.bgtCd)} <span class
       }
     }
     const seq = ++b.seq;
-    b.busy = true; b.ledger = null; b.monthly = null; b.month = ''; if (S.view === 'budget') renderMain();
+    b.busy = true; b.ledger = null; b.monthly = null; b.month = ''; b.monthlyBusy = false; b.mreq = (b.mreq || 0) + 1; if (S.view === 'budget') renderMain();
     let full = b.full && b.full.project === b.project ? b.full : null;
     if (!full) { try { full = await GW.budgetProject({project: b.project, filter: ''}); } catch (e) { full = {error: true, message: e.message}; } }
     if (seq !== b.seq) return;
@@ -208,6 +208,7 @@ ${ledger ? `<h3>결의 내역 · ${esc(ledger.name || ledger.bgtCd)} <span class
       b.table = {...full, filter: b.filter, rows};
     }
     b.busy = false; if (S.view === 'budget') renderMain();
+    if (b.pendingLedger) { const pc = b.pendingLedger; b.pendingLedger = ''; if (b.table && !b.table.error) loadLedger(pc); }
   }
   async function loadLedger(code) {
     const b = S.budget;
@@ -233,21 +234,29 @@ ${ledger ? `<h3>결의 내역 · ${esc(ledger.name || ledger.bgtCd)} <span class
     b.ledger = {bgtCd: '__ALL', name: `${head ? head.name : ''} 전체`, rows: null};
     renderMain();
     try {
-      const parts = await Promise.all(leaves.map(r => GW.budgetLedger({project: b.project, bgtCd: r.code, year: t.year, gisu: t.gisu}).then(l => ({r, l}))));
+      // 한 세목이 실패해도 나머지는 보여 주고, 실패한 세목은 따로 알린다
+      const settled = await Promise.allSettled(leaves.map(r => GW.budgetLedger({project: b.project, bgtCd: r.code, year: t.year, gisu: t.gisu}).then(l => ({r, l}))));
       if (seq !== b.seq) return;
+      const parts = settled.filter(s => s.status === 'fulfilled' && s.value.l && !s.value.l.error).map(s => s.value);
+      const failed = leaves.filter((r, i) => settled[i].status !== 'fulfilled' || (settled[i].value.l && settled[i].value.l.error)).map(r => r.code);
       const rows = parts.flatMap(p => p.l.rows).sort((x, y) => x.date.localeCompare(y.date));
       const sum = rows.reduce((s, r) => s + r.amount, 0);
       const bad = parts.filter(p => p.l.checkSum !== p.r.executed);
       const target = head ? head.executed : sum;
-      Object.assign(b.ledger, {rows, checkSum: sum, check: sum === target && !bad.length ? `합계 ✓ ${won(target)}원과 일치 (세목 ${parts.length}개, ${rows.length}건)` : `합계 ⚠ ${won(target)}원과 ${won(target - sum)}원 차이${bad.length ? ` · 확인 필요 세목 ${bad.map(p => p.r.code).join(', ')}` : ''}`});
+      Object.assign(b.ledger, {rows, checkSum: sum, check: failed.length ? `⚠ 일부만 읽음: 세목 ${failed.join(', ')} 조회 실패 · 읽은 합계 ${won(sum)}원 (전체 ${won(target)}원)` : sum === target && !bad.length ? `합계 ✓ ${won(target)}원과 일치 (세목 ${parts.length}개, ${rows.length}건)` : `합계 ⚠ ${won(target)}원과 ${won(target - sum)}원 차이${bad.length ? ` · 확인 필요 세목 ${bad.map(p => p.r.code).join(', ')}` : ''}`});
     } catch (e) { if (seq === b.seq) b.ledger.error = e.message; }
     if (S.view === 'budget') renderMain();
   }
   async function loadMonthly() {
     const b = S.budget;
     const code = b.filter || (b.table && b.table.rows[0] && b.table.rows[0].code) || '';
+    const req = (b.mreq = (b.mreq || 0) + 1), project = b.project;
     b.monthlyBusy = true; renderMain();
-    try { b.monthly = await GW.budgetMonthly({project: b.project, code, year: b.table && b.table.year}); b.monthly.code = code; } catch (e) { toast('월별 집행을 읽지 못했습니다: ' + e.message); }
+    let res = null;
+    try { res = await GW.budgetMonthly({project, code, year: b.table && b.table.year}); res.code = code; } catch (e) { if (req === b.mreq) toast('월별 집행을 읽지 못했습니다: ' + e.message); }
+    if (req !== b.mreq) return; // 더 새 요청이 있으면 그쪽이 화면을 맡는다
+    if (project !== b.project) { b.monthlyBusy = false; if (S.view === 'budget') renderMain(); return; } // 조회 중 사업을 바꾸면 이전 결과는 버린다
+    if (res) b.monthly = res;
     b.monthlyBusy = false; if (S.view === 'budget') renderMain();
   }
 

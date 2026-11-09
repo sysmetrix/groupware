@@ -1,17 +1,28 @@
 // GW 통합 업무센터 · data
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
   // ---------- data ----------
-  async function refresh({silent = false} = {}) {
-    if (S.loading) return;
+  async function refresh({silent = false, announce = false} = {}) {
+    if (S.loading) { if (announce) toast('이미 읽는 중입니다…'); return; }
     S.loading = true; S.error = '';
     if (!silent) renderHead();
     try {
       const raw = await GW.collect({budget: S.settings.budget, mailCount: S.settings.mailCount, days: S.settings.days});
       ingest(raw);
+      loadForms();
     } catch (e) { S.error = e && e.message || String(e); logError('자료 읽기', S.error); }
     finally { S.loading = false; }
+    if (announce) {
+      const bad = S.raw && S.raw.status ? Object.entries(S.raw.status).filter(([, s]) => s && s.error).map(([k]) => k) : [];
+      toast(S.error ? '새로 고치지 못했습니다: ' + S.error : `최신 자료로 새로 고쳤습니다 · 내 할 일 ${mineVisible().length}건${bad.length ? ` · 읽지 못한 영역: ${bad.join(', ')}` : ''}`);
+    }
     if (silent && isUserBusy()) { S.pendingRefresh = true; renderHead(); renderBand(); renderNav(); return; }
     render(); renderHead();
+  }
+  // 자주 쓰는 결재 양식(팔레트의 "새 기안: 양식")을 하루 한 번 읽는다.
+  function loadForms() {
+    if (S.forms && S.forms.list && Date.now() - (S.forms.at || 0) < 864e5) return;
+    if (typeof GW.frequentForms !== 'function') return;
+    GW.frequentForms().then(l => { const list = Array.isArray(l) ? l : (l && l.list) || []; S.forms = {list, at: Date.now()}; store.set('forms', S.forms); }).catch(() => {});
   }
   function logError(where, msg) { S.errors = [...(S.errors || []), {at: Date.now(), where, msg: String(msg).slice(0, 300)}].slice(-30); store.set('errors', S.errors); }
   function ingest(raw) {
@@ -87,11 +98,20 @@
       try { new Notification('GW 업무센터 · 새 긴급 항목 ' + items.length + '건', {body: items.slice(0, 3).map(x => `[${x.kind}] ${x.title}`).join('\n'), tag: 'bwyfgw-wc'}); } catch {}
     }
   }
+  // 배부·접수 이력: 진행 중 요청은 하나만, 실패하면 1분 동안 자동 재시도하지 않는다(무한 재조회·재렌더링 방지).
+  let routingP = null, routingFailAt = 0;
+  const routingBusy = () => !!routingP;
+  const routingFailedRecently = () => routingFailAt && Date.now() - routingFailAt < 60_000;
   async function loadRouting(force = false) {
     const fresh = S.routing && S.routing.fetchedAt && Date.now() - Date.parse(S.routing.fetchedAt) < 12 * 3600_000;
     if (fresh && !force) return S.routing;
-    try { S.routing = await GW.routingHistory({days: 180, size: 500}); store.set('routing', S.routing); } catch (e) { toast('배부·접수 이력을 읽지 못했습니다: ' + e.message); }
-    return S.routing;
+    if (routingP) return routingP;
+    if (!force && routingFailedRecently()) return S.routing;
+    routingP = (async () => {
+      try { S.routing = await GW.routingHistory({days: 180, size: 500}); store.set('routing', S.routing); routingFailAt = 0; } catch (e) { routingFailAt = Date.now(); toast('배부·접수 이력을 읽지 못했습니다: ' + e.message); }
+      return S.routing;
+    })();
+    try { return await routingP; } finally { routingP = null; }
   }
   const previewCache = new Map();
   async function loadPreview(doc) {

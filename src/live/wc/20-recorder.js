@@ -255,11 +255,15 @@
     const steps = recorder.stop();
     recorder = null; updateRecBar();
     if (!steps.length) { toast('기록된 동작이 없습니다.'); return; }
+    // 사용자를 알 수 없는 상태(default)에서는 store.set이 macros 저장을 막는다(01-storage). 저장했다고 말하지 않는다.
+    if (currentKey === 'default') { toast(`기록한 ${steps.length}단계를 저장하지 못했습니다: 로그인 사용자 정보를 읽지 못해 기록 저장이 막혀 있습니다. 그룹웨어에 다시 로그인한 뒤 기록하세요.`); return; }
     const name = (prompt(`기록한 ${steps.length}단계의 이름을 입력하세요.`, `기록 ${new Date().toLocaleString('ko-KR', {timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'})}`) || '').trim();
     if (!name) { toast('이름이 없어 저장하지 않았습니다.'); return; }
     const m = macroLoad();
     m.unshift({version: '1.0', id: 'm' + Date.now().toString(36), name, createdAt: Date.now(), vars: {}, steps});
     macroSave(m);
+    const saved = macroLoad().some(x => x.id === m[0].id); // 실제로 다시 읽혀야 저장된 것
+    if (!saved) { toast(`“${name}”을(를) 저장하지 못했습니다 (브라우저 저장 공간이 부족하거나 막혀 있습니다).`); return; }
     toast(`“${name}” ${steps.length}단계를 저장했습니다.`);
     openRecorder();
   }
@@ -297,13 +301,15 @@
   }
   function recStepDel(i, k) { const ms = macroLoad(); if (ms[i]) { ms[i].steps.splice(k, 1); macroSave(ms); recDetail(i); } }
   function recDel(i) { const ms = macroLoad(); if (!ms[i] || !confirm(`“${ms[i].name}” 기록을 삭제할까요?`)) return; ms.splice(i, 1); macroSave(ms); openRecorder(); }
-  function recExport(i) { const m = macroLoad()[i]; if (!m) return; const json = JSON.stringify(m, null, 2); try { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([json], {type: 'application/json'})); a.download = `${m.name}.macro.json`; a.click(); } catch {} toast('기록을 파일로 저장했습니다.'); }
+  function recExport(i) { const m = macroLoad()[i]; if (!m) return; const json = JSON.stringify(m, null, 2); try { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([json], {type: 'application/json'})); a.download = `${m.name}.macro.json`; a.click(); toast('기록 파일 다운로드를 시작했습니다.'); } catch (e) { toast('내보내지 못했습니다: ' + e.message); } }
   function recImport() {
     const txt = prompt('내보낸 기록(JSON)을 붙여 넣으세요.');
     if (!txt) return;
     try { const m = JSON.parse(txt); if (!m || !Array.isArray(m.steps)) throw new Error('steps가 없습니다');
       if (!m.steps.every(s => s && REC_TYPES.has(s.type) && (!s.nextAction || REC_TYPES.has(s.nextAction.type)))) throw new Error('허용되지 않은 단계 종류가 있습니다');
-      m.name = String(m.name || '가져온 기록').slice(0, 60); m.imported = true; m.id = 'm' + Date.now().toString(36); m.createdAt = Date.now(); const ms = macroLoad(); ms.unshift(m); macroSave(ms); toast(`“${m.name || '가져온 기록'}”을 가져왔습니다.`); openRecorder(); }
+      m.name = String(m.name || '가져온 기록').slice(0, 60); m.imported = true; m.id = 'm' + Date.now().toString(36); m.createdAt = Date.now(); const ms = macroLoad(); ms.unshift(m); macroSave(ms);
+      if (!macroLoad().some(x => x.id === m.id)) throw new Error(currentKey === 'default' ? '로그인 사용자 정보를 읽지 못해 저장이 막혀 있습니다' : '브라우저에 저장하지 못했습니다');
+      toast(`“${m.name || '가져온 기록'}”을 가져왔습니다.`); openRecorder(); }
     catch (e) { toast('가져오지 못했습니다: ' + e.message); }
   }
   async function recPlay(i, mode) {
@@ -316,13 +322,20 @@
     closeOverlay();
     const log = [];
     const render = () => { const el = $('#recplay'); if (el) el.innerHTML = m.steps.map((s, k) => `<div style="display:flex;gap:8px;padding:3px 0;border-top:1px solid var(--line)"><b style="width:18px;color:${log[k] ? (log[k].ok ? 'var(--ok)' : 'var(--hi)') : 'var(--muted)'}">${log[k] ? (log[k].ok ? '✓' : '✗') : (k === log.length ? '▶' : '·')}</b><span style="flex:1">${stepLabel(s)}${log[k] && !log[k].ok ? `<div class="err" style="font-size:12px">${esc(log[k].detail)}</div>` : ''}</span></div>`).join(''); };
-    $('#overlay').innerHTML = `<div class="modal"><div class="dlg" data-stop="1" style="width:min(620px,94vw);padding:18px 22px;position:absolute;right:24px;bottom:24px;top:auto;left:auto;transform:none;max-height:70vh;overflow:auto" role="dialog" aria-label="기록 재생"><h2 style="margin:0 0 6px;font-size:16px">▶ ${esc(m.name)} 재생 중</h2><div id="recplay"></div><div class="acts" style="margin-top:8px;justify-content:flex-end"><button class="btn sm danger" data-act="recAbort">중지</button><button class="btn sm primary" data-act="closeHelp">닫기</button></div></div></div>`;
+    $('#overlay').innerHTML = `<div class="modal"><div class="dlg" data-stop="1" style="width:min(620px,94vw);padding:18px 22px;position:absolute;right:24px;bottom:24px;top:auto;left:auto;transform:none;max-height:70vh;overflow:auto" role="dialog" aria-label="기록 재생"><h2 id="recplayTitle" style="margin:0 0 6px;font-size:16px">▶ ${esc(m.name)} 재생 중</h2><div id="recplay"></div><div class="acts" style="margin-top:8px;justify-content:flex-end"><button class="btn sm danger" data-act="recAbort">중지</button><button class="btn sm primary" data-act="closeHelp">닫기</button></div></div></div>`;
     render();
     player = createPlayer({getRootDocs: () => { const x = recFrameDocNow(); return x ? [x] : []; }, onProgress: (k, res) => { log[k] = res; render(); },
       beforeStep: mode === 'step' ? async (s, k) => window.confirm(`${k + 1}/${m.steps.length}단계를 실행할까요?\n${stepLabel(s).replace(/<[^>]+>/g, '')}`) : null});
     let r;
     AUTO.running = true; AUTO.allow = false;
-    try { const fw = $('#frame iframe').contentWindow; installGuard(fw); r = await player.play(m, {vars}); } finally { AUTO.running = false; AUTO.allow = false; player = null; }
+    try { const fw = $('#frame iframe').contentWindow; installGuard(fw); r = await player.play(m, {vars}); }
+    catch (e) { r = {ok: false, at: 0, results: [{ok: false, detail: `재생을 시작하지 못했습니다: ${e && e.message ? e.message : e}`}]}; }
+    finally { AUTO.running = false; AUTO.allow = false; player = null; }
+    const tEl = $('#recplayTitle');
+    if (tEl) { tEl.textContent = `${r.ok ? '✓' : '✗'} ${m.name} ${r.ok ? '재생 완료' : `${r.at + 1}단계에서 중단`}`; tEl.style.color = r.ok ? 'var(--ok)' : 'var(--hi)'; }
+    if (!r.ok && r.results.length === 1 && !log.length) { const el = $('#recplay'); if (el) el.insertAdjacentHTML('afterbegin', `<div class="err" style="font-size:12px;margin-bottom:6px">${esc(r.results[0].detail)}</div>`); }
+    $('#overlay').querySelector('[data-act="recAbort"]')?.remove();
+    S.paletteOpen = true; // 끝난 뒤에는 Esc·바깥 클릭으로 닫히게
     logActionRecord({command: `기록 재생: ${m.name}`, type: '기록기', target: m.name, summary: r.ok ? `${m.steps.length}단계를 모두 재생했습니다.` : `${r.at + 1}단계에서 중단했습니다: ${(r.results[r.at] || {}).detail || ''}`, steps: r.results.map((x, k) => `${x.ok ? '✓' : '✗'} ${k + 1}. ${x.detail}`), verified: r.ok});
     toast(r.ok ? `“${m.name}” 재생을 마쳤습니다.` : `재생을 중단했습니다: ${(r.results[r.at] || {}).detail || ''}`);
   }

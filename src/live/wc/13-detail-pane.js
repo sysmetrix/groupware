@@ -27,7 +27,7 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
       S.pane.mounted = S.pane.url;
     }
     frame.classList.toggle('idle', !S.pane.url);
-    if (!S.pane.url) frame.innerHTML = info.url ? '' : `<div class="fe">${info.url ? `<div>${ic('ext', 'style="width:30px;height:30px"')}</div><div>그룹웨어 원래 화면을 여기에 열어 그대로 처리할 수 있습니다.<br><span class="muted">원래 화면의 버튼(결재·접수·배부·발송·보내기)은 실제로 처리됩니다.</span></div><button class="btn primary" data-act="paneOpenMain">원래 화면 열기</button>` : '<div class="muted">이 항목은 열 화면이 없습니다.</div>'}</div>`;
+    if (!S.pane.url) frame.innerHTML = `<div class="fe">${info.url ? `<div>${ic('ext', 'style="width:30px;height:30px"')}</div><div>그룹웨어 원래 화면을 여기에 열어 그대로 처리할 수 있습니다.<br><span class="muted">원래 화면의 버튼(결재·접수·배부·발송·보내기)은 실제로 처리됩니다.</span></div><button class="btn primary" data-act="paneOpenMain">원래 화면 열기</button>` : '<div class="muted">이 항목은 열 화면이 없습니다.</div>'}</div>`;
     $('#fbar').innerHTML = focusBar();
     const af = $('#autofill'); if (af) af.innerHTML = autoFillBar();
   }
@@ -283,82 +283,70 @@ ${mailFilesBox(m)}
 
   
   // ---------- Smart Auto-Submission & Auto-Fill Service Engine ----------
+  // 프레임 안 문서가 준비될 때까지 기다린다(고정 대기 대신). 화면이 바뀌면 중단.
+  async function waitFrameDoc(url, test, ms = 15000) {
+    const t0 = Date.now();
+    while (Date.now() - t0 < ms) {
+      if (S.pane.url !== url) return null;
+      const f = $('#frame iframe');
+      try { const d = f && f.contentDocument; if (d && d.readyState !== 'loading' && test(d)) return d; } catch {}
+      await new Promise(r => setTimeout(r, 300));
+    }
+    return null;
+  }
   async function mailToDraft(uid) {
     const m = findMail('INBOX', uid) || [...(S.raw.data.mail?.inbox.records || []), ...(S.raw.data.mail?.otherUnseen || [])].find(x => x.uid === uid);
     if (!m) { toast('메일 정보를 찾을 수 없습니다.'); return; }
-    
-    toast('기안문 화면을 열고 메일 내용을 결재 직전 서식으로 자동 기입하는 중…');
     const url = GW.links.draft('mg_20160303185413307', '일반기안문');
     openUrl(url, {title: `새 기안: [공문] ${m.subject}`});
-    S.pane.expanded = true;
-
-    // Wait for iframe to load, then inject
-    setTimeout(() => {
-      const f = $('#frame iframe');
-      const d = f?.contentDocument;
-      if (!d) return;
-
-      const cleanSubj = String(m.subject || '업무 협조 요청').replace(/^(Re|Fw|전달|회신)\s*:\s*/i, '').trim();
-      const myName = (S.raw && S.raw.principal && S.raw.principal.name) || '서원하';
-      const myDept = (S.raw && S.raw.principal && S.raw.principal.deptName) || '전략경영실';
-      const todayStr = R.kstNow(new Date()).date;
-      const previewText = (m.preview || '').replace(/대용량 파일첨부[\s\S]*?보관\)/, '').trim().slice(0, 300);
-
-      // 1. Title
-      const titleInput = d.querySelector('input[placeholder="제목을 입력해주세요"]');
-      if (titleInput) {
-        titleInput.value = `[업무협조] ${cleanSubj}`;
-        titleInput.dispatchEvent(new Event('input', {bubbles: true}));
-        titleInput.dispatchEvent(new Event('change', {bubbles: true}));
-      }
-
-      // 2. Metadata: 공개, 일반, 내부결재
-      const pubRadio = [...d.querySelectorAll('input[type="radio"]')].find(rd => rd.value === '001');
-      if (pubRadio) { pubRadio.checked = true; pubRadio.dispatchEvent(new Event('change', {bubbles: true})); }
-      const normRadios = [...d.querySelectorAll('input[type="radio"]')].filter(rd => rd.value === '000');
-      normRadios.forEach(rd => { rd.checked = true; rd.dispatchEvent(new Event('change', {bubbles: true})); });
-
-      // 3. Body HWP injection
-      const bodyHtml = `
+    if (S.pane.url !== url) return; // 사용자가 이동을 취소함
+    S.pane.expanded = true; renderPane();
+    toast('기안 화면이 열리면 메일 내용으로 초안을 넣습니다…');
+    const d = await waitFrameDoc(url, doc => !!doc.querySelector('input[placeholder="제목을 입력해주세요"]'));
+    if (!d) { if (S.pane.url === url) toast('기안 화면을 준비하지 못해 자동 입력을 건너뛰었습니다. 직접 입력하세요.'); return; }
+    const cleanSubj = String(m.subject || '').replace(/^(Re|Fw|전달|회신)\s*:\s*/i, '').trim();
+    const previewText = (m.preview || '').replace(/대용량 파일첨부[\s\S]*?보관\)/, '').trim().slice(0, 300);
+    const done = [];
+    const titleInput = d.querySelector('input[placeholder="제목을 입력해주세요"]');
+    if (titleInput) {
+      titleInput.value = `[업무협조] ${cleanSubj}`;
+      titleInput.dispatchEvent(new Event('input', {bubbles: true}));
+      titleInput.dispatchEvent(new Event('change', {bubbles: true}));
+      done.push('제목');
+    }
+    const bodyHtml = `
 <p><b>1. 관련 근거</b></p>
-<p>&nbsp; 가. ${esc(m.from)} 발송 메일 ("${esc(cleanSubj)}", ${esc(m.date.slice(0, 10))})</p>
-<p>&nbsp; 나. 2026년도 ${esc(myDept)} 부서 추진 계획</p>
+<p>&nbsp; 가. ${esc(m.from)} 발송 메일 ("${esc(cleanSubj)}", ${esc(String(m.date || '').slice(0, 10))})</p>
+<p>&nbsp; 나. (관련 계획·공문이 있으면 적으세요)</p>
 <p><br></p>
-<p><b>2. 주요 요청 사항 및 배경</b></p>
-<p>&nbsp; 가. 발신: ${esc(m.from)} (${esc(m.fromEmail || '')})</p>
+<p><b>2. 요청 사항</b></p>
+<p>&nbsp; 가. 발신: ${esc(m.from)}${m.fromEmail ? ' (' + esc(m.fromEmail) + ')' : ''}</p>
 <p>&nbsp; 나. 개요: ${esc(previewText || cleanSubj)}</p>
 <p><br></p>
-<p><b>3. 세부 조치 및 추진 계획</b></p>
-<p>&nbsp; 가. 일시: ${esc(todayStr)} ~ </p>
-<p>&nbsp; 나. 조치 내용: 요청 사항 세부 검토 및 부서별 실행 과제 추진</p>
+<p><b>3. 추진 계획</b></p>
+<p>&nbsp; 가. 일시: (적으세요)</p>
+<p>&nbsp; 나. 내용: (적으세요)</p>
 <p><br></p>
 <p><b>4. 행정 사항</b></p>
-<p>&nbsp; 가. 관련 부서 업무 협조 및 기한 내 회신 완료</p>`;
-
-      let injected = false;
-      const walk = (doc) => {
-        if (!doc) return;
-        const hwp = doc.querySelector('#hwpEditorBoardContent') || doc.body;
-        if (hwp && (hwp.isContentEditable || doc.designMode === 'on')) {
-          hwp.innerHTML = bodyHtml;
-          hwp.dispatchEvent(new Event('input', {bubbles: true}));
-          injected = true;
-          return;
-        }
-        for (const ifr of doc.querySelectorAll('iframe')) {
-          try { walk(ifr.contentDocument); } catch (e) {}
-        }
-      };
-      walk(d);
-      toast('✓ 메일 내용을 바탕으로 기안문이 결재 직전 상태로 자동 완성되었습니다.');
-    }, 4500);
+<p>&nbsp; 가. (협조 부서·회신 기한 등)</p>`;
+    let injected = false;
+    const walk = doc => {
+      if (!doc || injected) return;
+      const hwp = doc.querySelector('#hwpEditorBoardContent') || doc.body;
+      if (hwp && (hwp.isContentEditable || doc.designMode === 'on')) { hwp.innerHTML = bodyHtml; hwp.dispatchEvent(new Event('input', {bubbles: true})); injected = true; return; }
+      for (const ifr of doc.querySelectorAll('iframe')) { try { walk(ifr.contentDocument); } catch {} }
+    };
+    // 본문 편집기는 제목보다 늦게 뜨므로 잠시 더 기다린다
+    for (let i = 0; i < 20 && !injected && S.pane.url === url; i++) { walk(d); if (!injected) await new Promise(r => setTimeout(r, 400)); }
+    if (injected) done.push('본문 틀');
+    toast(done.length ? `메일 내용으로 ${done.join('·')}을 넣었습니다. (괄호 칸은 직접 채우고, 기록물철·결재선을 확인한 뒤 상신하세요)` : '기안 화면에서 입력칸을 찾지 못했습니다. 직접 입력하세요.');
   }
 
   
   function quickAttendanceApplication(type) {
     closeOverlay();
     const todayKst = R.kstNow(new Date());
-    const todayLabel = `${todayKst.date}(${todayKst.weekday})`;
+    const todayLabel = `${todayKst.date}(${'일월화수목금토'[new Date(todayKst.date + 'T00:00:00Z').getUTCDay()]})`;
     let reasonText = '';
     let formTitle = '';
 
@@ -376,7 +364,7 @@ ${mailFilesBox(m)}
     copyText(reasonText);
     openUrl(GW.links.route(GW.routes.attendanceRequest), {title: `근태신청: ${formTitle}`});
     S.pane.expanded = true;
-    toast(`✓ ${formTitle} 준비 완료: 신청 사유("${reasonText.slice(0, 20)}…")가 복사되었습니다. 근태신청 화면에서 사유란에 붙여넣기(Ctrl+V) 후 [신청]하세요.`);
+    toast(`${formTitle}: 근태신청 화면을 열고 사유 예시("${reasonText.slice(0, 20)}…")를 복사했습니다. 날짜·시간을 고르고 사유란에 붙여넣기(Ctrl+V)한 뒤 직접 [신청]하세요. 오늘이 아닌 날이면 날짜를 바꾸세요.`);
   }
 
   async function autoFillMail(templateType) {
@@ -387,36 +375,39 @@ ${mailFilesBox(m)}
     const sel = S.sel;
     const item = sel && sel.type === 'action' ? selectedAction() : (sel && sel.type === 'mail' ? findMail(sel.box, sel.uid) : null);
     const originTitle = (item ? item.title || item.subject : '').replace(/^(Re|Fw|전달|회신)\s*:\s*/i, '').trim();
-    const myName = (S.raw && S.raw.principal && S.raw.principal.name) || '서원하';
-    const myDept = (S.raw && S.raw.principal && S.raw.principal.deptName) || '전략경영실';
-    const myDuty = (S.raw && S.raw.principal && S.raw.principal.duty) || '차장';
+    const myName = (S.raw && S.raw.principal && S.raw.principal.name) || '';
+    const myDept = (S.raw && S.raw.principal && S.raw.principal.deptName) || '';
+    const myDuty = (S.raw && S.raw.principal && (S.raw.principal.duty || S.raw.principal.position)) || '';
+    const me = [myDept, myName, myDuty].filter(Boolean).join(' ') || '담당자';
+    const hasAttach = (() => { try { const fd = f.contentDocument; return !!(fd && fd.querySelector('[class*=attach] li, [class*=file] li, .fileName, .file-name')); } catch { return false; } })();
+    if ((() => { let hit = false; const look = doc => { if (!doc || hit) return; if (doc.querySelector('[data-bwyfgw-tpl]')) { hit = true; return; } for (const i of doc.querySelectorAll('iframe')) { try { look(i.contentDocument); } catch {} } }; look(d); return hit; })()) { if (!confirm('이미 넣은 회신 문구가 있습니다. 새 문구로 바꿀까요?')) return; }
     const todayStr = R.kstNow(new Date()).date;
 
     let bodyText = '';
     if (templateType === 'confirm') {
-      bodyText = `<p>안녕하십니까, ${esc(myDept)} ${esc(myName)} ${esc(myDuty)}입니다.</p>
+      bodyText = `<p>안녕하십니까, ${esc(me)}입니다.</p>
 <p><br></p>
 <p>보내주신 <b>[${esc(originTitle)}]</b> 건과 관련하여 담당 사항에 대한 확인 및 검토를 완료하였음을 회신드립니다.</p>
 <p>&nbsp; 1. 확인 일자: ${esc(todayStr)}</p>
-<p>&nbsp; 2. 확인 결과: 이상 없음 (요청 사항 반영 완료)</p>
+<p>&nbsp; 2. 확인 결과: (확인한 내용을 적으세요)</p>
 <p><br></p>
 <p>감사합니다.</p><p><br></p>`;
     } else if (templateType === 'submit') {
-      bodyText = `<p>안녕하십니까, ${esc(myDept)} ${esc(myName)} ${esc(myDuty)}입니다.</p>
+      bodyText = `<p>안녕하십니까, ${esc(me)}입니다.</p>
 <p><br></p>
 <p>요청하신 <b>[${esc(originTitle)}]</b> 관련 자료를 아래와 같이 작성하여 제출합니다.</p>
 <p>&nbsp; 1. 제출 건명: ${esc(originTitle)}</p>
 <p>&nbsp; 2. 제출 일자: ${esc(todayStr)}</p>
-<p>&nbsp; 3. 제출자: ${esc(myDept)} ${esc(myName)} (${esc(myDuty)})</p>
-<p>&nbsp; 4. 비고: 세부 사항은 첨부파일을 참조하여 주시기 바랍니다.</p>
+<p>&nbsp; 3. 제출자: ${esc(me)}</p>
+<p>&nbsp; 4. 비고: ${hasAttach ? '세부 사항은 첨부파일을 참조하여 주시기 바랍니다.' : '(첨부파일을 붙이거나 내용을 적으세요)'}</p>
 <p><br></p>
 <p>감사합니다.</p><p><br></p>`;
     } else if (templateType === 'extend') {
-      bodyText = `<p>안녕하십니까, ${esc(myDept)} ${esc(myName)} ${esc(myDuty)}입니다.</p>
+      bodyText = `<p>안녕하십니까, ${esc(me)}입니다.</p>
 <p><br></p>
 <p>보내주신 <b>[${esc(originTitle)}]</b> 건과 관련하여, 부서 내 추가 검토 및 자료 취합 일정으로 인하여 부득이하게 제출 기한의 조정을 요청드리고자 합니다.</p>
-<p>&nbsp; - 기존 기한: 기 공지 기한</p>
-<p>&nbsp; - 요청 기한: 익일 18:00까지</p>
+<p>&nbsp; - 기존 기한: (공지된 기한)</p>
+<p>&nbsp; - 요청 기한: (요청할 기한)</p>
 <p><br></p>
 <p>일정에 차질을 드려 양해 부탁드리며, 신속히 검토하여 제출하도록 하겠습니다. 감사합니다.</p><p><br></p>`;
     }
@@ -429,7 +420,8 @@ ${mailFilesBox(m)}
           const idoc = ifr.contentDocument;
           const ibody = idoc?.body;
           if (ibody && (ibody.isContentEditable || idoc.designMode === 'on')) {
-            ibody.insertAdjacentHTML('afterbegin', bodyText);
+            const old = ibody.querySelector('[data-bwyfgw-tpl]'); if (old) old.remove();
+            ibody.insertAdjacentHTML('afterbegin', `<div data-bwyfgw-tpl="1">${bodyText}</div>`);
             ibody.dispatchEvent(new Event('input', {bubbles: true}));
             injected = true;
             return;
@@ -439,8 +431,9 @@ ${mailFilesBox(m)}
       }
     };
     walk(d);
-    if (injected) toast('✓ 표준 회신문이 본문에 자동 기입되었습니다.');
-    else toast('메일 에디터를 찾지 못했습니다.');
+    if (injected) toast(`회신 문구를 본문 맨 위에 넣었습니다. 괄호 칸을 채우고${templateType === 'submit' && !hasAttach ? ' 첨부파일을 붙인 뒤' : ''} 직접 보내세요.`);
+    else toast('메일 편집기를 찾지 못했습니다. 화면이 다 뜬 뒤 다시 누르세요.');
+    return injected;
   }
 
   function autoFillAtt() {

@@ -4,11 +4,11 @@
   const VIEWS = [
     {id: 'today', label: '오늘 할 일'}, {id: 'approval', label: '결재·문서유통'}, {id: 'mail', label: '메일'}, {id: 'search', label: '통합검색'},
     {id: 'board', label: '할 일 보드'}, {id: 'calendar', label: '일정 달력'}, {id: 'budget', label: '예산 집행'}, {id: 'attendance', label: '근태·연차'}, {id: 'resource', label: '자원 예약'},
-    {id: 'report', label: '보고서'}, {id: 'settings', label: '설정'},
+    {id: 'overview', label: '현황 차트'}, {id: 'report', label: '보고서'}, {id: 'settings', label: '설정'},
   ];
   // Charts: shown on big screens, folded on laptops unless the user chose otherwise.
   const showCharts = () => S.settings.showCharts ?? (window.innerHeight >= 860 && window.innerWidth >= 1500);
-  const go = v => { if (S.view !== v && !S.focus) { if (!leavePane()) return; S.sel = null; S.pane.url = ''; } S.view = v; S.multi.clear(); S.pane.expanded = false; render(); const mm = $('#main'); if (mm) mm.scrollTop = 0; };
+  const go = v => { if (S.view !== v && !S.focus) { if (!leavePane()) return; S.sel = null; S.pane.url = ''; } if (S.view !== v) S.apTabPinned = false; S.view = v; S.multi.clear(); S.pane.expanded = false; render(); const mm = $('#main'); if (mm) mm.scrollTop = 0; };
   // Home: back to a clean "오늘 할 일" (asks first if something is being typed in the pane).
   function goHome() {
     if (S.focus) { stopFocus(); if (S.focus) return; }
@@ -88,7 +88,7 @@
       board: S.a ? {n: boardCount()} : null,
       calendar: S.a ? (() => { const n = mine.filter(x => x.deadline && x.deadline.dday >= 0 && x.deadline.dday <= 7).length; return {n, cls: n ? 'mine' : ''}; })() : null,
     };
-    const item = (v, i) => { const c = counts[v.id]; return `<a data-act="view" data-v="${v.id}" class="${S.view === v.id ? 'on' : ''}" role="link" tabindex="0" aria-current="${S.view === v.id ? 'page' : 'false'}" title="${esc(v.label)} (숫자키 ${i + 1})">${ic(VIEW_ICON[v.id])}<span class="lb">${esc(v.label)}</span>${c && c.n !== '' && c.n !== 0 ? `<span class="n ${c.cls || ''}" title="${v.id === 'today' ? '내 처리할 일' : v.id === 'board' ? '보드의 남은 카드' : v.id === 'calendar' ? '7일 안에 기한이 있는 내 처리할 일' : '내 처리할 일 중 이 영역'}">${c.n}</span>` : ''}</a>`; };
+    const item = (v, i) => { const c = counts[v.id]; return `<a data-act="view" data-v="${v.id}" class="${S.view === v.id ? 'on' : ''}" role="link" tabindex="0" aria-current="${S.view === v.id ? 'page' : 'false'}" title="${esc(v.label)}${i < 9 ? ` (숫자키 ${i + 1})` : ''}">${ic(VIEW_ICON[v.id])}<span class="lb">${esc(v.label)}</span>${c && c.n !== '' && c.n !== 0 ? `<span class="n ${c.cls || ''}" title="${v.id === 'today' ? '내 처리할 일' : v.id === 'board' ? '보드의 남은 카드' : v.id === 'calendar' ? '7일 안에 기한이 있는 내 처리할 일' : '내 처리할 일 중 이 영역'}">${c.n}</span>` : ''}</a>`; };
     $('#nav').innerHTML = VIEWS.slice(0, 9).map(item).join('') + '<div class="sep"></div>' + VIEWS.slice(9).map((v, i) => item(v, i + 9)).join('')
       + `<div class="foot"><a data-act="help" role="link" tabindex="0">${ic('help')}<span class="lb">사용법</span></a><a data-act="coach" role="link" tabindex="0">${ic('play')}<span class="lb">처음 안내</span></a><a data-act="openChangelog" role="link" tabindex="0" title="버전과 업데이트 내역">${ic('doc')}<span class="lb">v${VERSION} 업데이트 내역</span></a></div>`;
   }
@@ -104,7 +104,7 @@
     if (S.view === 'budget' && !S.budget.table && !S.budget.busy) loadBudget();
     if (S.view === 'attendance' && !S.att.rows && !S.att.busy) loadAttendance();
     if (S.view === 'resource' && !resState().bookings && !resState().busy && !resState().err) resLoad();
-    if (S.view === 'approval' && ['distWaiting', 'deptWaiting'].includes(S.apTab) && !S.routing) loadRouting().then(() => { if (S.view === 'approval') renderMain(); });
+    if (S.view === 'approval' && ['distWaiting', 'deptWaiting'].includes(S.apTab) && !S.routing && !routingBusy() && !routingFailedRecently()) loadRouting().then(() => { if (S.view === 'approval') renderMain(); });
   }
   const pgh = (title, sub = '', tools = '') => `<div class="pgh"><h1>${title}</h1>${sub ? `<span class="sub">${sub}</span>` : ''}${tools ? `<div class="tools">${tools}</div>` : ''}</div>`;
 

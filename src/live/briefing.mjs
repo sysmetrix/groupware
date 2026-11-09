@@ -4,6 +4,10 @@
 
 const ACTION_WORDS = /요청|확인|회신|제출|협조|검토|마감|기한|긴급|필독|참석|회의|신청|문의|보고|의견|취합/;
 const NOISE_WORDS = /광고|뉴스레터|newsletter|weekly|위클리|웨비나|webinar|no-?reply|수신거부|구독|이벤트 안내/i;
+// 홍보·뉴스레터 메일: 제목 말고 보낸 주소(edu@·news@·marketing@ 등)와 그림 문자로 시작하는 제목도 본다(예: '🅰️ 2027년도 AI와 함께할 미래…' edu@ablearn.kr).
+const PROMO_SENDER = /^(edu|news|newsletter|marketing|event|events|mailer|noreply|no-reply|donotreply|promo|ad|ads|campaign)@/i;
+const TRUSTED_MAIL = /(^|[.@])(bwyf\.or\.kr|go\.kr|korea\.kr|or\.kr|ac\.kr|re\.kr|(hs|ms|es|sc)\.kr)$/i;
+export const isNoiseMail = m => { const s = String((m && m.subject) || ''), e = String((m && (m.fromEmail || m.email)) || ''); if (NOISE_WORDS.test(s)) return true; if (TRUSTED_MAIL.test(e)) return false; return PROMO_SENDER.test(e) || /^\s*[\u{1F000}-\u{1FAFF}]/u.test(s); };
 const PRIORITY_ORDER = {high: 0, medium: 1, low: 2};
 
 const pad = n => String(n).padStart(2, '0');
@@ -344,8 +348,8 @@ export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6, roles 
   const mails = [...(d.mail?.inbox?.records || []), ...(d.mail?.otherUnseen || [])];
   const seenUid = new Set();
   const uniqueMails = mails.filter(m => { const k = `${m.box}:${m.uid}`; if (seenUid.has(k)) return false; seenUid.add(k); return true; });
-  const unreadMails = uniqueMails.filter(m => !m.seen && !NOISE_WORDS.test(m.subject));
-  const recentAction = uniqueMails.filter(m => m.seen && !m.answered && !m.forwarded && ageDays(m.date, now) <= 3 && ACTION_WORDS.test(m.subject) && !NOISE_WORDS.test(m.subject) && !/^re:|^회신:|^답장:/i.test(m.subject.trim()));
+  const unreadMails = uniqueMails.filter(m => !m.seen && !isNoiseMail(m));
+  const recentAction = uniqueMails.filter(m => m.seen && !m.answered && !m.forwarded && ageDays(m.date, now) <= 3 && ACTION_WORDS.test(m.subject) && !isNoiseMail(m) && !/^re:|^회신:|^답장:/i.test(m.subject.trim()));
   const fromMe = m => (me && m.from === me) || (myLogin && String(m.fromEmail || '').toLowerCase().startsWith(myLogin + '@'));
   for (const m of uniqueMails) {
     const k = `mail:${m.box}:${m.uid}`;
@@ -353,12 +357,12 @@ export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6, roles 
     // "Re:/FW:" mails are replies to a request (often my own): not my deadline.
     const isReplyMail = /^\s*(re|fw|fwd|회신|답장|전달)\s*[:：]/i.test(m.subject || '');
     if (isReplyMail) {
-      if (!m.seen && !NOISE_WORDS.test(m.subject)) push({key: k, type: 'mail', base: 'mailReplyIn', from: m.from, ref: {box: m.box, uid: m.uid}, area: '메일', kind: '내 요청에 온 회신', title: m.subject, detail: `${m.from} · 안 읽음`, when: m.date, url: d.mail.url, isNew: hasPrev && !prevMail.has(`${m.box}:${m.uid}`)});
+      if (!m.seen && !isNoiseMail(m)) push({key: k, type: 'mail', base: 'mailReplyIn', from: m.from, ref: {box: m.box, uid: m.uid}, area: '메일', kind: '내 요청에 온 회신', title: m.subject, detail: `${m.from} · 안 읽음`, when: m.date, url: d.mail.url, isNew: hasPrev && !prevMail.has(`${m.box}:${m.uid}`)});
       continue;
     }
     const dl = ageDays(m.date, now) <= 30 ? addDeadline(m.subject, '메일', d.mail?.url, k, m.preview) : null;
-    const hasDeadline = dl && dl.dday >= -1 && dl.dday <= 7 && !NOISE_WORDS.test(m.subject);
-    const unread = !m.seen && !NOISE_WORDS.test(m.subject);
+    const hasDeadline = dl && dl.dday >= -1 && dl.dday <= 7 && !isNoiseMail(m);
+    const unread = !m.seen && !isNoiseMail(m);
     const asks = ASK_WORDS.test(`${m.subject} ${m.preview || ''}`);
     const shareOnly = SHARE_WORDS.test(m.subject) && !ASK_WORDS.test(m.subject);
     const replyCheck = recentAction.includes(m) && asks && !shareOnly;
@@ -1111,6 +1115,7 @@ export function wrapUpModel({now = new Date(), ownOtToday = null, tomorrowItems 
 // 업데이트 내역: 새 버전을 낼 때 맨 위에 한 줄을 추가한다(하네스가 현재 버전과 맞는지 검사).
 // 4.2~4.6 사이 세부 항목은 릴리스 제목만 근거로 적어 간단하다.
 export const CHANGELOG = [
+  {v: "0.30.0",date: "2026-11-09 13:30",old: "",title: "3차 종합 점검: 작동하지 않던 기능 전수 수리",items: ["점검 방식: 실제 그룹웨어 화면에서 모든 화면·버튼 160여 개를 자동으로 눌러 보는 실화면 점검 + 에이전트 팀(Claude Opus 5.5 배선·결함, GPT-6 Astra 업무 동선, Gemini 디자인·레퍼런스) 교차 검토","Ctrl+K 명령 팔레트가 빈 창으로 뜨던 문제 수정(정의되지 않은 함수). 새로 만들기·결과보고·계획서·지급·출장·연차·시간외·차량·AI·진단 등 명령 추가, 최근 쓴 명령을 위로","AI 도우미·지급·기록기 등 대화상자 입력칸에서 Enter를 누르면 창이 닫히고 엉뚱한 명령이 실행되던 문제 수정. AI 질문창은 Enter로 보내기, 앞 대화를 이어서 답하고 답변 길이 늘림","헤더 검색창 Enter가 검색 대신 명령 콘솔만 열던 문제: 업무 지시처럼 보일 때만 빠른 업무 실행, 나머지는 통합검색","빠른 업무 실행(명령 콘솔)의 가짜 성공 제거: 보낸메일 확인은 실제 보낸메일함 조회 결과만 표시, 알아듣지 못한 명령은 통합검색으로, 예산·지급 명령은 지급 문서 화면으로, “다음 주 ○요일”이 이번 주로 계산되던 날짜 오류 수정, 고정 날짜(11-14) 제거","기안·회신 자동 입력의 과장 문구 정리: 본문 사실이 비면 “초안 틀만 입력”으로 표시, 결재선은 “불러옴(이름 확인 필요)”, 회신 문구의 “이상 없음·반영 완료” 같은 단정 대신 입력 칸, 첨부 없을 때 “첨부 참조” 문구 생략, 다시 넣을 때 중복으로 쌓이지 않음, 이름·직위 하드코딩 제거","메일로 기안: 고정 4.5초 대기 대신 화면이 준비될 때까지 확인, 다른 화면에 값을 넣지 않음, 실제로 넣은 칸만 알림","결재 탭을 직접 고르면 0건이어도 그 탭을 유지(다른 탭으로 튕기던 문제), “이 목록 하나씩 처리”가 다른 업무를 열던 문제 수정","처리 창 닫기 버튼이 입력 중인 내용을 묻지 않고 버리던 문제 수정, 처리 창의 “원래 화면 열기” 버튼 복구","직원 근태·배부 이력 조회가 실패하면 끝없이 다시 읽던 문제(화면 깜박임) 수정, 예산 월별 조회 중 사업을 바꾸면 이전 결과가 덮던 문제, 전체 결의 내역이 세목 하나 실패로 통째로 안 보이던 문제 수정","키보드: E = 끝냄 표시 추가, 행 메뉴(⋯) 다시 누르면 닫힘, 숫자키 안내를 실제 동작(1~9)과 일치","“처리 완료” 문구를 “끝냄 표시(업무센터 목록에서만)”로 바꿔 그룹웨어 처리와 구분, Ctrl+Z로 “나와 상관없음” 규칙도 되돌림, 같은 업무를 할 일에 두 번 넣지 않음","현황 차트 화면을 메뉴에 연결(그동안 들어갈 길이 없었음), 팔레트의 “새 기안: 자주 쓰는 양식” 목록이 채워지도록 연결","예산 결의 내역의 문서번호를 누르면 바로 결재문서를 찾아 열기, 관심 사업 행 삭제가 저장되지 않던 문제, 설치 상태가 늘 “미설치”로 보이던 문제, 모두 지우기 뒤 옛 자료가 다시 들어오던 문제 수정","자원 예약: 확인 뒤 예약명만 고쳐도 다시 확인하라던 문제와 첫 클릭이 씹히던 문제 수정","새로고침 버튼을 누르면 결과(내 할 일 건수, 못 읽은 영역)를 알림으로 표시","근태 빠른 신청 사유에 “(undefined)”가 들어가던 문제 수정, 기록기 재생 후 “재생 중”으로 멈추던 문제 수정","디자인: 정의 없이 쓰이던 색·그림자 토큰 정의, 키보드 포커스 테두리, 선택 상자 선명하게, 한글 제목 단어 단위 줄바꿈"]},
   {v: "0.29.0", date: "2026-11-09 12:10", old: "5.8.0 이후", title: "버전 번호를 0.1.0부터 다시 매기고 모든 업데이트 내역을 상세화", items: ["버전 체계를 0.1.0부터 다시 정리: 첫 로컬 도우미(10-22)부터 지금까지 전체를 시간순 0.1.0~0.29.0으로 재번호. 이전 표기(v3.x, v4.x, v5.x)는 각 항목에 “이전 v…”로 남김","업데이트 내역 화면: 항목마다 날짜·시각, 이전 표기, 변경 내용을 자세히 표시하고 최신 3건은 펼쳐서 보여 줌","업데이트 확인은 새 번호 체계(0.x) 릴리스만 비교하도록 변경(옛 v5.x 태그와 섞여 “새 버전”으로 잘못 뜨지 않게 함)","GitHub 릴리스 태그도 v0.29.0부터 새 번호로 발행(이전 v3~v5 태그는 기록으로 그대로 보존)"]},
   {v: "0.28.0", date: "2026-11-09 11:51", old: "5.8.0", title: "버전·업데이트 내역 화면", items: ["왼쪽 아래 “v… 업데이트 내역” 링크와 설정 화면의 “업데이트 내역” 버튼 추가","설치된 버전, 수집기 버전, 최신 여부(GitHub 확인), “업데이트 확인”·“최신 릴리스 열기” 버튼","새 버전으로 바뀐 뒤 처음 열 때 한 번 자동으로 내역 표시(처음 설치 시와 사용 안내 중에는 표시하지 않음)","하네스가 업데이트 내역 맨 위 버전과 실제 버전이 같은지 검사해서 내역 누락을 막음"]},
   {v: "0.27.1", date: "2026-11-09 11:07", old: "5.7.1", title: "다크/라이트 전환 버튼과 Shift+D", items: ["사라졌던 화면 모드 전환 버튼을 헤더(알림 아이콘 왼쪽)에 되살림. 다크면 해, 라이트면 달 아이콘","Shift+D로 다크/라이트 전환 + “다크 모드/라이트 모드” 알림. 검색창 등 입력 중에는 동작하지 않음","도움말 단축키 목록에 Shift+D 추가"]},
@@ -1151,3 +1156,6 @@ export const CHANGELOG = [
   {v: "0.2.0", date: "2026-10-22 03:38", old: "로컬 도우미 초기", title: "이식 가능한 설치와 예약 처리", items: ["어느 PC에서나 설치하는 설치 스크립트, 예약된 내보내기 자료 처리","제출한 문서와 결재 대기를 구분하도록 수정"]},
   {v: "0.1.0", date: "2026-10-22 01:37", old: "시작", title: "로컬 업무도우미 MVP", items: ["그룹웨어 자료를 가져와 업무 브리핑·규정과 서식 검색·초안 사전 점검을 하는 로컬 우선 도우미","범위가 정해진 근거 중심 워크플로, 상신·결재·발송·회계 반영 기능 없음"]},
 ];
+
+// 헤더 검색창 Enter: 업무 지시처럼 보이면 빠른 업무 실행(명령 콘솔), 아니면 통합검색.
+export const looksLikeCommand = q => /(작성|기안|신청|예약|회신|답장)\s*(해\s*줘|해\s*주세요|하기|해)$|(작성|기안|신청|예약|회신|답장)\s*(해\s*줘|해\s*주세요)|올려\s*줘|만들어\s*줘|써\s*줘|보내\s*줘|확인해\s*줘|확인해\s*주세요|준비해\s*줘|보냈는지/.test(String(q || '').trim());

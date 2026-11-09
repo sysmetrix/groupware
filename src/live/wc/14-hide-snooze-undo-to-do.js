@@ -1,25 +1,32 @@
 // GW 통합 업무센터 · hide / snooze / undo / to-do
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
   // ---------- hide / snooze / undo / to-do ----------
-  function pushUndo(label) { S.undo.push({label, hidden: {...S.hidden}, snooze: {...S.snooze}, plan: {...S.plan}, todos: JSON.parse(JSON.stringify(S.todos))}); if (S.undo.length > 20) S.undo.shift(); }
+  function pushUndo(label) { S.undo.push({label, hidden: {...S.hidden}, snooze: {...S.snooze}, plan: {...S.plan}, todos: JSON.parse(JSON.stringify(S.todos)), rel: label === '관련성 규칙' ? JSON.parse(JSON.stringify((S.settings && S.settings.rel) || null)) : undefined}); if (S.undo.length > 20) S.undo.shift(); }
   function undo() {
     const u = S.undo.pop();
     if (!u) { toast('되돌릴 작업이 없습니다.'); return; }
-    S.hidden = u.hidden; S.snooze = u.snooze; S.plan = u.plan; S.todos = u.todos; saveLocal(); render(); toast(`되돌렸습니다: ${u.label}`);
+    S.hidden = u.hidden; S.snooze = u.snooze; S.plan = u.plan; S.todos = u.todos; if (u.rel !== undefined) { S.settings.rel = u.rel || undefined; if (S.raw) reanalyze(); } saveLocal(); render(); toast(`되돌렸습니다: ${u.label}`);
   }
   function hide(keys) { pushUndo(`${keys.length}건 숨기기`); for (const k of keys) S.hidden[k] = Date.now(); S.multi.clear(); saveLocal(); afterMark(); toastUndo(`${keys.length}건을 이 화면에서 숨겼습니다. 그룹웨어에서 처리해야 완전히 사라집니다.`); }
   function snooze(keys) { pushUndo(`${keys.length}건 미루기`); const t = tomorrow8(); for (const k of keys) S.snooze[k] = t; S.multi.clear(); saveLocal(); afterMark(); toastUndo(`${keys.length}건을 내일 오전 8시까지 미뤘습니다.`); }
+  // 끝냄 표시(업무센터 목록에서만). 그룹웨어 처리 여부와 별개라는 점을 문구로 분명히 한다.
+  function markDoneKeys(keys) {
+    if (!keys.length) return;
+    pushUndo('끝냄 ' + keys.length + '건'); for (const k of keys) S.hidden[k] = Date.now(); S.multi.clear(); saveLocal(); afterMark();
+    toastUndo(keys.every(k => k.startsWith('att:')) ? '확인 끝냄으로 표시했습니다. 그룹웨어 기록이 3일 뒤에도 그대로면 다시 보여 드립니다.' : '끝냄으로 표시했습니다(업무센터 목록에서만). 그룹웨어에 아직 남아 있으면 하루 뒤 다시 보여 드립니다.');
+  }
   function afterMark() { if (S.view === 'today') refreshQueue(); else render(); if (S.sel && S.sel.type === 'action' && (isHidden(S.sel.key) || isSnoozed(S.sel.key)) && !S.focus) { const q = queue(); if (q[0]) selectAction(q[0].key); else { S.sel = null; renderPane(); } } }
   function addTodo(title, due = '', source = '', url = '', key = '') {
-    if (!title) return;
+    if (!title) { const i = $('#tdTitle'); if (i) { i.focus(); toast('할 일 제목을 입력하세요.'); } return; }
+    if (key) { const ex = S.todos.find(t => t.key === key && t.status !== 'done'); if (ex) { S.plan[key] = S.plan[key] || 'today'; saveLocal(); toast('이미 할 일에 있습니다' + (ex.due ? ` (기한 ${ex.due.slice(5)})` : '') + '.'); return; } }
     pushUndo('할 일 추가');
-    const t = {id: uid(), title, due, status: 'todo', source, url, at: Date.now()};
+    const t = {id: uid(), title, due, status: 'todo', source, url, key: key || '', at: Date.now()};
     S.todos.unshift(t);
     if (key) S.plan[key] = S.plan[key] || 'today';
     saveLocal(); renderNav(); if (S.view === 'board' || S.view === 'calendar') renderMain();
     toastUndo(`할 일에 추가했습니다${due ? ` (기한 ${due.slice(5)})` : ''}.`);
   }
-  function addTodoFromInput() { const title = ($('#tdTitle') || {}).value?.trim(); if (!title) return; addTodo(title, parseDue(($('#tdDue') || {}).value), '직접 추가'); }
+  function addTodoFromInput() { const title = ($('#tdTitle') || {}).value?.trim(); addTodo(title, parseDue(($('#tdDue') || {}).value), '직접 추가'); }
   function selInfo() { const info = S.sel ? paneInfo() : null; return info ? {title: info.title, url: info.url} : {title: '', url: ''}; }
 
   // ---------- 연속 처리 모드 ----------

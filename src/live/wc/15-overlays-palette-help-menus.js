@@ -2,6 +2,7 @@
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
   // ---------- overlays: palette, help, menus ----------
   let palItems = [], palIndex = 0;
+  const dispTitle = x => R.cleanTitle((x && x.title) || '');
   function openPalette(q = '') {
     S.paletteOpen = true; S.menuOpen = ''; S.helpOpen = false;
     $('#overlay').innerHTML = `<div class="modal" data-act="closeOverlay"><div class="dlg pal" data-stop="1"><input id="palq" placeholder="무엇을 할까요? 예) 결재, 사업 예산, 지난달 근태, 새 메일, 문서번호, 회의록" value="${esc(q)}" autocomplete="off"><div id="pallist" style="margin-top:8px"></div><div class="muted" style="margin-top:6px">↑↓ 이동 · Enter 실행 · Esc 닫기</div></div></div>`;
@@ -11,6 +12,7 @@
   }
   function palCommands(q) {
     const cmds = [];
+    const qq = q.trim();
     const add = (label, hint, run, extra = '', icon = 'play') => cmds.push({label, hint, run, icon, text: label + ' ' + hint + ' ' + extra});
     const VIEW_WORDS = {today: '할 일 오늘 긴급 대시보드', approval: '배부 접수 결재 발송 열람 공문 문서유통', mail: '메일 답장 받은메일', search: '검색 찾기', board: '할 일 계획 보드', calendar: '일정 달력 기한', budget: '예산 집행 결의 예실', attendance: '근태 연차 휴가 출근 퇴근', report: '보고서 주간 브리핑 실적', settings: '설정 글자 테마 알림'};
     for (const v of VIEWS) add(`${v.label}`, '화면으로 이동', () => go(v.id), VIEW_WORDS[v.id] || '', VIEW_ICON[v.id]);
@@ -24,11 +26,23 @@
     for (const p of S.settings.budget) add(`예산 ${p.project} ${p.filter || ''}`, p.label || '예산 집행', () => { S.budget.project = p.project; S.budget.filter = p.filter || ''; S.budget.table = null; go('budget'); });
     add('주간 업무 실적 초안', '보고서', () => { go('report'); makeWeekly(); }, '보고');
     add('오늘 브리핑 한글용 복사', '보고서', () => copyRich(briefHtml(), R.renderMarkdown(S.a)));
+    add('새로 만들기', '기안·신청·메일 메뉴', () => openMenu('new', root.querySelector('[data-act=menuNew]')), '기안 작성 신청');
+    add('결과보고 작성', '내 계획서에서 이어서', () => openResultPlanPicker(), '결과 보고 기안');
+    add('운영·참가계획 작성', '과거 계획서 서식', () => autoStartDraft('plan'), '계획 기안');
+    add('지급·지출 문서', '지급 건의·물품·지출결의', () => openPaymentHub(), '지출 지급 결의 카드 이체');
+    add('출장 신청', '근태신청', () => quickAttendanceApplication('trip'), '관내 관외 출장');
+    add('연차·반차 신청', '근태신청', () => quickAttendanceApplication('leave'), '휴가 대체');
+    add('시간외·휴일근무 신청', '근태신청', () => quickAttendanceApplication('overtime'), '연장 야근');
+    add('차량 예약', '자원 예약', () => go('resource'), '관용차 자원 예약');
+    if (allowed('aiAssistant')) add('AI 도우미', '우선순위·질문', () => openAi(), 'gemini 인공지능');
+    if (allowed('aiConsole')) add('빠른 업무 실행', '말로 시키기', () => openCommandConsole(qq), '명령 콘솔 지시');
+    add('업데이트 내역', '버전', () => openChangelog(), '버전 변경');
+    add('데이터 관리', '저장한 자료', () => openDataCenter(), '삭제 개인정보');
+    add('진단', '오류·상태', () => openDiag(), '오류 문제');
     add('도움말', '사용법·용어', () => toggleHelp(true));
     add('글자 크게', '보기', () => fontStep(1)); add('글자 작게', '보기', () => fontStep(-1));
     add(S.settings.theme === 'dark' ? '밝은 테마' : '어두운 테마', '보기', () => toggleTheme());
-    for (const x of visibleActions().slice(0, 60)) add(dispTitle(x), x.headline || x.kind, () => { go('today'); selectAction(x.key); }, x.detail, {doc: 'doc', mail: 'mail', attendance: 'clock', notice: 'bell'}[x.type] || 'doc');
-    const qq = q.trim();
+    for (const x of visibleActions().slice(0, 60)) { add(dispTitle(x), x.headline || x.kind, () => { go('today'); selectAction(x.key); }, x.detail, {doc: 'doc', mail: 'mail', attendance: 'clock', notice: 'bell'}[x.type] || 'doc'); cmds[cmds.length - 1].work = isMine(x) ? 2 : 1; }
     if (/^[A-Za-z]\d{3}$/.test(qq)) add(`예산 ${qq.toUpperCase()} 조회`, '프로젝트 코드', () => { S.budget.project = qq.toUpperCase(); S.budget.filter = ''; S.budget.table = null; go('budget'); });
     if (/[가-힣A-Za-z0-9]+-\d{2,}/.test(qq)) add(`문서번호 ${qq} 찾아 열기`, '결재문서', () => findAndOpenDocNo(qq, ''));
     if (qq.length >= 2) add(`통합검색: ${qq}`, 'Enter', () => { S.search.kw = qq; runSearch(); }, qq);
@@ -44,15 +58,17 @@
   };
   function palRender(q) {
     const cmds = palCommands(q);
-    palItems = cmds.map(c => ({...c, s: fuzzy(c.text, q.trim())})).filter(c => c.s > 0).sort((a, b) => b.s - a.s).slice(0, 14);
+    const recent = S.settings.palRecent || [];
+    palItems = cmds.map(c => { const s = fuzzy(c.text, q.trim()); const ri = recent.indexOf(c.label); return {...c, s: s > 0 && ri >= 0 ? s + (q.trim() ? 8 : 50) - ri : (!q.trim() && c.work === 2 ? 20 : s)}; }).filter(c => c.s > 0).sort((a, b) => b.s - a.s).slice(0, 14);
     if (q.trim().length >= 2 && !palItems.some(c => c.label.startsWith('통합검색'))) palItems.push(cmds.find(c => c.label.startsWith('통합검색')));
     palItems = palItems.filter(Boolean);
     palIndex = 0;
     $('#pallist').innerHTML = palItems.map((c, i) => `<div class="it ${i === palIndex ? 'on' : ''}" data-act="palRun" data-i="${i}">${ic(c.icon || 'play')}<span class="lb">${esc(c.label)}</span><span class="k">${esc(c.hint)}</span></div>`).join('') || '<div class="muted">해당하는 명령이 없습니다.</div>';
   }
+  function palExec(c) { closeOverlay(); if (!c) return; S.settings.palRecent = [c.label, ...(S.settings.palRecent || []).filter(l => l !== c.label)].slice(0, 6); saveLocal(); c.run(); }
   function paletteKey(e) {
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); palIndex = Math.max(0, Math.min(palItems.length - 1, palIndex + (e.key === 'ArrowDown' ? 1 : -1))); root.querySelectorAll('.pal .it').forEach((n, i) => n.classList.toggle('on', i === palIndex)); return; }
-    if (e.key === 'Enter') { e.preventDefault(); const c = palItems[palIndex]; closeOverlay(); if (c) c.run(); }
+    if (e.key === 'Enter') { e.preventDefault(); palExec(palItems[palIndex]); }
   }
   function toggleHelp(force) {
     S.helpOpen = force === undefined ? !S.helpOpen : force; S.paletteOpen = false; S.menuOpen = '';
@@ -151,6 +167,7 @@
     } catch (err) { if (out) out.innerHTML = `<p class="err">${esc(err.message)}</p>`; }
   }
   async function makeWeekly() {
+    if (S.weekly && S.weekly.trim() && !confirm('지금 초안을 고친 내용이 있으면 사라집니다. 새로 만들까요?\n(필요하면 먼저 복사해 두세요)')) return;
     toast('최근 7일 자료를 읽는 중…');
     try {
       const [sub, hist] = await Promise.all([GW.submittedRange({days: 7, size: 100}), loadRouting()]);

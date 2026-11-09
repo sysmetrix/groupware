@@ -37,10 +37,10 @@
     return true;
   }
   const DEFAULT_SETTINGS = {refreshMin: 5, notify: false, budget: [], urgentWords: [], mailCount: 100, days: 14, fontSize: 'm', theme: 'light', paneWidth: 560, beginner: true, tourDone: false};
-  const migrateTodos = list => (Array.isArray(list) ? list : []).map(t => ({id: t.id || `t${t.at || Date.now()}${Math.random().toString(36).slice(2, 6)}`, title: t.title, due: t.due || '', status: t.status || (t.done ? 'done' : 'todo'), source: t.source || '', url: t.url || '', at: t.at || Date.now()}));
+  const migrateTodos = list => (Array.isArray(list) ? list : []).map(t => ({id: t.id || `t${t.at || Date.now()}${Math.random().toString(36).slice(2, 6)}`, title: t.title, due: t.due || '', status: t.status || (t.done ? 'done' : 'todo'), source: t.source || '', key: t.key || '', url: t.url || '', at: t.at || Date.now()}));
   const S = {
     userKey: currentKey,
-    settings: {...DEFAULT_SETTINGS, ...store.get('settings', {})},
+    settings: {...DEFAULT_SETTINGS, budget: [], ...store.get('settings', {})},
     hidden: store.get('hidden', store.get('done', {})), snooze: store.get('snooze', {}), plan: store.get('plan', {}),
     todos: migrateTodos(store.get('todos', [])), newKeys: new Set(store.get('newKeys', [])), activity: store.get('activity', []), seenActivity: store.get('seenActivity', 0),
     history: store.get('history', []), routing: store.get('routing', null), forms: store.get('forms', null),
@@ -56,7 +56,8 @@
   };
   function reloadUserState() {
     S.userKey = currentKey;
-    S.settings = {...DEFAULT_SETTINGS, ...store.get('settings', {})};
+    S.settings = {...DEFAULT_SETTINGS, budget: [], ...store.get('settings', {})};
+    S.aiHist = [];
     S.hidden = store.get('hidden', store.get('done', {}));
     S.snooze = store.get('snooze', {});
     S.plan = store.get('plan', {});

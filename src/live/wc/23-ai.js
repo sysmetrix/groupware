@@ -30,7 +30,7 @@
         <button class="btn" data-act="aiAsk" data-q="오늘 업무를 아침 브리핑처럼 5줄 이내로 요약해 주세요.">아침 브리핑</button>
         <button class="btn" data-act="aiAsk" data-q="오늘 직원 부재와 내 일정을 고려해 협조 요청이 필요한 일이 있는지 알려 주세요.">협조·부재 확인</button>
       </div>
-      <div style="display:flex;gap:8px;margin-top:12px"><input id="aiQ" class="inp" style="flex:1;height:40px" placeholder="무엇이든 물어보세요 (예: 이번 주에 먼저 끝내야 할 일은?)" aria-label="AI에게 질문"><button class="btn primary" data-act="aiAsk">물어보기</button></div>
+      <div style="display:flex;gap:8px;margin-top:12px"><input id="aiQ" class="inp" style="flex:1;height:40px" placeholder="무엇이든 물어보세요 (Enter로 보내기 · 앞 대화를 이어서 답합니다)" aria-label="AI에게 질문"><button class="btn primary" data-act="aiAsk">물어보기</button></div>
       <div id="aiOut" class="box" style="margin-top:14px;min-height:80px;line-height:1.8"><span class="muted">질문을 고르거나 입력하세요.</span></div>
       <details style="margin-top:10px"><summary class="muted" style="cursor:pointer">AI에게 보내는 내용 보기</summary><pre style="white-space:pre-wrap;font:inherit;font-size:12.5px;margin:6px 0 0">${esc(aiContext())}</pre><div class="muted" style="font-size:12px">업무 제목·상태·마감과 직원 이름·휴가 구분만 보냅니다. 메일·문서 본문, 계좌번호, 비밀번호는 보내지 않습니다.</div></details>
       <div class="acts"><button class="btn sm ghost" data-act="aiSetup">키 바꾸기</button><button class="btn sm ghost danger" data-act="aiForget">키 지우기</button></div>`);
@@ -93,10 +93,11 @@
     const out = $('#aiOut');
     if (out) out.innerHTML = '<span class="muted"><span class="spin"></span> 생각하는 중…</span>';
     try {
-      const j = await aiRequest(`models/${c.model || 'gemini-flash-latest'}:generateContent`, {systemInstruction: {parts: [{text: R.AI_SYSTEM}]}, contents: [{role: 'user', parts: [{text: `[내 업무 요약]\n${aiContext()}\n\n[질문]\n${q}`}]}], generationConfig: {temperature: 0.3, maxOutputTokens: 900}}, c.key);
+      const j = await aiRequest(`models/${c.model || 'gemini-flash-latest'}:generateContent`, {systemInstruction: {parts: [{text: R.AI_SYSTEM}]}, contents: [...(S.aiHist || []).slice(-4).flatMap(h => [{role: 'user', parts: [{text: h.q}]}, {role: 'model', parts: [{text: h.a}]}]), {role: 'user', parts: [{text: `[내 업무 요약]\n${aiContext()}\n\n[질문]\n${q}`}]}], generationConfig: {temperature: 0.3, maxOutputTokens: 2048}}, c.key);
       const text = (j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts || []).map(p => p.text || '').join('').trim();
       if (!text) throw new Error('답변이 비어 있습니다(안전 필터 또는 사용량 제한일 수 있습니다)');
-      if ($('#aiOut')) $('#aiOut').innerHTML = aiRich(text) + '<div class="muted" style="font-size:12px;margin-top:8px">AI 답변은 참고용입니다. 마감·금액은 원문으로 확인하세요.</div>';
+      S.aiHist = [...(S.aiHist || []), {q, a: text.slice(0, 1500)}].slice(-4); const qi = $('#aiQ'); if (qi) qi.value = '';
+      if ($('#aiOut')) $('#aiOut').innerHTML = `<div class="muted" style="font-size:12px;margin-bottom:6px">질문: ${esc(q.slice(0, 80))}</div>` + aiRich(text) + '<div class="muted" style="font-size:12px;margin-top:8px">AI 답변은 참고용입니다. 마감·금액은 원문으로 확인하세요.</div>';
       logActionRecord({command: 'AI 질문: ' + q.slice(0, 60), type: 'AI', target: '', summary: 'AI 도우미 답변을 받았습니다(실행 없음).', steps: [], verified: true});
     } catch (e) {
       logError('aiAsk', e.message);

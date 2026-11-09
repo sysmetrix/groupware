@@ -10,7 +10,7 @@
 
     // 1. If any overlay, dropdown menu, modal, or coachmark is open, clicking outside it closes it IMMEDIATELY
     if ((S.menuOpen || S.paletteOpen || S.helpOpen || S.coach) && !hasStop) {
-      if (!['menuNew', 'menuBell', 'menuView', 'help', 'openPalette'].includes(act)) {
+      if (!['menuNew', 'menuBell', 'menuView', 'help', 'openPalette', 'rowMenu'].includes(act)) {
         closeOverlay();
       }
     }
@@ -19,7 +19,7 @@
     if (act === 'closeOverlay' && hasStop) return;
     if (el.tagName === 'A' && el.getAttribute('href') === '#') e.preventDefault();
     switch (act) {
-      case 'refresh': refresh(); break;
+      case 'refresh': refresh({announce: true}); break;
       case 'applyRefresh': S.pendingRefresh = false; render(); break;
       case 'relogin': if (!S.pane.dirty || confirm('처리 창에 입력 중인 내용이 있습니다. 그룹웨어를 새로 고치면 사라집니다. 계속할까요?')) location.reload(); break;
       case 'close': if (leavePane()) close(); break;
@@ -28,8 +28,8 @@
       case 'copyErrors': copyText((S.errors || []).map(x => `${new Date(x.at).toISOString()} ${x.where}: ${x.msg}`).join('\n')); break;
       case 'setTodayTab': S.todayTab = v; S.filter.level = 'all'; renderMain(); break;
       case 'stateFilter': S.filter.level = S.filter.level === v || v === 'all' ? 'all' : v; renderMain(); break;
-      case 'rowMenu': e.stopPropagation(); openMenu('row:' + el.dataset.k, el); break;
-      case 'markDone': e.stopPropagation(); { pushUndo('끝냄'); S.hidden[el.dataset.k] = Date.now(); saveLocal(); afterMark(); toastUndo(el.dataset.k.startsWith('att:') ? '확인 완료 처리했습니다. 그룹웨어 기록이 3일 뒤에도 그대로면 다시 보여 드립니다.' : '처리 완료되었습니다. 그룹웨어에 아직 남아 있으면 하루 뒤 다시 보여 드립니다.'); } break;
+      case 'rowMenu': e.stopPropagation(); if (S.menuOpen === 'row:' + el.dataset.k) closeOverlay(); else { closeOverlay(); openMenu('row:' + el.dataset.k, el); } break;
+      case 'markDone': e.stopPropagation(); markDoneKeys([el.dataset.k]); break;
       case 'coach': startCoach(); break;
       case 'coachNext': coachNext(); break;
       case 'coachEnd': endCoach(); break;
@@ -128,12 +128,12 @@
       case 'fsDown': fontStep(-1); if (S.menuOpen === 'view') { S.menuOpen = ''; openMenu('view'); } break;
       case 'theme': toggleTheme(); toast(S.settings.theme === 'dark' ? '다크 모드' : '라이트 모드'); if (S.menuOpen === 'view') { S.menuOpen = ''; openMenu('view'); } break;
       case 'openPalette': closeOverlay(); openPalette(''); break;
-      case 'palRun': { const c = palItems[Number(el.dataset.i)]; closeOverlay(); if (c) c.run(); break; }
+      case 'palRun': palExec(palItems[Number(el.dataset.i)]); break;
       case 'tileLevel': S.filter.level = S.filter.level === v ? 'all' : v; S.filter.area = 'all'; renderMain(); break;
       case 'tileArea': S.filter.area = S.filter.area === v ? 'all' : v; S.filter.level = 'all'; renderMain(); break;
-      case 'goApproval': if (v) S.apTab = v; go('approval'); break;
+      case 'goApproval': go('approval'); if (v) { S.apTab = v; S.apTabPinned = true; renderMain(); } break;
       case 'goCalendar': go('calendar'); break;
-      case 'goBudgetCode': go('budget'); break;
+      case 'goBudgetCode': { const b = S.budget, pj = el.dataset.p || ''; if (pj && pj !== b.project) { b.project = pj; b.filter = ''; b.table = null; b.full = null; } if (v) { if (b.table && !b.table.error && !b.busy && (!pj || b.table.project === pj)) { go('budget'); loadLedger(v); } else { b.pendingLedger = v; go('budget'); } } else go('budget'); break; }
       case 'goAttendanceDay': S.att.day = v; if (S.att.month !== v.slice(0, 6)) { S.att.rows = null; S.att.month = v.slice(0, 6); } go('attendance'); break;
       case 'selDeadline': if (el.dataset.k && S.a.actions.some(x => x.key === el.dataset.k)) { go('today'); selectAction(el.dataset.k); } else { S.search.kw = relatedQ(el.dataset.title); runSearch(); } break;
       case 'area': S.filter.area = v; renderMain(); break;
@@ -154,19 +154,19 @@
       case 'quickTodo': e.stopPropagation(); { const x = S.a.actions.find(a => a.key === el.dataset.k); if (x) addTodo(x.title, x.deadline && x.deadline.date || '', x.kind, x.url, x.key); } break;
       case 'batchHide': hide([...S.multi]); break;
       case 'batchSnooze': snooze([...S.multi]); break;
-      case 'batchTodo': { const keys = [...S.multi]; pushUndo(`${keys.length}건 할 일로`); for (const k of keys) { const x = S.a.actions.find(a => a.key === k); if (x) { S.todos.unshift({id: uid(), title: x.title, due: x.deadline && x.deadline.date || '', status: 'todo', source: x.kind, url: x.url, at: Date.now()}); S.plan[k] = S.plan[k] || 'today'; } } S.multi.clear(); saveLocal(); refreshQueue(); toastUndo(`${keys.length}건을 할 일에 넣었습니다.`); break; }
+      case 'batchTodo': { const keys = [...S.multi]; pushUndo(`${keys.length}건 할 일로`); for (const k of keys) { const x = S.a.actions.find(a => a.key === k); if (x) { if (!S.todos.some(t => t.key === k && t.status !== 'done')) S.todos.unshift({id: uid(), title: x.title, due: x.deadline && x.deadline.date || '', status: 'todo', source: x.kind, url: x.url, key: k, at: Date.now()}); S.plan[k] = S.plan[k] || 'today'; } } S.multi.clear(); saveLocal(); refreshQueue(); toastUndo(`${keys.length}건을 할 일에 넣었습니다.`); break; }
       case 'batchCsv': { const rows = S.a.actions.filter(x => S.multi.has(x.key)); download(`선택항목_${today()}.csv`, R.toCsv(rows, csvCols), 'text/csv;charset=utf-8'); break; }
       case 'batchFocus': startFocus([...S.multi]); S.multi.clear(); break;
       case 'batchClear': S.multi.clear(); refreshQueue(); break;
       case 'focusStart': startFocus(); break;
-      case 'focusList': { const l = S.a.approval.lists[S.apTab]; startFocus(((l && l.docs) || []).map(d => `doc:${S.apTab}:${d.docId}`).filter(k => S.a.actions.some(a => a.key === k))); break; }
+      case 'focusList': { const l = S.a.approval.lists[S.apTab]; const ks = [...((l && l.docs) || []), ...(S.apMore[S.apTab] || [])].map(d => `doc:${S.apTab}:${d.docId}`).filter(k => S.a.actions.some(a => a.key === k)); if (!ks.length) { toast('이 목록의 문서는 처리할 일로 분류되지 않았습니다. 행의 버튼으로 하나씩 여세요.'); break; } startFocus(ks); break; }
       case 'focusNext': focusNext(true); break;
       case 'focusSkip': if (S.focus && !S.focus.busy && leavePane()) { S.focus.results[S.focus.keys[S.focus.i]] = 'skip'; if (S.focus.i >= S.focus.keys.length - 1) finishFocus(); else { S.focus.i++; focusOpen(); } } break;
       case 'focusOpenGate': if (S.focus) { const x = S.a.actions.find(a => a.key === S.focus.keys[S.focus.i]); S.focus.gate = false; if (x) { S.pane.url = x.url; renderPane(); } } break;
       case 'menuView': openMenu('view'); break;
       case 'focusPrev': focusPrev(); break;
       case 'focusStop': stopFocus(); break;
-      case 'apTab': S.apTab = v; renderMain(); break;
+      case 'apTab': S.apTab = v; S.apTabPinned = true; renderMain(); break;
       case 'apMore': { const l = S.a.approval.lists[S.apTab]; const have = l.docs.length + (S.apMore[S.apTab] || []).length; try { const r = await GW.approvalPage(S.apTab, Math.floor(have / 30) + 1); S.apMore[S.apTab] = [...(S.apMore[S.apTab] || []), ...r.docs.filter(d => !l.docs.some(x => x.docId === d.docId))]; } catch (err) { toast(err.message); } renderMain(); break; }
       case 'selDoc': if (!leavePane()) break; S.sel = {type: 'doc', kind: el.dataset.kind, docId: el.dataset.id}; S.pane.url = ''; S.pane.extract = null; S.pane.preview = null; renderMain(); renderPane(); break;
       case 'reloadRouting': toast('배부·접수 이력을 읽는 중…'); await loadRouting(true); render(); break;
@@ -183,7 +183,7 @@
       case 'openUrl': closeOverlay(); openUrl(el.dataset.url, {title: el.dataset.title || el.textContent.trim(), unread: el.dataset.unread === '1', what: el.dataset.what || '문서'}); break;
       case 'copy': copyText(v); break;
       case 'paneExpand': S.pane.expanded = !S.pane.expanded; renderPane(); break;
-      case 'closePane': if (S.focus) { stopFocus(); break; } S.pane.dirty = false; S.sel = null; S.pane.url = ''; S.pane.expanded = false; render(); break;
+      case 'closePane': if (S.focus) { stopFocus(); break; } if (!leavePane()) break; S.pane.dirty = false; S.sel = null; S.pane.url = ''; S.pane.expanded = false; render(); break;
       case 'todoFromSel': { const t = selInfo(); const x = selectedAction(); addTodo(t.title, x && x.deadline && x.deadline.date || '', x ? x.kind : '업무센터 항목', t.url, x ? x.key : ''); break; }
       case 'todoFromExtract': { const nx = S.pane.extract && R.nextDeadline(S.pane.extract.deadlines); const t = selInfo(); if (nx) addTodo(t.title, nx.date, '원문 기한 자동 추출', t.url); break; }
       case 'boardCard': { const k = el.dataset.k; if (path.some(n => n && n.tagName === 'BUTTON')) break; if (k.startsWith('todo:')) { const t = S.todos.find(x => `todo:${x.id}` === k); if (t && t.url) { S.sel = {type: 'frame', title: t.title, url: t.url}; openUrl(t.url, {title: t.title}); } } else { go('today'); selectAction(k); } break; }
@@ -226,7 +226,7 @@
       case 'richWeekly': copyRich(weeklyHtml(S.weekly), S.weekly); break;
       case 'dlWeekly': download(`주간업무실적_${today()}.txt`, S.weekly); break;
       case 'budgetRowAdd': S.settings.budget.push({project: '', filter: '', label: ''}); renderMain(); break;
-      case 'budgetRowDel': S.settings.budget.splice(Number(el.dataset.i), 1); renderMain(); break;
+      case 'budgetRowDel': S.settings.budget.splice(Number(el.dataset.i), 1); S.budget.table = null; saveLocal(); renderMain(); break;
       case 'saveSettings': {
         const st = S.settings;
         st.refreshMin = Number($('#setRefresh').value);
@@ -244,7 +244,7 @@
       }
       case 'resetDone': pushUndo('표시 초기화'); S.hidden = {}; S.snooze = {}; S.plan = {}; saveLocal(); render(); toastUndo('숨기기·미루기·보드 계획을 지웠습니다.'); break;
       case 'resetRouting': S.routing = null; store.del('routing'); toast('추천 이력을 지웠습니다.'); break;
-      case 'resetAll': if (confirm('이 브라우저에 저장된 내 업무센터 설정·할 일·표시를 모두 지울까요? (그룹웨어 자료는 바뀌지 않습니다)')) { const p = getPrefix(); for (const k of Object.keys(localStorage)) if (k.startsWith(p)) localStorage.removeItem(k); S.hidden = {}; S.snooze = {}; S.plan = {}; S.todos = []; S.newKeys.clear(); S.activity = []; S.history = []; S.settings = {...DEFAULT_SETTINGS}; S.routing = null; S.forms = null; applyLook(); render(); } break;
+      case 'resetAll': if (confirm('이 브라우저에 저장된 내 업무센터 설정·할 일·표시를 모두 지울까요? (그룹웨어 자료는 바뀌지 않습니다)')) { const p = getPrefix(); for (const k of Object.keys(localStorage)) if (k.startsWith(p)) localStorage.removeItem(k); for (const k of Object.keys(localStorage)) if (k.startsWith('bwyfgw:wc:migrated:') && localStorage.getItem(k) === currentKey) localStorage.removeItem('bwyfgw:wc:' + k.slice('bwyfgw:wc:migrated:'.length)); S.hidden = {}; S.snooze = {}; S.plan = {}; S.todos = []; S.newKeys.clear(); S.activity = []; S.history = []; S.settings = {...DEFAULT_SETTINGS, budget: []}; S.routing = null; S.forms = null; applyLook(); render(); } break;
       case 'toastUndo': undo(); root.querySelector('.toast')?.remove(); break;
       default: break;
     }
@@ -267,7 +267,8 @@
     if (t.id === 'bCatProj') { S.budget.project = t.value; S.budget.filter = ''; loadBudget(); }
     if (t.id === 'bq') renderMain();
     if (t.id === 'resDate') resGo();
-    if (t.id === 'resTitle' || t.id === 'resStart' || t.id === 'resEnd') { resSyncForm(); const rs = resState(); if (rs.check) { rs.rev++; rs.check = null; renderMain(); } }
+    if (t.id === 'resTitle') resSyncForm(); // 예약명만 바꾸면 겹침 확인 결과는 그대로 둔다(다시 그리면 누르려던 버튼이 사라져 클릭이 씹힘)
+    if (t.id === 'resStart' || t.id === 'resEnd') { resSyncForm(); const rs = resState(); if (rs.check) { rs.rev++; rs.check = null; renderMain(); } }
     if (t.classList && t.classList.contains('setc')) saveSettingField(t);
     if (t.dataset && t.dataset.b) saveBudgetRows();
   });

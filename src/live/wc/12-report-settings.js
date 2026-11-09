@@ -18,7 +18,7 @@ ${S.weekly ? `<h2>주간 업무 실적 초안 <span class="saved on" id="wkSaved
   // ----- 설정 (바꾸는 즉시 자동 저장) -----
   function vSettings() {
     const st = S.settings;
-    const hasMini = !!localStorage.getItem(LS + 'src');
+    const hasMini = !!localStorage.getItem('bwyfgw:wc:src') || !!localStorage.getItem(LS + 'src') || !!window.BWYFGW_POLICY || !!document.documentElement.dataset.bwyfgwExt;
     const perm = 'Notification' in window ? ({granted: '허용됨', denied: '브라우저에서 막혀 있음', default: '아직 묻지 않음'}[Notification.permission] || '') : '이 브라우저는 지원하지 않음';
     const r = rel();
     const ruleChips = (l, name) => r[l].length ? `<div style="margin-top:8px"><span class="muted">${name}</span> ${r[l].map((q, i) => `<span class="chip">${esc(q.label || q.v)}<button class="btn sm ghost icon" style="height:22px;width:22px" data-act="delRule" data-l="${l}" data-i="${i}" aria-label="지우기">${ic('x')}</button></span>`).join(' ')}</div>` : '';

@@ -108,9 +108,12 @@
     const s = resState();
     if (!s.check || !s.check.ok || !s.check.payload || s.confirm) return;
     resSyncForm();
-    const p = s.check.payload;
-    // 확정 직전, 화면의 값이 확인한 값과 같은지 다시 비교한다
-    if (p.resSeq !== s.sel || p.title !== s.form.title.trim() || p.start12 !== s.date + s.form.start.replace(':', '') || p.end12 !== s.date + s.form.end.replace(':', '')) { s.check = null; renderMain(); toast('내용이 바뀌어 다시 확인이 필요합니다.'); return; }
+    // 예약명은 확인 뒤에 고쳐도 된다(겹침과 무관). 고친 이름도 같은 규칙으로 다시 검사한다.
+    const p = {...s.check.payload, title: s.form.title.trim()};
+    const vt = R.validateBooking({title: p.title, date: s.date, start: s.form.start, end: s.form.end});
+    if (!vt.ok) { s.check = {ok: false, errors: vt.errors}; renderMain(); return; }
+    // 확정 직전, 화면의 시간·자원이 확인한 값과 같은지 다시 비교한다
+    if (p.resSeq !== s.sel || p.start12 !== s.date + s.form.start.replace(':', '') || p.end12 !== s.date + s.form.end.replace(':', '')) { s.check = null; renderMain(); toast('내용이 바뀌어 다시 확인이 필요합니다.'); return; }
     s.confirm = true;
     const sel = (s.list || []).find(r => r.resSeq === p.resSeq);
     try {

@@ -671,3 +671,27 @@ test('home day helpers: timeline clipping, stalled submissions, wrap-up reminder
   assert.equal(w.active, true); assert.match(w.otReminder, /18:00~21:00/);
   assert.equal(wrapUpModel({now: new Date('2026-11-09T10:00:00+09:00')}).active, false);
 });
+
+test('v0.30 usability: promo mail detection, command detection, palette/keyboard wiring in the bundle', async () => {
+  const B = await import('../src/live/briefing.mjs');
+  assert.equal(B.isNoiseMail({subject: '🅰️ 2027년도 AI와 함께할 미래, 아이폰 속에 힌트가 있다? 📱', fromEmail: 'edu@ablearn.kr'}), true);
+  assert.equal(B.isNoiseMail({subject: '[11월] 교육 안내', fromEmail: 'news@example.com'}), true);
+  assert.equal(B.isNoiseMail({subject: '(전략실)10월 시간외근무 확인 및 주당근무시간 작성 요청', fromEmail: 'lee@bwyf.or.kr'}), false);
+  assert.equal(B.isNoiseMail({subject: '자료 제출 요청', fromEmail: 'info@bucheon.go.kr'}), false);
+  assert.equal(B.looksLikeCommand('결과보고 작성해 줘'), true);
+  assert.equal(B.looksLikeCommand('시간외근무'), false);
+  assert.equal(B.looksLikeCommand('주간업무보고'), false);
+  assert.equal(B.looksLikeCommand('운영계획 기안'), false);
+  assert.equal(B.looksLikeCommand('결과보고서 작성'), false);
+  assert.equal(B.looksLikeCommand('주당근무시간 보냈는지 확인해줘'), true);
+  assert.equal(B.isNoiseMail({subject: '🔔 공지 사항', fromEmail: 'hr@bwyf.or.kr'}), false);
+  assert.equal(B.isNoiseMail({subject: '[요청] 실적 제출', fromEmail: 'info@korea.kr'}), false);
+  assert.equal(B.isNoiseMail({subject: '⚠ 마감 안내', fromEmail: 'kim@partner.com'}), false);
+  const wc = (await Promise.all((await fs.readdir('src/live/wc')).filter(f => f.endsWith('.js')).map(f => fs.readFile(path.join('src/live/wc', f), 'utf8')))).join('\n');
+  assert.match(wc, /const dispTitle = /, 'palette title helper must exist');
+  assert.match(wc, /S\.paletteOpen && \$\('#palq'\)/, 'palette keys only when the palette input exists');
+  assert.match(wc, /c === 'KeyE'/, 'E marks done');
+  assert.doesNotMatch(wc, /2026-11-14/, 'no hard-coded dates in commands');
+  assert.doesNotMatch(wc, /이하림 담당자|3번째 시트/, 'no fake sent-mail verification');
+  assert.match(wc, /id: 'overview'/, 'overview view reachable');
+});

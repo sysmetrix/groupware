@@ -30,19 +30,24 @@
       if (S.sel) { S.sel = null; render(); return; }
       close(); return;
     }
-    if (S.paletteOpen) { paletteKey(e); return; }
+    // 팔레트 키 처리는 진짜 명령 팔레트(#palq)가 열려 있을 때만. 다른 대화상자(AI·지급·기록기 등)도 paletteOpen을 쓰므로
+    // 거기서 Enter를 누르면 팔레트 항목이 실행되던 문제를 막는다.
+    if (S.paletteOpen && $('#palq')) { paletteKey(e); return; }
     if (S.coach) { if (e.key === 'Enter' || e.key === 'ArrowRight') { e.preventDefault(); coachNext(); } return; }
     if (!typing && (e.key === 'Enter' || e.key === ' ') && t.dataset && t.dataset.act && t.tagName !== 'BUTTON' && t.tagName !== 'A' || (!typing && (e.key === 'Enter' || e.key === ' ') && t.tagName === 'A' && !t.href)) { e.preventDefault(); t.click(); return; }
     if (typing) {
       if (e.key !== 'Enter') return;
       if (t.id === 'cmdPrompt') { e.preventDefault(); executeCommandWorkflow(t.value); return; }
-      if (t.id === 'gsearch') { e.preventDefault(); const v = t.value.trim(); if (v) { openCommandConsole(v); } return; }
+      if (t.id === 'gsearch') { e.preventDefault(); const v = t.value.trim(); if (!v) return; if (R.looksLikeCommand(v) && allowed('aiConsole')) openCommandConsole(v); else { t.blur(); S.search.kw = v; runSearch(); } return; }
+      if (t.id === 'aiQ') { e.preventDefault(); aiAsk(); return; }
+      if (t.id === 'aiKey') { e.preventDefault(); aiSaveKey(); return; }
       else if (t.id === 'sq') { S.search.kw = t.value.trim(); runSearch(); }
       else if (t.id === 'mailq') runMailSearch(t.value.trim());
       else if (t.id === 'tdTitle') addTodoFromInput();
       else if (t.id === 'bcode' || t.id === 'bfilter') { S.budget.project = $('#bcode').value.trim(); S.budget.filter = $('#bfilter').value.trim(); loadBudget(); }
       return;
     }
+    if (S.paletteOpen || S.helpOpen) return; // 대화상자(AI·지급·기록기·명령 콘솔 등) 위에서는 전역 단축키를 쓰지 않는다
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const c = e.code;
     if (c === 'KeyD' && e.shiftKey) { e.preventDefault(); toggleTheme(); toast(S.settings.theme === 'dark' ? '다크 모드' : '라이트 모드'); return; }
@@ -58,6 +63,7 @@
     if (!x) return;
     if (c === 'Enter') openItem(x);
     else if (c === 'KeyO') openWindow(x.url, x);
+    else if (c === 'KeyE') { e.preventDefault(); markDoneKeys([x.key]); }
     else if (c === 'KeyX') hide([x.key]);
     else if (c === 'KeyS') snooze([x.key]);
     else if (c === 'KeyT') addTodo(x.title, x.deadline && x.deadline.date || '', x.kind, x.url, x.key);

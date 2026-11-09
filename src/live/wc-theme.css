@@ -213,3 +213,11 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .tl .sg{position:absolute;top:3px;bottom:3px;border-radius:5px;opacity:.9}
 .tl .nw{position:absolute;top:0;bottom:0;width:2px;background:var(--hi);box-shadow:0 0 0 2px var(--hi-soft)}
 .tll{display:flex;flex-direction:column;gap:3px;font-size:13px;margin-top:6px}
+
+/* v0.30.0: 정의 없이 쓰이던 토큰(명령 콘솔·결과 카드·상세)을 정의하고, 키보드 포커스와 선택 상자를 또렷하게 */
+.wc{--bg-subtle:rgba(15,23,42,.04);--card-hover:rgba(99,102,241,.05);--fg-secondary:#475569;--accent-text:#4338ca;--ok-text:#065f46;--sh-sm:0 1px 2px rgba(16,24,40,.06);--sh-md:0 4px 12px -2px rgba(16,24,40,.10);--pane:560px}
+.wc.dark{--bg-subtle:rgba(255,255,255,.04);--card-hover:rgba(255,255,255,.07);--fg-secondary:#a3acc2;--accent-text:#c7d2fe;--ok-text:#a7f3d0;--sh-sm:0 1px 2px rgba(0,0,0,.4);--sh-md:0 6px 16px -4px rgba(0,0,0,.6)}
+.wc .row:focus-visible,.wc tr.click:focus-visible,.wc .mi:focus-visible,.wc .it:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.wc .row .ck{opacity:.8}.wc .row:focus-within .ck{opacity:1}
+.wc header .srch:focus-within{box-shadow:0 0 0 2px var(--accent)}
+.wc .t,.wc .ct,.wc h1,.wc h2,.wc h3{word-break:keep-all;overflow-wrap:anywhere}

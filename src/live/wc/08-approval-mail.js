@@ -7,7 +7,8 @@
     const lists = S.a.approval.lists, counts = S.a.approval.counts;
     const tabs = [['pending', '결재 대기'], ['deptWaiting', '부서 접수 대기'], ['distWaiting', '배부 대기'], ['sendWaiting', '발송 대기'], ['viewing', '열람문서'], ['submitted', '내 상신문서']];
     // Automatically select the first tab that has documents if the active tab is empty
-    if (!lists[S.apTab] || !lists[S.apTab].docs || lists[S.apTab].docs.length === 0) {
+    // (사용자가 탭을 직접 고른 뒤에는 0건이어도 그 탭을 그대로 보여 준다)
+    if (!S.apTabPinned && (!lists[S.apTab] || !lists[S.apTab].docs || lists[S.apTab].docs.length === 0)) {
       const firstWithDocs = tabs.find(([k]) => lists[k] && lists[k].docs && lists[k].docs.length > 0);
       if (firstWithDocs) S.apTab = firstWithDocs[0];
     }
@@ -21,7 +22,7 @@
     const roleMine = {distWaiting: S.settings.roles?.distributor, deptWaiting: S.settings.roles?.deptReceiver, sendWaiting: S.settings.roles?.sender}[S.apTab];
     const rows = docs.map(d => {
       const rec = withRec && hist.length ? R.recommendRouting(d, hist, {target, limit: 2}) : Object.assign([], {group: null});
-      const recHtml = !withRec ? '' : !S.routing ? '<span class="spin"></span>' : rec.group && rec.group.targets.length >= 2 ? `<b>${rec.group.targets.length}곳 함께</b><div class="muted">${esc(rec.group.targets.slice(0, 3).join(', '))}${rec.group.targets.length > 3 ? ' 외' : ''}</div>` : rec.length ? rec.map(r => `<div>${esc(r.name)} <span class="muted">· 비슷한 ${r.of}건 중 ${r.count}건</span></div>`).join('') : '<span class="muted">비슷한 이력 없음</span>';
+      const recHtml = !withRec ? '' : !S.routing ? (routingFailedRecently() ? '<span class="muted">이력을 읽지 못함</span>' : '<span class="spin"></span>') : rec.group && rec.group.targets.length >= 2 ? `<b>${rec.group.targets.length}곳 함께</b><div class="muted">${esc(rec.group.targets.slice(0, 3).join(', '))}${rec.group.targets.length > 3 ? ' 외' : ''}</div>` : rec.length ? rec.map(r => `<div>${esc(r.name)} <span class="muted">· 비슷한 ${r.of}건 중 ${r.count}건</span></div>`).join('') : '<span class="muted">비슷한 이력 없음</span>';
       return `<tr class="click ${S.sel && S.sel.type === 'doc' && S.sel.docId === d.docId ? 'sel' : ''}" data-act="selDoc" data-kind="${S.apTab}" data-id="${esc(d.docId)}" tabindex="0"><td><div style="font-weight:700">${esc(R.cleanTitle ? R.cleanTitle(d.title) : d.title)}</div><div class="muted">${d.unread ? '<span class="bdg check" style="margin-right:6px">아직 안 봄</span>' : ''}${esc(d.docNo)}${d.attachments ? ` · 첨부 ${d.attachments}` : ''}</div></td><td>${esc(d.sender || d.drafter || d.drafterDept)}</td><td class="nowrap">${esc(AP_STATUS[S.apTab] || d.status)}</td>${withRec ? `<td>${recHtml}</td>` : ''}<td class="nowrap">${esc(shortWhen(d.date))}</td><td class="nowrap"><button class="btn sm ${roleMine === false || S.apTab === 'submitted' || S.apTab === 'viewing' ? '' : 'primary'}" data-act="apOpen" data-kind="${S.apTab}" data-id="${esc(d.docId)}">${roleMine === false ? '원래 화면 보기' : AP_VERB[S.apTab]}</button></td></tr>`;
     }).join('');
     const total = l ? (l.total ?? l.docs.length) : 0;

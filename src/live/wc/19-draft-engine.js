@@ -214,7 +214,8 @@
     btnIn(dlg, /^반영$/)?.click();
     const closed = !!(await waitFor(() => !dlgOf(d), 5000));
     if (!closed) allDlgs(d).forEach(x => btnIn(x, /^(취소|닫기)$/)?.click());
-    return {ok: closed, detail: closed ? '내결재라인 “기본” 반영' : '결재라인 창을 닫지 못해 취소했습니다(직접 지정 필요)'};
+    // 결재자 이름은 화면에서 다시 읽어 대조하지 않으므로, 이름까지 맞다고 말하지 않는다
+    return {ok: closed, detail: closed ? '기본 결재선을 불러왔습니다(이름 확인 필요)' : '결재라인 창을 닫지 못해 취소했습니다(직접 지정 필요)'};
   }
 
   // 참조문서: 계획서를 제목으로 검색해 선택한다 (합성 입력/마우스 이벤트)
@@ -334,20 +335,27 @@
     if (spec.ref) await run('참조문서', () => pickRefDoc(f, spec.ref.title, spec.ref.docNo));
     AUTO.running = false;
     w.__wcFilled = Date.now();
-    steps.push({name: '안전장치', ok: AUTO.blocked.length === 0, detail: AUTO.blocked.length ? `자동 실행 중 ${AUTO.blocked.join(', ')} 버튼 클릭을 차단했습니다(상신·저장은 하지 않았습니다)` : '상신·결재·임시저장·삭제는 실행하지 않았습니다(결재 직전에서 멈춤)'});
+    steps.push({name: '안전장치', ok: AUTO.blocked.length === 0, detail: AUTO.blocked.length ? `자동 실행 중 ${AUTO.blocked.join(', ')} 버튼 클릭을 차단했습니다(상신·저장은 하지 않았습니다)` : '상신·결재·임시저장·삭제는 실행하지 않았습니다(상신 전에서 멈춤)'});
     return steps;
   }
 
   function showDraftReport(title, steps, notes = []) {
     const bad = steps.filter(s => !s.ok).length;
-    logActionRecord({command: title, type: '기안', target: title, summary: bad ? `${steps.length - bad}/${steps.length}개 항목 자동 기입, ${bad}개는 직접 확인이 필요합니다.` : `${steps.length}개 항목을 지난 결재문서 패턴대로 모두 자동 기입했습니다.`, steps: steps.map(s => `${s.ok ? '✓' : '✗'} ${s.name}: ${s.detail}`), verified: !bad, details: notes.join(' / ')});
+    const bodyStep = steps.find(s => s.name === '본문');
+    const bodyFilled = !!(bodyStep && bodyStep.ok); // 본문을 실제로 넣고 다시 읽어 일치한 경우만
+    const frameOnly = '초안 틀만 입력했습니다. 본문 사실(일시·장소·인원·금액)은 직접 확인하세요.';
+    const head = bad ? '자동 기입 결과 (확인이 필요한 항목이 있습니다)' : bodyFilled ? '자동 기입 완료 · 상신 전 확인 단계' : '초안 틀만 입력했습니다';
+    const summary = bad ? `${steps.length - bad}/${steps.length}개 항목 자동 기입, ${bad}개는 직접 확인이 필요합니다.` : bodyFilled ? `${steps.length}개 항목을 지난 결재문서 패턴대로 기입하고 다시 읽어 확인했습니다.` : `${steps.length}개 항목(본문 제외)을 기입했습니다. ${frameOnly}`;
+    logActionRecord({command: title, type: '기안', target: title, summary, steps: steps.map(s => `${s.ok ? '✓' : '✗'} ${s.name}: ${s.detail}`), status: bad ? 'partial' : 'success', verified: !bad, details: notes.join(' / ')});
+    S.paletteOpen = true; // Esc·바깥 클릭으로 닫히게
     $('#overlay').innerHTML = `
       <div class="modal" data-act="closeOverlay">
         <div class="dlg" data-stop="1" style="width:min(620px,94vw);padding:20px 24px;position:absolute;right:24px;bottom:24px;top:auto;left:auto;transform:none" role="dialog" aria-label="자동 기입 결과">
           <button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button>
-          <h2 style="margin:0 0 4px;font-size:17px">${bad ? '자동 기입 결과 (확인이 필요한 항목이 있습니다)' : '자동 기입 완료 · 결재 직전 상태'}</h2>
+          <h2 style="margin:0 0 4px;font-size:17px">${esc(head)}</h2>
           <div class="muted" style="margin-bottom:10px">${esc(title)}</div>
           ${steps.map(s => `<div style="display:flex;gap:8px;padding:5px 0;border-top:1px solid var(--line)"><b style="color:${s.ok ? 'var(--ok)' : 'var(--hi)'};width:18px">${s.ok ? '✓' : '✗'}</b><div><b>${esc(s.name)}</b><div class="muted" style="font-size:12.5px">${esc(s.detail)}</div></div></div>`).join('')}
+          ${!bodyFilled ? `<div class="box warn" style="margin-top:10px"><b>${esc(frameOnly)}</b></div>` : ''}
           ${notes.length ? `<div class="box warn" style="margin-top:10px">${notes.map(esc).join('<br>')}</div>` : ''}
           <div class="acts" style="margin-top:12px;justify-content:flex-end"><button class="btn sm primary" data-act="closeHelp">확인하고 계속 작성</button></div>
         </div>
@@ -459,15 +467,21 @@
   function goodsPickPlan() {
     if (gated('draftGoods')) return;
     const plans = planDocs().slice(0, 14);
+    S.paletteOpen = true; // Esc·바깥 클릭으로 닫히게
+    const list = plans.length
+      ? plans.map(p => `<div class="cmd-preset" role="button" tabindex="0" data-act="goodsRun" data-id="${esc(p.id)}"><b>${esc(p.title)}</b><div class="muted" style="font-size:12px">${esc(p.docNo)} · 기록물철 ${esc(p.binder)}</div></div>`).join('')
+      : `<div class="empty"><div class="ill">${ic('doc')}</div><b>학습된 계획서가 없습니다</b>내 결재문서에서 계획서를 아직 읽지 못했습니다. 계획서 없이 작성하면 기록물철·참조문서는 직접 지정해야 합니다.</div>`;
     $('#overlay').innerHTML = `<div class="modal" data-act="closeOverlay"><div class="dlg" data-stop="1" style="width:min(700px,95vw);padding:22px 24px;max-height:86vh;overflow:auto" role="dialog" aria-label="물품매입 품의 계획서 선택">
       <button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button>
       <h2 style="margin:0 0 4px;font-size:18px">어느 사업의 물품매입 품의인가요?</h2><div class="muted" style="margin-bottom:10px">선택한 계획서의 기록물철을 쓰고, 계획서를 참조문서로 지정합니다.</div>
-      ${plans.map(p => `<div class="cmd-preset" role="button" tabindex="0" data-act="goodsRun" data-id="${esc(p.id)}"><b>${esc(p.title)}</b><div class="muted" style="font-size:12px">${esc(p.docNo)} · 기록물철 ${esc(p.binder)}</div></div>`).join('')}</div></div>`;
+      ${list}
+      <div class="acts" style="margin-top:12px;justify-content:flex-end;border-top:1px solid var(--line);padding-top:10px"><button class="btn sm" data-act="goodsRun" data-id="">계획서 없이 작성</button><button class="btn sm ghost" data-act="closeHelp">닫기 (Esc)</button></div></div></div>`;
   }
   async function goodsRun(planId) {
     if (gated('draftGoods')) return;
+    if (!planId) return goodsRunNoPlan();
     const plan = patLoad().docs[planId];
-    if (!plan) return;
+    if (!plan) { toast('선택한 계획서 정보를 찾지 못했습니다.'); return; }
     const base = String(plan.title).replace(/\s*(운영|참가)\s*계획(\(안\))?$/, '').trim();
     const title = (prompt('물품매입 품의 제목을 확인·수정하세요.', `${base} 운영물품 구입`) || '').trim();
     if (!title) return;
@@ -478,13 +492,24 @@
     const steps = await fillDraft(f, {title, meta, ref: {title: plan.title, docNo: plan.docNo}});
     showDraftReport(title, steps, ['물품 내역·금액은 양식의 표에 직접 입력하세요.']);
   }
+  // 계획서 없이: 제목만 받아 양식을 열고 기본항목·결재선(·지난 문서로 추정한 기록물철)을 채운다. 참조문서는 사용자가 지정
+  async function goodsRunNoPlan() {
+    const title = (prompt('물품매입 품의 제목을 입력하세요.', '') || '').trim();
+    if (!title) return;
+    closeOverlay();
+    const meta = R.predictDraftMeta(patModel(), {title});
+    const f = await openDraftFrame('mg_20160313172845987', '물품매입(수리제조)품의 및 요구서', `물품매입: ${title}`);
+    if (!f) { toast('기안 화면을 열지 못했습니다.'); return; }
+    const steps = await fillDraft(f, {title, meta});
+    showDraftReport(title, steps, ['계획서 없이 작성했습니다. 참조문서는 직접 지정하고, 기록물철은 지난 문서로 추정한 값이니 확인하세요.', '물품 내역·금액은 양식의 표에 직접 입력하세요.']);
+  }
   const startGoodsDraft = goodsPickPlan;
 
   // 메뉴/콘솔/버튼에서 부르는 진입점
   function autoStartDraft(type) {
     if (type === 'result') return openResultPlanPicker();
     if (type === 'plan') return startPlanDraft();
-    if (type === 'pay') return openPaymentHub();
+    if (type === 'pay' || type === 'budget') return openPaymentHub(); // 예산 집행·지급 품의는 지급 문서 화면에서 시작
     closeOverlay();
     return goodsPickPlan();
   }
