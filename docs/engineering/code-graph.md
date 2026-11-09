@@ -9,7 +9,7 @@ flowchart LR
   m01_storage_js["01-storage<br/>107줄"]
   m02_shell_js["02-shell<br/>129줄"]
   m03_data_js["03-data<br/>130줄"]
-  m04_timers_keys_js["04-timers-keys<br/>73줄"]
+  m04_timers_keys_js["04-timers-keys<br/>74줄"]
   m05_views_js["05-views<br/>111줄"]
   m06_today_js["06-today<br/>147줄"]
   m07_charts_js["07-charts<br/>64줄"]
@@ -18,20 +18,21 @@ flowchart LR
   m10_calendar_budget_js["10-calendar-budget<br/>263줄"]
   m11_attendance_js["11-attendance<br/>62줄"]
   m12_report_settings_js["12-report-settings<br/>62줄"]
-  m13_detail_pane_js["13-detail-pane<br/>469줄"]
+  m13_detail_pane_js["13-detail-pane<br/>437줄"]
   m14_hide_snooze_undo_to_do_js["14-hide-snooze-undo-to-do<br/>110줄"]
-  m15_overlays_palette_help_menus_js["15-overlays-palette-help-menus<br/>182줄"]
-  m16_events_js["16-events<br/>309줄"]
+  m15_overlays_palette_help_menus_js["15-overlays-palette-help-menus<br/>213줄"]
+  m16_events_js["16-events<br/>310줄"]
   m17_lifecycle_js["17-lifecycle<br/>36줄"]
-  m18_command_console_js["18-command-console<br/>481줄"]
-  m19_draft_engine_js["19-draft-engine<br/>516줄"]
+  m18_command_console_js["18-command-console<br/>450줄"]
+  m19_draft_engine_js["19-draft-engine<br/>562줄"]
   m20_recorder_js["20-recorder<br/>343줄"]
   m21_governance_js["21-governance<br/>156줄"]
-  m22_expense_js["22-expense<br/>84줄"]
+  m22_expense_js["22-expense<br/>86줄"]
   m23_ai_js["23-ai<br/>111줄"]
   m24_resource_js["24-resource<br/>135줄"]
   m25_home_js["25-home<br/>64줄"]
   m26_changelog_js["26-changelog<br/>17줄"]
+  m27_attendance_request_js["27-attendance-request<br/>151줄"]
   m01_storage_js -->|2| m14_hide_snooze_undo_to_do_js
   m03_data_js -->|6| m01_storage_js
   m03_data_js -->|2| m16_events_js
@@ -86,6 +87,7 @@ flowchart LR
   m13_detail_pane_js -->|5| m05_views_js
   m13_detail_pane_js -->|2| m16_events_js
   m13_detail_pane_js -->|2| m03_data_js
+  m13_detail_pane_js -->|4| m19_draft_engine_js
   m14_hide_snooze_undo_to_do_js -->|6| m01_storage_js
   m14_hide_snooze_undo_to_do_js -->|3| m03_data_js
   m14_hide_snooze_undo_to_do_js -->|2| m16_events_js
@@ -95,25 +97,25 @@ flowchart LR
   m15_overlays_palette_help_menus_js -->|5| m02_shell_js
   m15_overlays_palette_help_menus_js -->|7| m05_views_js
   m15_overlays_palette_help_menus_js -->|4| m03_data_js
-  m15_overlays_palette_help_menus_js -->|3| m13_detail_pane_js
+  m15_overlays_palette_help_menus_js -->|2| m13_detail_pane_js
   m15_overlays_palette_help_menus_js -->|3| m19_draft_engine_js
   m15_overlays_palette_help_menus_js -->|3| m21_governance_js
   m16_events_js -->|4| m02_shell_js
   m16_events_js -->|17| m01_storage_js
-  m16_events_js -->|14| m15_overlays_palette_help_menus_js
+  m16_events_js -->|15| m15_overlays_palette_help_menus_js
   m16_events_js -->|5| m03_data_js
   m16_events_js -->|7| m05_views_js
-  m16_events_js -->|16| m13_detail_pane_js
+  m16_events_js -->|15| m13_detail_pane_js
   m16_events_js -->|2| m17_lifecycle_js
   m16_events_js -->|14| m14_hide_snooze_undo_to_do_js
   m16_events_js -->|4| m18_command_console_js
-  m16_events_js -->|9| m19_draft_engine_js
+  m16_events_js -->|10| m19_draft_engine_js
   m16_events_js -->|10| m24_resource_js
   m16_events_js -->|6| m23_ai_js
   m16_events_js -->|6| m22_expense_js
   m16_events_js -->|8| m21_governance_js
   m16_events_js -->|11| m20_recorder_js
-  m16_events_js -->|3| m09_search_board_js
+  m16_events_js -->|4| m09_search_board_js
   m16_events_js -->|6| m10_calendar_budget_js
   m16_events_js -->|4| m12_report_settings_js
   m17_lifecycle_js -->|2| m01_storage_js
@@ -126,11 +128,12 @@ flowchart LR
   m18_command_console_js -->|4| m01_storage_js
   m18_command_console_js -->|3| m05_views_js
   m18_command_console_js -->|2| m16_events_js
-  m18_command_console_js -->|5| m13_detail_pane_js
+  m18_command_console_js -->|6| m13_detail_pane_js
   m18_command_console_js -->|2| m19_draft_engine_js
   m19_draft_engine_js -->|3| m01_storage_js
   m19_draft_engine_js -->|3| m02_shell_js
   m19_draft_engine_js -->|2| m16_events_js
+  m19_draft_engine_js -->|2| m15_overlays_palette_help_menus_js
   m19_draft_engine_js -->|2| m13_detail_pane_js
   m20_recorder_js -->|4| m02_shell_js
   m20_recorder_js -->|4| m19_draft_engine_js
@@ -153,6 +156,12 @@ flowchart LR
   m26_changelog_js -->|3| m01_storage_js
   m26_changelog_js -->|2| mworkcenter_browser_js
   m26_changelog_js -->|2| m02_shell_js
+  m27_attendance_request_js -->|2| m18_command_console_js
+  m27_attendance_request_js -->|2| m02_shell_js
+  m27_attendance_request_js -->|2| m15_overlays_palette_help_menus_js
+  m27_attendance_request_js -->|3| m01_storage_js
+  m27_attendance_request_js -->|3| m13_detail_pane_js
+  m27_attendance_request_js -->|4| m19_draft_engine_js
 ```
 
 ## 화면 이벤트 -> 처리 함수 (일부)
@@ -257,7 +266,7 @@ flowchart LR
 | 01-storage.js | 107 | 32 |
 | 02-shell.js | 129 | 13 |
 | 03-data.js | 130 | 22 |
-| 04-timers-keys.js | 73 | 5 |
+| 04-timers-keys.js | 74 | 5 |
 | 05-views.js | 111 | 24 |
 | 06-today.js | 147 | 6 |
 | 07-charts.js | 64 | 7 |
@@ -266,17 +275,18 @@ flowchart LR
 | 10-calendar-budget.js | 263 | 21 |
 | 11-attendance.js | 62 | 2 |
 | 12-report-settings.js | 62 | 6 |
-| 13-detail-pane.js | 469 | 30 |
+| 13-detail-pane.js | 437 | 29 |
 | 14-hide-snooze-undo-to-do.js | 110 | 16 |
-| 15-overlays-palette-help-menus.js | 182 | 20 |
-| 16-events.js | 309 | 5 |
+| 15-overlays-palette-help-menus.js | 213 | 22 |
+| 16-events.js | 310 | 5 |
 | 17-lifecycle.js | 36 | 7 |
-| 18-command-console.js | 481 | 21 |
-| 19-draft-engine.js | 516 | 42 |
+| 18-command-console.js | 450 | 22 |
+| 19-draft-engine.js | 562 | 43 |
 | 20-recorder.js | 343 | 32 |
 | 21-governance.js | 156 | 19 |
-| 22-expense.js | 84 | 13 |
+| 22-expense.js | 86 | 13 |
 | 23-ai.js | 111 | 13 |
 | 24-resource.js | 135 | 15 |
 | 25-home.js | 64 | 2 |
 | 26-changelog.js | 17 | 1 |
+| 27-attendance-request.js | 151 | 5 |

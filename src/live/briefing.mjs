@@ -664,7 +664,7 @@ export function predictDraftMeta(model, {title = '', sourceDocNo = '', sourceTit
     for (const t of tk) if (e.tokens.includes(t)) s += t.length >= 3 ? 2 : 1;
     if (s >= 2 && (!best || s > best.s)) best = {s, e};
   }
-  if (best) return {...metaOf(best.e), basis: `같은 사업의 과거 문서 “${best.e.title}”와 동일`, confidence: 'similar'};
+  if (best) return {...metaOf(best.e), basis: `제목이 비슷한 과거 문서 “${best.e.title}”와 같게 고름(맞는지 확인)`, confidence: 'similar'};
   const joined = `${title} ${sourceTitle}`;
   if (/참가\s*(계획|결과보고|비)|교육 참가|아카데미|연수/.test(joined)) {
     const ed = es.find(e => e.binder === '직원교육');
@@ -737,7 +737,9 @@ export function buildPlanSkeleton(model, {title = ''} = {}) {
   const lines = String(best.e.body).split(/\r?\n/);
   const start = lines.findIndex(l => /^ {2}(?:[가-하]|\d{1,2})\.\s+\S/.test(l));
   if (start < 0) return null;
-  const refLine = lines.find(l => /^1\.\s/.test(l)) || '';
+  // 관련 문서번호는 같은 사업으로 볼 만큼 제목이 겹칠 때만 이어받는다(아니면 빈칸)
+  const hit = tk.filter(t => best.e.tokens.includes(t)).length;
+  const refLine = tk.length && hit >= Math.max(2, Math.ceil(tk.length * 0.6)) ? (lines.find(l => /^1\.\s/.test(l)) || '') : '';
   const kind = /참가\s*계획/.test(title) ? '참가' : '운영';
   const name = String(title).replace(/\s*(운영|참가)\s*계획(\(안\))?\s*$/, '').trim();
   const items = [];
@@ -748,7 +750,7 @@ export function buildPlanSkeleton(model, {title = ''} = {}) {
     if (m) items.push(`  ${ordKo(n++)}. ${m[1].trim()} `);
   }
   const out = [refLine || '1. 전략경영실-    (    .  .  .)호와 관련입니다.', kind === '참가' ? `2. ${name}에 참가하고자 합니다.` : `2. ${name}${(() => { const k = [...name].reverse().find(ch => /[가-힣]/.test(ch)); return k && (k.charCodeAt(0) - 0xAC00) % 28 === 0 ? '를' : '을'; })()} 다음과 같이 운영하고자 합니다.`, ...items, '', `붙임  ${kind === '참가' ? '안내문' : '운영계획서'} 1부.  끝.`];
-  return {lines: out, text: out.join('\r\n'), basis: best.e.title};
+  return {lines: out, text: out.join('\r\n'), basis: best.e.title, refCopied: !!refLine};
 }
 
 // ---------------------------------------------------------------------------
@@ -780,7 +782,7 @@ const isPurchase = d => /물품매입|구입과지출/.test(d.form || '');
 export function listProposals(docs = []) { return docs.filter(d => d && d.binder && !/^접수문서/.test(d.binder) && isProposal(d)).sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))); }
 export function proposalAmount(d) { const m = String(d.body || '').match(/(?:지급|지출)예정금액:\s*금([\d,]+)원/); return m ? parseWon(m[1]) : 0; }
 // 지급 건의 본문: 같은 사업·비목의 과거 건의를 틀로 삼아 근거 문서·사업명·금액만 바꾼다(결제방법·예산과목·붙임은 그대로 이어받음).
-export function buildPaymentProposalBody(baseBody = '', {ref = '', title = '', amount = 0} = {}) {
+export function buildPaymentProposalBody(baseBody = '', {ref = '', title = '', amount = 0, planBody = ''} = {}) {
   const src = String(baseBody).split(/\r?\n/);
   const tail = src.findIndex(l => /^ {2}가\.\s/.test(l));
   if (tail < 0) return null;
@@ -791,8 +793,18 @@ export function buildPaymentProposalBody(baseBody = '', {ref = '', title = '', a
   const ks = lines.flatMap((l, i) => (/^ {2}[가-하]\.\s+(?:지급|지출)예정금액\s*[:：]/.test(l) ? [i] : []));
   if (ks.length !== 1) return null;
   lines[ks[0]] = lines[ks[0]].replace(/[:：]\s*.*$/, `: ${moneyKo(amount)}`);
+  // 예산과목: 근거 계획서에 '예산과목' 줄이 있으면 그 값으로 바꾼다(틀 문서는 다른 사업일 수 있음)
+  const notes = ['지급계획(표)에는 지급처·내역을 직접 입력하세요.'];
+  const planSub = (String(planBody).split(/\r?\n/).map(l => l.match(/예산\s*과목\s*[:：]\s*(.+?)\s*(?:\.\s*끝\.)?\s*$/)).find(Boolean) || [])[1] || '';
+  const bi = lines.findIndex(l => /^ {2}[가-하]\.\s+예산\s*과목\s*[:：]/.test(l));
+  const looksCode = /(정책|단위|세부|편성목|통계목)\)/.test(planSub); // '부서별 사업비 개별 집행' 같은 설명은 과목 값이 아님
+  if (bi >= 0 && planSub && looksCode) {
+    const end = /\.\s*끝\.\s*$/.test(lines[bi]) ? '.  끝.' : '';
+    lines[bi] = lines[bi].replace(/[:：]\s*.*$/, `: ${planSub.replace(/\.$/, '')}${end}`);
+    notes.push('예산과목은 근거 계획서의 값으로 넣었습니다.');
+  } else if (bi >= 0) notes.push('예산과목은 틀 문서의 값입니다(근거 계획서에 과목 코드가 적혀 있지 않음). 이번 사업에 맞는지 확인하세요.');
   const hang = lines.map(l => /^ {2}[가-하]\.\s/.test(l) && textWidthPt(l) > HANG_LIMIT_PT);
-  return {lines, text: lines.join('\r\n'), hang, notes: ['지급계획(표)에는 지급처·내역을 직접 입력하세요.']};
+  return {lines, text: lines.join('\r\n'), hang, notes};
 }
 export function expenseTitleOf(d) {
   const t = String(d.title || '').trim();
@@ -1115,6 +1127,7 @@ export function wrapUpModel({now = new Date(), ownOtToday = null, tomorrowItems 
 // 업데이트 내역: 새 버전을 낼 때 맨 위에 한 줄을 추가한다(하네스가 현재 버전과 맞는지 검사).
 // 4.2~4.6 사이 세부 항목은 릴리스 제목만 근거로 적어 간단하다.
 export const CHANGELOG = [
+  {v: "0.31.0",date: "2026-11-09 16:30",old: "",title: "만들어 둔 기능을 실제 업무 끝까지 되게: 기능별 실화면 완주 점검과 보강",items: ["점검 방식: 결과보고·계획서·물품매입·지급 건의·메일로 기안·회신 문구·출장/휴가/시간외 신청·지출 준비·차량 예약·주간 실적·할 일 보드·연속 처리·명령 콘솔을 실제 그룹웨어 화면에서 상신·신청 직전까지 끝까지 실행해 보고, 들어간 값을 화면에서 다시 읽어 확인","근태 신청(출장·휴가·시간외/휴일근무): 사유만 복사하던 방식에서, 먼저 날짜·종류·방문처·목적·시간을 묻고 근태신청서(출장신청서·연차휴가신청서·연장근무신청서)를 직접 채운 뒤 [신청완료] 직전에서 멈추도록 바꿈. “다음 주 수요일”처럼 적어도 됨. 출장은 교통수단 선택과 일별 업무계획 등록까지, 시간외는 근무 시간(예: 10:00~15:00)까지 넣음. 같은 날 근태가 이미 있으면 알려 줌","근태신청 버튼이 근태관리 첫 화면이 아니라 근태신청서 화면으로 바로 열리게 수정","결과보고·물품매입: 참조문서(근거 계획서) 자동 지정이 화면 크기에 따라 실패하던 문제 수정, 오래된 계획서도 찾도록 조회 기간을 넓힘","결재선: 불러온 뒤 결재란을 다시 읽어 “차장 → 부장 → 실장”처럼 실제로 들어간 순서를 보여 줌","운영·참가계획: 관련 없는 과거 계획서의 문서번호를 1번 근거로 넣던 문제 수정(같은 사업일 때만 이어받음), 기록물철을 비슷한 제목으로 골랐으면 확인하라고 표시","메일로 기안: 한글 편집기에 본문이 들어가지 않던 문제 수정(결과보고와 같은 기안 엔진 사용), 요청 요지에서 첨부 파일 이름·인사말을 빼고 요청 문장을 고름","지급 건의: 근거 계획서를 바꾸면 제목도 그 사업 이름으로 바뀜, 계획서에 예산과목 코드가 있으면 그 값으로 넣음","지출결의서: 결재작성이 아니라 실제 입력 화면인 마이페이지 > 예산관리 > 예산집행 > 결의서입력을 열고, 그 위에 제목·참조문서·금액·카드 내역 복사 막대를 유지","회신 문구: 제목 괄호가 [[요청] …]처럼 겹치던 표시 수정, 명령 콘솔의 회신문은 대상 메일이 없으면 고르게 함","메일 본문에 “<hr …>” 같은 태그 글자가 섞여 보이던 문제 수정","주간 실적 초안: 기간 선택(이번 주·지난주·최근 7일·11/2~11/6), 월요일에는 지난주가 기본","입력창: 브라우저 기본 입력창 대신 업무센터 안의 입력 대화상자 사용(계획서 제목·물품 품의 제목·할 일 고치기), Enter로 다음 칸·확인","결과보고 대상 목록에서 “예산 변경 계획” 같은 변경 계획서는 제외","자동 입력 안전장치에 [신청완료]·[추가신청]·[신청취소]를 추가해 자동으로 눌리지 않게 함"]},
   {v: "0.30.0",date: "2026-11-09 13:30",old: "",title: "3차 종합 점검: 작동하지 않던 기능 전수 수리",items: ["점검 방식: 실제 그룹웨어 화면에서 모든 화면·버튼 160여 개를 자동으로 눌러 보는 실화면 점검 + 에이전트 팀(Claude Opus 5.5 배선·결함, GPT-6 Astra 업무 동선, Gemini 디자인·레퍼런스) 교차 검토","Ctrl+K 명령 팔레트가 빈 창으로 뜨던 문제 수정(정의되지 않은 함수). 새로 만들기·결과보고·계획서·지급·출장·연차·시간외·차량·AI·진단 등 명령 추가, 최근 쓴 명령을 위로","AI 도우미·지급·기록기 등 대화상자 입력칸에서 Enter를 누르면 창이 닫히고 엉뚱한 명령이 실행되던 문제 수정. AI 질문창은 Enter로 보내기, 앞 대화를 이어서 답하고 답변 길이 늘림","헤더 검색창 Enter가 검색 대신 명령 콘솔만 열던 문제: 업무 지시처럼 보일 때만 빠른 업무 실행, 나머지는 통합검색","빠른 업무 실행(명령 콘솔)의 가짜 성공 제거: 보낸메일 확인은 실제 보낸메일함 조회 결과만 표시, 알아듣지 못한 명령은 통합검색으로, 예산·지급 명령은 지급 문서 화면으로, “다음 주 ○요일”이 이번 주로 계산되던 날짜 오류 수정, 고정 날짜(11-14) 제거","기안·회신 자동 입력의 과장 문구 정리: 본문 사실이 비면 “초안 틀만 입력”으로 표시, 결재선은 “불러옴(이름 확인 필요)”, 회신 문구의 “이상 없음·반영 완료” 같은 단정 대신 입력 칸, 첨부 없을 때 “첨부 참조” 문구 생략, 다시 넣을 때 중복으로 쌓이지 않음, 이름·직위 하드코딩 제거","메일로 기안: 고정 4.5초 대기 대신 화면이 준비될 때까지 확인, 다른 화면에 값을 넣지 않음, 실제로 넣은 칸만 알림","결재 탭을 직접 고르면 0건이어도 그 탭을 유지(다른 탭으로 튕기던 문제), “이 목록 하나씩 처리”가 다른 업무를 열던 문제 수정","처리 창 닫기 버튼이 입력 중인 내용을 묻지 않고 버리던 문제 수정, 처리 창의 “원래 화면 열기” 버튼 복구","직원 근태·배부 이력 조회가 실패하면 끝없이 다시 읽던 문제(화면 깜박임) 수정, 예산 월별 조회 중 사업을 바꾸면 이전 결과가 덮던 문제, 전체 결의 내역이 세목 하나 실패로 통째로 안 보이던 문제 수정","키보드: E = 끝냄 표시 추가, 행 메뉴(⋯) 다시 누르면 닫힘, 숫자키 안내를 실제 동작(1~9)과 일치","“처리 완료” 문구를 “끝냄 표시(업무센터 목록에서만)”로 바꿔 그룹웨어 처리와 구분, Ctrl+Z로 “나와 상관없음” 규칙도 되돌림, 같은 업무를 할 일에 두 번 넣지 않음","현황 차트 화면을 메뉴에 연결(그동안 들어갈 길이 없었음), 팔레트의 “새 기안: 자주 쓰는 양식” 목록이 채워지도록 연결","예산 결의 내역의 문서번호를 누르면 바로 결재문서를 찾아 열기, 관심 사업 행 삭제가 저장되지 않던 문제, 설치 상태가 늘 “미설치”로 보이던 문제, 모두 지우기 뒤 옛 자료가 다시 들어오던 문제 수정","자원 예약: 확인 뒤 예약명만 고쳐도 다시 확인하라던 문제와 첫 클릭이 씹히던 문제 수정","새로고침 버튼을 누르면 결과(내 할 일 건수, 못 읽은 영역)를 알림으로 표시","근태 빠른 신청 사유에 “(undefined)”가 들어가던 문제 수정, 기록기 재생 후 “재생 중”으로 멈추던 문제 수정","디자인: 정의 없이 쓰이던 색·그림자 토큰 정의, 키보드 포커스 테두리, 선택 상자 선명하게, 한글 제목 단어 단위 줄바꿈"]},
   {v: "0.29.0", date: "2026-11-09 12:10", old: "5.8.0 이후", title: "버전 번호를 0.1.0부터 다시 매기고 모든 업데이트 내역을 상세화", items: ["버전 체계를 0.1.0부터 다시 정리: 첫 로컬 도우미(10-22)부터 지금까지 전체를 시간순 0.1.0~0.29.0으로 재번호. 이전 표기(v3.x, v4.x, v5.x)는 각 항목에 “이전 v…”로 남김","업데이트 내역 화면: 항목마다 날짜·시각, 이전 표기, 변경 내용을 자세히 표시하고 최신 3건은 펼쳐서 보여 줌","업데이트 확인은 새 번호 체계(0.x) 릴리스만 비교하도록 변경(옛 v5.x 태그와 섞여 “새 버전”으로 잘못 뜨지 않게 함)","GitHub 릴리스 태그도 v0.29.0부터 새 번호로 발행(이전 v3~v5 태그는 기록으로 그대로 보존)"]},
   {v: "0.28.0", date: "2026-11-09 11:51", old: "5.8.0", title: "버전·업데이트 내역 화면", items: ["왼쪽 아래 “v… 업데이트 내역” 링크와 설정 화면의 “업데이트 내역” 버튼 추가","설치된 버전, 수집기 버전, 최신 여부(GitHub 확인), “업데이트 확인”·“최신 릴리스 열기” 버튼","새 버전으로 바뀐 뒤 처음 열 때 한 번 자동으로 내역 표시(처음 설치 시와 사용 안내 중에는 표시하지 않음)","하네스가 업데이트 내역 맨 위 버전과 실제 버전이 같은지 검사해서 내역 누락을 막음"]},

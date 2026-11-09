@@ -15,7 +15,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '0.30.0';
+  const VERSION = '0.31.0';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
@@ -63,10 +63,11 @@
     notice: '#/UF/UFA/UFA0000?specialLnb=Y&moduleCode=UF&menuCode=3000300_001008&pageCode=UFA3000',
     schedule: '#/UE/UEA/UEA0000?specialLnb=Y&moduleCode=UE&menuCode=UEA&pageCode=UEA0000',
     worktime: '#/HP/HPD0220/HPD0220',
-    attendanceRequest: '#/HP/HPD0100/HPD0100',
+    attendanceRequest: '#/HP/HPD0110/HPD0110',
     leave: '#/HP/HPD0550/HPD0550',
     budget: '#/HP/NPC2040/NCC0610',
     draft: '#/UC/UCA/UCA0000?specialLnb=Y&moduleCode=UC&menuCode=UCA&pageCode=UCA7000',
+    expenseEntry: '#/HP/NPC1030/NCA0020',
   };
 
   // Native screens that the groupware itself opens as popups (same origin, embeddable in an iframe).
@@ -87,7 +88,7 @@
       // Interlocked forms (근태 36, 출장 40, 연장 43, 대체 1012/1021, 지출결의 1007/1009/1011) must NOT be opened via raw tiKeyCode.
       // Amaranth 10 fails with "연동본문 데이터 조회 실패하였습니다." unless opened from their originating modules.
       if (/^(36|40|43|1012|1021)$/.test(fid) || /휴가|출장|근태|연장|대체/.test(name)) return `${ORIGIN}/${ROUTES.attendanceRequest}`;
-      if (/^(1007|1009|1011|1013)$/.test(fid) || /지출결의|구입과지출/.test(name)) return `${ORIGIN}/${ROUTES.draft}`;
+      if (/^(1007|1009|1011|1013)$/.test(fid) || /지출결의|구입과지출/.test(name)) return `${ORIGIN}/${ROUTES.expenseEntry}`;
       return `${ORIGIN}/#popup?${qs({MicroModuleCode: 'ea', tiKeyCode: fid, callComp: 'UCAP001'})}`;
     },
     article: a => `${ORIGIN}/#/popup?${qs({callComp: 'UFAP003', art_seq_no: a.id, cat_seq_no: a.cat, cat_type: a.catType || 'L', alarm_yn: 'Y', MicroModuleCode: 'board', externalYn: 'Y'})}`,
@@ -552,7 +553,7 @@
     }).filter(f => /^https:\/\/[a-z0-9.-]+\.amaranth10\.co\.kr\//i.test(f.href));
     const bigUntil = (html.replace(/<[^>]+>/g, ' ').match(/다운로드 기간\s*:\s*[\d-]+\s*~\s*([\d-]+)/) || [])[1] || '';
     const files = arr(mime.fileList).map(f => ({name: str(f.originalFileName, 200) + (f.fileExtsn && !String(f.originalFileName || '').toLowerCase().endsWith('.' + String(f.fileExtsn).toLowerCase()) ? '.' + f.fileExtsn : ''), size: num(f.fileSize), ext: str(f.fileExtsn, 10), sn: String(f.fileSn || '')}));
-    const plain = dec(String(mime.body?.plain || '').replace(/&nbsp;/g, ' ')).replace(/\s+/g, ' ').trim();
+    const plain = dec(String(mime.body?.plain || '').replace(/&nbsp;/g, ' ')).replace(/<\/?[a-z][a-z0-9]*(?:\s[^<>@]{0,200})?\/?>/gi, ' ').replace(/\s+/g, ' ').trim();
     return {uid: String(uid), subject: str(dm.subject, 300), from: dec(str(dm.from, 200)), to: dec(str(dm.to, 2000)), cc: dec(str(dm.cc, 2000)), date: str(dm.date, 20),
       readUrl: str(dm.url, 500), account: str(dm.email, 120), files, bigFiles, bigUntil, text: mask(plain, 4000), wasUnread: seen !== true};
   }
@@ -693,10 +694,11 @@
     };
   }
 
-  async function submittedRange({days = 7, size = 100} = {}) {
+  async function submittedRange({days = 7, size = 100, from: f0 = '', to: t0 = ''} = {}) {
     const ctx = context();
     const now = new Date();
-    const from = ymd(addDays(now, -days)), to = ymd(now);
+    const ok8 = s => /^\d{8}$/.test(String(s || ''));
+    const from = ok8(f0) ? f0 : ymd(addDays(now, -days)), to = ok8(t0) ? t0 : ymd(now);
     const d = await call('/ea/ea038A09', {...approvalBase(ctx, from, to, size), nMenuID: '11000300', pageCode: 'UCA1020', periodPicker: 'diWriteDate', sortField: 'diWriteDate', topSort: 'diWriteDate', searchSts: '002'});
     return {from, to, docs: firstList(d).list.map(r => toDoc(r, 'submitted'))};
   }

@@ -433,7 +433,7 @@ test('safe draft links: interlocked forms (36, 40, 1007, 1012) route to safe mod
   assert.ok(tripUrl.includes(api.routes.attendanceRequest), 'biztrip draft routes to attendance request');
 
   const expUrl = api.links.draft('1007', '지출결의서');
-  assert.ok(expUrl.includes(api.routes.draft), 'accounting draft routes to full draft picker');
+  assert.ok(expUrl.includes(api.routes.expenseEntry), 'accounting draft routes to 결의서입력 (예산집행)');
 
   const stdUrl = api.links.draft('mg_20160303185413307', '일반기안문');
   assert.ok(stdUrl.includes('tiKeyCode=mg_20160303185413307'), 'general form opens direct draft popup');

@@ -189,7 +189,7 @@
       case 'boardCard': { const k = el.dataset.k; if (path.some(n => n && n.tagName === 'BUTTON')) break; if (k.startsWith('todo:')) { const t = S.todos.find(x => `todo:${x.id}` === k); if (t && t.url) { S.sel = {type: 'frame', title: t.title, url: t.url}; openUrl(t.url, {title: t.title}); } } else { go('today'); selectAction(k); } break; }
       case 'addTodo': addTodoFromInput(); break;
       case 'todoDel': { const t = S.todos.find(x => x.id === el.dataset.id); if (!t) break; pushUndo('할 일 삭제'); S.todos = S.todos.filter(x => x.id !== t.id); delete S.plan[`todo:${t.id}`]; saveLocal(); renderMain(); renderNav(); toastUndo(`"${t.title.slice(0, 20)}" 할 일을 지웠습니다.`); break; }
-      case 'todoEdit': { const t = S.todos.find(x => x.id === el.dataset.id); if (!t) break; const nt = prompt('할 일 내용', t.title); if (nt === null) break; const nd = prompt('기한 (YYYY-MM-DD, 비우면 없음)', t.due || ''); pushUndo('할 일 고치기'); t.title = nt.trim() || t.title; t.due = /^\d{4}-\d{2}-\d{2}$/.test((nd || '').trim()) ? nd.trim() : ''; saveLocal(); renderMain(); break; }
+      case 'todoEdit': { const t = S.todos.find(x => x.id === el.dataset.id); if (!t) break; askForm({title: '할 일 고치기', fields: [{label: '할 일 내용', value: t.title}, {label: '기한 (예: 11/20 또는 2026-11-20, 비우면 없음)', value: t.due || ''}]}).then(v => { if (!v || !v[0]) return; pushUndo('할 일 수정'); t.title = v[0]; t.due = v[1] ? parseDue(v[1]) : ''; saveLocal(); renderMain(); renderNav(); toastUndo('할 일을 고쳤습니다.'); }); break; }
       case 'calLayer': { const cf = teamCfg(); cf.layers[el.dataset.v] = !cf.layers[el.dataset.v]; renderMain(); break; }
     case 'calDept': teamCfg().dept = el.dataset.v; renderMain(); break;
     case 'calMine': { const cf = teamCfg(); cf.mine = !cf.mine; renderMain(); break; }
@@ -267,6 +267,7 @@
     if (t.id === 'bCatProj') { S.budget.project = t.value; S.budget.filter = ''; loadBudget(); }
     if (t.id === 'bq') renderMain();
     if (t.id === 'resDate') resGo();
+    if (t.id === 'payPlan') payPlanChanged();
     if (t.id === 'resTitle') resSyncForm(); // 예약명만 바꾸면 겹침 확인 결과는 그대로 둔다(다시 그리면 누르려던 버튼이 사라져 클릭이 씹힘)
     if (t.id === 'resStart' || t.id === 'resEnd') { resSyncForm(); const rs = resState(); if (rs.check) { rs.rev++; rs.check = null; renderMain(); } }
     if (t.classList && t.classList.contains('setc')) saveSettingField(t);

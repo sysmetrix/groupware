@@ -294,78 +294,45 @@ ${mailFilesBox(m)}
     }
     return null;
   }
+  // 메일로 기안: 결과보고·계획서와 같은 기안 엔진(제목·기본항목·기록물철·결재선·한글 본문)을 쓴다.
+  // 본문 편집기는 한글(HWP) 웹 편집기라 contentEditable로는 들어가지 않으므로 putBody(HwpCtrl)로 넣는다.
   async function mailToDraft(uid) {
     const m = findMail('INBOX', uid) || [...(S.raw.data.mail?.inbox.records || []), ...(S.raw.data.mail?.otherUnseen || [])].find(x => x.uid === uid);
     if (!m) { toast('메일 정보를 찾을 수 없습니다.'); return; }
-    const url = GW.links.draft('mg_20160303185413307', '일반기안문');
-    openUrl(url, {title: `새 기안: [공문] ${m.subject}`});
-    if (S.pane.url !== url) return; // 사용자가 이동을 취소함
-    S.pane.expanded = true; renderPane();
-    toast('기안 화면이 열리면 메일 내용으로 초안을 넣습니다…');
-    const d = await waitFrameDoc(url, doc => !!doc.querySelector('input[placeholder="제목을 입력해주세요"]'));
-    if (!d) { if (S.pane.url === url) toast('기안 화면을 준비하지 못해 자동 입력을 건너뛰었습니다. 직접 입력하세요.'); return; }
-    const cleanSubj = String(m.subject || '').replace(/^(Re|Fw|전달|회신)\s*:\s*/i, '').trim();
-    const previewText = (m.preview || '').replace(/대용량 파일첨부[\s\S]*?보관\)/, '').trim().slice(0, 300);
-    const done = [];
-    const titleInput = d.querySelector('input[placeholder="제목을 입력해주세요"]');
-    if (titleInput) {
-      titleInput.value = `[업무협조] ${cleanSubj}`;
-      titleInput.dispatchEvent(new Event('input', {bubbles: true}));
-      titleInput.dispatchEvent(new Event('change', {bubbles: true}));
-      done.push('제목');
-    }
-    const bodyHtml = `
-<p><b>1. 관련 근거</b></p>
-<p>&nbsp; 가. ${esc(m.from)} 발송 메일 ("${esc(cleanSubj)}", ${esc(String(m.date || '').slice(0, 10))})</p>
-<p>&nbsp; 나. (관련 계획·공문이 있으면 적으세요)</p>
-<p><br></p>
-<p><b>2. 요청 사항</b></p>
-<p>&nbsp; 가. 발신: ${esc(m.from)}${m.fromEmail ? ' (' + esc(m.fromEmail) + ')' : ''}</p>
-<p>&nbsp; 나. 개요: ${esc(previewText || cleanSubj)}</p>
-<p><br></p>
-<p><b>3. 추진 계획</b></p>
-<p>&nbsp; 가. 일시: (적으세요)</p>
-<p>&nbsp; 나. 내용: (적으세요)</p>
-<p><br></p>
-<p><b>4. 행정 사항</b></p>
-<p>&nbsp; 가. (협조 부서·회신 기한 등)</p>`;
-    let injected = false;
-    const walk = doc => {
-      if (!doc || injected) return;
-      const hwp = doc.querySelector('#hwpEditorBoardContent') || doc.body;
-      if (hwp && (hwp.isContentEditable || doc.designMode === 'on')) { hwp.innerHTML = bodyHtml; hwp.dispatchEvent(new Event('input', {bubbles: true})); injected = true; return; }
-      for (const ifr of doc.querySelectorAll('iframe')) { try { walk(ifr.contentDocument); } catch {} }
-    };
-    // 본문 편집기는 제목보다 늦게 뜨므로 잠시 더 기다린다
-    for (let i = 0; i < 20 && !injected && S.pane.url === url; i++) { walk(d); if (!injected) await new Promise(r => setTimeout(r, 400)); }
-    if (injected) done.push('본문 틀');
-    toast(done.length ? `메일 내용으로 ${done.join('·')}을 넣었습니다. (괄호 칸은 직접 채우고, 기록물철·결재선을 확인한 뒤 상신하세요)` : '기안 화면에서 입력칸을 찾지 못했습니다. 직접 입력하세요.');
+    const cleanSubj = String(m.subject || '').replace(/^\s*((re|fw|fwd|전달|회신|답장)\s*:\s*)+/i, '').replace(/^\s*\[[^\]]{0,12}\]\s*/, '').trim();
+    const title = ((await askText('메일로 기안', '기안 제목 (확인·수정)', cleanSubj)) || '').trim();
+    if (!title) return;
+    const det = S.mailDet && S.mailDet[uid];
+    // 요청 요지: 첨부 파일 이름·인사말·서명·이전 메일 인용을 빼고, 요청 낱말이 있는 문장을 우선 고른다
+    const raw = String((det && det.text) || m.preview || '')
+      .replace(/대용량 파일첨부[\s\S]*?보관\)/, ' ')
+      .split(/보내는\s*사람\s*:|-{3,}\s*Original|From:\s/i)[0]
+      .replace(/[^\s()]+\.(hwpx?|pdf|xlsx?|xls|docx?|pptx?|zip|jpe?g|png|hwp)\s*\([\d.,]+\s*[KMG]?B\)/gi, ' ')
+      .replace(/\s+/g, ' ').trim();
+    const sents = raw.split(/(?<=[.!?。]|니다|세요|드려요|해요)\s+/).map(x => x.trim()).filter(x => x.length > 4 && !/^(안녕|수고|감사|고맙)/.test(x) && !/(T\.|☎|직통|내선|사무실)\s*\d/.test(x));
+    const ask = sents.filter(x => /요청|부탁|제출|회신|검토|작성|협조|바랍니다|주시기|주세요|드려요|전달/.test(x));
+    const gist = (ask.length ? ask : sents).slice(0, 2).join(' ').slice(0, 140);
+    const when = String(m.date || '').slice(0, 10).split('-').map(Number);
+    const ymd = when.length === 3 && when[0] ? `${when[0]}. ${when[1]}. ${when[2]}.` : '';
+    const lines = [
+      `1. ${m.from || '발신자'}${ymd ? `(${ymd})` : ''} 메일(제목: ${cleanSubj})과 관련입니다.`,
+      `2. 위 메일과 관련하여 다음과 같이 추진하고자 합니다.`,
+      `  가. 요청 내용: ${gist || '(메일의 요청 사항을 적으세요)'}`,
+      '  나. 추진 내용: ',
+      '  다. 추진 일정: ',
+      '  라. 소요 예산: ',
+      '',
+      '붙임  관련 메일 1부.  끝.',
+    ];
+    const meta = R.predictDraftMeta(patModel(), {title});
+    const fr = await openDraftFrame('mg_20160303185413307', '일반기안문', `새 기안: ${title}`);
+    if (!fr) { toast('기안 화면을 열지 못했습니다. 잠시 후 다시 시도하세요.'); return; }
+    const steps = await fillDraft(fr, {title, meta, body: {text: lines.join('\r\n'), lines, hang: lines.map(() => false)}});
+    showDraftReport(title, steps, ['본문은 메일에서 뼈대만 만들었습니다. 추진 내용·일정·예산은 직접 채우세요.', ...(meta.confidence === 'similar' ? ['기록물철은 제목이 비슷한 과거 문서를 보고 골랐습니다. 맞는지 확인하세요.'] : meta.binder ? [] : ['기록물철을 정하지 못했습니다. 직접 고르세요.']), '메일 원문을 붙임으로 넣으려면 메일을 PDF로 저장해 첨부하세요.']);
   }
 
   
-  function quickAttendanceApplication(type) {
-    closeOverlay();
-    const todayKst = R.kstNow(new Date());
-    const todayLabel = `${todayKst.date}(${'일월화수목금토'[new Date(todayKst.date + 'T00:00:00Z').getUTCDay()]})`;
-    let reasonText = '';
-    let formTitle = '';
-
-    if (type === 'trip') {
-      formTitle = '관내출장신청';
-      reasonText = `${todayLabel} 재단 주요 현안 및 업무 추진을 위한 관내출장`;
-    } else if (type === 'leave') {
-      formTitle = '휴가신청';
-      reasonText = `${todayLabel} 개인 용무에 따른 연차 휴가 사용`;
-    } else if (type === 'overtime') {
-      formTitle = '휴일/시간외근무신청';
-      reasonText = `${todayLabel} 재단 당면 주요 과제 완수를 위한 시간외/휴일근무`;
-    }
-
-    copyText(reasonText);
-    openUrl(GW.links.route(GW.routes.attendanceRequest), {title: `근태신청: ${formTitle}`});
-    S.pane.expanded = true;
-    toast(`${formTitle}: 근태신청 화면을 열고 사유 예시("${reasonText.slice(0, 20)}…")를 복사했습니다. 날짜·시간을 고르고 사유란에 붙여넣기(Ctrl+V)한 뒤 직접 [신청]하세요. 오늘이 아닌 날이면 날짜를 바꾸세요.`);
-  }
+  // 근태 빠른 신청은 27-attendance-request.js (값을 먼저 묻고 신청서를 채움)
 
   async function autoFillMail(templateType) {
     const f = $('#frame iframe');
@@ -374,7 +341,7 @@ ${mailFilesBox(m)}
 
     const sel = S.sel;
     const item = sel && sel.type === 'action' ? selectedAction() : (sel && sel.type === 'mail' ? findMail(sel.box, sel.uid) : null);
-    const originTitle = (item ? item.title || item.subject : '').replace(/^(Re|Fw|전달|회신)\s*:\s*/i, '').trim();
+    const originTitle = (item ? item.title || item.subject : '').replace(/^\s*((re|fw|fwd|전달|회신|답장)\s*:\s*)+/i, '').trim();
     const myName = (S.raw && S.raw.principal && S.raw.principal.name) || '';
     const myDept = (S.raw && S.raw.principal && S.raw.principal.deptName) || '';
     const myDuty = (S.raw && S.raw.principal && (S.raw.principal.duty || S.raw.principal.position)) || '';
@@ -387,7 +354,7 @@ ${mailFilesBox(m)}
     if (templateType === 'confirm') {
       bodyText = `<p>안녕하십니까, ${esc(me)}입니다.</p>
 <p><br></p>
-<p>보내주신 <b>[${esc(originTitle)}]</b> 건과 관련하여 담당 사항에 대한 확인 및 검토를 완료하였음을 회신드립니다.</p>
+<p>보내주신 <b>“${esc(originTitle)}”</b> 건과 관련하여 담당 사항에 대한 확인 및 검토를 완료하였음을 회신드립니다.</p>
 <p>&nbsp; 1. 확인 일자: ${esc(todayStr)}</p>
 <p>&nbsp; 2. 확인 결과: (확인한 내용을 적으세요)</p>
 <p><br></p>
@@ -395,7 +362,7 @@ ${mailFilesBox(m)}
     } else if (templateType === 'submit') {
       bodyText = `<p>안녕하십니까, ${esc(me)}입니다.</p>
 <p><br></p>
-<p>요청하신 <b>[${esc(originTitle)}]</b> 관련 자료를 아래와 같이 작성하여 제출합니다.</p>
+<p>요청하신 <b>“${esc(originTitle)}”</b> 관련 자료를 아래와 같이 작성하여 제출합니다.</p>
 <p>&nbsp; 1. 제출 건명: ${esc(originTitle)}</p>
 <p>&nbsp; 2. 제출 일자: ${esc(todayStr)}</p>
 <p>&nbsp; 3. 제출자: ${esc(me)}</p>
@@ -405,7 +372,7 @@ ${mailFilesBox(m)}
     } else if (templateType === 'extend') {
       bodyText = `<p>안녕하십니까, ${esc(me)}입니다.</p>
 <p><br></p>
-<p>보내주신 <b>[${esc(originTitle)}]</b> 건과 관련하여, 부서 내 추가 검토 및 자료 취합 일정으로 인하여 부득이하게 제출 기한의 조정을 요청드리고자 합니다.</p>
+<p>보내주신 <b>“${esc(originTitle)}”</b> 건과 관련하여, 부서 내 추가 검토 및 자료 취합 일정으로 인하여 부득이하게 제출 기한의 조정을 요청드리고자 합니다.</p>
 <p>&nbsp; - 기존 기한: (공지된 기한)</p>
 <p>&nbsp; - 요청 기한: (요청할 기한)</p>
 <p><br></p>
@@ -453,7 +420,8 @@ ${mailFilesBox(m)}
     if (!u) return '';
     const isMail = u.includes('MicroModuleCode=mail');
     const isDraft = u.includes('MicroModuleCode=ea') && !u.includes('diKeyCode');
-    const isAtt = u.includes('HPD0100');
+    const isAtt = u.includes('HPD0100') || u.includes('HPD0110');
+    if (u.includes('NCA0020') && S.expBar) return `<div class="autofill-bar"><span class="lbl">${ic('star')} 지출 값 복사:</span>${S.expBar.items.map(([k, v]) => `<button class="btn sm" data-act="copy" data-v="${esc(v)}" title="${esc(v)}">${esc(k)}</button>`).join('')}<span class="muted" style="font-size:12px">결의서입력에서 [결재상신]은 직접 누르세요</span></div>`;
     
     if (isMail) {
       return `<div class="autofill-bar"><span class="lbl">${ic('star')} 회신 자동 기입:</span><button class="btn sm" data-act="autoFillMail" data-v="confirm">✉️ 확인 회신문</button><button class="btn sm" data-act="autoFillMail" data-v="submit">✉️ 자료 제출 회신문</button><button class="btn sm" data-act="autoFillMail" data-v="extend">✉️ 기한 연장 요청</button></div>`;
@@ -462,7 +430,7 @@ ${mailFilesBox(m)}
       return `<div class="autofill-bar"><span class="lbl">${ic('star')} 새로 쓰기 (내 결재문서 패턴):</span><button class="btn sm primary" data-act="quickDraft" data-t="result">📝 결과보고(계획서 선택)</button><button class="btn sm" data-act="quickDraft" data-t="plan">📝 계획서</button><button class="btn sm" data-act="quickDraft" data-t="goods">📦 물품구입</button></div>`;
     }
     if (isAtt) {
-      return `<div class="autofill-bar"><span class="lbl">${ic('star')} 근태 도우미:</span><button class="btn sm" data-act="autoFillAtt">📅 대체휴무 사유 복사</button></div>`;
+      return `<div class="autofill-bar"><span class="lbl">${ic('star')} 신청서 채우기:</span><button class="btn sm" data-act="quickAtt" data-t="trip">출장</button><button class="btn sm" data-act="quickAtt" data-t="leave">휴가</button><button class="btn sm" data-act="quickAtt" data-t="overtime">시간외·휴일근무</button><button class="btn sm ghost" data-act="autoFillAtt">대체휴무 사유 복사</button></div>`;
     }
     return '';
   }

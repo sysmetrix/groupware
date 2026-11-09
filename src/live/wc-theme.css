@@ -221,3 +221,7 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .row .ck{opacity:.8}.wc .row:focus-within .ck{opacity:1}
 .wc header .srch:focus-within{box-shadow:0 0 0 2px var(--accent)}
 .wc .t,.wc .ct,.wc h1,.wc h2,.wc h3{word-break:keep-all;overflow-wrap:anywhere}
+
+/* v0.31: 결과 보고 창은 뒤 화면(채운 서식)을 가리지 않는다 */
+.wc .modal.peek{background:transparent!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important;pointer-events:none}
+.wc .modal.peek .dlg{pointer-events:auto;max-height:70vh;overflow:auto;box-shadow:var(--sh2)}

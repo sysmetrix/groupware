@@ -90,6 +90,7 @@
       reportedCores.add(core(d.title));
     }
     return plans
+      .filter(p => !/변경\s*(\(\d+차\))?\s*계획|계획\s*\(변경\)|계획\s*변경/.test(p.title))
       .filter(p => !reportedNos.has(p.docNo) && !reportedCores.has(core(p.title)))
       .sort((a, b) => String(b.date).localeCompare(String(a.date)));
   }
@@ -133,10 +134,12 @@
 
   // ---------- 새 기안 창 열기 / 채우기 ----------
   async function openDraftFrame(formKey, formName, title) {
-    openUrl(GW.links.draft(formKey, formName), {title});
+    const url = GW.links.draft(formKey, formName);
+    openUrl(url, {title});
+    if (S.pane.url !== url) return null; // 사용자가 이동을 취소함: 다른 화면에 값을 넣지 않는다
     S.pane.expanded = true;
     renderPane();
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < 40 && S.pane.url === url; i++) {
       await wait(500);
       const f = $('#frame iframe');
       let d = null; try { d = f && f.contentDocument; } catch {}
@@ -149,7 +152,7 @@
   const allDlgs = d => [...d.querySelectorAll('.obtdialog.open, ._isDialog')];
   const waitFor = async (pred, ms = 8000, step = 150) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { let r; try { r = pred(); } catch {} if (r) return r; await wait(step); } return null; };
   // 자동 기입 중에는 상신·결재·임시저장·보내기·삭제 같은 비가역 버튼을 코드 레벨에서 막는다
-  const DENY_BTN = /^(결재\s*상신|결재상신|상신하기|상신|결재|결재요청|승인요청|일괄결재|임시저장|저장|보관|보내기|발송|전송|회수|삭제|삭제하기|기안|승인|반려|전결|대결|접수|배부|제출|확정)(\(\w\))?$/;
+  const DENY_BTN = /^(결재\s*상신|결재상신|상신하기|상신|결재|결재요청|승인요청|일괄결재|임시저장|저장|보관|보내기|발송|전송|회수|삭제|삭제하기|기안|승인|반려|전결|대결|접수|배부|제출|확정|신청완료|추가신청|신청취소|신청)(\(\w\))?$/;
   const AUTO = {running: false, allow: false, blocked: []};
   function installGuard(win) {
     if (win.__wcGuard) return;
@@ -215,7 +218,11 @@
     const closed = !!(await waitFor(() => !dlgOf(d), 5000));
     if (!closed) allDlgs(d).forEach(x => btnIn(x, /^(취소|닫기)$/)?.click());
     // 결재자 이름은 화면에서 다시 읽어 대조하지 않으므로, 이름까지 맞다고 말하지 않는다
-    return {ok: closed, detail: closed ? '기본 결재선을 불러왔습니다(이름 확인 필요)' : '결재라인 창을 닫지 못해 취소했습니다(직접 지정 필요)'};
+    // 결재란(본문 서식의 approver1~8 칸)에 실제로 들어간 직위를 다시 읽어 보여 준다
+    const readSeq = () => { const out = []; try { const H = d.querySelector('iframe[src*="hwpBuild"], #formCtrl_1').contentWindow.HwpCtrl; for (let i = 1; i <= 8; i++) { const v = String(H.GetFieldText('approver' + i) || '').trim(); if (v) out.push(v); } } catch {} return out; };
+    let seq = closed ? ((await waitFor(() => { const s = readSeq(); return s.length ? s : null; }, 2000)) || []) : [];
+    if (closed && !seq.length) return {ok: true, detail: '기본 결재선을 불러왔습니다(결재란을 다시 읽지 못했으니 화면에서 확인)'};
+    return {ok: closed, detail: closed ? `기본 결재선 반영: ${seq.join(' → ')} (결재란 다시 읽음)` : '결재라인 창을 닫지 못해 취소했습니다(직접 지정 필요)'};
   }
 
   // 참조문서: 계획서를 제목으로 검색해 선택한다 (합성 입력/마우스 이벤트)
@@ -233,27 +240,54 @@
     await wait(1800);
     const dlg = dlgOf(d);
     if (!dlg) return {ok: false, detail: '참조문서 창이 열리지 않았습니다'};
-    const inp = [...dlg.querySelectorAll('input[type=text]')].find(i => { const r = i.getBoundingClientRect(); return r.top > 0 && r.width > 50; });
-    const q = [...dlg.querySelectorAll('button')].find(b => { const r = b.getBoundingClientRect(); return r.top > 60 && r.top < 110 && r.width > 15; });
-    const queries = [planTitle, planTitle.replace(/[『』「」]/g, ' ').trim().split(/\s+/).slice(-3).join(' ')];
+    // 화면 크기와 무관하게 찾는다: '제목' 글자와 같은 줄의 입력칸, 그 오른쪽 돋보기 버튼, 목록 아래의 '↓(선택 목록에 담기)' 버튼
+    const R0 = el => el.getBoundingClientRect();
+    const mid = q => q.top + q.height / 2;
+    const lab = [...dlg.querySelectorAll('*')].find(el => el.children.length === 0 && (el.textContent || '').trim() === '제목' && R0(el).width > 0);
+    if (!lab) { btnIn(dlg, /취소/)?.click(); return {ok: false, detail: '참조문서 창에서 제목 칸을 찾지 못했습니다'}; }
+    const lr = R0(lab);
+    const inp = [...dlg.querySelectorAll('input[type=text]')].filter(i => { const q = R0(i); return q.width > 0 && Math.abs(mid(q) - mid(lr)) < 14 && q.left > lr.left; }).sort((a, b) => R0(a).left - R0(b).left)[0];
+    const ir = inp && R0(inp);
+    const q = inp && [...dlg.querySelectorAll('button')].filter(b => { const r2 = R0(b); return r2.width > 0 && r2.width < 40 && Math.abs(mid(r2) - mid(ir)) < 14 && r2.left >= ir.right - 2; }).sort((a, b) => R0(a).left - R0(b).left)[0];
+    if (!inp || !q) { btnIn(dlg, /취소/)?.click(); return {ok: false, detail: '참조문서 검색칸·검색 버튼을 찾지 못했습니다(직접 선택)'}; }
+    const widen = async yearsBack => {
+      const pl = [...dlg.querySelectorAll('*')].find(el => el.children.length === 0 && (el.textContent || '').trim() === '기간' && R0(el).width > 0);
+      if (!pl) return false;
+      const pr = R0(pl);
+      const di = [...dlg.querySelectorAll('input')].filter(i => { const q2 = R0(i); return q2.width > 0 && Math.abs(mid(q2) - mid(pr)) < 14 && q2.left > pr.left; }).sort((a, b) => R0(a).left - R0(b).left)[0];
+      if (!di) return false;
+      const y = new Date().getFullYear() - yearsBack;
+      di.focus(); di.select && di.select(); d.execCommand('insertText', false, `${y}0101`); await wait(150);
+      di.dispatchEvent(new w.KeyboardEvent('keydown', {key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true})); await wait(150); di.blur(); await wait(300);
+      return true;
+    };
+    await widen(0);
+    const queries = [planTitle, docNo, planTitle.replace(/[『』「」]/g, ' ').trim().split(/\s+/).slice(-3).join(' ')].filter(Boolean);
     let found = 0;
     for (const qs of queries) {
       inp.focus(); setNative(w, inp, qs); q.click();
       await wait(3000);
       found = Number((dlg.innerText.match(/총(\d+)개/) || [])[1] || 0);
-      if (found) break;
+      if (found === 1) break;
     }
+    if (!found && await widen(1)) { for (const qs of queries) { inp.focus(); setNative(w, inp, qs); q.click(); await wait(3000); found = Number((dlg.innerText.match(/총(\d+)개/) || [])[1] || 0); if (found === 1) break; } }
     if (found !== 1) { btnIn(dlg, /취소/)?.click(); return {ok: false, detail: found ? `검색 결과가 ${found}건이라 자동 선택하지 않았습니다(직접 선택)` : '참조문서 검색 결과가 없습니다'}; }
-    const cv = dlg.querySelectorAll('canvas')[0];
-    const r = cv.getBoundingClientRect();
-    const fire = (type, x, y) => cv.dispatchEvent(new w.MouseEvent(type, {bubbles: true, cancelable: true, clientX: x, clientY: y, view: w, button: 0, buttons: type === 'mouseup' ? 0 : 1}));
-    const x = r.left + 55, y = r.top + 46;
-    fire('mousemove', x, y); fire('mousedown', x, y); fire('mouseup', x, y); fire('click', x, y);
-    await wait(500);
-    const down = [...dlg.querySelectorAll('button')].find(b => { const q2 = b.getBoundingClientRect(); return q2.top > 380 && q2.top < 420 && q2.width > 20 && q2.width < 40; });
-    down && down.click();
-    await wait(800);
-    if (!/선택된 문서 목록\s*\n?\s*[1-9]/.test(dlg.innerText)) { [...dlg.querySelectorAll('button')].find(b => /취소/.test(b.innerText))?.click(); return {ok: false, detail: '참조문서 행 선택에 실패했습니다'}; }
+    const cvs = [...dlg.querySelectorAll('canvas')].filter(x => R0(x).width > 100).sort((a, b) => R0(a).top - R0(b).top);
+    const cv = cvs[0], cr = cv && R0(cv), c2 = cvs[1] && R0(cvs[1]);
+    if (!cv) { btnIn(dlg, /취소/)?.click(); return {ok: false, detail: '참조문서 목록을 찾지 못했습니다'}; }
+    const fire = (type, x, y) => cv.dispatchEvent(new w.MouseEvent(type, {bubbles: true, cancelable: true, clientX: x, clientY: y, view: w, button: 0, buttons: type === 'mouseup' || type === 'click' ? 0 : 1}));
+    const mover = [...dlg.querySelectorAll('button')].filter(b => { const r2 = R0(b); return r2.width >= 24 && r2.width <= 36 && r2.top > cr.bottom + 20 && (!c2 || r2.bottom < c2.top + 2); }).sort((a, b) => R0(a).top - R0(b).top || R0(a).left - R0(b).left)[0];
+    let picked = false;
+    for (const dy of [46, 40, 52, 34]) {
+      const x = cr.left + 55, y = cr.top + dy;
+      fire('mousemove', x, y); fire('mousedown', x, y); fire('mouseup', x, y); fire('click', x, y);
+      await wait(400);
+      mover && mover.click();
+      await wait(800);
+      const m = dlg.innerText.match(/선택된 문서 목록\s*\(?\s*(\d+)/);
+      if (m && Number(m[1]) > 0) { picked = true; break; }
+    }
+    if (!picked) { [...dlg.querySelectorAll('button')].find(b => /취소/.test(b.innerText))?.click(); return {ok: false, detail: '참조문서 행 선택에 실패했습니다(직접 선택)'}; }
     [...dlg.querySelectorAll('button')].find(b => (b.innerText || '').trim() === '확인')?.click();
     await wait(1200);
     const txt = d.body.innerText;
@@ -308,9 +342,9 @@
     const steps = [];
     const bad0 = preflight(f, spec);
     if (bad0) return [{name: '사전점검', ok: false, detail: bad0}];
-    installGuard(w); AUTO.running = true; AUTO.blocked = [];
+    installGuard(w); AUTO.running = true; AUTO.blocked = []; const tok = AUTO.tok = {};
     window.addEventListener('beforeunload', () => { AUTO.running = false; }, {once: true});
-    setTimeout(() => { AUTO.running = false; }, 180000); // 어떤 이유로든 3분 뒤에는 반드시 풀린다(사람이 직접 상신·저장할 수 있어야 함)
+    setTimeout(() => { if (AUTO.tok === tok) AUTO.running = false; }, 180000); // 어떤 이유로든 3분 뒤에는 반드시 풀린다(사람이 직접 상신·저장할 수 있어야 함)
     let halted = false;
     const run = async (name, fn) => {
       if (halted) { steps.push({name, ok: false, detail: '앞 단계의 팝업이 정리되지 않아 중단했습니다'}); return; }
@@ -349,7 +383,7 @@
     logActionRecord({command: title, type: '기안', target: title, summary, steps: steps.map(s => `${s.ok ? '✓' : '✗'} ${s.name}: ${s.detail}`), status: bad ? 'partial' : 'success', verified: !bad, details: notes.join(' / ')});
     S.paletteOpen = true; // Esc·바깥 클릭으로 닫히게
     $('#overlay').innerHTML = `
-      <div class="modal" data-act="closeOverlay">
+      <div class="modal peek">
         <div class="dlg" data-stop="1" style="width:min(620px,94vw);padding:20px 24px;position:absolute;right:24px;bottom:24px;top:auto;left:auto;transform:none" role="dialog" aria-label="자동 기입 결과">
           <button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button>
           <h2 style="margin:0 0 4px;font-size:17px">${esc(head)}</h2>
@@ -384,7 +418,7 @@
   // ---------- 운영/참가 계획서: 같은 사업의 과거 계획서 서식을 이어받아 뼈대 작성 ----------
   async function startPlanDraft() {
     if (gated('draftPlan')) return;
-    const name = (prompt('계획서 사업명을 입력하세요.\n예) 2026년『OOO』 운영계획  /  2026년 OOO 참가계획') || '').trim();
+    const name = ((await askText('운영·참가계획 작성', '계획서 제목(사업명)', '', '예) 2026년『OOO』 운영계획  /  2026년 OOO 참가계획')) || '').trim();
     if (!name) return;
     const title = /계획(\(안\))?$/.test(name) ? name : `${name} 운영계획`;
     closeOverlay();
@@ -395,7 +429,7 @@
     if (!f) { toast('기안 화면을 열지 못했습니다.'); return; }
     const body = sk ? {text: sk.text, lines: sk.lines, hang: sk.lines.map(() => false)} : null;
     const steps = await fillDraft(f, {title, meta, body});
-    showDraftReport(title, steps, sk ? [`본문 뼈대: 과거 계획서 “${sk.basis}”의 서식을 이어받았습니다. 항목 값은 직접 채워 주세요.`] : ['과거 계획서가 없어 본문은 비워 두었습니다.']);
+    showDraftReport(title, steps, sk ? [`본문 뼈대: 과거 계획서 “${sk.basis}”의 서식을 이어받았습니다. 항목 값은 직접 채워 주세요.`, sk.refCopied ? '1번 관련 문서번호는 그 계획서의 근거를 그대로 가져왔습니다. 이번 사업에 맞는지 확인하세요.' : '1번 관련 문서번호는 비워 두었습니다. 근거 문서를 적어 주세요.', ...(meta.confidence === 'similar' ? ['기록물철은 제목이 비슷한 과거 문서를 보고 골랐습니다. 맞는지 확인하세요.'] : [])] : ['과거 계획서가 없어 본문은 비워 두었습니다.']);
   }
 
   // ---------- 지급 문서: 계획서 -> 지급 건의(일반기안문) -> 지출결의서 / 계획서 -> 물품매입품의서 -> 지출결의서 ----------
@@ -421,7 +455,7 @@
       <div class="sec"><div class="sh">② 물품매입 품의 새로 작성</div><div class="acts"><button class="btn primary" data-act="goodsPickPlan">${ic('plus')}계획서를 고르고 작성</button></div></div>
       <div class="sec"><div class="sh">③ 지출결의서를 올릴 차례인 문서 <span class="muted">(${pend.length}건)</span></div>
         ${pend.length ? pend.map(p => `<div class="box" style="margin:6px 0"><b>${esc(p.title)}</b> <span class="bdg tag">${esc(p.kind)}</span><div class="muted" style="font-size:12.5px;margin:3px 0">${esc(p.docNo)} 참조 · ${esc(p.expenseForm)} · 기록물철 ${esc(p.binder)}${p.amount ? ' · ' + esc(won0(p.amount)) : ''}</div><div class="acts"><button class="btn sm primary" data-act="expOpen" data-id="${esc(p.id)}">지출 내역 입력하고 확인</button><button class="btn sm" data-act="copy" data-v="${esc(p.expenseTitle)}">제목 복사</button><button class="btn sm" data-act="copy" data-v="${esc(p.ref || p.docNo)}">참조문서 복사</button>${p.amount ? `<button class="btn sm" data-act="copy" data-v="${esc(R.moneyKo(p.amount))}">금액(한글) 복사</button>` : ''}</div></div>`).join('') : '<div class="muted">지출결의서가 필요한 문서가 없습니다.</div>'}
-        <div class="acts" style="margin-top:8px"><button class="btn sm" data-act="openUrl" data-url="${esc(GW.links.route(GW.routes.draft))}" data-title="결재작성">${ic('ext')}지출결의서 양식 열기</button><button class="btn sm" data-act="openRec">${ic('play')}기록기로 지출결의 입력 기록·재생</button></div>
+        <div class="acts" style="margin-top:8px"><button class="btn sm" data-act="openUrl" data-url="${esc(GW.links.route(GW.routes.expenseEntry))}" data-title="결의서입력 (예산집행)">${ic('ext')}결의서입력 화면 열기</button><button class="btn sm" data-act="openRec">${ic('play')}기록기로 지출결의 입력 기록·재생</button></div>
         <div class="muted" style="font-size:12px;margin-top:6px">지출결의서는 일반기안문이 아니라 지출 메뉴의 별도 양식입니다. 먼저 법인카드·계좌이체 내역을 입력하면 건의·품의 금액과 대조해 확인한 뒤, 값 복사와 기록기 재생으로 이어집니다(상신·결재는 하지 않습니다).</div>
       </div>`);
   }
@@ -442,6 +476,18 @@
       <div class="acts" style="margin-top:14px;justify-content:flex-end"><button class="btn sm ghost" data-act="openPay">뒤로</button><button class="btn sm primary" data-act="payRun">작성 시작</button></div></div></div>`;
   }
 
+  // 근거 계획서를 바꾸면 제목도 그 사업 이름으로 바꿔 준다(제목을 직접 고쳤으면 그대로 둔다)
+  function payPlanChanged() {
+    const base = S.pay && patLoad().docs[S.pay.baseId];
+    const plan = patLoad().docs[($('#payPlan') || {}).value];
+    const t = $('#payTitle');
+    if (!base || !plan || !t) return;
+    if (t.dataset.auto !== undefined ? t.value !== t.dataset.auto : t.value !== base.title) return;
+    const bt = String(base.title);
+    const suffix = (bt.match(/\s(\S*(?:비|료|금|예산|수당)(?:\([^)]*\))?)\s*지급\s*건의$/) || bt.match(/\s(\S+)\s*지급\s*건의$/) || [])[1] || '운영비';
+    const name = String(plan.title).replace(/\s*(운영|참가)?\s*(예산\s*)?(변경)?\s*(\(\d차\))?\s*계획(\s*변경)?(\(안\)|\(변경\))?\s*$/, '').trim();
+    t.value = `${name} ${suffix} 지급 건의`; t.dataset.auto = t.value;
+  }
   async function payRun() {
     if (gated('draftPay')) return;
     const base = S.pay && patLoad().docs[S.pay.baseId];
@@ -453,14 +499,14 @@
     if (!amount) { toast('금액을 입력하세요.'); return; }
     closeOverlay();
     let src = plan;
-    if (!src.runday) { const r = await readDocPattern({id: plan.id, ti: 'mg_20160303185413307', title: plan.title, form: plan.form, docNo: plan.docNo, date: plan.date}); if (!r.err) { patSaveDoc(r); src = r; } }
-    const body = R.buildPaymentProposalBody(base.body || '', {ref: R.formatRunRef(src.runday) || plan.docNo, title, amount});
+    if (!src.runday || !src.body) { const r = await readDocPattern({id: plan.id, ti: 'mg_20160303185413307', title: plan.title, form: plan.form, docNo: plan.docNo, date: plan.date}); if (!r.err) { patSaveDoc(r); src = r; } }
+    const body = R.buildPaymentProposalBody(base.body || '', {ref: R.formatRunRef(src.runday) || plan.docNo, title, amount, planBody: src.body || ''});
     if (!body) { toast('틀 문서의 본문을 읽지 못했습니다. 다른 건의를 선택하세요.'); return; }
     const meta = R.predictDraftMeta(patModel(), {title, sourceDocNo: plan.docNo, sourceTitle: plan.title});
     const f = await openDraftFrame('mg_20160303185413307', '일반기안문', `지급 건의: ${title}`);
     if (!f) { toast('기안 화면을 열지 못했습니다.'); return; }
     const steps = await fillDraft(f, {title, meta, body, ref: {title: plan.title, docNo: plan.docNo}});
-    showDraftReport(title, steps, [...body.notes, `금액 ${R.moneyKo(amount)}`, '예산과목·결제방법은 틀 문서와 같은지 확인하세요.']);
+    showDraftReport(title, steps, [...body.notes, `금액 ${R.moneyKo(amount)}`, '결제방법(카드·계좌이체)은 틀 문서 값입니다. 맞는지 확인하세요.']);
   }
 
   // ---------- 물품매입 품의 (계획서를 참조문서로 지정) ----------
@@ -483,7 +529,7 @@
     const plan = patLoad().docs[planId];
     if (!plan) { toast('선택한 계획서 정보를 찾지 못했습니다.'); return; }
     const base = String(plan.title).replace(/\s*(운영|참가)\s*계획(\(안\))?$/, '').trim();
-    const title = (prompt('물품매입 품의 제목을 확인·수정하세요.', `${base} 운영물품 구입`) || '').trim();
+    const title = ((await askText('물품매입 품의', '품의 제목 (확인·수정)', `${base} 운영물품 구입`)) || '').trim();
     if (!title) return;
     closeOverlay();
     const meta = R.predictDraftMeta(patModel(), {title, sourceDocNo: plan.docNo, sourceTitle: plan.title});
@@ -494,7 +540,7 @@
   }
   // 계획서 없이: 제목만 받아 양식을 열고 기본항목·결재선(·지난 문서로 추정한 기록물철)을 채운다. 참조문서는 사용자가 지정
   async function goodsRunNoPlan() {
-    const title = (prompt('물품매입 품의 제목을 입력하세요.', '') || '').trim();
+    const title = ((await askText('물품매입 품의 (계획서 없이)', '품의 제목', '', '예) 2026년 OOO 운영물품 구입')) || '').trim();
     if (!title) return;
     closeOverlay();
     const meta = R.predictDraftMeta(patModel(), {title});

@@ -70,6 +70,22 @@
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); palIndex = Math.max(0, Math.min(palItems.length - 1, palIndex + (e.key === 'ArrowDown' ? 1 : -1))); root.querySelectorAll('.pal .it').forEach((n, i) => n.classList.toggle('on', i === palIndex)); return; }
     if (e.key === 'Enter') { e.preventDefault(); palExec(palItems[palIndex]); }
   }
+  // 입력 대화상자: 값 배열(취소·Esc·바깥 클릭이면 null)을 돌려준다. Enter는 handleKey에서 #askOk로 연결
+  function askForm({title, desc = '', fields, okLabel = '확인'}) {
+    return new Promise(res => {
+      S.paletteOpen = true; S.menuOpen = ''; S.helpOpen = false;
+      const ov = $('#overlay');
+      ov.innerHTML = `<div class="modal" data-act="closeOverlay"><div class="dlg" data-stop="1" style="width:min(560px,94vw);padding:22px 24px" role="dialog" aria-label="${esc(title)}"><h2 style="margin:0 0 6px;font-size:17px">${esc(title)}</h2>${desc ? `<div class="muted" style="margin-bottom:10px">${esc(desc)}</div>` : ''}${fields.map((f, i) => `<label style="display:flex;flex-direction:column;gap:4px;margin:10px 0 0;font-size:13px;color:var(--muted)">${esc(f.label)}<input class="inp" id="ask_${i}" type="${f.type || 'text'}" value="${esc(f.value || '')}" placeholder="${esc(f.placeholder || '')}" autocomplete="off" style="height:40px;font-size:14px;color:var(--fg)"></label>`).join('')}<div class="acts" style="justify-content:flex-end;margin-top:16px"><button class="btn" id="askNo">취소</button><button class="btn primary" id="askOk">${esc(okLabel)}</button></div></div></div>`;
+      let settled = false;
+      const obs = new MutationObserver(() => { if (!ov.querySelector('#askOk') && !settled) { settled = true; obs.disconnect(); res(null); } });
+      const done = v => { if (settled) return; settled = true; obs.disconnect(); closeOverlay(); res(v); };
+      $('#askOk').addEventListener('click', () => done(fields.map((f, i) => (($('#ask_' + i) || {}).value || '').trim())));
+      $('#askNo').addEventListener('click', () => done(null));
+      obs.observe(ov, {childList: true});
+      setTimeout(() => { const i = $('#ask_0'); if (i) { i.focus(); i.select(); } }, 30);
+    });
+  }
+  async function askText(title, label, value = '', placeholder = '') { const v = await askForm({title, fields: [{label, value, placeholder}]}); return v ? v[0] : null; }
   function toggleHelp(force) {
     S.helpOpen = force === undefined ? !S.helpOpen : force; S.paletteOpen = false; S.menuOpen = '';
     if (!S.helpOpen) { $('#overlay').innerHTML = ''; return; }
@@ -168,11 +184,26 @@
   }
   async function makeWeekly() {
     if (S.weekly && S.weekly.trim() && !confirm('지금 초안을 고친 내용이 있으면 사라집니다. 새로 만들까요?\n(필요하면 먼저 복사해 두세요)')) return;
-    toast('최근 7일 자료를 읽는 중…');
+    // 기간: 이번 주(월~오늘) · 지난주(월~금) · 최근 7일 · 직접(11/2~11/6)
+    const pv = await askText('주간 업무 실적 초안', '기간 (이번 주 / 지난주 / 최근 7일 / 11/2~11/6)', S.settings.weeklyPeriod || (new Date(Date.now() + 9 * 3600000).getUTCDay() === 1 ? '지난주' : '이번 주'));
+    if (pv === null) return;
+    const k = R.kstNow(new Date()), base = new Date(Date.UTC(k.y, k.m - 1, k.d)), dow = base.getUTCDay() || 7;
+    const ymdU = dt => `${dt.getUTCFullYear()}${String(dt.getUTCMonth() + 1).padStart(2, '0')}${String(dt.getUTCDate()).padStart(2, '0')}`;
+    const add = n => new Date(base.getTime() + n * 86400000);
+    let range = null; const p = pv.replace(/\s+/g, '');
+    const mm = p.match(/(\d{1,2})[./](\d{1,2})~(\d{1,2})[./](\d{1,2})/);
+    if (mm) range = {from: `${k.y}${mm[1].padStart(2, '0')}${mm[2].padStart(2, '0')}`, to: `${k.y}${mm[3].padStart(2, '0')}${mm[4].padStart(2, '0')}`};
+    else if (/지난주|저번주/.test(p)) range = {from: ymdU(add(-dow - 6)), to: ymdU(add(-dow - 2))};
+    else if (/최근/.test(p)) range = {from: ymdU(add(-7)), to: ymdU(base)};
+    else if (/이번주|금주|^$/.test(p)) range = {from: ymdU(add(1 - dow)), to: ymdU(base)};
+    else { toast('기간을 알아보지 못했습니다. 예) 이번 주, 지난주, 최근 7일, 11/2~11/6'); return; }
+    
+    toast(`${range.from.slice(4, 6)}/${range.from.slice(6)}~${range.to.slice(4, 6)}/${range.to.slice(6)} 자료를 읽는 중…`);
     try {
-      const [sub, hist] = await Promise.all([GW.submittedRange({days: 7, size: 100}), loadRouting()]);
+      const [sub0, hist] = await Promise.all([GW.submittedRange({from: range.from, to: range.to, size: 100}), loadRouting()]);
+      const sub = {...sub0, docs: (sub0.docs || []).filter(dd => { const dt = String(dd.date || '').replace(/\D/g, '').slice(0, 8); return !dt || (dt >= range.from && dt <= range.to); })};
       const me = S.raw.principal.name;
-      const receipts = (hist ? hist.dept : []).filter(r => String(r.toEmp).replace(/\s/g, '') === String(me).replace(/\s/g, '') && String(r.date).replace(/-/g, '').slice(0, 8) >= sub.from);
+      const receipts = (hist ? hist.dept : []).filter(r => String(r.toEmp).replace(/\s/g, '') === String(me).replace(/\s/g, '') && String(r.date).replace(/-/g, '').slice(0, 8) >= sub.from && String(r.date).replace(/-/g, '').slice(0, 8) <= sub.to);
       S.weekly = R.weeklyReport({submitted: sub.docs, receipts, me: `${S.raw.principal.deptName} ${me}`, from: sub.from, to: sub.to});
       saveLocal();
     } catch (err) { toast('주간 초안을 만들지 못했습니다: ' + err.message); }

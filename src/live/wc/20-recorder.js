@@ -4,7 +4,7 @@
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
 
   // ---------- 기록/재생 엔진 (의존성 없음) ----------
-  const REC_DANGER = /^(결재\s*상신|결재상신|상신하기|상신|결재|결재요청|승인요청|일괄결재|임시저장|저장|보관|보내기|발송|회수|삭제|삭제하기|승인|반려|전결|대결|전송|폐기|기안|접수|배부|제출|확정|등록)(\(\w\))?$/;
+  const REC_DANGER = /^(결재\s*상신|결재상신|상신하기|상신|결재|결재요청|승인요청|일괄결재|임시저장|저장|보관|보내기|발송|회수|삭제|삭제하기|승인|반려|전결|대결|전송|폐기|기안|접수|배부|제출|확정|신청완료|추가신청|신청취소|신청|등록)(\(\w\))?$/;
   const REC_TYPES = new Set(['click', 'dblclick', 'type', 'select', 'check', 'key', 'canvasClick', 'confirm', 'assert', 'waitFor']);
   // 클릭 대상(버튼) 이름을 글자, 값, aria-label, title 어디서든 찾아 위험 여부를 판단한다.
   const recDanger = el => { const b = (el.closest && el.closest('button,a,[role=button],.topBtn,.OBTButton,input[type=button],input[type=submit]')) || el; return [b.innerText, b.value, b.getAttribute && b.getAttribute('aria-label'), b.title].map(x => rNorm(x).replace(/\s+/g, '')).find(x => x && REC_DANGER.test(x)) || ''; };

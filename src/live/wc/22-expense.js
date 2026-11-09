@@ -67,6 +67,8 @@
     logActionRecord({command: `지출 내역 확인: ${p.expenseTitle}`, type: '지출', target: p.docNo, summary: `${p.kind} ${p.docNo}에 대해 카드 ${res.cards.length}건·이체 ${res.trans.length}건, 합계 ${expWon(res.total)}를 사용자가 확인했습니다.`,
       steps: [...res.cards.map(r => `카드 ${r.merchant} ${expWon(R.parseWon(r.amount))}`), ...res.trans.map(r => `이체 ${r.payee} ${r.bank} ${R.maskAccount(r.account)} ${expWon(R.parseWon(r.amount))}`)], verified: true});
     e.ready = {res, cardLines, transLines};
+    // 결의서입력 화면 위에 복사 막대로 남긴다(창을 닫아도 값이 사라지지 않게)
+    S.expBar = {title: p.expenseTitle, items: [['제목', p.expenseTitle], ['참조문서', p.ref || p.docNo], ['금액', String(res.total)], ['금액(한글)', R.moneyKo(res.total)], ...cardLines.map((l, i) => [`카드${cardLines.length > 1 ? i + 1 : ''}`, l]), ...transLines.map((l, i) => [`이체${transLines.length > 1 ? i + 1 : ''}`, l])].filter(x => x[1])};
     const cp = (label, v) => v ? `<button class="btn sm" data-act="copy" data-v="${esc(v)}">${esc(label)} 복사</button>` : '';
     $('#overlay').innerHTML = expShell(`<h2 style="margin:0 0 4px;font-size:18px">지출결의서 준비 완료</h2>
       <div class="box tip"><b>${esc(p.expenseTitle)}</b><div class="muted" style="margin-top:4px">양식: ${esc(p.expenseForm)} · 참조문서: ${esc(p.ref || p.docNo)} · 기록물철: ${esc(p.binder)}</div>
@@ -75,7 +77,7 @@
       <div class="acts" style="margin-top:0">${cp('제목', p.expenseTitle)}${cp('참조문서', p.ref || p.docNo)}${cp('금액(한글)', R.moneyKo(res.total))}${cp('카드 내역 전체', cardLines.join('\n'))}${cp('이체 내역 전체', transLines.join('\n'))}</div>
       ${cardLines.length ? `<h3>카드</h3>${cardLines.map(l => `<div class="trow"><span>${esc(l)}</span><button class="btn sm ghost" data-act="copy" data-v="${esc(l)}">복사</button></div>`).join('')}` : ''}
       ${transLines.length ? `<h3>계좌이체</h3>${transLines.map((l, ti) => `<div class="trow"><span>${esc(res.trans[ti].payee + ' ' + res.trans[ti].bank + ' ' + R.maskAccount(res.trans[ti].account) + ' ' + expWon(R.parseWon(res.trans[ti].amount)) + (res.trans[ti].date ? ' ' + res.trans[ti].date : '') + (res.trans[ti].memo ? ' ' + res.trans[ti].memo : ''))}</span><button class="btn sm ghost" data-act="copy" data-v="${esc(l)}">복사</button></div>`).join('')}` : ''}
-      <div class="acts" style="margin-top:14px"><button class="btn primary" data-act="openUrl" data-url="${esc(GW.links.route(GW.routes.draft))}" data-title="결재작성">${ic('ext')}결재작성에서 지출결의서 열기</button><button class="btn" data-act="openRec">${ic('play')}기록기로 입력 기록·재생</button><button class="btn ghost" data-act="expClose">닫기</button></div>
+      <div class="acts" style="margin-top:14px"><button class="btn primary" data-act="openUrl" data-url="${esc(GW.links.route(GW.routes.expenseEntry))}" data-title="결의서입력 (예산집행)">${ic('ext')}결의서입력 화면 열기 (복사 막대 유지)</button><button class="btn" data-act="openRec">${ic('play')}기록기로 입력 기록·재생</button><button class="btn ghost" data-act="expClose">닫기</button></div>
       <div class="muted" style="font-size:12px;margin-top:8px">상신·결재는 하지 않습니다. 계좌번호는 화면에서만 가리고 복사에는 전체가 들어가며, 저장되는 기록에는 끝 4자리만 남습니다.</div>`);
   }
   function expAdd(kind) { expSync(); if (S.exp) { S.exp[kind].push(kind === 'cards' ? blankCard() : blankTrans()); S.exp.res = null; expRender(); } }

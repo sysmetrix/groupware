@@ -73,10 +73,10 @@
     { id: 'plan_draft', tag: '기안', label: '운영계획서 기안', desc: '지난 계획서 서식으로 제목·기본항목·본문 뼈대를 기입 (항목 값은 직접 확인)', icon: 'doc', query: '운영계획서 기안문 작성' },
     { id: 'budget_draft', tag: '예산', label: '예산 집행·지급 문서', desc: '지급 건의·물품매입 품의·지출결의서 차례를 확인하고 작성 화면으로 이동', icon: 'wallet', query: '예산 집행 지급 품의 작성' },
     { id: 'sent_check', tag: '검증', label: '보낸메일함 답장 확인', desc: '선택한(또는 고른) 메일의 답장을 보낸메일함에서 실제로 찾아 날짜·수신자·첨부 여부를 표시', icon: 'check', query: '주당근무시간 보낸메일함에서 보냈는지 확인' },
-    { id: 'att_sat', tag: '근태', label: '이번주 토요일 휴일근무', desc: '이번 주 토요일 날짜를 계산해 사유를 복사하고 근태신청 화면을 엽니다 (신청은 직접)', icon: 'clock', query: '이번주 토요일 휴일근무 올려줘' },
-    { id: 'mail_confirm', tag: '메일', label: '확인 회신문', desc: '선택한 메일의 답장 화면을 열고 표준 확인 회신문을 넣습니다 (보내기는 직접)', icon: 'mail', query: '시간외근무 확인 회신문 작성' },
+    { id: 'att_sat', tag: '근태', label: '이번주 토요일 휴일근무', desc: '이번 주 토요일로 연장근무신청서(휴일근무)를 채웁니다. 시간·사유를 확인받고 [신청완료] 직전에서 멈춤', icon: 'clock', query: '이번주 토요일 휴일근무 올려줘' },
+    { id: 'mail_confirm', tag: '메일', label: '확인 회신문', desc: '선택한(또는 고른) 메일의 답장 화면을 열고 확인 회신 문구를 넣습니다 (보내기는 직접)', icon: 'mail', query: '시간외근무 확인 회신문 작성' },
     { id: 'mail_submit', tag: '메일', label: '자료 제출용 회신문', desc: '답장 화면에 제출 건명·제출자·첨부 안내 문구를 넣습니다 (첨부·보내기는 직접)', icon: 'mail', query: '자료 제출용 회신문 작성' },
-    { id: 'att_trip', tag: '근태', label: '관내출장 신청', desc: '출장 사유를 복사하고 근태신청 화면을 엽니다 (신청은 직접)', icon: 'clock', query: '관내출장신청' },
+    { id: 'att_trip', tag: '근태', label: '관내출장 신청', desc: '날짜·방문처·목적을 확인받아 출장신청서를 채우고 일별 계획까지 등록 ([신청완료]는 직접)', icon: 'clock', query: '관내출장신청' },
   ];
 
   // Open Command Console Dialog
@@ -208,7 +208,7 @@
   async function cmdCopy(text) {
     try { await navigator.clipboard.writeText(text); return true; } catch { return false; }
   }
-  const mailActions = () => ((S.a && S.a.actions) || []).filter(x => x.type === 'mail');
+  const mailActions = () => { const acts = ((S.a && S.a.actions) || []).filter(x => x.type === 'mail'); const have = new Set(acts.map(a => a.ref && a.ref.uid)); const inbox = ((S.raw && S.raw.data && S.raw.data.mail && S.raw.data.mail.inbox && S.raw.data.mail.inbox.records) || []).filter(m => !have.has(m.uid) && !R.isNoiseMail(m)).slice(0, 8).map(m => ({type: 'mail', title: m.subject, ref: {box: m.box || 'INBOX', uid: m.uid}, fromInbox: true})); return [...acts, ...inbox]; };
   const cmdSelectedMail = () => { const x = S.sel && S.sel.type === 'action' ? selectedAction() : null; return x && x.type === 'mail' ? x : null; };
   // 지시문에서 메일 제목과 맞춰 볼 낱말만 남긴다
   const CMD_STOP = /^(보낸|보낸메일|보낸메일함|메일함|메일|확인|확인은|보냈는지|보냈나|했나|했는지|내가|제가|검증|발송|발송확인|여부|좀|해줘|해|줘|있나|봐줘|봐|답장|회신)$/;
@@ -243,31 +243,12 @@
 
   // ---------- A. 휴일근무 ----------
   async function cmdHolidayWork(q, parsed) {
-    const targetLabel = parsed.label, targetDate = parsed.iso;
-    cmdStep('step1', `1. 날짜: ${targetLabel}`, 'done');
-    const reasonText = `${targetLabel} 재단 주요 업무 및 당면 현안 추진을 위한 휴일근무`;
-    const copied = await cmdCopy(reasonText);
-    cmdStep('step2', copied ? `2. 신청 사유를 클립보드에 복사했습니다 ("${reasonText.slice(0, 24)}…")` : '2. 클립보드 복사에 실패했습니다. 사유를 직접 입력하세요', copied ? 'done' : 'fail');
+    cmdStep('step1', `1. 날짜: ${parsed.label}`, 'done');
     closeOverlay();
-    openUrl(GW.links.route(GW.routes.attendanceRequest), {title: `근태신청: ${targetLabel} 휴일근무`});
-    S.pane.expanded = true;
-    toast(copied
-      ? `${targetLabel} 휴일근무: 근태신청 화면을 열고 사유를 복사했습니다. 휴일근무를 고르고 사유란에 붙여넣기(Ctrl+V) 후 직접 [신청]하세요.`
-      : `${targetLabel} 휴일근무: 근태신청 화면을 열었습니다. 사유 복사는 실패했으니 직접 입력하세요: ${reasonText}`);
-    logActionRecord({
-      command: q,
-      type: '근태',
-      target: `${targetLabel} 휴일근무신청`,
-      summary: `${targetLabel} 휴일근무 신청 화면을 열었습니다. 신청은 아직 하지 않았습니다.`,
-      steps: [
-        `날짜 계산: ${targetLabel} (ISO ${targetDate})`,
-        `${copied ? '✓ 사유 클립보드 복사' : '✗ 사유 클립보드 복사 실패'}: "${reasonText}"`,
-        '근태신청 화면 열기 (신청 여부는 확인하지 않았습니다)'
-      ],
-      verified: false,
-      details: '근태신청 화면에서 휴일근무를 고르고 사유를 붙여넣은 뒤 직접 신청하세요.'
-    });
+    // 값을 확인하는 입력창을 띄운 뒤 연장근무신청서(휴일근무)를 채우고 [신청완료] 직전에서 멈춘다
+    await quickAttendanceApplication('overtime', {kind: '휴일근무', date: parsed.iso});
   }
+
   // 날짜를 알아듣지 못했을 때: 다가오는 토요일을 미리 넣은 날짜 칸을 보여 주고 사용자가 고르게 한다
   function cmdAskDate(q, onPick) {
     const guess = parseKoreanDate('토요일');
@@ -330,19 +311,19 @@
     });
   }
   // 대상 메일 고르기: 선택된 메일 → 지시문 낱말과 제목이 맞는 내 메일 → 최근 메일 목록에서 사용자가 고름
-  function cmdPickMail(q, onPick) {
+  function cmdPickMail(q, onPick, {reply = false} = {}) {
     const sel = cmdSelectedMail();
     if (sel) return onPick(sel);
-    const toks = cmdKeywords(q);
+    const toks = cmdKeywords(q).filter(t => !reply || !/^(회신문|회신|작성|문구|제출용|제출|자료|기한|연장|요청|넣어|써|확인|표준)$/.test(t));
     if (toks.length) {
       const mine = mailActions(); // 숨기거나 참고로 내려간 메일도 지시문 낱말이 맞으면 대상으로 삼는다
       const scored = mine.map(x => { const t = String(x.title || '').replace(/\s+/g, ''); return {x, n: toks.filter(k => t.includes(k)).length}; }).filter(o => o.n > 0).sort((a, b) => b.n - a.n);
       if (scored.length && (scored.length === 1 || scored[0].n > scored[1].n)) return onPick(scored[0].x);
     }
-    const list = mailActions().slice(0, 6);
-    cmdStep('step1', list.length ? '1. 어느 메일의 답장을 확인할지 골라 주세요' : '1. 확인할 메일 항목이 없습니다', list.length ? 'info' : 'fail');
+    const list = mailActions().slice(0, 8);
+    cmdStep('step1', list.length ? (reply ? '1. 답장할 메일을 골라 주세요' : '1. 어느 메일의 답장을 확인할지 골라 주세요') : '1. 확인할 메일 항목이 없습니다', list.length ? 'info' : 'fail');
     const box = cmdResultBox(list.length
-      ? `<b>어느 메일의 답장을 확인할까요?</b><div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">${list.map((x, i) => `<button class="btn sm" data-i="${i}" style="justify-content:flex-start;text-align:left;font-size:13px">${esc(x.title || '(제목 없음)')}</button>`).join('')}</div>`
+      ? `<b>${reply ? '어느 메일에 답장할까요?' : '어느 메일의 답장을 확인할까요?'}</b><div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">${list.map((x, i) => `<button class="btn sm" data-i="${i}" style="justify-content:flex-start;text-align:left;font-size:13px">${esc(x.title || '(제목 없음)')}</button>`).join('')}</div>`
       : '<b>확인할 메일 항목이 없습니다</b><br><span class="muted">오늘 할 일에서 메일을 선택한 뒤 다시 지시하세요.</span>', list.length ? 'tip' : 'warn');
     if (!box) { toast('확인할 메일을 먼저 선택하세요.'); return; }
     box.querySelectorAll('button[data-i]').forEach(b => b.addEventListener('click', () => onPick(list[Number(b.dataset.i)])));
@@ -350,19 +331,20 @@
 
   // ---------- D. 메일 회신 ----------
   async function cmdMailReply(q, template) {
-    const x = cmdSelectedMail() || (typeof mineVisible === 'function' ? mineVisible() : []).find(a => a.type === 'mail');
-    if (!x) {
-      cmdStep('step1', '1. 회신할 메일이 없습니다', 'fail');
-      cmdResultBox('<b>회신할 메일이 없습니다</b><br><span class="muted">오늘 할 일에서 메일을 선택한 뒤 다시 지시하세요.</span>', 'warn');
-      return;
-    }
+    const x0 = cmdSelectedMail() || (typeof mineVisible === 'function' ? mineVisible() : []).find(a => a.type === 'mail');
+    if (!x0) return cmdPickMail(q, x => cmdMailReplyTo(q, template, x), {reply: true});
+    return cmdMailReplyTo(q, template, x0);
+  }
+  async function cmdMailReplyTo(q, template, x) {
     closeOverlay();
-    // selectAction은 이미 선택된 항목을 다시 부르면 선택을 해제하므로, 같은 항목이면 다시 부르지 않는다
-    if (!(S.sel && S.sel.type === 'action' && S.sel.key === x.key)) selectAction(x.key);
-    if (!(S.sel && S.sel.key === x.key)) { toast('작성 중인 화면이 있어 메일을 바꾸지 않았습니다.'); return; }
+    if (x.key) {
+      // selectAction은 이미 선택된 항목을 다시 부르면 선택을 해제하므로, 같은 항목이면 다시 부르지 않는다
+      if (!(S.sel && S.sel.type === 'action' && S.sel.key === x.key)) selectAction(x.key);
+      if (!(S.sel && S.sel.key === x.key)) { toast('작성 중인 화면이 있어 메일을 바꾸지 않았습니다.'); return; }
+    } else { if (!leavePane()) return; S.sel = {type: 'mail', box: x.ref.box, uid: x.ref.uid}; }
     openUrl(GW.links.compose('re', {box: x.ref.box, uid: x.ref.uid}), {title: `답장: ${x.title}`});
     const ready = await waitMailEditor(15000);
-    if (ready && S.sel && S.sel.key === x.key) autoFillMail(template);
+    if (ready && S.sel && (x.key ? S.sel.key === x.key : S.sel.uid === x.ref.uid)) autoFillMail(template);
     else toast('메일 작성 화면의 에디터를 찾지 못해 회신문을 넣지 않았습니다. 화면이 열리면 [회신 자동 기입] 버튼을 누르세요.');
     logActionRecord({
       command: q,
@@ -448,25 +430,12 @@
       return;
     }
 
-    // Case E: Leave / Business Trip
+    // Case E: Leave / Business Trip → 값을 확인받고 신청서를 채운다
     if (isLeave || isBizTrip) {
-      const targetLabel = dateLabel || '';
-      const typeName = isBizTrip ? '출장' : '휴가';
-      const reasonText = isBizTrip ? `${targetLabel ? targetLabel + ' ' : ''}재단 주요 업무 수행을 위한 관내출장` : `${targetLabel ? targetLabel + ' ' : ''}개인 용무에 따른 연차 휴가 사용`;
-      const copied = await cmdCopy(reasonText);
       closeOverlay();
-      openUrl(GW.links.route(GW.routes.attendanceRequest), {title: `근태신청: ${typeName}`});
-      toast(copied
-        ? `${typeName}: 근태신청 화면을 열고 사유를 복사했습니다. 사유란에 붙여넣기(Ctrl+V) 후 직접 [신청]하세요.${targetLabel ? '' : ' 날짜는 화면에서 고르세요.'}`
-        : `${typeName}: 근태신청 화면을 열었습니다. 사유 복사는 실패했으니 직접 입력하세요.`);
-      logActionRecord({
-        command: q,
-        type: '근태',
-        target: `${targetLabel || '날짜 미지정'} ${typeName}신청`,
-        summary: `${typeName} 신청 화면을 열었습니다. 신청은 아직 하지 않았습니다.`,
-        steps: [`대상 일자: ${targetLabel || '지시문에 없음(화면에서 선택)'}`, `${copied ? '✓ 사유 복사' : '✗ 사유 복사 실패'}: "${reasonText}"`, '근태신청 화면 열기'],
-        verified: false
-      });
+      const iso = (parseKoreanDate(q) || {}).iso || '';
+      const kind = isLeave ? (/오전\s*반차/.test(q) ? '오전반차' : /오후\s*반차/.test(q) ? '오후반차' : /대체/.test(q) ? '대체휴가' : '연차') : (/관외/.test(q) ? '관외' : '관내');
+      await quickAttendanceApplication(isBizTrip ? 'trip' : 'leave', {date: iso, kind});
       return;
     }
 
