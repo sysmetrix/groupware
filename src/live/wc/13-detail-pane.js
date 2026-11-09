@@ -151,15 +151,23 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
   // Attachments: read once for mails already read (no state change); unread mails need consent.
   async function loadMailDetail(m, allowMarkRead = false) {
     S.mailDet = S.mailDet || {}; S.mailDetBusy = S.mailDetBusy || {};
-    if (S.mailDetBusy[m.uid]) return;
-    S.mailDetBusy[m.uid] = 1;
-    try {
-      const r = await GW.mailDetail({uid: m.uid, seen: m.seen === true, allowMarkRead});
-      S.mailDet[m.uid] = r;
-      if (allowMarkRead) m.seen = true;
-    } catch (e) { S.mailDet[m.uid] = {error: e.message}; }
-    delete S.mailDetBusy[m.uid];
-    if (S.sel && (S.sel.uid === m.uid || (S.sel.key || '').endsWith(':' + m.uid))) renderPane();
+    if (S.mailDet[m.uid] && !S.mailDet[m.uid].error) return S.mailDet[m.uid];
+    if (S.mailDetBusy[m.uid]) return S.mailDetBusy[m.uid];
+    S.mailDetBusy[m.uid] = (async () => {
+      try {
+        const r = await GW.mailDetail({uid: m.uid, seen: m.seen === true, allowMarkRead});
+        S.mailDet[m.uid] = r;
+        if (allowMarkRead) m.seen = true;
+        return r;
+      } catch (e) {
+        S.mailDet[m.uid] = {error: e.message};
+        return S.mailDet[m.uid];
+      } finally {
+        delete S.mailDetBusy[m.uid];
+        if (S.sel && (S.sel.uid === m.uid || (S.sel.key || '').endsWith(':' + m.uid))) renderPane();
+      }
+    })();
+    return S.mailDetBusy[m.uid];
   }
   // The groupware's own document viewer (HWP·PDF·엑셀 등), same request the mail read view makes.
   const previewUrl = (c, uid, f) => '/#popup?' + new URLSearchParams({authKeyMap: JSON.stringify({email: `link@${(c.account || '').split('@')[1] || location.hostname.replace(/^gw\./, '')}`, muid: String(uid), empSeq: '-1'}), fileSn: f.sn, moduleGbn: 'MAIL', path: '/ecm/ecm001A07', pathSeq: '700', callComp: 'UAA0700', popupUUID: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()))}).toString();
@@ -202,12 +210,16 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
     const ur = m.seen ? '' : 'data-unread="1" data-what="메일"';
     const c = S.mailDet && S.mailDet[m.uid];
     const to = c && c.to ? c.to.replace(/<[^>]+>/g, '').replace(/\s*,\s*/g, ', ') : '';
+    const mailUrl = (c && c.readUrl) || (action && action.url) || S.a.mail.url;
     const reply = `<button class="btn" data-act="openUrl" data-url="${esc(GW.links.compose('reall', m))}" data-title="전체 답장: ${esc(m.subject)}" ${ur}>전체 답장</button><button class="btn" data-act="openUrl" data-url="${esc(GW.links.compose('fw', m))}" data-title="전달: ${esc(m.subject)}" ${ur}>전달</button>`;
-    return {title: m.subject || '(제목 없음)', url: GW.links.compose('re', m), body: `${why || ''}<div class="kv"><b>보낸 사람</b><span>${esc(m.from)} <span class="muted">${esc(m.fromEmail)}</span></span><b>받은 시각</b><span>${esc(m.date.slice(0, 16))}</span>${to ? `<b>받는 사람</b><span title="${esc(to)}">${esc(to.length > 90 ? to.slice(0, 90) + '…' : to)}</span>` : ''}<b>상태</b><span>${m.seen ? '읽음' : '안 읽음'}${m.answered ? ' · 답장함' : ''}${m.forwarded ? ' · 전달함' : ''}</span></div>
+    const openOrigBtn = c && c.readUrl
+      ? `<button class="btn ${S.pane.url === c.readUrl ? '' : 'primary'}" data-act="openUrl" data-url="${esc(c.readUrl)}" data-title="메일 원문: ${esc(m.subject)}">${ic('ext')}원문 화면 열기</button>`
+      : `<button class="btn primary" data-act="mailOpenItem" data-box="${esc(m.box || '')}" data-uid="${esc(m.uid)}">${ic('ext')}원문 화면 열기</button>`;
+    return {title: m.subject || '(제목 없음)', url: mailUrl, body: `${why || ''}<div class="kv"><b>보낸 사람</b><span>${esc(m.from)} <span class="muted">${esc(m.fromEmail)}</span></span><b>받은 시각</b><span>${esc(m.date.slice(0, 16))}</span>${to ? `<b>받는 사람</b><span title="${esc(to)}">${esc(to.length > 90 ? to.slice(0, 90) + '…' : to)}</span>` : ''}<b>상태</b><span>${m.seen ? '읽음' : '안 읽음'}${m.answered ? ' · 답장함' : ''}${m.forwarded ? ' · 전달함' : ''}</span></div>
 ${c && !c.error ? '' : `<div class="body-text open" style="max-height:120px">${esc((m.preview || '').replace(/대용량 파일첨부[\s\S]*?보관\)/, '').trim()) || '미리보기 없음'}</div>`}
 ${mailFilesBox(m)}
-<div class="acts"><button class="btn primary" data-act="openUrl" data-url="${esc(GW.links.compose('re', m))}" data-title="답장: ${esc(m.subject)}" ${ur}>${ic('mail')}답장 쓰기</button><button class="btn" data-act="mailToDraft" data-uid="${esc(m.uid)}" title="메일 내용을 바탕으로 기안문 서식을 결재 직전 상태로 자동 완성합니다">${ic('doc')}이 메일로 기안문 작성</button>${reply}${action ? `<button class="btn icon" data-act="rowMenu" data-k="${esc(action.key)}" aria-label="더 보기">${ic('more')}</button>` : ''}</div>
-<p class="muted" style="margin-top:10px">답장 창은 받는 사람·제목이 채워진 채 열리고 "보내기"를 눌러야 발송됩니다.${m.seen ? '' : ' 안 읽은 메일은 답장 창을 열 때 읽음으로 바뀔 수 있어 먼저 묻습니다.'}</p>`};
+<div class="acts">${openOrigBtn}<button class="btn" data-act="openUrl" data-url="${esc(GW.links.compose('re', m))}" data-title="답장: ${esc(m.subject)}" ${ur}>${ic('mail')}답장 쓰기</button><button class="btn" data-act="mailToDraft" data-uid="${esc(m.uid)}" title="메일 내용을 바탕으로 기안문 서식을 결재 직전 상태로 자동 완성합니다">${ic('doc')}이 메일로 기안문 작성</button>${reply}${action ? `<button class="btn icon" data-act="rowMenu" data-k="${esc(action.key)}" aria-label="더 보기">${ic('more')}</button>` : ''}</div>
+<p class="muted" style="margin-top:10px">답장 버튼을 누르면 받는 사람·제목이 채워진 채 열리고, 실제 발송은 그룹웨어 화면에서 "보내기"를 눌러야 처리됩니다.${m.seen ? '' : ' 안 읽은 메일은 답장 창을 열 때 읽음으로 바뀔 수 있어 먼저 묻습니다.'}</p>`};
   }
   function searchPane(it) {
     if (!it) return {title: '검색 결과를 찾을 수 없습니다', url: '', body: ''};
@@ -218,11 +230,18 @@ ${mailFilesBox(m)}
       return {title: it.title, url: it.url, body: `<div class="kv">${meta}<b>첨부</b><span>${it.files.map(f => esc(f.name)).join('<br>') || '-'}</span></div>${dl.length ? `<div class="box tip"><b>본문 기한</b> ${dl.map(d => `<span class="pill ${d.dday <= 1 ? 'solid' : 'medium'}" title="${esc(d.context)}">${esc(d.date.slice(5))} ${ddayText(d.dday)}</span>`).join('')}</div>` : ''}<div class="box"><b>본문 미리보기</b> <span class="muted">열람 기록 없음</span><div class="pv">${hl((it.text || it.snippet || '').slice(0, 4000), kw)}</div></div>${actsFor(it.url, {q: relatedQ(it.title), title: it.title})}<div class="box" id="extract">${extractHtml()}</div>`};
     }
     if (it.type === 'file') return {title: it.name, url: it.url, body: `<div class="kv"><b>출처</b><span>${esc(it.parent)}</span><b>올린 사람</b><span>${esc(it.owner)}</span><b>일자</b><span>${esc(it.date)}</span><b>크기</b><span>${won(it.size)} B</span></div>${actsFor(it.url, {q: relatedQ(it.parent), title: it.name})}<div class="box tip">첨부파일 미리보기(그룹웨어 문서 뷰어)가 열립니다.</div>`};
-    if (it.type === 'mail') return {title: it.subject || '(제목 없음)', url: S.a.mail.url, body: `<div class="kv"><b>메일함</b><span>${esc(it.box)}</span><b>보낸 사람</b><span>${esc(it.from)}</span><b>받는 사람</b><span>${esc(it.to)}</span><b>일시</b><span>${esc(it.date)}</span></div><div class="box">${hl(it.snippet, kw)}</div><div class="acts"><button class="btn primary" data-act="openUrl" data-url="${esc(GW.links.compose('re', it))}" data-title="답장">답장 쓰기</button><button class="btn" data-act="openUrl" data-url="${esc(GW.links.compose('fw', it))}" data-title="전달">전달</button></div>${actsFor(S.a.mail.url, {q: relatedQ(it.subject), title: '받은메일함'})}`};
+    if (it.type === 'mail') {
+      const det = S.mailDet && S.mailDet[it.uid];
+      const readUrl = det && det.readUrl;
+      const openBtn = readUrl
+        ? `<button class="btn primary" data-act="openUrl" data-url="${esc(readUrl)}" data-title="메일 원문: ${esc(it.subject)}">${ic('ext')}메일 원문 보기</button>`
+        : `<button class="btn primary" data-act="mailOpenItem" data-box="${esc(it.box || '')}" data-uid="${esc(it.uid)}">${ic('ext')}메일 원문 보기</button>`;
+      return {title: it.subject || '(제목 없음)', url: readUrl || S.a.mail.url, body: `<div class="kv"><b>메일함</b><span>${esc(it.box)}</span><b>보낸 사람</b><span>${esc(it.from)}</span><b>받는 사람</b><span>${esc(it.to)}</span><b>일시</b><span>${esc(it.date)}</span></div><div class="box">${hl(it.snippet, kw)}</div><div class="acts">${openBtn}<button class="btn" data-act="openUrl" data-url="${esc(GW.links.compose('re', it))}" data-title="답장">답장 쓰기</button><button class="btn" data-act="openUrl" data-url="${esc(GW.links.compose('fw', it))}" data-title="전달">전달</button></div>${actsFor(S.a.mail.url, {q: relatedQ(it.subject), title: '받은메일함'})}`};
+    }
     return {title: it.title || it.name, url: '', body: `<div class="box">${esc(it.snippet || '')}</div>`};
   }
   const findDoc = (kind, id) => ((S.a.approval.lists[kind] || {}).docs || []).find(d => d.docId === id);
-  const findMail = (box, uid) => [...(S.raw.data.mail?.inbox.records || []), ...(S.raw.data.mail?.otherUnseen || [])].find(m => m.box === box && m.uid === uid);
+  const findMail = (box, uid) => [...(S.raw.data.mail?.inbox.records || []), ...(S.raw.data.mail?.otherUnseen || [])].find(m => (!box || m.box === box) && m.uid === uid);
 
   function selectAction(key, {keepPane = false} = {}) {
     if (!keepPane && S.sel && S.sel.key === key) {
@@ -263,19 +282,44 @@ ${mailFilesBox(m)}
   // Would opening this item record a read/열람 in the groupware?
   function marksRead(x) {
     if (!x) return false;
-    if (x.type === 'doc') { const d = findDoc(x.ref.kind, x.ref.docId); return !!(d && d.unread); }
+    if (x.type === 'doc') { const d = findDoc(x.ref?.kind, x.ref?.docId); return !!(d && d.unread); }
     if (x.type === 'notice') return true;
-    if (x.type === 'mail') { const m = findMail(x.ref.box, x.ref.uid); return !!(m && !m.seen); }
+    if (x.type === 'mail') { const m = findMail(x.ref?.box, x.ref?.uid); return !!(m && !m.seen); }
     return false;
   }
-  function openItem(x) {
+  async function openItem(x) {
     const what = x.type === 'mail' ? '메일' : x.type === 'notice' ? '게시글' : '문서';
-    if (x.type === 'mail') { const m = findMail(x.ref.box, x.ref.uid); openUrl(m ? GW.links.compose('re', m) : x.url, {title: x.title, unread: marksRead(x), what}); return; }
+    if (x.type === 'mail') {
+      const m = findMail(x.ref?.box, x.ref?.uid);
+      if (!m) { openUrl(x.url || S.a.mail.url, {title: x.title, unread: marksRead(x), what}); return; }
+      const c = S.mailDet && S.mailDet[m.uid];
+      if (c && c.readUrl) {
+        openUrl(c.readUrl, {title: `메일: ${m.subject}`, unread: marksRead(x), what});
+        return;
+      }
+      if (!m.seen) {
+        if (!confirm('아직 읽지 않은 메일입니다. 메일을 열면 그룹웨어에 읽음으로 표시됩니다. 열까요?')) return;
+      }
+      try {
+        await loadMailDetail(m, true);
+        const det = S.mailDet && S.mailDet[m.uid];
+        if (det && det.readUrl) {
+          openUrl(det.readUrl, {title: `메일: ${m.subject}`, unread: false, what});
+          return;
+        }
+      } catch (err) {
+        toast(`메일 원문을 불러오지 못했습니다: ${err.message}`);
+      }
+      openUrl(x.url || S.a.mail.url, {title: x.title, what});
+      return;
+    }
     openUrl(x.url, {title: x.title, unread: marksRead(x), what});
   }
   function openWindow(url, x) {
-    const d = x && x.type === 'doc' ? findDoc(x.ref.kind, x.ref.docId) : null;
+    const d = x && x.type === 'doc' ? findDoc(x.ref?.kind, x.ref?.docId) : null;
     if (d && d.unread && !confirm('아직 열람하지 않은 문서입니다. 새 창으로 열면 열람으로 기록됩니다. 열까요?')) return;
+    const m = x && x.type === 'mail' ? findMail(x.ref?.box, x.ref?.uid) : null;
+    if (m && !m.seen && !confirm('아직 읽지 않은 메일입니다. 새 창으로 열면 그룹웨어에 읽음으로 표시됩니다. 열까요?')) return;
     window.open(url, '_blank');
   }
 

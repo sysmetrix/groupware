@@ -695,3 +695,15 @@ test('v0.30 usability: promo mail detection, command detection, palette/keyboard
   assert.doesNotMatch(wc, /이하림 담당자|3번째 시트/, 'no fake sent-mail verification');
   assert.match(wc, /id: 'overview'/, 'overview view reachable');
 });
+
+test('v0.32 usability: mail view does not trigger reply compose', async () => {
+  const wc = (await Promise.all((await fs.readdir('src/live/wc')).filter(f => f.endsWith('.js')).map(f => fs.readFile(path.join('src/live/wc', f), 'utf8')))).join('\n');
+  const openItemSrc = wc.match(/(?:async\s+)?function\s+openItem[\s\S]*?\n  \}/)?.[0] || '';
+  assert.ok(openItemSrc, 'openItem function must exist');
+  assert.doesNotMatch(openItemSrc, /compose\('re'/, 'openItem must not open reply compose');
+  const mailPaneSrc = wc.match(/function\s+mailPane[\s\S]*?\n  \}/)?.[0] || '';
+  assert.ok(mailPaneSrc, 'mailPane function must exist');
+  assert.doesNotMatch(mailPaneSrc, /url:\s*GW\.links\.compose\('re'/, 'mailPane URL must not be reply compose');
+  assert.match(wc, /case 'mailOpenItem'/, 'mailOpenItem event handler must exist');
+});
+
