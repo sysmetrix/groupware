@@ -37,7 +37,8 @@
       case 'openHistory': openActionHistory(); break;
       case 'submitCmd': { const q = ($('#cmdPrompt') || {}).value; executeCommandWorkflow(q); break; }
       case 'runPreset': { const pr = COMMAND_PRESETS.find(x => x.id === el.dataset.id); if (pr) executeCommandWorkflow(pr.query); break; }
-      case 'clearHistory': store.del('actionHistory'); openActionHistory(); toast('작업 내역을 비웠습니다.'); break;
+      case 'recoverWeekly': { const r = store.get('weeklyRecovery', null); if (r && confirm('보관된 다른 탭의 초안으로 바꿀까요? 현재 초안도 복구본으로 보관합니다.')) { const old = S.weekly; S.weekly = r.text; if (!saveLocal()) { S.weekly = old; toast('저장하지 못해 복구하지 않았습니다.'); break; } store.set('weeklyRecovery', {at: Date.now(), text: old}); renderMain(); toast('복구본을 불러왔습니다.'); } break; }
+      case 'clearHistory': if (confirm('자동 작업 감사 기록을 모두 지울까요? 되돌릴 수 없습니다.')) { store.del('actionHistory'); logActionRecord({command: '작업 내역 초기화', type: '관리', summary: '사용자가 이전 감사 기록을 삭제했습니다.', status: 'cleared', verified: true}); openActionHistory(); toast('이전 기록을 지우고 초기화 이력을 남겼습니다.'); } break;
       case 'mailToDraft': mailToDraft(el.dataset.uid); break;
       case 'quickDraft': {
         if (el.dataset.t === 'result' && !el.dataset.custom) {
@@ -50,6 +51,12 @@
       case 'openPay': openPaymentHub(); break;
     case 'openChangelog': openChangelog(); break;
     case 'goResource': closeOverlay(); go('resource'); break;
+    case 'gcalMode': { gcalCfg().mode = v; saveLocal(); renderMain(); break; }
+    case 'gcalSave': gcalSave(); break;
+    case 'gcalCancel': S.gcalEdit = false; renderMain(); break;
+    case 'gcalEdit': S.gcalEdit = true; renderMain(); break;
+    case 'gcalNew': gcalOpenTab('https://calendar.google.com/calendar/u/0/r/eventedit'); break;
+    case 'gcalOpen': gcalOpenTab('https://calendar.google.com/calendar/u/0/r/' + ({MONTH: 'month', AGENDA: 'agenda'}[gcalCfg().mode] || 'week')); break;
     case 'resSel': resSel(el.dataset.v); break;
     case 'resDay': resDay(el.dataset.v); break;
     case 'resGo': resGo(); break;
@@ -183,7 +190,7 @@
       case 'focusPrev': focusPrev(); break;
       case 'focusStop': stopFocus(); break;
       case 'apTab': S.apTab = v; S.apTabPinned = true; renderMain(); break;
-      case 'apMore': { const l = S.a.approval.lists[S.apTab]; const have = l.docs.length + (S.apMore[S.apTab] || []).length; try { const r = await GW.approvalPage(S.apTab, Math.floor(have / 30) + 1); S.apMore[S.apTab] = [...(S.apMore[S.apTab] || []), ...r.docs.filter(d => !l.docs.some(x => x.docId === d.docId))]; } catch (err) { toast(err.message); } renderMain(); break; }
+      case 'apMore': await loadApprovalMore(); break;
       case 'selDoc': if (!leavePane()) break; S.sel = {type: 'doc', kind: el.dataset.kind, docId: el.dataset.id}; S.pane.url = ''; S.pane.extract = null; S.pane.preview = null; renderMain(); renderPane(); break;
       case 'reloadRouting': toast('배부·접수 이력을 읽는 중…'); await loadRouting(true); render(); break;
       case 'mailFilter': S.mailFilter = v; renderMain(); break;
@@ -205,7 +212,7 @@
       case 'boardCard': { const k = el.dataset.k; if (path.some(n => n && n.tagName === 'BUTTON')) break; if (k.startsWith('todo:')) { const t = S.todos.find(x => `todo:${x.id}` === k); if (t && t.url) { S.sel = {type: 'frame', title: t.title, url: t.url}; openUrl(t.url, {title: t.title}); } } else { go('today'); selectAction(k); } break; }
       case 'addTodo': addTodoFromInput(); break;
       case 'todoDel': { const t = S.todos.find(x => x.id === el.dataset.id); if (!t) break; pushUndo('할 일 삭제'); S.todos = S.todos.filter(x => x.id !== t.id); delete S.plan[`todo:${t.id}`]; saveLocal(); renderMain(); renderNav(); toastUndo(`"${t.title.slice(0, 20)}" 할 일을 지웠습니다.`); break; }
-      case 'todoEdit': { const t = S.todos.find(x => x.id === el.dataset.id); if (!t) break; askForm({title: '할 일 고치기', fields: [{label: '할 일 내용', value: t.title}, {label: '기한 (예: 11/20 또는 2026-11-20, 비우면 없음)', value: t.due || ''}]}).then(v => { if (!v || !v[0]) return; pushUndo('할 일 수정'); t.title = v[0]; t.due = v[1] ? parseDue(v[1]) : ''; saveLocal(); renderMain(); renderNav(); toastUndo('할 일을 고쳤습니다.'); }); break; }
+      case 'todoEdit': { const t = S.todos.find(x => x.id === el.dataset.id); if (!t) break; askForm({title: '할 일 고치기', fields: [{label: '할 일 내용', value: t.title}, {label: '기한 (예: 11/20 또는 2026-11-20, 비우면 없음)', value: t.due || ''}]}).then(v => { const cur = S.todos.find(x => x.id === t.id); if (!v || !v[0]) return; if (!cur) { toast('다른 탭에서 지워진 할 일입니다.'); return; } pushUndo('할 일 수정'); cur.title = v[0]; cur.due = v[1] ? parseDue(v[1]) : ''; saveLocal(); renderMain(); renderNav(); toastUndo('할 일을 고쳤습니다.'); }); break; }
       case 'calLayer': { const cf = teamCfg(); cf.layers[el.dataset.v] = !cf.layers[el.dataset.v]; renderMain(); break; }
     case 'calDept': teamCfg().dept = el.dataset.v; renderMain(); break;
     case 'calMine': { const cf = teamCfg(); cf.mine = !cf.mine; renderMain(); break; }
@@ -244,10 +251,11 @@
       case 'budgetRowAdd': S.settings.budget.push({project: '', filter: '', label: ''}); renderMain(); break;
       case 'budgetRowDel': S.settings.budget.splice(Number(el.dataset.i), 1); S.budget.table = null; saveLocal(); renderMain(); break;
       case 'saveSettings': {
-        const st = S.settings;
+        const notify = $('#setNotify').checked;
+        if (notify && 'Notification' in window && Notification.permission === 'default') { try { await Notification.requestPermission(); } catch {} }
+        const st = S.settings; // 대기 중 다른 탭의 변경이 반영됐을 수 있어 대기 뒤 현재 설정을 쓴다
         st.refreshMin = Number($('#setRefresh').value);
-        st.notify = $('#setNotify').checked;
-        if (st.notify && 'Notification' in window && Notification.permission === 'default') { try { await Notification.requestPermission(); } catch {} }
+        st.notify = notify;
         st.fontSize = $('#setFs').value; st.theme = $('#setTheme').value; st.beginner = $('#setBeginner').checked;
         const rows = {};
         root.querySelectorAll('#budgetRows input').forEach(i => { (rows[i.dataset.i] = rows[i.dataset.i] || {})[i.dataset.b] = i.value.trim(); });
@@ -260,7 +268,7 @@
       }
       case 'resetDone': pushUndo('표시 초기화'); S.hidden = {}; S.snooze = {}; S.plan = {}; saveLocal(); render(); toastUndo('숨기기·미루기·보드 계획을 지웠습니다.'); break;
       case 'resetRouting': S.routing = null; store.del('routing'); toast('추천 이력을 지웠습니다.'); break;
-      case 'resetAll': if (confirm('이 브라우저에 저장된 내 업무센터 설정·할 일·표시를 모두 지울까요? (그룹웨어 자료는 바뀌지 않습니다)')) { const p = getPrefix(); for (const k of Object.keys(localStorage)) if (k.startsWith(p)) localStorage.removeItem(k); for (const k of Object.keys(localStorage)) if (k.startsWith('bwyfgw:wc:migrated:') && localStorage.getItem(k) === currentKey) localStorage.removeItem('bwyfgw:wc:' + k.slice('bwyfgw:wc:migrated:'.length)); S.hidden = {}; S.snooze = {}; S.plan = {}; S.todos = []; S.newKeys.clear(); S.activity = []; S.history = []; S.settings = {...DEFAULT_SETTINGS, budget: []}; S.routing = null; S.forms = null; applyLook(); render(); } break;
+      case 'resetAll': if (confirm('이 브라우저에 저장된 내 업무센터 설정·할 일·표시를 모두 지울까요? (그룹웨어 자료는 바뀌지 않습니다)')) { const p = getPrefix(); for (const k of Object.keys(localStorage)) if (k.startsWith(p)) localStorage.removeItem(k); for (const k of Object.keys(localStorage)) if (k.startsWith('bwyfgw:wc:migrated:') && localStorage.getItem(k) === currentKey) localStorage.removeItem('bwyfgw:wc:' + k.slice('bwyfgw:wc:migrated:'.length)); reloadUserState(); clearUserViews(); localBaseline = localValues(); schedule(); applyLook(); refresh(); } break;
       case 'toastUndo': undo(); root.querySelector('.toast')?.remove(); break;
       default: break;
     }
@@ -272,7 +280,7 @@
     const t = e.composedPath()[0];
     if (t.id === 'qfilter') { S.filter.q = t.value; if (!e.isComposing) refreshQueue(); }
     else if (t.id === 'bq') { S.budget.q = t.value; }
-    else if (t.id === 'weekly') { S.weekly = t.value; store.set('weekly', S.weekly); const w = $('#wkSaved'); if (w) { w.classList.add('on'); } }
+    else if (t.id === 'weekly') { const shown = t.dataset.prev ?? t.defaultValue; if (S.weekly && S.weekly !== shown) store.set('weeklyRecovery', {at: Date.now(), text: S.weekly}); /* 다른 탭에서 바뀐 초안을 덮기 전에 보관 */ S.weekly = t.value; t.dataset.prev = t.value; const saved = saveLocal(); const w = $('#wkSaved'); if (w) { w.classList.toggle('on', saved); w.textContent = saved ? '자동 저장됨' : '저장 실패 · 내용을 복사하세요'; } }
     else if (t.id === 'palq') palRender(t.value);
   });
   root.addEventListener('compositionend', e => { const t = e.composedPath()[0]; if (t.id === 'qfilter') { S.filter.q = t.value; refreshQueue(); } });

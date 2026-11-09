@@ -27,17 +27,19 @@
         return v === null ? d : JSON.parse(v);
       } catch { return d; }
     },
-    set(k, v) { if (currentKey === 'default' && /^(patterns|macros|actionHistory)$/.test(k)) return; try { localStorage.setItem(getPrefix() + k, JSON.stringify(v)); } catch {} },
+    set(k, v) { if (currentKey === 'default' && /^(patterns|macros|actionHistory)$/.test(k)) return false; try { localStorage.setItem(getPrefix() + k, JSON.stringify(v)); return true; } catch { return false; } },
     del(k) { try { localStorage.removeItem(getPrefix() + k); } catch {} },
   };
   function switchUserStorage(newEmpKey) {
     if (!newEmpKey || newEmpKey === currentKey) return false;
     currentKey = newEmpKey;
     reloadUserState();
+    clearUserViews();
+    localBaseline = localValues();
     return true;
   }
   const DEFAULT_SETTINGS = {refreshMin: 5, notify: false, budget: [], urgentWords: [], mailCount: 100, days: 14, fontSize: 'm', theme: 'light', paneWidth: 560, beginner: true, tourDone: false};
-  const migrateTodos = list => (Array.isArray(list) ? list : []).map(t => ({id: t.id || `t${t.at || Date.now()}${Math.random().toString(36).slice(2, 6)}`, title: t.title, due: t.due || '', status: t.status || (t.done ? 'done' : 'todo'), source: t.source || '', key: t.key || '', url: t.url || '', at: t.at || Date.now()}));
+  const migrateTodos = list => (Array.isArray(list) ? list : []).map((t, i) => ({id: t.id || `t${t.at || 0}_${i}`, title: t.title, due: t.due || '', status: t.status || (t.done ? 'done' : 'todo'), source: t.source || '', key: t.key || '', url: t.url || '', at: t.at || Date.now()}));
   const S = {
     userKey: currentKey,
     settings: {...DEFAULT_SETTINGS, budget: [], ...store.get('settings', {})},
@@ -46,7 +48,7 @@
     history: store.get('history', []), routing: store.get('routing', null), forms: store.get('forms', null),
     raw: null, a: null, view: 'today', loading: false, error: '', lastRefresh: null, pendingRefresh: false,
     filter: {area: 'all', level: 'all', q: '', onlyNew: false, showHidden: false}, multi: new Set(), lastClickKey: '',
-    apTab: 'pending', apMore: {}, mailFilter: 'all', mailGroup: false,
+    apTab: 'pending', apMore: {}, apPages: {}, apBusy: {}, apEpoch: 0, mailFilter: 'all', mailGroup: false,
     sel: null, pane: {url: '', mounted: '', expanded: false, extract: null, preview: null},
     focus: null,
     search: {kw: '', types: ['doc', 'mail', 'board', 'file', 'person'], period: '', res: null, busy: false, more: {}}, mailSearch: {kw: '', res: null},
@@ -71,10 +73,83 @@
     S.weekly = store.get('weekly', '');
     S.errors = store.get('errors', []);
   }
-  const saveLocal = () => {
-    store.set('hidden', S.hidden); store.set('snooze', S.snooze); store.set('plan', S.plan); store.set('todos', S.todos); store.set('settings', S.settings);
-    store.set('newKeys', [...S.newKeys]); store.set('activity', S.activity.slice(-150)); store.set('seenActivity', S.seenActivity); store.set('history', S.history.slice(-40)); store.set('weekly', S.weekly);
+  function clearUserViews() {
+    S.apMore = {}; S.apPages = {}; S.apBusy = {}; S.apEpoch++;
+    S.sel = null; S.pane = {url: '', mounted: '', expanded: false, extract: null, preview: null};
+    S.focus = null; S.multi.clear(); S.undo = []; S.raw = null; S.a = null;
+    previewCache.clear(); routingFailAt = 0; S.mailDet = {}; S.mailDetBusy = {}; S.bodyOpen = false;
+    S.search = {kw: '', types: ['doc', 'mail', 'board', 'file', 'person'], period: '', res: null, busy: false, more: {}};
+    S.mailSearch = {kw: '', res: null}; S.team = {}; S.res = null; S.expBar = null; S.aiHist = [];
+    S.att = {month: '', rows: null, busy: false, seq: (S.att?.seq || 0) + 1, day: ''};
+    S.budget = {project: '', filter: '', table: null, ledger: null, monthly: null, month: '', busy: false, q: '', seq: (S.budget?.seq || 0) + 1};
+    if (typeof $ === 'function') { const frame = $('#frame'); if (frame) frame.replaceChildren(); const overlay = $('#overlay'); if (overlay) overlay.replaceChildren(); }
+    S.paletteOpen = false; S.helpOpen = false; S.menuOpen = '';
+  }
+  const localValues = () => JSON.parse(JSON.stringify({hidden: S.hidden, snooze: S.snooze, plan: S.plan, todos: S.todos, settings: S.settings, newKeys: [...S.newKeys], activity: S.activity.slice(-150), seenActivity: S.seenActivity, history: S.history.slice(-40), weekly: S.weekly}));
+  const localEmpty = {hidden: {}, snooze: {}, plan: {}, todos: [], settings: {...DEFAULT_SETTINGS, budget: []}, newKeys: [], activity: [], seenActivity: 0, history: [], weekly: ''};
+  let localBaseline = localValues();
+  const sameLocal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  function mergeLocal(base, local, remote) {
+    if (sameLocal(local, base)) return remote;
+    if (sameLocal(remote, base) || sameLocal(local, remote)) return local;
+    if (Array.isArray(local) && Array.isArray(remote) && Array.isArray(base)) {
+      const id = x => x && typeof x === 'object' ? x.id || x.key || x.date || (x.at && String(x.at)) : String(x);
+      if ([...base, ...local, ...remote].every(x => id(x))) {
+        const bm = new Map(base.map(x => [id(x), x])), lm = new Map(local.map(x => [id(x), x])), rm = new Map(remote.map(x => [id(x), x]));
+        return [...new Set([...lm.keys(), ...rm.keys()])].flatMap(k => {
+          if (bm.has(k) && (!lm.has(k) || !rm.has(k))) return [];
+          return [mergeLocal(bm.get(k), lm.get(k), rm.get(k))];
+        }).filter(x => x !== undefined);
+      }
+    }
+    if (base && local && remote && !Array.isArray(local) && typeof local === 'object' && typeof remote === 'object') {
+      const out = {};
+      for (const k of new Set([...Object.keys(base), ...Object.keys(local), ...Object.keys(remote)])) {
+        if (k in base && (!(k in local) || !(k in remote))) continue;
+        const v = mergeLocal(base[k], local[k], remote[k]); if (v !== undefined) out[k] = v;
+      }
+      return out;
+    }
+    return local;
+  }
+  // Stored values read with the same clean-up as startup (defaults merged into settings, legacy 'done' marks, stable to-do ids).
+  function loadLocal(k) {
+    if (k === 'settings') return {...DEFAULT_SETTINGS, budget: [], ...store.get('settings', {})};
+    if (k === 'hidden') return store.get('hidden', store.get('done', {}));
+    if (k === 'todos') return migrateTodos(store.get('todos', []));
+    return store.get(k, localEmpty[k]);
+  }
+  // Merges this tab's changes with what other tabs stored. A key that cannot be saved stays pending (its baseline is kept),
+  // and the other keys are still written. Returns true only when everything was saved.
+  function syncLocal(write = false) {
+    const local = localValues(), next = {}, remote = {}, failed = new Set();
+    for (const k of Object.keys(local)) {
+      remote[k] = loadLocal(k);
+      next[k] = mergeLocal(localBaseline[k], local[k], remote[k]);
+      if (k === 'weekly' && local[k] !== localBaseline[k] && remote[k] !== localBaseline[k] && local[k] !== remote[k] && remote[k]) {
+        if (!store.set('weeklyRecovery', {at: Date.now(), text: remote[k]}) && write) { failed.add(k); next[k] = local[k]; continue; } // never replace the other draft unless a copy is kept
+      }
+      if (write && !sameLocal(next[k], remote[k]) && !store.set(k, next[k])) failed.add(k);
+    }
+    Object.assign(S, next, {newKeys: new Set(next.newKeys)});
+    const fresh = localValues();
+    localBaseline = write ? Object.fromEntries(Object.keys(fresh).map(k => [k, failed.has(k) ? localBaseline[k] : fresh[k]])) : JSON.parse(JSON.stringify(remote));
+    if (write) {
+      S.storageError = failed.size > 0;
+      if (failed.size && typeof toast === 'function') toast('브라우저에 저장하지 못한 항목이 있습니다. 자료를 복사한 뒤 저장 공간·브라우저 설정을 확인하세요.');
+    }
+    return failed.size === 0;
+  }
+  const saveLocal = () => syncLocal(true);
+  const onStorage = e => {
+    if (e.key !== null && !e.key.startsWith(getPrefix())) return;
+    if (getUserKey() !== currentKey) return;
+    const before = JSON.stringify(localValues());
+    syncLocal();
+    if (JSON.stringify(localValues()) !== before) S.undo = []; // 되돌리기 기록은 다른 탭의 변경을 지울 수 있다
+    if (S.open && !isUserBusy()) { if (S.raw) reanalyze(); render(); } else S.pendingRefresh = true;
   };
+  window.addEventListener('storage', onStorage);
 
   // ---------- helpers ----------
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));

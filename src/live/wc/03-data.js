@@ -22,7 +22,8 @@
   function loadForms() {
     if (S.forms && S.forms.list && Date.now() - (S.forms.at || 0) < 864e5) return;
     if (typeof GW.frequentForms !== 'function') return;
-    GW.frequentForms().then(l => { const list = Array.isArray(l) ? l : (l && l.list) || []; S.forms = {list, at: Date.now()}; store.set('forms', S.forms); }).catch(() => {});
+    const owner = currentKey;
+    GW.frequentForms().then(l => { if (owner !== currentKey) return; const list = Array.isArray(l) ? l : (l && l.list) || []; S.forms = {list, at: Date.now()}; store.set('forms', S.forms); }).catch(() => {});
   }
   function logError(where, msg) { S.errors = [...(S.errors || []), {at: Date.now(), where, msg: String(msg).slice(0, 300)}].slice(-30); store.set('errors', S.errors); }
   function ingest(raw) {
@@ -33,6 +34,8 @@
         S.sel = null; S.pane.url = ''; S.pane.expanded = false; S.multi.clear();
       }
     }
+    syncLocal();
+    S.apMore = {}; S.apPages = {}; S.apBusy = {}; S.apEpoch++;
     const prev = store.get('state', null);
     const usablePrev = prev && prev.at && Date.parse(prev.at) < Date.parse(raw.collectedAt) ? prev : null;
     const a = R.analyze(raw, usablePrev, new Date(), {roles: S.settings.roles});
@@ -107,8 +110,9 @@
     if (fresh && !force) return S.routing;
     if (routingP) return routingP;
     if (!force && routingFailedRecently()) return S.routing;
+    const owner = currentKey;
     routingP = (async () => {
-      try { S.routing = await GW.routingHistory({days: 180, size: 500}); store.set('routing', S.routing); routingFailAt = 0; } catch (e) { routingFailAt = Date.now(); toast('배부·접수 이력을 읽지 못했습니다: ' + e.message); }
+      try { const rows = await GW.routingHistory({days: 180, size: 500}); if (owner !== currentKey) return null; S.routing = rows; store.set('routing', S.routing); routingFailAt = 0; } catch (e) { if (owner !== currentKey) return null; routingFailAt = Date.now(); toast('배부·접수 이력을 읽지 못했습니다: ' + e.message); }
       return S.routing;
     })();
     try { return await routingP; } finally { routingP = null; }

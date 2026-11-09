@@ -31,5 +31,5 @@
   }
   function close() { if (backArmed) { backArmed = false; try { history.back(); } catch {} } S.open = false; host.style.display = 'none'; fab.style.display = 'block';
     if (!S.settings.fabTipShown || (S.settings.fabTipCount || 0) < 3) { S.settings.fabTipCount = (S.settings.fabTipCount || 0) + 1; S.settings.fabTipShown = true; saveLocal(); tipBubble.style.display = 'block'; clearTimeout(tipTimer); tipTimer = setTimeout(() => { tipBubble.style.display = 'none'; }, 6000); } document.title = prevTitle; closeOverlay(); }
-  function destroy() { clearInterval(timer); document.removeEventListener('keydown', onDocKey, true); window.removeEventListener('resize', onResize); window.removeEventListener('popstate', onPop); host.remove(); fab.remove(); tipBubble.remove(); }
+  function destroy() { clearInterval(timer); document.removeEventListener('keydown', onDocKey, true); window.removeEventListener('resize', onResize); window.removeEventListener('popstate', onPop); window.removeEventListener('storage', onStorage); host.remove(); fab.remove(); tipBubble.remove(); }
 

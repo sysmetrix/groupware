@@ -36,10 +36,12 @@ export async function readJsonFile(file, limit = 5 * 1024 * 1024) {
     catch { throw new AppError('UTF-8 JSON 형식이 필요합니다.'); }
   } finally { await handle.close(); }
 }
+// Shared so size checks measure exactly the bytes atomicJson writes.
+export const jsonText = value => JSON.stringify(value, null, 2);
 export async function atomicJson(file, value) {
   await fs.mkdir(path.dirname(file), {recursive: true, mode: 0o700});
   const temp = file + '.' + randomUUID() + '.tmp';
-  try { await fs.writeFile(temp, JSON.stringify(value, null, 2), {flag: 'wx', mode: 0o600}); await fs.rename(temp, file); }
+  try { await fs.writeFile(temp, jsonText(value), {flag: 'wx', mode: 0o600}); await fs.rename(temp, file); }
   finally { await fs.rm(temp, {force: true}); }
 }
 const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -67,7 +69,7 @@ export async function createAutomation({store, dataDir, configFile, root = proce
       const dataset = validateDataset(await readJsonFile(config.inputFile)); requireFresh(dataset, time);
       const hash = digest(dataset);
       const current = store.snapshot().dataset;
-      if (current.source.kind === 'manual-export' && current.principal.userId === dataset.principal.userId && current.principal.organizationId === dataset.principal.organizationId && current.source.baseUrl === dataset.source.baseUrl && Date.parse(dataset.source.exportedAt) < Date.parse(current.source.exportedAt)) throw new AutomationError('SOURCE_ROLLBACK', '현재 자료보다 오래된 내보내기 파일로 자동 교체할 수 없습니다.');
+      if (['manual-export', 'browser-snapshot'].includes(current.source.kind) && current.principal.userId === dataset.principal.userId && current.principal.organizationId === dataset.principal.organizationId && current.source.baseUrl === dataset.source.baseUrl && Date.parse(dataset.source.exportedAt) < Date.parse(current.source.exportedAt)) throw new AutomationError('SOURCE_ROLLBACK', '현재 자료보다 오래된 내보내기 파일로 자동 교체할 수 없습니다.');
       if (hash !== digest(store.snapshot().dataset)) await store.replace(dataset);
       const snapshot = store.snapshot();
       // A manual import can supersede this run; never publish results for a different snapshot.

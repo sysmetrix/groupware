@@ -5,7 +5,8 @@
 
   const ATT_FORM = {trip: '출장신청서', leave: '연차휴가신청서', overtime: '연장근무신청서'};
   const ATT_LEAVE_KINDS = ['연차', '오전반차', '오후반차', '대체휴가', '보상휴가', '외출', '조퇴'];
-  const attYmd = s => { const v = String(s || '').trim(); if (!v) return ''; if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v; const p = parseKoreanDate(v); if (p) return p.iso; const m = v.match(/^(\d{1,2})[./-](\d{1,2})$/); if (m) { const y = R.kstNow(new Date()).y; return `${y}-${String(m[1]).padStart(2, '0')}-${String(m[2]).padStart(2, '0')}`; } return ''; };
+  // 날짜 검증·연도 판단은 parseKoreanDate 한 곳에서 한다(2/30 거부, 적은 연도 우선). '11-20'만 여기서 11/20으로 바꿔 넘긴다.
+  const attYmd = s => { const v = String(s || '').trim(); const p = v && parseKoreanDate(v.replace(/^(\d{1,2})-(\d{1,2})$/, '$1/$2')); return p ? p.iso : ''; };
 
   async function quickAttendanceApplication(type, preset = {}) {
     if (!ATT_FORM[type]) return;
@@ -50,8 +51,7 @@
 
   async function fillAttendanceForm(spec) {
     const url = GW.links.route(GW.routes.attendanceRequest);
-    openUrl(url, {title: `근태신청: ${ATT_FORM[spec.type]}`});
-    if (S.pane.url !== url) return;
+    if (!openUrl(url, {title: `근태신청: ${ATT_FORM[spec.type]}`})) return; // 이동을 취소함(같은 화면이어도): 아무 칸도 건드리지 않는다
     S.pane.expanded = true; renderPane();
     toast(`${ATT_FORM[spec.type]}을 여는 중…`);
     const vis = e => { const q = e.getBoundingClientRect(); return q.width > 0 && q.height > 0; };
@@ -59,6 +59,8 @@
     let f = null, d = null, w = null;
     for (let i = 0; i < 40 && S.pane.url === url; i++) { await wait(500); f = $('#frame iframe'); try { d = f && f.contentDocument; w = f && f.contentWindow; } catch {} if (d && leaf(d, ATT_FORM[spec.type])) break; d = null; }
     if (!d) { if (S.pane.url === url) toast('근태신청서 화면을 열지 못했습니다. 화면에서 직접 고르세요.'); return; }
+    // 이미 열린 신청서(입력 중일 수 있음)에 덮어쓰지 않는다. 방금 새로 연 화면이면 이 창은 뜨지 않는다.
+    if (leaf(d, '신청정보') && !confirm('근태신청 화면에 이미 열려 있는 신청서가 있습니다. 자동 기입으로 덮어쓸까요?')) { toast('열려 있는 신청서를 그대로 두었습니다.'); return; }
     installGuard(w); AUTO.running = true; AUTO.blocked = []; AUTO.tok = {};
     const steps = [];
     const step = (name, ok, detail = '') => steps.push({name, ok: !!ok, detail});

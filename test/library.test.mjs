@@ -206,3 +206,56 @@ test('persistent library-specific corruption is rejected before orphan cleanup',
   await assert.rejects(createLibrary(dir), /손상/);
   await fs.access(orphan);
 });
+
+test('a missing original is flagged, does not block uploads, and the same file restores it in place', async t => {
+  let extractions = 0;
+  const {library, dir} = await fixture(t, async file => {
+    extractions += 1; const bytes = await fs.readFile(file);
+    return {schemaVersion: 1, filename: path.basename(file), format: 'xlsx', sha256: createHash('sha256').update(bytes).digest('hex'), warnings: ['XLSX_RAW_CELL_VALUES'], units: [{id: 'B2', location: {sheet: '합성', cell: 'B2'}, text: '1000'}]};
+  });
+  const lost = await library.add('lost.xlsx', Buffer.from('lost'));
+  assert.equal(lost.documents[0].missing, false);
+  const original = path.join(dir, 'files', lost.id + '.xlsx');
+  await fs.rm(original);
+  const next = await library.add('next.xlsx', Buffer.from('next'));
+  assert.deepEqual(next.documents.map(doc => [doc.id, doc.missing]), [[lost.id, true], [next.id, false]]);
+  await assert.rejects(library.original(lost.id), error => error.status === 409);
+  const restarted = await createLibrary(dir, {extract: async () => { throw new Error('restore must not re-extract'); }});
+  assert.equal(restarted.list().documents.find(doc => doc.id === lost.id).missing, true);
+  const {dataset: evidence, revision} = restarted.snapshot();
+  const restored = await restarted.add('renamed.xlsx', Buffer.from('lost'));
+  assert.equal(restored.restored, true); assert.equal(restored.duplicate, true); assert.equal(restored.id, lost.id);
+  assert.equal(restored.revision, revision);
+  assert.deepEqual(restarted.snapshot().dataset, evidence);
+  assert.equal(restarted.list().documents.find(doc => doc.id === lost.id).missing, false);
+  assert.equal((await restarted.original(lost.id)).content.toString(), 'lost');
+  assert.equal(extractions, 2);
+  assert.deepEqual((await fs.readdir(path.join(dir, 'files'))).sort(), [lost.id + '.xlsx', next.id + '.xlsx'].sort());
+  const again = await restarted.add('lost.xlsx', Buffer.from('lost'));
+  assert.equal(again.duplicate, true); assert.equal(again.restored, undefined);
+});
+
+test('restoring a missing original respects the aggregate quota and leaves no partial file', async t => {
+  const {library, dir} = await fixture(t);
+  const lost = await library.add('lost.xlsx', Buffer.from('lost'));
+  const big = await library.add('big.xlsx', Buffer.from('big'));
+  const original = path.join(dir, 'files', lost.id + '.xlsx'), bigFile = path.join(dir, 'files', big.id + '.xlsx');
+  await fs.rm(original);
+  const stat = fs.stat;
+  const statMock = t.mock.method(fs, 'stat', async (file, ...args) => file === bigFile ? {size: 200 * 1024 * 1024} : stat(file, ...args));
+  await assert.rejects(library.add('lost.xlsx', Buffer.from('lost')), /200 MB/);
+  await assert.rejects(fs.access(original), {code: 'ENOENT'});
+  assert.deepEqual((await fs.readdir(path.join(dir, 'files'))).sort(), [big.id + '.xlsx'].sort());
+  assert.equal(library.list().documents.find(doc => doc.id === lost.id).missing, true);
+  statMock.mock.restore();
+  assert.equal((await library.add('lost.xlsx', Buffer.from('lost'))).restored, true);
+  assert.equal(library.list().revision, big.revision);
+});
+test('other original stat errors still refuse an upload without publishing it', async t => {
+  const {library, dir} = await fixture(t);
+  const added = await library.add('kept.xlsx', Buffer.from('kept'));
+  t.mock.method(fs, 'stat', async () => { throw Object.assign(new Error('synthetic stat denied'), {code: 'EACCES'}); });
+  await assert.rejects(library.add('blocked.xlsx', Buffer.from('blocked')), /stat denied/);
+  assert.equal(library.list().revision, added.revision);
+  assert.deepEqual(await fs.readdir(path.join(dir, 'files')), [added.id + '.xlsx']);
+});

@@ -1,4 +1,5 @@
 import {AppError, object, string, validateDataset, visibleItems} from './schema.mjs';
+import {jsonText} from './automation.mjs';
 
 export class SyncError extends AppError {
   constructor(code, message) { super(message, 409); this.code = code; }
@@ -79,6 +80,8 @@ export async function collectPages({scope: rawScope, expectedScope, previous = n
   if (!done || !pageCount) fail('INCOMPLETE', '마지막 페이지를 확인하지 못했습니다.');
   if (received !== declaredTotal) fail('TOTAL_MISMATCH', '전체 수집 건수가 일치하지 않습니다.');
   const dataset = scopedDataset({...header, items: [...records.values()]}, scope);
-  if (Buffer.byteLength(JSON.stringify(dataset)) > 5 * 1024 * 1024) fail('SIZE_LIMIT', '완성된 자료가 5 MB를 초과했습니다.');
-  return {state: {schemaVersion: 1, scope, checkpoint, dataset}, summary: {mode, pageCount, received, visibleCount: dataset.items.length}};
+  const state = {schemaVersion: 1, scope, checkpoint, dataset};
+  // Measure the pretty bytes atomicJson writes: readers cap the dataset at 5 MB and the state at 6 MB.
+  if (Buffer.byteLength(jsonText(dataset)) > 5 * 1024 * 1024 || Buffer.byteLength(jsonText(state)) > 6 * 1024 * 1024) fail('SIZE_LIMIT', '완성된 자료가 저장 한도(자료 5 MB·상태 6 MB)를 초과했습니다.');
+  return {state, summary: {mode, pageCount, received, visibleCount: dataset.items.length}};
 }

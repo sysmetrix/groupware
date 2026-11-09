@@ -5,7 +5,7 @@
   function schedule() {
     clearInterval(timer);
     const m = Number(S.settings.refreshMin || 0);
-    if (m > 0) timer = setInterval(() => refresh({silent: true}), m * 60_000);
+    if (m > 0) timer = setInterval(() => { if (document.visibilityState !== 'hidden' || S.settings.notify) refresh({silent: true}); }, m * 60_000); // 보이지 않는 탭은 알림을 켠 경우에만 조회
   }
   const onDocKey = e => {
     if (e.altKey && e.code === 'KeyG') { e.preventDefault(); e.stopPropagation(); S.open ? close() : open(); return; }

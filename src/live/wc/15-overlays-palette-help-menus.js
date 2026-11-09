@@ -14,7 +14,7 @@
     const cmds = [];
     const qq = q.trim();
     const add = (label, hint, run, extra = '', icon = 'play') => cmds.push({label, hint, run, icon, text: label + ' ' + hint + ' ' + extra});
-    const VIEW_WORDS = {today: '할 일 오늘 긴급 대시보드', approval: '배부 접수 결재 발송 열람 공문 문서유통', mail: '메일 답장 받은메일', search: '검색 찾기', board: '할 일 계획 보드', calendar: '일정 달력 기한', budget: '예산 집행 결의 예실', attendance: '근태 연차 휴가 출근 퇴근', report: '보고서 주간 브리핑 실적', settings: '설정 글자 테마 알림'};
+    const VIEW_WORDS = {today: '할 일 오늘 긴급 대시보드', approval: '배부 접수 결재 발송 열람 공문 문서유통', mail: '메일 답장 받은메일', search: '검색 찾기', board: '할 일 계획 보드', calendar: '일정 달력 기한', gcal: '구글 일정 캘린더 google calendar 내 일정', budget: '예산 집행 결의 예실', attendance: '근태 연차 휴가 출근 퇴근', report: '보고서 주간 브리핑 실적', settings: '설정 글자 테마 알림'};
     for (const v of VIEWS) add(`${v.label}`, '화면으로 이동', () => go(v.id), VIEW_WORDS[v.id] || '', VIEW_ICON[v.id]);
     add('연속 처리 시작', '처리할 일을 하나씩', () => startFocus(), '처리 모드');
     add('새로고침', '자료 다시 읽기', () => refresh());
@@ -33,6 +33,7 @@
     add('출장 신청', '근태신청', () => quickAttendanceApplication('trip'), '관내 관외 출장');
     add('연차·반차 신청', '근태신청', () => quickAttendanceApplication('leave'), '휴가 대체');
     add('시간외·휴일근무 신청', '근태신청', () => quickAttendanceApplication('overtime'), '연장 야근');
+    if (allowed('googleCalendar')) add('구글 일정', '내 Google 캘린더 보기', () => go('gcal'), '구글 캘린더 google calendar 내 일정 스케줄');
     add('차량 예약', '자원 예약', () => go('resource'), '관용차 자원 예약');
     if (allowed('aiAssistant')) add('AI 도우미', '우선순위·질문', () => openAi(), 'gemini 인공지능');
     if (allowed('aiConsole')) add('빠른 업무 실행', '말로 시키기', () => openCommandConsole(qq), '명령 콘솔 지시');

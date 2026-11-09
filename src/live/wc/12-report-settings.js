@@ -5,6 +5,7 @@
     return `${pgh('보고서', '한글(HWP)·워드에 붙여넣으면 굵게·표가 유지됩니다')}
 <div class="cards"><div class="card2"><div class="ct">주간 업무 실적 초안</div><div class="muted">최근 7일 상신문서와 내가 접수한 문서로 만듭니다.</div><div class="acts"><button class="btn primary" data-act="mkWeekly">${ic('report')}${S.weekly ? '다시 만들기' : '초안 만들기'}</button>${S.weekly ? `<button class="btn" data-act="richWeekly">한글용 복사</button><button class="btn" data-act="dlWeekly">${ic('down')}TXT 저장</button>` : ''}</div></div>
 <div class="card2"><div class="ct">오늘 브리핑</div><div class="muted">처리할 일과 참고 항목을 한 장으로 정리합니다.</div><div class="acts"><button class="btn primary" data-act="richBrief">한글용 복사</button><button class="btn" data-act="printBrief">인쇄·PDF</button><button class="btn" data-act="dlBrief">${ic('down')}HTML 저장</button><button class="btn" data-act="csvQueue">${ic('down')}엑셀(CSV)</button></div></div></div>
+${store.get('weeklyRecovery', null) ? `<div class="box warn">다른 탭에서 작성한 주간 보고 초안이 보관되어 있습니다. <button class="btn sm" data-act="recoverWeekly">보관 초안 복구</button></div>` : ''}
 ${S.weekly ? `<h2>주간 업무 실적 초안 <span class="saved on" id="wkSaved">${ic('check')}자동 저장됨</span></h2><textarea id="weekly" aria-label="주간 업무 실적 초안" rows="${Math.min(30, Math.max(10, S.weekly.split('\n').length + 2))}">${esc(S.weekly)}</textarea>` : ''}
 <h2>오늘 브리핑 미리보기</h2><iframe id="briefFrame" title="오늘 브리핑" sandbox="allow-popups allow-popups-to-escape-sandbox allow-modals" style="width:100%;height:640px;border:1px solid var(--line);border-radius:12px;background:#fff"></iframe>`;
   }

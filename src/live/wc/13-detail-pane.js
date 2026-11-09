@@ -138,7 +138,7 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
     const waiting = ['distWaiting', 'deptWaiting'].includes(kind);
     const pv = waiting ? {found: false} : S.pane.preview && S.pane.preview.key === (d.docNo || d.title) ? S.pane.preview.data : null;
     const pvBox = `<div class="box" id="pvbox">${pv === null ? '<span class="muted"><span class="spin"></span> 열람 기록 없이 미리보기를 찾는 중…</span>' : pv.found ? `<b>미리보기</b> <span class="muted">통합검색 색인에서 읽음 · 열람 기록 없음</span>${(() => { const dl = R.extractAllDeadlines(pv.text || '').filter(x => x.dday >= -1); return dl.length ? `<div>${dl.map(x => `<span class="pill ${x.dday <= 1 ? 'solid' : 'medium'}" title="${esc(x.context)}">${esc(x.date.slice(5))} ${ddayText(x.dday)}</span>`).join('')}</div>` : ''; })()}<div class="pv">${esc((pv.text || '').slice(0, 2500))}</div>${pv.files && pv.files.length ? `<div class="muted">첨부: ${pv.files.map(f => esc(f.name)).join(', ')}</div>` : ''}` : `<span class="muted">미리보기 없음: ${['distWaiting', 'deptWaiting'].includes(kind) ? '접수·배부 전 문서는 통합검색 색인에 아직 없어 원문으로만 볼 수 있습니다.' : '통합검색 색인에서 이 문서를 찾지 못했습니다.'}</span>`}</div>`;
-    if (pv === null) loadPreview(d).then(p => { S.pane.preview = {key: d.docNo || d.title, data: p}; const b = $('#pvbox'); if (b && S.sel) renderPane(); });
+    if (pv === null) { const owner = currentKey; loadPreview(d).then(p => { if (owner !== currentKey) return; S.pane.preview = {key: d.docNo || d.title, data: p}; const b = $('#pvbox'); if (b && S.sel) renderPane(); }); }
     const warn = d.unread ? '<div class="box warn">아직 열람하지 않은 문서입니다. 처리 창에 열면 그룹웨어에 열람으로 기록됩니다.</div>' : '';
     const title = d.title || (action && action.title) || '';
     return {title, url, body: `${why || ''}<div class="kv"><b>구분</b><span>${esc((S.a.approval.lists[kind] || {}).label || kind)}</span><b>문서번호</b><span>${esc(d.docNo || '-')}</span><b>보낸 곳</b><span>${esc(d.sender || '-')}</span><b>기안·담당</b><span>${esc([d.drafterDept, d.drafter, d.toEmp].filter(Boolean).join(' ') || '-')}</span><b>상태</b><span>${esc(d.status || '-')}</span><b>일시</b><span>${esc(d.date || '-')}</span><b>첨부</b><span>${d.attachments || 0}개</span>${action && action.deadline ? `<b>기한</b><span>${esc(action.deadline.date)}${action.deadline.time ? ' ' + esc(action.deadline.time) : ''} (${ddayText(action.deadline.dday)})</span>` : ''}</div>${recBox}${warn}${actsFor(url, {key: action ? action.key : `doc:${kind}:${d.docId}`, q: relatedQ(title), title, unread: d.unread})}${pvBox}<div class="box" id="extract">${extractHtml()}</div>`};
@@ -153,16 +153,20 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
     S.mailDet = S.mailDet || {}; S.mailDetBusy = S.mailDetBusy || {};
     if (S.mailDet[m.uid] && !S.mailDet[m.uid].error) return S.mailDet[m.uid];
     if (S.mailDetBusy[m.uid]) return S.mailDetBusy[m.uid];
+    const owner = currentKey, epoch = S.apEpoch;
     S.mailDetBusy[m.uid] = (async () => {
       try {
         const r = await GW.mailDetail({uid: m.uid, seen: m.seen === true, allowMarkRead});
+        if (owner !== currentKey || epoch !== S.apEpoch) return r;
         S.mailDet[m.uid] = r;
         if (allowMarkRead) m.seen = true;
         return r;
       } catch (e) {
+        if (owner !== currentKey || epoch !== S.apEpoch) return {error: e.message};
         S.mailDet[m.uid] = {error: e.message};
         return S.mailDet[m.uid];
       } finally {
+        if (owner !== currentKey || epoch !== S.apEpoch) return;
         delete S.mailDetBusy[m.uid];
         if (S.sel && (S.sel.uid === m.uid || (S.sel.key || '').endsWith(':' + m.uid))) renderPane();
       }
@@ -264,10 +268,14 @@ ${mailFilesBox(m)}
     else renderMain();
     renderPane();
   }
+  // 실제로 열었으면 true. 호출하는 쪽은 false면 화면에 아무것도 쓰지 말고 멈춘다.
   function openUrl(url, {title = '', unread = false, what = '문서'} = {}) {
-    if (!url) return;
-    if (url !== S.pane.url && !leavePane()) return;
-    if (unread && !confirm(`아직 읽지 않은 ${what}입니다. 처리 창에 열면 그룹웨어에 읽음(열람)으로 기록될 수 있습니다. 열까요?`)) return;
+    if (!url) return false;
+    // 같은 화면이어도 입력 중이면 묻는다. 버리기로 했으면 새로 열어 자동 기입이 사용자의 입력 위에 쓰지 않게 한다.
+    const discard = !!(S.pane.dirty && S.pane.url === url);
+    if (!leavePane()) return false;
+    if (unread && !confirm(`아직 읽지 않은 ${what}입니다. 처리 창에 열면 그룹웨어에 읽음(열람)으로 기록될 수 있습니다. 열까요?`)) return false;
+    if (discard) S.pane.mounted = '';
     if (!S.sel) S.sel = {type: 'frame', title: title || '그룹웨어 화면', url};
     S.pane.url = url; S.pane.extract = null;
     // Full groupware screens (근태신청, 메일함, 결재작성) need width: open the pane wide.
@@ -278,6 +286,7 @@ ${mailFilesBox(m)}
       S.pane.expanded = false;
     }
     renderPane();
+    return true;
   }
   // Would opening this item record a read/열람 in the groupware?
   function marksRead(x) {

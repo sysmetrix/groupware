@@ -6,6 +6,7 @@ import path from 'node:path';
 import {createStore} from '../src/store.mjs';
 import {createDemoDataset} from '../src/demo.mjs';
 import {createAutomation, defaultAutomation, atomicJson, validateAutomation, readJsonFile} from '../src/automation.mjs';
+import {itemTypes, validateDataset} from '../src/schema.mjs';
 
 async function fixture(t, overrides = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'groupware-auto-'));
@@ -154,4 +155,19 @@ test('disabled and invalid automation settings fail explicitly', async t => {
   const f = await fixture(t, {enabled: false}); await assert.rejects(f.automation.run(), /설정/);
   for (const override of [{intervalSeconds: 0}, {briefingTime: '25:00'}, {maxAgeHours: 0}, {expectedPrincipal: {userId: '', organizationId: ''}, enabled: true}, {extra: true}]) assert.throws(() => validateAutomation({...defaultAutomation, ...override}, f.root));
   const huge = path.join(f.root, 'huge.json'); await fs.writeFile(huge, 'x'.repeat(100)); await assert.rejects(readJsonFile(huge, 10), /최대/);
+});
+
+test('an older export cannot replace a newer browser-snapshot of the same principal and origin', async t => {
+  const f = await fixture(t), baseUrl = 'https://example.invalid';
+  const count = type => f.dataset.items.filter(item => item.type === type).length;
+  const browser = validateDataset({...f.dataset, source: {kind: 'browser-snapshot', label: '합성 화면 조회', exportedAt: '2026-10-22T00:04:00Z', baseUrl,
+    coverage: itemTypes.map(type => ({type, state: 'complete', query: '합성 조회', collected: count(type), total: count(type), url: baseUrl + '/list'}))}});
+  await f.store.replace(browser); const {revision} = f.store.snapshot();
+  f.dataset.source.baseUrl = baseUrl; f.dataset.source.exportedAt = '2026-10-22T00:00:00Z'; await atomicJson(f.inputFile, f.dataset);
+  const state = await f.automation.run();
+  assert.equal(state.errorCode, 'SOURCE_ROLLBACK'); assert.equal(state.reportAvailable, false);
+  assert.deepEqual(f.store.snapshot(), {dataset: browser, revision});
+  f.dataset.source.exportedAt = '2026-10-22T00:05:00Z'; await atomicJson(f.inputFile, f.dataset);
+  assert.equal((await f.automation.run()).outcome, 'completed');
+  assert.equal(f.store.snapshot().dataset.source.kind, 'manual-export');
 });

@@ -1,10 +1,4 @@
 {
-  "note": "환경 때문에 실패하는 것으로 확인된 테스트. 하네스는 이를 실패가 아닌 주의로 보고한다. 원인을 고치면 항목을 지운다.",
-  "tests": [
-    {
-      "since": "2026-11-09",
-      "reason": "python 의존 패키지(pypdf 계열 jbig2dec)가 이 PC의 python 버전에서 import 오류: TypeError: 'jbig2dec_binary' is a field but has no type annotation",
-      "name": "real PDF/XLSX/HWPX upload"
-    }
-  ]
+  "note": "환경 때문에 실패하는 것으로 확인된 테스트만 격리한다. 항목마다 name(정확한 테스트 이름), file(test/로 시작하는 파일 경로), signature(실패 메시지에 나타나야 하는 정규식), reason, since 가 모두 있어야 하며, 하나라도 다르면 실패로 처리한다. 원인을 고치면 항목을 지운다. (2026-11-10: 'real PDF/XLSX/HWPX upload' 항목은 원인이 실행 앱이 넘겨준 PYTHONHOME 으로 확인되어, 하네스가 테스트 프로세스 환경에서 PYTHONHOME 을 빼도록 고치고 삭제함)",
+  "tests": []
 }

@@ -4,7 +4,7 @@
   // ---------- 관리자 정책 (확장 폴더의 policy.js가 window.BWYFGW_POLICY로 지정) ----------
   const POLICY = R.normalizePolicy(window.BWYFGW_POLICY);
   const NOTICE_VER = '1';
-  const FEATURE_NAME = {briefing: '업무 브리핑', teamAttendance: '직원 근태 달력', aiAssistant: 'AI 도우미', resource: '자원 예약', draftResult: '결과보고 기안', draftPlan: '계획서 기안', draftPay: '지급 건의 기안', draftGoods: '물품매입 기안', recorder: '기록기', aiConsole: 'AI 지시창', updateCheck: '업데이트 확인'};
+  const FEATURE_NAME = {briefing: '업무 브리핑', teamAttendance: '직원 근태 달력', aiAssistant: 'AI 도우미', resource: '자원 예약', googleCalendar: '구글 일정', draftResult: '결과보고 기안', draftPlan: '계획서 기안', draftPay: '지급 건의 기안', draftGoods: '물품매입 기안', recorder: '기록기', aiConsole: 'AI 지시창', updateCheck: '업데이트 확인'};
   function allowed(f) { return R.featureAllowed(POLICY, f); }
   // 막힌 기능이면 안내하고 true를 돌려준다. 호출부는 true면 바로 return 한다.
   function gated(f) {
@@ -47,7 +47,7 @@
   }
 
   // ---------- 데이터 관리 ----------
-  const DATA_LABEL = {patterns: ['학습한 내 결재문서(기안 패턴)', '결재문서 본문·기록물철을 학습한 자료'], macros: ['기록기 기록', '내가 저장한 동작 기록'], actionHistory: ['자동 작업 감사 기록', '자동 기안·재생 결과(변조 감지 포함)'], errors: ['오류 기록', '최근 오류 30건'], settings: ['설정', '화면·예산·알림 설정'], todos: ['내 할 일', ''], hidden: ['숨기기 표시', ''], snooze: ['미루기 표시', ''], plan: ['오늘 계획', ''], history: ['처리 이력', ''], updateInfo: ['업데이트 확인 결과', ''], routing: ['배부 추천 이력', '문서 배부 추천용 캐시(12시간)'], state: ['처리 상태', '처리 완료·확인 표시'], forms: ['양식 목록 캐시', ''], activity: ['활동 기록', ''], weekly: ['주간 보고 캐시', ''], newKeys: ['새 항목 표시', ''], seenActivity: ['확인한 활동', '']};
+  const DATA_LABEL = {patterns: ['학습한 내 결재문서(기안 패턴)', '결재문서 본문·기록물철을 학습한 자료'], macros: ['기록기 기록', '내가 저장한 동작 기록'], actionHistory: ['자동 작업 감사 기록', '자동 기안·재생 결과(변조 감지 포함)'], errors: ['오류 기록', '최근 오류 30건'], settings: ['설정', '화면·예산·알림 설정'], todos: ['내 할 일', ''], hidden: ['숨기기 표시', ''], snooze: ['미루기 표시', ''], plan: ['오늘 계획', ''], history: ['처리 이력', ''], updateInfo: ['업데이트 확인 결과', ''], routing: ['배부 추천 이력', '문서 배부 추천용 캐시(12시간)'], state: ['처리 상태', '처리 완료·확인 표시'], forms: ['양식 목록 캐시', ''], activity: ['활동 기록', ''], weekly: ['주간 보고 캐시', ''], weeklyRecovery: ['주간 보고 복구본', '다른 탭과 동시 편집할 때 보관한 초안'], newKeys: ['새 항목 표시', ''], seenActivity: ['확인한 활동', '']};
   function inventory() {
     const p = 'bwyfgw:wc:' + currentKey + ':';
     const rows = [];

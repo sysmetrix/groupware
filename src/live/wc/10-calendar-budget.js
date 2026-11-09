@@ -53,14 +53,15 @@ ${teamDayPanel()}
     const lastD = new Date(Number(mk.slice(0, 4)), Number(mk.slice(4)), 0).getDate();
     const todayY = R.kstNow(new Date()).date.replace(/-/g, '');
     const monthEnd = mk + String(lastD).padStart(2, '0');
+    const owner = currentKey;
     S.team[mk] = {busy: true, rows: null, err: ''};
     // 지문이 있는 과거·오늘은 근태 기록, 아직 오지 않은 날은 신청 현황(결재 중 포함)으로 채운다
     const yest = R.kstNow(new Date(Date.now() - 86400000)).date.replace(/-/g, ''); // 근태 기록 조회는 오늘을 포함하면 빈 결과가 나와 어제까지만 읽는다
     const past = mk + '01' <= yest ? GW.teamAttendance({from: mk + '01', to: monthEnd < yest ? monthEnd : yest}) : Promise.resolve([]);
     const planned = monthEnd >= todayY && GW.teamPlanned ? GW.teamPlanned().then(p => R.expandPlanned(p.apps, {fromYmd: mk + '01', toYmd: monthEnd, todayYmd: todayY, meCd: p.me})).catch(() => []) : Promise.resolve([]);
     Promise.all([past, planned])
-      .then(([rows, fut]) => { const all = [...rows, ...fut]; S.team[mk] = {busy: false, rows: all, err: '', cal: R.buildTeamCalendar(all, new Date()), at: Date.now(), asOf: todayY === R.kstNow(new Date()).date.replace(/-/g, '') ? R.kstNow(new Date()).date : todayY, user: currentKey, planned: fut.length}; })
-      .catch(e => { S.team[mk] = {busy: false, rows: null, err: String(e.message || e).slice(0, 80), at: Date.now(), user: currentKey}; logError('team', e.message); })
+      .then(([rows, fut]) => { if (owner !== currentKey) return; const all = [...rows, ...fut]; S.team[mk] = {busy: false, rows: all, err: '', cal: R.buildTeamCalendar(all, new Date()), at: Date.now(), asOf: todayY === R.kstNow(new Date()).date.replace(/-/g, '') ? R.kstNow(new Date()).date : todayY, user: currentKey, planned: fut.length}; })
+      .catch(e => { if (owner !== currentKey) return; S.team[mk] = {busy: false, rows: null, err: String(e.message || e).slice(0, 80), at: Date.now(), user: currentKey}; logError('team', e.message); })
       .finally(() => { if (S.view === 'calendar' || S.view === 'today') renderMain(); });
   }
   // 부서 필터 기본값은 내 부서(전략경영실). 사용자가 '전체 부서'나 다른 부서를 고르면 그 선택을 따른다.

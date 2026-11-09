@@ -11,6 +11,11 @@
     const WD_KO = ['일', '월', '화', '수', '목', '금', '토'];
     const mk = dt => { const iso = dt.toISOString().slice(0, 10), w = dt.getUTCDay(); return {iso, wd: WD_KO[w], label: `${iso}(${WD_KO[w]})`}; };
     const at = off => mk(new Date(Date.UTC(y, m, d + off)));
+    const valid = (yy, mo, dy) => { const dt = new Date(Date.UTC(yy, mo - 1, dy)); return dt.getUTCFullYear() === yy && dt.getUTCMonth() === mo - 1 && dt.getUTCDate() === dy ? dt : null; }; // 2/30 같은 날짜는 다음 달로 넘기지 않고 거부
+
+    // 연도를 적었으면 그 연도 그대로(2026-11-20, 2027.1.5, 2027년 1월 5일)
+    const full = s.match(/(20\d{2})\s*[-./년]\s*(\d{1,2})\s*[-./월]\s*(\d{1,2})/);
+    if (full) { const dt = valid(Number(full[1]), Number(full[2]), Number(full[3])); return dt ? mk(dt) : null; }
 
     if (/오늘/.test(s)) return at(0);
     if (/내일/.test(s)) return at(1);
@@ -35,9 +40,10 @@
 
     const matchDate = s.match(/(\d{1,2})\s*[./월]\s*(\d{1,2})\s*일?/);
     if (matchDate) {
-      const mo = Number(matchDate[1]) - 1, dy = Number(matchDate[2]);
-      if (mo < 0 || mo > 11 || dy < 1 || dy > 31) return null;
-      return mk(new Date(Date.UTC(y, mo, dy)));
+      // 연도가 없으면 오늘에서 가장 가까운 해: 12월의 1/5는 내년, 1월의 12/28은 작년, 지난주 날짜는 올해 그대로(지난 근태도 신청)
+      const today = Date.UTC(y, m, d);
+      const near = [y - 1, y, y + 1].map(yy => valid(yy, Number(matchDate[1]), Number(matchDate[2]))).filter(Boolean).sort((a, b) => Math.abs(a - today) - Math.abs(b - today))[0];
+      return near ? mk(near) : null;
     }
 
     return null;
@@ -342,7 +348,8 @@
       if (!(S.sel && S.sel.type === 'action' && S.sel.key === x.key)) selectAction(x.key);
       if (!(S.sel && S.sel.key === x.key)) { toast('작성 중인 화면이 있어 메일을 바꾸지 않았습니다.'); return; }
     } else { if (!leavePane()) return; S.sel = {type: 'mail', box: x.ref.box, uid: x.ref.uid}; }
-    openUrl(GW.links.compose('re', {box: x.ref.box, uid: x.ref.uid}), {title: `답장: ${x.title}`});
+    // 열지 않았으면(입력 중인 화면을 지키기로 함) 그 화면에 회신 문구를 넣지 않는다
+    if (!openUrl(GW.links.compose('re', {box: x.ref.box, uid: x.ref.uid}), {title: `답장: ${x.title}`})) { toast('작성 중인 화면을 그대로 두고 회신 문구를 넣지 않았습니다.'); return; }
     const ready = await waitMailEditor(15000);
     if (ready && S.sel && (x.key ? S.sel.key === x.key : S.sel.uid === x.ref.uid)) autoFillMail(template);
     else toast('메일 작성 화면의 에디터를 찾지 못해 회신문을 넣지 않았습니다. 화면이 열리면 [회신 자동 기입] 버튼을 누르세요.');

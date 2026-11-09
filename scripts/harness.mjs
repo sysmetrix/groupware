@@ -4,9 +4,12 @@
 //   node scripts/harness.mjs --json     기계가 읽는 결과만 출력(에이전트 루프용)
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import os from 'node:os';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {graphReport} from './graph.mjs';
+import {checkLiveSyntax} from './live-build.mjs';
+import {testEnv, verdict} from './lib/test-results.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = new Set(process.argv.slice(2));
@@ -23,17 +26,21 @@ async function stage(name, fn) {
   results.push({name, ms: Date.now() - t0, ok: r.ok !== false && !(r.fails && r.fails.length), fails: r.fails || [], warns: r.warns || [], info: r.info || ''});
 }
 
+// Standalone files. The src/live/wc fragments are bodies of boot(), so checkLiveSyntax parses them in that shape
+// and also parses the assembled bundle.
 const liveFiles = async () => {
-  const wcDir = path.join(root, 'src', 'live', 'wc');
-  return [...(await fs.readdir(wcDir)).filter(n => n.endsWith('.js')).sort().map(n => path.join(wcDir, n)),
-    path.join(root, 'src', 'live', 'collector.browser.js'), path.join(root, 'src', 'live', 'workcenter.browser.js'), path.join(root, 'src', 'live', 'briefing.mjs'),
-    path.join(root, 'scripts', 'live-build.mjs'), path.join(root, 'scripts', 'harness.mjs'), path.join(root, 'scripts', 'graph.mjs')];
+  return [path.join(root, 'src', 'live', 'collector.browser.js'), path.join(root, 'src', 'live', 'workcenter.browser.js'), path.join(root, 'src', 'live', 'briefing.mjs'),
+    path.join(root, 'scripts', 'live-build.mjs'), path.join(root, 'scripts', 'harness.mjs'), path.join(root, 'scripts', 'graph.mjs'),
+    path.join(root, 'scripts', 'check.mjs'), path.join(root, 'scripts', 'lib', 'test-results.mjs')];
 };
 
 await stage('구문 검사', async () => {
   const fails = [];
-  for (const f of await liveFiles()) { const r = sh(node, ['--check', f]); if (r.status) fails.push(`${path.relative(root, f)}: ${(r.stderr || '').split('\n').find(l => /Error/.test(l)) || '구문 오류'}`); }
-  return {fails, info: `${(await liveFiles()).length}개 파일`};
+  const files = await liveFiles();
+  for (const f of files) { const r = sh(node, ['--check', f]); if (r.status) fails.push(`${path.relative(root, f)}: ${(r.stderr || '').split('\n').find(l => /Error/.test(l)) || '구문 오류'}`); }
+  const live = await checkLiveSyntax(root);
+  for (const e of live.errors) fails.push(`${e.file}${e.line ? ':' + e.line : ''}: ${e.message}`);
+  return {fails, info: `${files.length}개 파일, 조각 ${live.fragments}개, 조립 번들`};
 });
 
 await stage('코드 그래프', async () => {
@@ -76,40 +83,47 @@ await stage('이벤트 데이터 계약', async () => {
 });
 await stage('단위 테스트', async () => {
   const files = FAST ? ['test/live.test.mjs', 'test/harness.test.mjs'] : (await fs.readdir(path.join(root, 'test'))).filter(n => n.endsWith('.test.mjs')).map(n => 'test/' + n);
-  const r = sh(node, ['--test', ...files]);
-  const out = (r.stdout || '') + (r.stderr || '');
-  const pass = +(out.match(/ℹ pass (\d+)/) || [])[1] || 0, fail = +(out.match(/ℹ fail (\d+)/) || [])[1] || 0;
-  const names = [...out.matchAll(/^✖ (.+?) \(\d/gm)].map(m => m[1]);
-  let known = []; try { known = JSON.parse(await fs.readFile(path.join(root, 'scripts', 'harness-known.json'), 'utf8')).tests; } catch {}
-  const isKnown = n => known.some(k => n.includes(k.name));
-  const uniq = [...new Set(names)];
-  const fails = r.status ? (uniq.length ? uniq.filter(n => !isKnown(n)).map(n => `테스트 실패: ${n}`) : ['테스트 실행 실패']) : [];
-  const warns = uniq.filter(isKnown).map(n => `알려진 환경 문제로 격리됨: ${n}`);
-  return {fails, warns, info: `통과 ${pass} / 실패 ${fail}` + (warns.length ? ` (격리 ${warns.length})` : '')};
+  // Structured results (one JSON line per test), and a child environment without host interpreter overrides
+  // (PYTHONHOME from the launching app breaks the project's own Python); only the test processes get it.
+  const r = sh(node, ['--test', '--test-reporter=./scripts/lib/test-results.mjs', '--test-reporter-destination=stdout', ...files], {env: Object.fromEntries(Object.entries(testEnv()).filter(([k]) => k !== 'NODE_TEST_CONTEXT'))});
+  let known = [];
+  try { known = JSON.parse(await fs.readFile(path.join(root, 'scripts', 'harness-known.json'), 'utf8')).tests || []; } catch (e) { if (e.code !== 'ENOENT') return {fails: [`harness-known.json 을 읽지 못함: ${e.message}`]}; }
+  const v = verdict(r, known);
+  return {fails: v.fails, warns: v.warns, info: `통과 ${v.passed} / 실패 ${v.failed}` + (v.quarantined ? ` (격리 ${v.quarantined})` : '')};
 });
 
 if (!FAST) {
   await stage('빌드와 예산', async () => {
-    const b = sh(node, ['scripts/live-build.mjs']);
-    if (b.status) return {fails: ['빌드 실패: ' + (b.stderr || '').split('\n')[0]]};
-    const fails = [], warns = [];
-    const bundle = await fs.readFile(path.join(root, 'build', 'live', 'gw-live.js'));
-    const kb = Math.round(bundle.length / 1024);
-    if (kb > BUDGET.bundleKB) fails.push(`번들 ${kb}KB > 예산 ${BUDGET.bundleKB}KB`);
-    for (const f of (await fs.readdir(path.join(root, 'src', 'live', 'wc'))).filter(n => n.endsWith('.js'))) {
-      const lines = (await fs.readFile(path.join(root, 'src', 'live', 'wc', f), 'utf8')).split('\n').length;
-      if (lines > BUDGET.wcFileLines) warns.push(`${f} ${lines}줄 (분리 권장, 기준 ${BUDGET.wcFileLines})`);
-    }
-    const ver = f => fs.readFile(path.join(root, f), 'utf8').then(t => (t.match(/const VERSION = '([\d.]+)'/) || [])[1]);
-    const [vw, vc] = [await ver('src/live/workcenter.browser.js'), await ver('src/live/collector.browser.js')];
-    const manifest = JSON.parse(await fs.readFile(path.join(root, 'build', 'live', 'extension', 'manifest.json'), 'utf8')).version;
-    const clTop = ((await fs.readFile(path.join(root, 'src/live/briefing.mjs'), 'utf8')).match(/export const CHANGELOG = \[\s*\{v: ['"]([\d.]+)['"]/) || [])[1];
-    if (clTop !== vw) fails.push(`업데이트 내역 맨 위 버전(${clTop})이 현재 버전(${vw})과 다름: briefing.mjs의 CHANGELOG에 새 항목을 추가하세요`);
-    if (new Set([vw, vc, manifest]).size !== 1) fails.push(`버전 불일치: 업무센터 ${vw}, 수집기 ${vc}, 확장 ${manifest}`);
-    const sha = (await fs.readFile(path.join(root, 'build', 'live', 'gw-live.sha256'), 'utf8')).trim().split(/\s+/)[0];
-    const { createHash } = await import('node:crypto');
-    if (sha && !sha.startsWith(createHash('sha256').update(bundle).digest('hex').slice(0, Math.min(sha.length, 64)))) warns.push('gw-live.sha256 이 번들과 다름');
-    return {fails, warns, info: `번들 ${kb}KB, 버전 ${vw}`};
+    // 격리된 임시 폴더에 두 번 빌드한다: build/live(배포본과 관리자 policy.js)는 건드리지 않고, 같은 소스에서 같은 해시가 나오는지도 확인한다.
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'gw-harness-build-'));
+    try {
+      const outA = path.join(tmp, 'a'), outB = path.join(tmp, 'b');
+      for (const out of [outA, outB]) {
+        const b = sh(node, ['scripts/live-build.mjs', '--out-dir', out]);
+        if (b.status) return {fails: ['빌드 실패: ' + ((b.stderr || '').split('\n').find(l => l.trim()) || `종료 코드 ${b.status}`)]};
+      }
+      const fails = [], warns = [];
+      const bundle = await fs.readFile(path.join(outA, 'gw-live.js'));
+      const { createHash } = await import('node:crypto');
+      const digest = createHash('sha256').update(bundle).digest('hex');
+      if (digest !== createHash('sha256').update(await fs.readFile(path.join(outB, 'gw-live.js'))).digest('hex')) fails.push('같은 소스로 두 번 빌드한 번들의 해시가 다름(빌드 결과가 재현되지 않음)');
+      const kb = Math.round(bundle.length / 1024);
+      if (kb > BUDGET.bundleKB) fails.push(`번들 ${kb}KB > 예산 ${BUDGET.bundleKB}KB`);
+      for (const f of (await fs.readdir(path.join(root, 'src', 'live', 'wc'))).filter(n => n.endsWith('.js'))) {
+        const lines = (await fs.readFile(path.join(root, 'src', 'live', 'wc', f), 'utf8')).split('\n').length;
+        if (lines > BUDGET.wcFileLines) warns.push(`${f} ${lines}줄 (분리 권장, 기준 ${BUDGET.wcFileLines})`);
+      }
+      const ver = f => fs.readFile(path.join(root, f), 'utf8').then(t => (t.match(/const VERSION = '([\d.]+)'/) || [])[1]);
+      const [vw, vc] = [await ver('src/live/workcenter.browser.js'), await ver('src/live/collector.browser.js')];
+      const manifest = JSON.parse(await fs.readFile(path.join(outA, 'extension', 'manifest.json'), 'utf8')).version;
+      // 맨 위 항목은 {v: '…'} 또는 JSON 형태 {"v": "…"} 둘 다 허용
+      const clTop = ((await fs.readFile(path.join(root, 'src/live/briefing.mjs'), 'utf8')).match(/export const CHANGELOG = \[\s*\{\s*(?:v|"v"|'v')\s*:\s*['"]([\d.]+)['"]/) || [])[1];
+      if (clTop !== vw) fails.push(`업데이트 내역 맨 위 버전(${clTop})이 현재 버전(${vw})과 다름: briefing.mjs의 CHANGELOG에 새 항목을 추가하세요`);
+      if (new Set([vw, vc, manifest]).size !== 1) fails.push(`버전 불일치: 업무센터 ${vw}, 수집기 ${vc}, 확장 ${manifest}`);
+      const sha = (await fs.readFile(path.join(outA, 'gw-live.sha256'), 'utf8')).trim().split(/\s+/)[0];
+      if (sha !== digest) fails.push('gw-live.sha256 이 번들과 다름');
+      return {fails, warns, info: `번들 ${kb}KB, 버전 ${vw}, sha256 ${digest.slice(0, 12)} (격리 빌드 2회 동일)`};
+    } finally { await fs.rm(tmp, {recursive: true, force: true}); }
   });
 }
 
@@ -140,7 +154,7 @@ await stage('안전 규칙', async () => {
   for (const f of ['src/live/collector.browser.js', 'src/live/workcenter.browser.js', ...(await fs.readdir(path.join(root, 'src/live/wc'))).map(n => 'src/live/wc/' + n)]) {
     for (const x of (await read(f)).matchAll(/https?:\/\/([\w.-]+)/g)) hosts.add(x[1]);
   }
-  const okHosts = /^(gw\.bwyf\.or\.kr|api\.github\.com|github\.com|www\.w3\.org|localhost|127\.0\.0\.1|generativelanguage\.googleapis\.com|aistudio\.google\.com)$/;
+  const okHosts = /^(gw\.bwyf\.or\.kr|api\.github\.com|github\.com|www\.w3\.org|localhost|127\.0\.0\.1|generativelanguage\.googleapis\.com|aistudio\.google\.com|calendar\.google\.com)$/;
   for (const h of hosts) if (!okHosts.test(h)) warns.push(`허용 목록에 없는 외부 주소: ${h}`);
   // 글자 크기 12px 미만 금지 (접근성)
   const css = (await read('src/live/wc-style.css')) + (await read('src/live/wc-theme.css'));

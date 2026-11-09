@@ -5,7 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import {createDemoDataset} from '../src/demo.mjs';
 import {collectPages, validateSyncState} from '../src/sync.mjs';
-import {atomicJson, createAutomation, defaultAutomation} from '../src/automation.mjs';
+import {atomicJson, createAutomation, defaultAutomation, jsonText, readJsonFile} from '../src/automation.mjs';
+import {validateDataset} from '../src/schema.mjs';
 import {createStore} from '../src/store.mjs';
 import {syncPageFile} from '../scripts/sync-pages.mjs';
 
@@ -118,4 +119,31 @@ test('output write failure does not advance the checkpoint and the same bundle c
   await assert.rejects(fs.access(args.stateFile)); await assert.rejects(fs.access(args.stateFile + '.lock'));
   await fs.rmdir(args.outputFile);
   await syncPageFile(args); assert.equal(JSON.parse(await fs.readFile(args.stateFile)).checkpoint, 'v1');
+});
+
+test('size limit measures the pretty files actually written; an exact 5 MB dataset stays readable and 1 byte more is refused', async t => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'groupware-sync-size-')); t.after(() => fs.rm(root, {recursive: true, force: true}));
+  const f = fixture(), {expectedScope, now: clock, ...bundle} = f.input, limit = 5 * 1024 * 1024;
+  const sized = target => {
+    const items = Array.from({length: 200}, (_, n) => ({id: `size-${n}`, type: 'notice', status: 'published', title: '용량 경계 합성 자료', body: 'x', organizationId: f.scope.organizationId, allowedUserIds: [f.scope.userId], updatedAt: now.toISOString()}));
+    const extra = target - Buffer.byteLength(jsonText(validateDataset({...f.data, items})));
+    items.forEach((item, n) => { item.body += 'x'.repeat(Math.floor(extra / items.length) + (n === items.length - 1 ? extra % items.length : 0)); });
+    return items;
+  };
+  const exact = sized(limit), over = sized(limit + 1);
+  assert.equal(Buffer.byteLength(jsonText(validateDataset({...f.data, items: over}))), limit + 1);
+  assert.ok(Buffer.byteLength(JSON.stringify(validateDataset({...f.data, items: over}))) <= limit, 'compact size alone would have accepted it');
+  const args = {inputFile: path.join(root, 'pages.json'), scopeFile: path.join(root, 'scope.json'), stateFile: path.join(root, 'state.json'), outputFile: path.join(root, 'dataset.json'), now};
+  const writeBundle = items => fs.writeFile(args.inputFile, JSON.stringify({schemaVersion: 1, ...bundle, pages: [{...f.page, items, total: items.length}]}));
+  await atomicJson(args.scopeFile, expectedScope); await writeBundle(exact);
+  assert.equal((await syncPageFile(args)).visibleCount, 200);
+  assert.equal((await fs.stat(args.outputFile)).size, limit);
+  assert.equal((await readJsonFile(args.outputFile)).items.length, 200);
+  assert.ok((await fs.stat(args.stateFile)).size <= 6 * 1024 * 1024);
+  const saved = validateSyncState(await readJsonFile(args.stateFile, 6 * 1024 * 1024));
+  const output = await fs.readFile(args.outputFile, 'utf8'), state = await fs.readFile(args.stateFile, 'utf8');
+  await writeBundle(over);
+  await assert.rejects(syncPageFile(args), code('SIZE_LIMIT'));
+  await assert.rejects(collectPages({...f.input, previous: saved, pages: [{...f.page, items: over, total: over.length}]}), code('SIZE_LIMIT'));
+  assert.equal(await fs.readFile(args.outputFile, 'utf8'), output); assert.equal(await fs.readFile(args.stateFile, 'utf8'), state);
 });

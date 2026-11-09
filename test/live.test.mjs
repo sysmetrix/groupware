@@ -249,11 +249,15 @@ test('collector v2 builds native popup links and normalizes search results', asy
 test('bundle build includes collector, analysis and lazy work center', async () => {
   const {execFileSync} = await import('node:child_process');
   const {fileURLToPath} = await import('node:url');
-  execFileSync(process.execPath, [fileURLToPath(new URL('../scripts/live-build.mjs', import.meta.url))], {stdio: 'pipe'});
-  const bundle = await fs.readFile(new URL('../build/live/gw-live.js', import.meta.url), 'utf8');
-  for (const s of ['window.BWYFGW =', 'window.BWYFGW_REPORT', 'window.BWYFGW_WC', 'recommendRouting']) assert.ok(bundle.includes(s), s);
-  const mini = await fs.readFile(new URL('../build/live/bookmarklet-mini.txt', import.meta.url), 'utf8');
-  assert.ok(mini.length < 2000, 'launch bookmark stays small');
+  // Isolated output: never touch build/live (the real bundle and the administrator's extension/policy.js).
+  const out = await fs.mkdtemp(path.join(os.tmpdir(), 'gw-live-build-'));
+  try {
+    execFileSync(process.execPath, [fileURLToPath(new URL('../scripts/live-build.mjs', import.meta.url)), '--out-dir', out], {stdio: 'pipe'});
+    const bundle = await fs.readFile(path.join(out, 'gw-live.js'), 'utf8');
+    for (const s of ['window.BWYFGW =', 'window.BWYFGW_REPORT', 'window.BWYFGW_WC', 'recommendRouting']) assert.ok(bundle.includes(s), s);
+    const mini = await fs.readFile(path.join(out, 'bookmarklet-mini.txt'), 'utf8');
+    assert.ok(mini.length < 2000, 'launch bookmark stays small');
+  } finally { await fs.rm(out, {recursive: true, force: true}); }
 });
 
 test('deadline mails: unanswered ones rise, answered ones stay low, leave-day conflicts are flagged', () => {
@@ -394,8 +398,11 @@ test('work center: every clickable data-act has a handler, CSS is a separate des
   assert.deepEqual(missing, [], `unhandled actions: ${missing.join(', ')}`);
   assert.ok(src.includes("'/*@WC_CSS@*/'") && src.includes('/*@WC_PARTS@*/'));
   const {execFileSync} = await import('node:child_process');
-  execFileSync(process.execPath, ['scripts/live-build.mjs'], {cwd: new URL('..', import.meta.url)});
-  execFileSync(process.execPath, ['--check', 'build/live/gw-live.js'], {cwd: new URL('..', import.meta.url)});
+  const out = await fs.mkdtemp(path.join(os.tmpdir(), 'gw-live-build-'));
+  try {
+    execFileSync(process.execPath, ['scripts/live-build.mjs', '--out-dir', out], {cwd: new URL('..', import.meta.url)});
+    execFileSync(process.execPath, ['--check', path.join(out, 'gw-live.js')], {cwd: new URL('..', import.meta.url)});
+  } finally { await fs.rm(out, {recursive: true, force: true}); }
   assert.ok(/word-break:keep-all/.test(css), 'Korean words must not break mid-word');
   assert.ok(!/font-size:(?:[0-9]|1[01])(?:\.\d+)?px/.test(css), 'no text smaller than 12px');
   assert.ok(/:focus-visible/.test(css), 'keyboard focus ring');

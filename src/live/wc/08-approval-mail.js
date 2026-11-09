@@ -3,6 +3,22 @@
   // ----- 결재·문서유통 -----
   const AP_VERB = {distWaiting: '배부하기', deptWaiting: '접수하기', pending: '결재하기', sendWaiting: '발송하기', viewing: '열람하기', submitted: '열기'};
   const AP_STATUS = {distWaiting: '배부 전', deptWaiting: '접수 전'};
+  async function loadApprovalMore() {
+    const tab = S.apTab, owner = currentKey, epoch = S.apEpoch;
+    const l = S.a?.approval?.lists?.[tab];
+    if (!l || l.error || S.apBusy[tab]) return;
+    const page = (S.apPages[tab] || 1) + 1;
+    S.apBusy[tab] = true; renderMain();
+    try {
+      const r = await GW.approvalPage(tab, page);
+      if (owner !== currentKey || epoch !== S.apEpoch) return;
+      const docs = new Map([...l.docs, ...(S.apMore[tab] || [])].map(d => [d.docId, d]));
+      for (const d of r.docs) if (!docs.has(d.docId)) docs.set(d.docId, d);
+      const first = new Set(l.docs.map(d => d.docId));
+      S.apMore[tab] = [...docs.values()].filter(d => !first.has(d.docId)); S.apPages[tab] = page;
+    } catch (err) { if (owner === currentKey && epoch === S.apEpoch) toast(err.message); }
+    finally { if (owner === currentKey && epoch === S.apEpoch) { S.apBusy[tab] = false; renderMain(); } }
+  }
   function vApproval() {
     const lists = S.a.approval.lists, counts = S.a.approval.counts;
     const tabs = [['pending', '결재 대기'], ['deptWaiting', '부서 접수 대기'], ['distWaiting', '배부 대기'], ['sendWaiting', '발송 대기'], ['viewing', '열람문서'], ['submitted', '내 상신문서']];
@@ -31,7 +47,7 @@
 <div class="bar"><div class="seg" role="tablist">${tabs.map(([k, n]) => { const c = lists[k]; const cnt = c ? (c.error ? '?' : c.total ?? c.docs.length) : '-'; return `<button role="tab" aria-selected="${S.apTab === k}" class="${S.apTab === k ? 'on' : ''}" data-act="apTab" data-v="${k}">${n}<span class="c">${cnt}</span></button>`; }).join('')}</div></div>
 ${note}
 ${l && l.error ? `<div class="box errb">${esc(l.message)} <button class="btn sm" data-act="refresh">다시 시도</button></div>` : docs.length ? `<table><tr><th>제목</th><th>보낸 곳·기안</th><th>상태</th>${withRec ? `<th title="최근 180일 동안 제목 주제가 비슷한 문서가 어디로 갔는지 센 값">지난번엔 어디로?</th>` : ''}<th>받은 날</th><th></th></tr>${rows}</table>` : `<div class="list"><div class="empty"><b>${esc((tabs.find(t => t[0] === S.apTab) || [])[1] || '')} 문서가 없습니다</b>${tabs.filter(([k]) => k !== S.apTab && lists[k] && !lists[k].error && (lists[k].total ?? lists[k].docs.length) > 0 && !['viewing', 'submitted'].includes(k)).map(([k, n]) => `<button class="chip" data-act="apTab" data-v="${k}" style="margin:8px 4px 0">${n} ${lists[k].total ?? lists[k].docs.length}건 보기${myTab(k) ? '' : ' (참고)'}</button>`).join('') || '<div>지금 처리할 결재 문서가 없습니다.</div>'}</div></div>`}
-${docs.length < total ? `<div class="acts"><button class="btn" data-act="apMore">더 보기 (${docs.length}/${total})</button></div>` : ''}
+${docs.length < total ? `<div class="acts"><button class="btn" data-act="apMore" ${S.apBusy[S.apTab] ? 'disabled' : ''}>${S.apBusy[S.apTab] ? '읽는 중…' : '더 보기'} (${docs.length}/${total})</button></div>` : ''}
 <details style="margin-top:18px"><summary class="muted" style="cursor:pointer">그룹웨어 메뉴별 건수</summary><table style="margin-top:8px"><tr><th>메뉴</th><th class="num">건수</th></tr>${counts.map(c => `<tr><td>${esc(c.name)}</td><td class="num">${c.count}</td></tr>`).join('')}</table></details>`;
   }
 

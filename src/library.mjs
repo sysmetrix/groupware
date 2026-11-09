@@ -32,6 +32,13 @@ export async function createLibrary(directory, {extract = extractAttachment} = {
   await fs.mkdir(files, {recursive: true, mode: 0o700});
   let busy = false;
   const filePath = item => path.join(files, item.id + '.' + item.attachments[0].format);
+  // A missing original stays indexed (its evidence is kept) and is flagged for
+  // the user to remove; it must not block every later upload.
+  const missing = new Set();
+  async function originalSize(item) {
+    try { const {size} = await fs.stat(filePath(item)); missing.delete(item.id); return size; }
+    catch (error) { if (error.code !== 'ENOENT') throw error; missing.add(item.id); return 0; }
+  }
   async function cleanOrphans() {
     const retained = new Set(store.snapshot().dataset.items.map(item => path.basename(filePath(item))));
     for (const entry of await fs.readdir(files, {withFileTypes: true})) {
@@ -43,11 +50,13 @@ export async function createLibrary(directory, {extract = extractAttachment} = {
   // Recover uploads interrupted before publication and deletions interrupted
   // after publication. Unknown files are not library-owned and are left alone.
   await cleanOrphans();
+  // Startup only flags missing originals; other stat errors surface on upload.
+  await Promise.all(initial.items.map(item => originalSize(item).catch(() => 0)));
   function list() {
     const {dataset, revision} = store.snapshot();
     return {revision, documents: dataset.items.map(item => ({id: item.id, title: item.title, updatedAt: item.updatedAt,
       filename: item.attachments[0].filename, format: item.attachments[0].format, units: item.attachments[0].units.length,
-      warnings: item.attachments[0].warnings, url: `/api/documents/${item.id}/file`}))};
+      warnings: item.attachments[0].warnings, missing: missing.has(item.id), url: `/api/documents/${item.id}/file`}))};
   }
   return {
     snapshot: store.snapshot,
@@ -71,10 +80,21 @@ export async function createLibrary(directory, {extract = extractAttachment} = {
         const {dataset, revision} = store.snapshot();
         const digest = createHash('sha256').update(bytes).digest('hex');
         const duplicate = dataset.items.find(item => item.attachments[0].sha256 === digest);
-        if (duplicate) return {duplicate: true, id: duplicate.id, ...list()};
-        if (dataset.items.length >= 50) throw new AppError('내 문서는 최대 50개입니다. 사용하지 않는 문서를 먼저 삭제하세요.');
-        const sizes = await Promise.all(dataset.items.map(item => fs.stat(filePath(item))));
-        if (sizes.reduce((sum, stat) => sum + stat.size, bytes.length) > 200 * 1024 * 1024) throw new AppError('내 문서 원본은 합계 200 MB까지 보관합니다.');
+        if (duplicate) {
+          await originalSize(duplicate);
+          if (!missing.has(duplicate.id)) return {duplicate: true, id: duplicate.id, ...list()};
+        }
+        if (!duplicate && dataset.items.length >= 50) throw new AppError('내 문서는 최대 50개입니다. 사용하지 않는 문서를 먼저 삭제하세요.');
+        const sizes = await Promise.all(dataset.items.map(originalSize));
+        if (sizes.reduce((sum, size) => sum + size, bytes.length) > 200 * 1024 * 1024) throw new AppError('내 문서 원본은 합계 200 MB까지 보관합니다.');
+        if (duplicate) {
+          // Same SHA-256 as the indexed original: put the bytes back without re-extracting or changing the index.
+          temporary = path.join(files, 'upload-' + randomUUID() + '.' + duplicate.attachments[0].format);
+          await fs.writeFile(temporary, bytes, {flag: 'wx', mode: 0o600});
+          await fs.rename(temporary, filePath(duplicate));
+          missing.delete(duplicate.id);
+          return {duplicate: true, restored: true, id: duplicate.id, ...list()};
+        }
         const id = 'local-' + randomUUID(), format = filename.split('.').at(-1).toLowerCase();
         temporary = path.join(files, 'upload-' + randomUUID() + '.' + format);
         await fs.writeFile(temporary, bytes, {flag: 'wx', mode: 0o600});
@@ -152,7 +172,9 @@ export async function createLibrary(directory, {extract = extractAttachment} = {
         }
         if (length !== stat.size) throw changed();
         content = buffer.subarray(0, length);
+        missing.delete(item.id);
       } catch (error) {
+        if (error.code === 'ENOENT') missing.add(item.id);
         if (error.code === 'ENOENT' || error.code === 'EISDIR') throw changed();
         throw error;
       } finally { await handle?.close(); }

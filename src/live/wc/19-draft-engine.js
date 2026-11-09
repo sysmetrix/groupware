@@ -135,8 +135,7 @@
   // ---------- 새 기안 창 열기 / 채우기 ----------
   async function openDraftFrame(formKey, formName, title) {
     const url = GW.links.draft(formKey, formName);
-    openUrl(url, {title});
-    if (S.pane.url !== url) return null; // 사용자가 이동을 취소함: 다른 화면에 값을 넣지 않는다
+    if (!openUrl(url, {title})) return null; // 사용자가 이동을 취소함(같은 화면이어도): 입력 중인 화면에 값을 넣지 않는다
     S.pane.expanded = true;
     renderPane();
     for (let i = 0; i < 40 && S.pane.url === url; i++) {
@@ -333,7 +332,9 @@
     if (!ctrl) return '한글 편집기가 아직 준비되지 않았습니다. 잠시 후 다시 시도하세요.';
     const t = d.querySelector('input[placeholder="제목을 입력해주세요"]');
     let body = ''; try { body = String(ctrl.GetFieldText('_F_CONTENTS_') || '').trim(); } catch {}
-    const typed = (t && t.value.trim() && t.value.trim() !== spec.title) || (body && !spec.body) || (f.contentWindow.__wcFilled && (t.value.trim() || body));
+    const want = String((spec.body && spec.body.text) || '').replace(/\r\n?/g, '\n').trim();
+    // 본문이 이미 있으면 바꿔 넣을 본문이 있든 없든 묻는다(같은 본문을 다시 넣는 경우만 제외)
+    const typed = (t && t.value.trim() && t.value.trim() !== spec.title) || (body && body.replace(/\r\n?/g, '\n') !== want) || (f.contentWindow.__wcFilled && (t.value.trim() || body));
     if (typed && !confirm('이미 입력한 내용이 있습니다. 자동 기입으로 덮어쓸까요?')) return '사용자가 덮어쓰기를 취소했습니다.';
     return '';
   }
@@ -409,7 +410,7 @@
     const meta = R.predictDraftMeta(patModel(), {title, sourceDocNo: plan.docNo, sourceTitle: plan.title});
     const body = R.buildResultBody(src.body || '', {runday: src.runday, docNo: plan.docNo, planTitle: plan.title});
     const f = await openDraftFrame('mg_20160303185413307', '일반기안문', `결과보고: ${plan.title}`);
-    if (!f) { toast('기안 화면을 열지 못했습니다. 잠시 후 다시 시도하세요.'); return; }
+    if (!f) { toast('기안 열기를 취소했거나 화면이 아직 준비되지 않았습니다. 기존 내용은 그대로 두었습니다.'); return; }
     const steps = await fillDraft(f, {title, meta, body, ref: {title: plan.title, docNo: plan.docNo}});
     const notes = [...body.notes.map(n => `${n}: 계획서 값을 그대로 두었습니다. 실제 결과로 고쳐 주세요.`), '붙임 파일명·개수와 소요예산 문구는 실제 결과에 맞게 확인하세요.'];
     showDraftReport(title, steps, notes);
@@ -426,7 +427,7 @@
     const meta = R.predictDraftMeta(model, {title});
     const sk = R.buildPlanSkeleton(model, {title});
     const f = await openDraftFrame('mg_20160303185413307', '일반기안문', `새 기안: ${title}`);
-    if (!f) { toast('기안 화면을 열지 못했습니다.'); return; }
+    if (!f) { toast('기안 열기를 취소했거나 화면이 준비되지 않았습니다. 기존 내용은 그대로 두었습니다.'); return; }
     const body = sk ? {text: sk.text, lines: sk.lines, hang: sk.lines.map(() => false)} : null;
     const steps = await fillDraft(f, {title, meta, body});
     showDraftReport(title, steps, sk ? [`본문 뼈대: 과거 계획서 “${sk.basis}”의 서식을 이어받았습니다. 항목 값은 직접 채워 주세요.`, sk.refCopied ? '1번 관련 문서번호는 그 계획서의 근거를 그대로 가져왔습니다. 이번 사업에 맞는지 확인하세요.' : '1번 관련 문서번호는 비워 두었습니다. 근거 문서를 적어 주세요.', ...(meta.confidence === 'similar' ? ['기록물철은 제목이 비슷한 과거 문서를 보고 골랐습니다. 맞는지 확인하세요.'] : [])] : ['과거 계획서가 없어 본문은 비워 두었습니다.']);
@@ -504,7 +505,7 @@
     if (!body) { toast('틀 문서의 본문을 읽지 못했습니다. 다른 건의를 선택하세요.'); return; }
     const meta = R.predictDraftMeta(patModel(), {title, sourceDocNo: plan.docNo, sourceTitle: plan.title});
     const f = await openDraftFrame('mg_20160303185413307', '일반기안문', `지급 건의: ${title}`);
-    if (!f) { toast('기안 화면을 열지 못했습니다.'); return; }
+    if (!f) { toast('기안 열기를 취소했거나 화면이 준비되지 않았습니다. 기존 내용은 그대로 두었습니다.'); return; }
     const steps = await fillDraft(f, {title, meta, body, ref: {title: plan.title, docNo: plan.docNo}});
     showDraftReport(title, steps, [...body.notes, `금액 ${R.moneyKo(amount)}`, '결제방법(카드·계좌이체)은 틀 문서 값입니다. 맞는지 확인하세요.']);
   }
@@ -534,7 +535,7 @@
     closeOverlay();
     const meta = R.predictDraftMeta(patModel(), {title, sourceDocNo: plan.docNo, sourceTitle: plan.title});
     const f = await openDraftFrame('mg_20160313172845987', '물품매입(수리제조)품의 및 요구서', `물품매입: ${title}`);
-    if (!f) { toast('기안 화면을 열지 못했습니다.'); return; }
+    if (!f) { toast('기안 열기를 취소했거나 화면이 준비되지 않았습니다. 기존 내용은 그대로 두었습니다.'); return; }
     const steps = await fillDraft(f, {title, meta, ref: {title: plan.title, docNo: plan.docNo}});
     showDraftReport(title, steps, ['물품 내역·금액은 양식의 표에 직접 입력하세요.']);
   }
@@ -545,7 +546,7 @@
     closeOverlay();
     const meta = R.predictDraftMeta(patModel(), {title});
     const f = await openDraftFrame('mg_20160313172845987', '물품매입(수리제조)품의 및 요구서', `물품매입: ${title}`);
-    if (!f) { toast('기안 화면을 열지 못했습니다.'); return; }
+    if (!f) { toast('기안 열기를 취소했거나 화면이 준비되지 않았습니다. 기존 내용은 그대로 두었습니다.'); return; }
     const steps = await fillDraft(f, {title, meta});
     showDraftReport(title, steps, ['계획서 없이 작성했습니다. 참조문서는 직접 지정하고, 기록물철은 지난 문서로 추정한 값이니 확인하세요.', '물품 내역·금액은 양식의 표에 직접 입력하세요.']);
   }

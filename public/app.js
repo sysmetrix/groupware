@@ -248,6 +248,7 @@ async function refreshLibrary() {
     const row = element('article', undefined, 'record');
     row.append(element('h3', doc.filename, 'record-title'), element('p', `${doc.format.toUpperCase()} · 추출 단위 ${doc.units}개 · ${formatTime(doc.updatedAt)}에 넣음`, 'subtle'));
     const warnings = element('div', undefined, 'record-meta'); attachmentMeta({attachment: doc, locationLabel: ''}, warnings); row.append(warnings);
+    if (doc.missing) warnings.prepend(element('span', '원본 파일 없음 · 같은 파일을 다시 넣으면 복구됩니다', 'tag urgent'));
     const actions = element('div', undefined, 'library-actions'), preview = element('button', '추출 내용 보기', 'secondary');
     preview.addEventListener('click', () => operation(preview, () => showPreview(doc.id)));
     const agree = element('label'), check = element('input'); check.type = 'checkbox'; agree.append(check, document.createTextNode('이 PC의 보관본 삭제'));
@@ -283,7 +284,7 @@ $('document-form').addEventListener('submit', event => {
     const result = await response.json(); if (!response.ok) throw new Error(result.error || '문서를 가져오지 못했습니다.');
     await refreshLibrary(); await showPreview(result.id);
     $('document-file').value = ''; $('search-scope').value = 'library';
-    message(result.duplicate ? '이미 보관한 파일입니다. 기존 문서 내용을 표시합니다.' : '문서를 가져왔습니다. 추출 내용을 확인하고 「내 문서 검색」에서 파일 속 키워드를 검색하세요.');
+    message(result.restored ? '없던 원본 파일을 복구했습니다. 기존 추출 내용과 검색 근거는 그대로입니다.' : result.duplicate ? '이미 보관한 파일입니다. 기존 문서 내용을 표시합니다.' : '문서를 가져왔습니다. 추출 내용을 확인하고 「내 문서 검색」에서 파일 속 키워드를 검색하세요.');
   });
 });
 $('refresh-library').addEventListener('click', event => operation(event.currentTarget, refreshLibrary));
