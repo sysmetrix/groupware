@@ -33,7 +33,7 @@
       case 'coach': startCoach(); break;
       case 'coachNext': coachNext(); break;
       case 'coachEnd': endCoach(); break;
-      case 'openCmd': openCommandConsole(); break;
+      case 'openCmd': go('home'); setTimeout(chatFocusInput, 60); break; // "AI 지시" = 홈의 채팅창(기존 빠른 업무 실행은 Ctrl+K에서)
       case 'openHistory': openActionHistory(); break;
       case 'submitCmd': { const q = ($('#cmdPrompt') || {}).value; executeCommandWorkflow(q); break; }
       case 'runPreset': { const pr = COMMAND_PRESETS.find(x => x.id === el.dataset.id); if (pr) executeCommandWorkflow(pr.query); break; }

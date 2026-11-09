@@ -1,7 +1,7 @@
 /* GW 통합 업무센터 · 홈 전용 스타일. 접두 hm- (홈). 색은 wc-style/wc-theme의 변수(--bg --fg --muted --line --card --accent --hi --md --ok 및 *-soft)만 쓴다.
    라이트·다크는 .wc.dark 변수 교체로 따라간다. 글자 크기는 12px 이상, 모션은 prefers-reduced-motion에서 끈다.
    대비 점검(WCAG AA 4.5:1): 본문 --fg/--card, 보조 --muted/--card, 경고 --hi/--hi-soft, 완료 --ok/--ok-soft는 wc-theme의 값 기준으로 확인했다. */
-.hm{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+.hm{max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
 .hm-head{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;padding:4px 2px 0}
 .hm-hello{margin:0;font-size:26px;line-height:1.3;font-weight:800;letter-spacing:-.4px}
 .hm-sub{margin:4px 0 0;font-size:15px;color:var(--muted)}
@@ -71,3 +71,13 @@
 .gs-memo{margin:4px 0 8px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);font:inherit;font-size:14px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere}
 @container (max-width:700px){.gs-l{grid-template-columns:1fr}.gs-sub{grid-column:1}.gs-main{align-items:flex-start;flex-direction:column}}
 .gs-found{margin:6px 0;padding:8px 10px;border-radius:8px;background:var(--ok-soft);color:var(--fg);font-size:14px}
+
+/* 홈 2단 배치: 왼쪽 채팅, 오른쪽 핵심 요약 (한 화면에 둘 다 보인다) */
+.hm-grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(300px,1fr);gap:18px;align-items:start}
+.hm-chatcol{min-width:0}
+#hmDash{min-width:0}
+#hmDash .hm-tiles{grid-template-columns:repeat(2,1fr)}
+#hmDash .hm-tile:first-child{grid-column:1/-1;min-height:84px}
+#hmDash .hm-tile{min-height:88px;padding:12px 14px}
+#hmDash .hm-tile-v{font-size:26px}
+@container (max-width:1000px){.hm-grid{grid-template-columns:1fr}#hmDash .hm-tiles{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}#hmDash .hm-tile:first-child{grid-column:auto}}

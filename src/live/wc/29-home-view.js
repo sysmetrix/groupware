@@ -58,12 +58,12 @@
     const tl = R.homeTimelineCompact(d.timeline, 5);
     const awayLine = R.homeAwayLine(d.away.map(x => ({name: x.name, label: x.label})), 3);
     const tlHtml = `<section class="hm-today" aria-label="오늘 일정"><div class="hm-today-k">오늘 일정</div>${tl.rows.length ? `<ul class="hm-tl">${tl.rows.map(r => `<li class="hm-tl-${esc(r.kind)}"><span class="hm-tl-t">${r.allDay ? '종일' : esc(r.from) + (r.to ? '~' + esc(r.to) : '')}</span><span class="hm-tl-l">${esc(r.label)}</span></li>`).join('')}</ul>${tl.more ? `<div class="hm-more">외 ${tl.more}건 · <button class="hm-link" data-act="homeTile" data-v="schedule">일정 달력에서 보기</button></div>` : ''}` : '<div class="hm-empty">오늘 시간이 정해진 일정이 없습니다.</div>'}${awayLine ? `<div class="hm-away"><span class="hm-away-k">자리 비움</span> ${esc(awayLine)}</div>` : ''}</section>`;
-    return `<section class="hm-tiles" aria-label="핵심 현황">${tileHtml}</section><div class="hm-cols">${nextHtml}${tlHtml}</div>`;
+    return `<section class="hm-tiles" aria-label="핵심 현황">${tileHtml}</section>${nextHtml}${tlHtml}`;
   }
 
   function vHome() {
     const d = homeData();
-    return `<div class="hm" id="hm">${`<div id="hmHead">${homeHeadHtml(d)}</div>`}${typeof chatView === 'function' ? chatView() : ''}<div id="hmDash">${homeDashHtml(d)}</div></div>`;
+    return `<div class="hm" id="hm"><div id="hmHead">${homeHeadHtml(d)}</div><div class="hm-grid"><div class="hm-chatcol">${typeof chatView === 'function' ? chatView() : ''}</div><div id="hmDash">${homeDashHtml(d)}</div></div></div>`;
   }
   // 홈이 이미 그려져 있으면 입력창을 건드리지 않고 머리말과 요약만 새로 그린다(비동기 자료가 도착할 때 입력 중 포커스를 잃지 않게). 그렸으면 true.
   function homePartialRefresh() {

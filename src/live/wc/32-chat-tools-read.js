@@ -53,7 +53,7 @@
       else if (st === 'check') list = list.filter(x => ['check', 'confirm'].includes(stateOf(x)));
       if (a.area) list = list.filter(x => x.area === a.area);
       const label = {urgent: '급한 일', todo: '할 일', check: '확인이 필요한 일', wait: '결재 대기 중인 일', all: '처리할 일'}[st] || '처리할 일';
-      if (!list.length) return {ok: true, text: `${a.area ? a.area + ' ' : ''}${label}이(가) 없습니다.`, data: {count: 0, items: []}};
+      if (!list.length) return {ok: true, text: a.area ? `${a.area}: 지금 ${st === 'all' ? '처리하거나 답할' : label} 것이 없습니다.` : `${label}이 없습니다.`, data: {count: 0, items: []}};
       return {ok: true, text: `${a.area ? a.area + ' ' : ''}${label} ${list.length}건입니다.${list.length > lim ? ` 위에서 ${lim}건만 보여 드립니다.` : ''}`, data: {count: list.length, items: list.slice(0, lim).map(x => ({title: x.title, area: x.area, state: stateOf(x), deadline: x.deadline && x.deadline.date || ''}))},
         cards: [{type: 'list', title: label, items: list.slice(0, lim).map(chatTaskItem), more: Math.max(0, list.length - lim)}]};
     },
@@ -65,9 +65,11 @@
     params: {type: 'object', properties: {date: {type: 'string'}, days: {type: 'number'}}},
     run: async a => {
       if (!S.a || !S.raw) return chatNotReady();
-      const d0 = chatDateArg(a.date);
+      let d0 = chatDateArg(a.date);
       if (!d0) return {ok: false, text: '날짜를 알아보지 못했습니다. 예) 내일, 11/20, 다음 주 수요일'};
-      const n = Math.min(Math.max(Number(a.days) || 1, 1), 7), isos = Array.from({length: n}, (_, i) => chatAddDays(d0, i));
+      let n = Math.min(Math.max(Number(a.days) || 1, 1), 7);
+      { const t = today(), endIso = chatAddDays(d0, n - 1); if (d0 < t && endIso >= t) { n = Math.round((Date.parse(endIso) - Date.parse(t)) / 86400000) + 1; d0 = t; } } // "이번 주"는 지난 요일을 빼고 오늘부터
+      const isos = Array.from({length: n}, (_, i) => chatAddDays(d0, i));
       const teamOk = await chatLoadTeam(isos);
       const sched = (S.raw.data && S.raw.data.schedule && S.raw.data.schedule.events) || [];
       const days = isos.map(iso => {
@@ -117,12 +119,40 @@
         }
       }
       const span = nn === 1 ? chatMd(d0) : `${chatMd(d0)}~${chatMd(isos[isos.length - 1])}`;
+      const short = (x, n) => { x = String(x || ''); return x.length > n ? x.slice(0, n - 1) + '…' : x; };
       if (!hits.length) return {ok: true, text: name ? `${span} 사이에 “${name}” 님의 휴가·출장·교육 일정이 없습니다.` : `${span}에 ${dept || '우리 부서'}에서 휴가·출장·교육으로 자리를 비우는 직원이 없습니다.`, data: {count: 0}};
-      const line = h => `${h.name} ${h.label}${h.time ? ' ' + h.time : ''}${h.place ? ' · ' + h.place : ''}${h.reason ? ' · ' + h.reason : ''}${h.pending ? ' (결재 중)' : ''}`;
-      const items = hits.slice(0, 20).map(h => ({title: name ? `${chatMd(h.iso)} ${h.label}${h.time ? ' ' + h.time : ''}` : `${h.name} ${h.label}`, sub: [name ? '' : chatMd(h.iso) + (h.time ? ' ' + h.time : ''), h.place, h.reason].filter(Boolean).join(' · '), badge: h.pending ? '결재 중' : '', tone: 'info'}));
-      const head = name ? `${name} 님의 일정은 ${hits.length}건입니다.` : `${span} 자리 비움은 ${hits.length}건입니다.`;
-      return {ok: true, text: head, llm: `${head} ${hits.slice(0, 12).map(h => `${chatMd(h.iso)} ${h.name} ${h.label}${h.time ? ' ' + h.time : ''}`).join('; ')}`, data: {count: hits.length},
-        cards: [{type: 'list', title: name ? `${name} 님 일정` : '자리 비움', items, more: Math.max(0, hits.length - 20)}, {type: 'nav', label: '일정 달력에서 크게 보기', view: 'calendar'}]};
+      if (name) {
+        const first = hits[0];
+        const head = hits.length === 1 ? `${name} 님은 ${chatMd(first.iso)} ${first.label}${first.time ? ' ' + first.time : ''}${first.place ? ', ' + short(first.place, 30) : ''} 일정이 있습니다.` : `${name} 님의 일정은 ${hits.length}건이고, 가장 가까운 것은 ${chatMd(first.iso)} ${first.label}${first.time ? ' ' + first.time : ''}입니다.`;
+        const items = hits.slice(0, 20).map(h => ({title: `${chatMd(h.iso)} ${h.label}${h.time ? ' ' + h.time : ''}`, sub: [h.place, short(h.reason, 40)].filter(Boolean).join(' · '), badge: h.pending ? '결재 중' : '', tone: 'info'}));
+        return {ok: true, text: head, llm: `${head} ${hits.slice(0, 12).map(h => `${chatMd(h.iso)} ${h.label}${h.time ? ' ' + h.time : ''}`).join('; ')}`, data: {count: hits.length},
+          cards: [{type: 'list', title: `${name} 님 일정`, items, more: Math.max(0, hits.length - 20)}, {type: 'nav', label: '일정 달력에서 크게 보기', view: 'calendar'}]};
+      }
+      // 이름이 없으면 같은 일정(날짜·종류·시간·장소·사유)을 한 줄로 묶는다
+      const groups = new Map();
+      for (const h of hits) { const k = [h.iso, h.kind, h.label, h.time, h.place, h.reason].join('|'); const g = groups.get(k) || {...h, names: []}; g.names.push(h.name); groups.set(k, g); }
+      const gl = [...groups.values()], multiDay = nn > 1;
+      const head = `${span} ${dept || '우리 부서'} 자리 비움은 ${new Set(hits.map(h => h.name)).size}명, ${gl.length}개 일정입니다.`;
+      const line = g => `${g.names.join('·')} — ${multiDay ? chatMd(g.iso) + ' ' : ''}${g.label}${g.time ? ' ' + g.time : ''}${g.place ? ' · ' + short(g.place, 24) : ''}`;
+      return {ok: true, text: head + '\n' + gl.slice(0, 8).map(g => '• ' + line(g)).join('\n') + (gl.length > 8 ? `\n외 ${gl.length - 8}개 일정` : ''), llm: `${head} ${gl.slice(0, 10).map(g => `${g.names.join('·')} ${multiDay ? chatMd(g.iso) + ' ' : ''}${g.label}${g.time ? ' ' + g.time : ''}`).join('; ')}`, data: {people: new Set(hits.map(h => h.name)).size, events: gl.length},
+        cards: [{type: 'list', title: '자세한 내용', items: gl.slice(0, 20).map(g => ({title: `${g.names.join('·')} ${g.label}`, sub: [multiDay ? chatMd(g.iso) : '', g.time, short(g.place, 30), short(g.reason, 36)].filter(Boolean).join(' · '), badge: g.pending ? '결재 중' : '', tone: 'info'})), more: Math.max(0, gl.length - 20)}, {type: 'nav', label: '일정 달력에서 크게 보기', view: 'calendar'}]};
+    },
+  });
+
+  chatRegisterTool({
+    name: 'lookup_person', label: '직원 찾기', kind: 'read',
+    description: '직원의 부서·직급·전화·이메일을 찾는다(조직도 검색). name은 한글 이름.',
+    params: {type: 'object', properties: {name: {type: 'string'}}, required: ['name']},
+    run: async a => {
+      const q = String(a.name || '').trim();
+      if (q.length < 2) return {ok: false, text: '찾을 직원 이름을 알려 주세요. 예) 김지은 전화번호'};
+      let res; try { res = await GW.search(q, {types: ['person'], pageSize: 5}); } catch (e) { return {ok: false, text: '직원 검색에 실패했습니다: ' + String(e.message || e).slice(0, 80)}; }
+      const g = res.groups.person, list = (g && g.items) || [];
+      if (!list.length) return {ok: true, text: `“${q}” 님을 조직도에서 찾지 못했습니다. 이름을 확인해 주세요.`, data: {count: 0}};
+      const one = x => `${x.name} ${x.duty || x.position || ''} · ${x.dept || ''}`.replace(/\s+/g, ' ').trim();
+      const text = list.length === 1 ? `${one(list[0])}${list[0].tel ? ' · 전화 ' + list[0].tel : ''}${list[0].email ? ' · ' + list[0].email : ''}` : `“${q}”로 ${list.length}명이 검색됩니다.\n` + list.slice(0, 4).map(x => '• ' + one(x) + (x.tel ? ' · ' + x.tel : '')).join('\n');
+      return {ok: true, text, llm: `조직도에서 ${list.length}명 찾음: ${list.slice(0, 4).map(one).join('; ')}`, data: {count: list.length},
+        cards: [{type: 'list', title: '조직도 검색 결과', items: list.slice(0, 5).map(x => ({title: `${x.name} ${x.duty || x.position || ''}`.trim(), sub: [x.dept, x.tel, x.email].filter(Boolean).join(' · '), tone: 'info'}))}]};
     },
   });
 

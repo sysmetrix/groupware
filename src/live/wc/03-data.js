@@ -127,7 +127,7 @@
   }
   const isUserBusy = () => {
     const ae = root.activeElement;
-    if (ae && ['INPUT', 'TEXTAREA', 'SELECT'].includes(ae.tagName) && ae.id !== 'gsearch') return true;
+    if (ae && ['INPUT', 'TEXTAREA', 'SELECT'].includes(ae.tagName) && ae.id !== 'gsearch' && !(ae.id === 'chInput' && S.view === 'home')) return true; // 홈의 채팅 입력은 부분 갱신으로 지켜지므로 바쁜 것으로 보지 않는다
     return !!S.focus || S.paletteOpen;
   };
 

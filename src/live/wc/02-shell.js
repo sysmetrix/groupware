@@ -109,7 +109,7 @@
 <label class="srch" title="통합검색 또는 명령 (Ctrl+K)">${ic('search')}<input id="gsearch" placeholder="메일·문서·사람 검색 또는 명령" autocomplete="off" aria-label="통합검색"><kbd>Ctrl K</kbd></label>
 <span class="sp"></span>
 <button class="stat" id="meta" data-act="refresh" title="지금 다시 읽기 (R)"></button>
-<button class="hb primary" data-act="openCmd" title="AI 업무 지시창 (자연어로 기안·회신·신청 자동화)">${ic('star')}AI 지시</button>
+<button class="hb primary" data-act="openCmd" title="AI에게 말로 지시하기 (홈의 채팅창, 단축키 /)">${ic('star')}AI 지시</button>
 <button class="hb" data-act="menuNew" title="새 메일·새 기안·근태신청">${ic('plus')}새로 만들기</button>
 <button class="hb icon" data-act="openHistory" title="자동화 작업 내역 및 검증 로그" aria-label="작업 내역">${ic('clock')}</button>
 <button class="hb icon" data-act="theme" id="themeBtn" title="다크/라이트 모드 전환 (Shift+D)" aria-label="화면 모드 전환"></button>

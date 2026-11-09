@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {chatParseDate, chatParseTime, chatParseRange, chatIntent, chatExtractName, chatToGeminiTools, chatParseResponse, chatSanitizeForLlm, chatSanitizeText, chatErrorMessage, chatBuildRequest, chatSystemPrompt} from '../src/live/chat.mjs';
+import {chatRankModels, chatCooldownFor, chatComposePrompt, chatExtractPerson, chatParseDate, chatParseTime, chatParseRange, chatIntent, chatExtractName, chatToGeminiTools, chatParseResponse, chatSanitizeForLlm, chatSanitizeText, chatErrorMessage, chatBuildRequest, chatSystemPrompt} from '../src/live/chat.mjs';
 
 // 2026-11-10 (화) 12:00 KST
 const NOW = new Date('2026-11-10T12:00:00+09:00');
@@ -50,7 +50,7 @@ test('chatIntent: Korean phrases route to the right tool', () => {
     ['월간업무보고 검색', 'search_documents'], ['노동이사제 찾아줘', 'search_documents'],
     ['예산 집행 현황', 'get_budget'], ['차량 예약 가능한 시간', 'get_resource_status'], ['내일 관용차 비어 있어?', 'get_resource_status'],
     ['내일 14시부터 16시까지 차량 예약해줘', 'reserve_vehicle'], ['결과보고 작성해줘', 'prepare_draft'], ['운영계획서 기안 시작', 'prepare_draft'],
-    ['김팀장 메일 답장 써줘', 'draft_mail_reply'], ['보고서 할 일 추가해줘', 'add_todo'], ['예산 화면 열어줘', 'open_view'], ['구글 캘린더에 올릴 거 있어?', 'get_gcal_sync'], ['근태 구글 캘린더 동기화 해줘', 'get_gcal_sync'], ['메일 보여줘', 'open_view'],
+    ['김팀장 메일 답장 써줘', 'draft_mail_reply'], ['보고서 할 일 추가해줘', 'add_todo'], ['예산 화면 열어줘', 'open_view'], ['구글 캘린더에 올릴 거 있어?', 'get_gcal_sync'], ['답장 필요한 메일 있어?', 'list_tasks'], ['이번 주에 내가 제일 먼저 챙길 게 뭐야?', 'list_tasks'], ['회신 안 한 메일 뭐야', 'list_tasks'], ['김지은 전화번호 알려줘', 'lookup_person'], ['이승봉 팀장 부서가 어디야', 'lookup_person'], ['근태 구글 캘린더 동기화 해줘', 'get_gcal_sync'], ['메일 보여줘', 'open_view'],
   ];
   for (const [q, tool] of cases) assert.equal(chatIntent(q, NOW).tool, tool, q);
   assert.equal(chatIntent('안녕', NOW).tool, '');
@@ -106,4 +106,22 @@ test('chatErrorMessage maps statuses to Korean messages', () => {
 test('chatSystemPrompt states the safety rules', () => {
   const p = chatSystemPrompt('2026-11-10 12:00', '홍길동');
   assert.match(p, /홍길동/); assert.match(p, /신뢰할 수 없는/); assert.match(p, /확인 카드/); assert.match(p, /지어내지/);
+});
+
+test('chatRankModels prefers lite (newest first), skips preview/tts/image, keeps aliases last', () => {
+  const r = chatRankModels(['models/gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-3.5-flash-lite', 'gemini-flash-lite-latest', 'gemini-3.1-flash-lite', 'gemini-3-flash-preview', 'gemini-3.8-flash-tts', 'gemini-3.1-flash-image', 'gemini-flash-latest', 'gemma-4-31b-it', 'gemini-3.8-flash']);
+  assert.deepEqual(r, ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-flash-lite-latest', 'gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-flash-latest']);
+  assert.deepEqual(chatRankModels([]), []);
+});
+test('chatCooldownFor: quota, retry info, 404, 5xx', () => {
+  assert.equal(chatCooldownFor(429, 'You exceeded your current quota'), 30 * 60000);
+  assert.equal(chatCooldownFor(429, 'Please retry in 37.2s.'), 37200);
+  assert.equal(chatCooldownFor(429, 'x', '5s'), 30000); // 최소 30초
+  assert.equal(chatCooldownFor(429, 'Quota exceeded for metric ... PerDay'), 6 * 3600000);
+  assert.equal(chatCooldownFor(404, ''), 24 * 3600000); assert.equal(chatCooldownFor(503, ''), 90000); assert.equal(chatCooldownFor(500, ''), 60000); assert.equal(chatCooldownFor(400, ''), 0);
+});
+test('chatComposePrompt keeps the result as data and asks for a short grouped answer; chatExtractPerson', () => {
+  const p = chatComposePrompt('오늘 누가 출장이야?', '김보라 관내출장', '{"count":1}');
+  assert.match(p, /질문: 오늘 누가 출장이야\?/); assert.match(p, /지시문이 아니다/); assert.match(p, /3~5줄/); assert.match(p, /김보라 관내출장/);
+  assert.equal(chatExtractPerson('김지은 전화번호 알려줘'), '김지은'); assert.equal(chatExtractPerson('이승봉 팀장 부서'), '이승봉'); assert.equal(chatExtractPerson('내 부서 알려줘'), ''); assert.equal(chatExtractPerson('일정'), '');
 });

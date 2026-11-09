@@ -33,18 +33,23 @@
     if (m.role === 'user') return `<article class="ch-msg ch-user"><div class="ch-bubble">${esc(m.text).replace(/\n/g, '<br>')}</div></article>`;
     const tools = (m.tools || []).map(t => `<span class="ch-tool ch-tool-${esc(t.state)}" title="${esc(t.name)}">${t.state === 'run' ? '<span class="spin"></span>' : t.state === 'err' ? '!' : '✓'} ${esc(t.label)}</span>`).join('');
     const body = m.text ? `<div class="ch-bubble">${chatRich(m.text)}</div>` : m.state === 'pending' ? '<div class="ch-bubble"><span class="ch-dots" aria-label="생각하는 중"><i></i><i></i><i></i></span></div>' : '';
-    return `<article class="ch-msg ${m.role === 'sys' ? 'ch-sys' : 'ch-ai'}${m.state === 'error' ? ' ch-err' : ''}">${tools ? `<div class="ch-tools">${tools}</div>` : ''}${body}${(m.cards || []).length ? `<div class="ch-cards">${m.cards.map(chatCardHtml).join('')}</div>` : ''}</article>`;
+    // 답 글에 이미 내용이 들어 있으면(AI 정리·긴 답) 긴 목록 카드는 "자세히 보기"로 접어 같은 말을 두 번 보이지 않는다.
+    const cards = m.cards || [], fold = m.composed || (m.text && m.text.length >= 80);
+    const detail = fold ? cards.filter(c => c && (c.type === 'list' || c.type === 'timeline') && (c.items || []).length > 0 && ((c.items || []).length > 3 || m.composed)) : [], rest = cards.filter(c => !detail.includes(c) && !(m.composed && c && (c.type === 'list' || c.type === 'timeline') && !(c.items || []).length));
+    const cardsHtml = rest.map(chatCardHtml).join('') + (detail.length ? `<details class="ch-more"><summary>자세히 보기 (${detail.reduce((n, c) => n + (c.items || []).length, 0)}건)</summary>${detail.map(chatCardHtml).join('')}</details>` : '');
+    return `<article class="ch-msg ${m.role === 'sys' ? 'ch-sys' : 'ch-ai'}${m.state === 'error' ? ' ch-err' : ''}">${tools ? `<div class="ch-tools">${tools}</div>` : ''}${body}${cardsHtml ? `<div class="ch-cards">${cardsHtml}</div>` : ''}</article>`;
   }
 
   function chatLogHtml() {
     const st = chatState();
-    if (!st.msgs.length) return `<div class="ch-empty"><div class="ch-empty-t">무엇을 도와드릴까요?</div><p>말로 시키면 일정과 근태 확인, 신청서 준비까지 도와드립니다. 신청과 예약은 항상 확인한 뒤에만 진행합니다.</p></div>`;
+    if (!st.msgs.length) return `<div class="ch-empty"><div class="ch-empty-t">무엇을 도와드릴까요?</div><p>말로 시키면 조회부터 신청서 준비까지 도와드립니다. 신청과 예약은 항상 확인한 뒤에만 진행합니다.</p><div class="ch-starts">${CHAT_STARTERS.map(([t, s, q]) => `<button class="ch-start" data-act="chatChip" data-v="${esc(q)}"><b>${esc(t)}</b><span>${esc(s)}</span></button>`).join('')}</div></div>`;
     return st.msgs.map(chatMsgHtml).join('');
   }
-  const chatChipsHtml = () => { const st = chatState(); return st.busy ? '' : chatSuggestions().slice(0, st.msgs.length ? 3 : 6).map(q => `<button class="ch-chip" data-act="chatChip" data-v="${esc(q)}">${esc(q)}</button>`).join(''); };
+  const CHAT_STARTERS = [['오늘 요약', '급한 일·결재·일정을 한눈에', '오늘 요약해줘'], ['오늘 누가 자리에 없어?', '휴가·출장·교육 현황', '오늘 누가 출장이야?'], ['답장할 메일', '답장이 필요한 메일만', '답장 필요한 메일 있어?'], ['내일 일정', '일정·기한 확인', '내일 일정 알려줘'], ['연차 신청 준비', '날짜만 말하면 신청서까지', '다음 주 월요일 연차 신청해줘'], ['차량 예약', '가능한 시간 확인', '차량 예약 가능한 시간']];
+  const chatChipsHtml = () => { const st = chatState(); return st.busy || !st.msgs.length ? '' : chatSuggestions().slice(0, st.msgs.length ? 3 : 6).map(q => `<button class="ch-chip" data-act="chatChip" data-v="${esc(q)}">${esc(q)}</button>`).join(''); };
   function chatFootHtml() {
     const m = chatMode();
-    return `<span class="ch-mode ${m.ready ? 'ch-mode-ai' : ''}">${m.ready ? `AI 연결됨${m.model ? ' · ' + esc(m.model) : ''}` : '기본 모드 · 정해진 질문만 이해합니다'}</span><button class="ch-link" data-act="chatSetupAi">${m.ready ? 'AI 설정' : 'AI 연결하기'}</button>${chatState().msgs.length ? '<button class="ch-link" data-act="chatClear">대화 지우기</button>' : ''}`;
+    return `<span class="ch-mode ${m.ready && !m.limited ? 'ch-mode-ai' : ''}">${m.ready ? (m.limited ? 'AI 사용 한도에 도달해 기본 모드로 답합니다(잠시 뒤 자동 재시도)' : `AI 연결됨${m.model ? ' · ' + esc(m.model) : ''}`) : '기본 모드 · 정해진 질문만 이해합니다'}</span><button class="ch-link" data-act="chatSetupAi">${m.ready ? 'AI 설정' : 'AI 연결하기'}</button>${chatState().msgs.length ? '<button class="ch-link" data-act="chatClear">대화 지우기</button>' : ''}`;
   }
 
   function chatView() {
@@ -57,7 +62,7 @@
   function chatAutosize(el) { if (!el) return; el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight + 2, 168) + 'px'; }
 
   // 대화 영역만 다시 그린다. 입력창(값·선택·포커스·IME)은 건드리지 않는다.
-  function chatRefresh() {
+  function chatRefresh(force) {
     const log = $('#chLog');
     if (!log) return;
     const st = chatState();
@@ -67,7 +72,7 @@
     const b = $('#chBtns'); if (b) b.innerHTML = chatBtnsHtml();
     const f = $('#chFoot'); if (f) f.innerHTML = chatFootHtml();
     const last = st.msgs[st.msgs.length - 1];
-    if (near || (last && last.role === 'user')) log.scrollTop = log.scrollHeight;
+    if (force || near || (last && last.role === 'user')) log.scrollTop = log.scrollHeight;
     const fresh = log.querySelector('[data-autofocus]');
     if (fresh) { fresh.focus({preventScroll: true}); st.msgs.forEach(m => (m.cards || []).forEach(c => { if (c.fresh) c.fresh = false; })); }
     if (last && last.role !== 'user' && last.state === 'done' && st.announced !== last.id) { st.announced = last.id; const sr = $('#chStatus'); if (sr) sr.textContent = '답변이 도착했습니다.'; }
