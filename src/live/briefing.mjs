@@ -907,7 +907,33 @@ export function maskSensitive(s) {
 // ---------------------------------------------------------------------------
 const hmMin = s => { const m = String(s || '').match(/^(\d{2})(\d{2})$/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
 const hmFmt = s => (String(s || '').length === 4 ? `${s.slice(0, 2)}:${s.slice(2)}` : '');
+// 신청 한 건의 시간·장소·사유(근태 달력과 근태 화면에 보여 주는 세부 내역)
+export function appInfo(a = {}) {
+  const s = String(a.startTm || ''), e = String(a.endTm || '');
+  const time = s.length === 4 && e.length === 4 && !(s === '0000' && e === '0000') ? `${hmFmt(s)}~${hmFmt(e)}` : '';
+  return {item: String(a.atNm || ''), time, place: String(a.place || ''), route: [a.depart, a.stop, a.arrive].filter(Boolean).join(' → '), reason: String(a.reason || ''), transport: String(a.transport || ''), title: String(a.title || ''), noDoc: String(a.noDoc || ''), pending: String(a.approState) !== '1'};
+}
+export const appInfoLine = i => (i ? [i.time, i.place, i.reason].filter(Boolean).join(' · ') + (i.pending ? ' (결재 중)' : '') : '');
+// 신청 목록을 사번|날짜별로 색인한다(날짜별 하루씩 펼침, 과거 포함).
+export function appInfoIndex(apps = []) {
+  const idx = {};
+  for (const r of expandPlanned(apps, {fromYmd: '20200101', toYmd: '20991231', todayYmd: '20200101', includePast: true})) (idx[`${r.emp}|${r.date}`] = idx[`${r.emp}|${r.date}`] || []).push({...r.info, name: r.name, dept: r.dept});
+  return idx;
+}
+const kindOfItem = item => /휴가|연차|반차|병가|공가|대체휴가|보상휴가/.test(item) ? 'leave' : /출장|교육/.test(item) ? 'trip' : /연장근무|휴일근무|조기근무|시간외\s*근무/.test(item) ? 'ot' : '';
+function pickInfo(idx, r) {
+  const list = idx && idx[`${r.emp}|${r.date}`];
+  if (!list || !list.length) return null;
+  return list.find(i => i.item === r.item) || list.find(i => kindOfItem(i.item) && kindOfItem(i.item) === kindOfItem(r.item)) || null;
+}
 export function classifyTeamRow(r, now = new Date()) {
+  const c = classifyCore(r, now);
+  if (!c) return c;
+  const i = r.info || null;
+  const detail = c.kind === 'ot' ? c.detail + (i && i.reason ? ` · 사유 ${i.reason}` : '') : appInfoLine(i);
+  return {...c, info: i, time: i ? i.time : '', place: i ? i.place : '', reason: i ? i.reason : '', detail};
+}
+function classifyCore(r, now = new Date()) {
   const item = String(r.item || '');
   let kind = '';
   if (/휴가|연차|반차|병가|공가|대체휴가|보상휴가/.test(item)) kind = 'leave';
@@ -930,10 +956,11 @@ export function classifyTeamRow(r, now = new Date()) {
   const early = actual < end;
   return {...base, state: early ? 'short' : 'ok', detail: `신청 ${span} · 퇴근 지문 ${hmFmt(r.leave)}${early ? ` (신청 종료보다 ${end - actual}분 일찍)` : ''}`};
 }
-export function buildTeamCalendar(rows = [], now = new Date()) {
+export function buildTeamCalendar(rows = [], now = new Date(), idx = null) {
   const byDate = {}, problems = [];
   const expanded = rows.flatMap(r => String(r.item || '').split(/\s*[,;/+·]\s*/).filter(Boolean).map(item => ({...r, item})));
-  for (const r of expanded) {
+  for (const r0 of expanded) {
+    const r = r0.info ? r0 : {...r0, info: pickInfo(idx, r0)};
     const c = classifyTeamRow(r, now);
     if (!c) continue;
     if (c.kind === 'ot' && !c.mine) continue; // 다른 직원의 시간외·지문은 표시하지 않는다(내 것만)
@@ -1019,7 +1046,7 @@ export const AI_SYSTEM = '당신은 한국 공공기관(부천여성청소년재
 // ---------------------------------------------------------------------------
 // 도래하지 않은 날짜: 근태/출장 신청 현황(결재 중 포함)을 날짜별 행으로 펼친다. 지문은 아직 없으므로 신청만 보여 준다.
 // ---------------------------------------------------------------------------
-export function expandPlanned(apps = [], {fromYmd, toYmd, todayYmd, meCd = ''} = {}) {
+export function expandPlanned(apps = [], {fromYmd, toYmd, todayYmd, meCd = '', includePast = false} = {}) {
   const out = [];
   const toDay = s => Math.floor(Date.parse(fmtYmd(s) + 'T00:00:00Z') / 86400000);
   const ymdOf = n => new Date(n * 86400000).toISOString().slice(0, 10).replace(/-/g, '');
@@ -1033,11 +1060,11 @@ export function expandPlanned(apps = [], {fromYmd, toYmd, todayYmd, meCd = ''} =
     if (a.deleteReqYn === 'Y' || a.docdelYn === 'N') continue;
     const leaveLike = /휴가|연차|반차|병가|공가|보상|대체/.test(String(a.atNm || ''));
     // 조회 범위와 오늘로 먼저 잘라서(수개월짜리 신청도 안전하게) 하루씩 펼친다
-    const lo = Math.max(toDay(s), toDay(String(fromYmd)), toDay(String(todayYmd))), hi = Math.min(toDay(e), toDay(String(toYmd)));
+    const lo = Math.max(toDay(s), toDay(String(fromYmd)), includePast ? -Infinity : toDay(String(todayYmd))), hi = Math.min(toDay(e), toDay(String(toYmd)));
     for (let d = lo; d <= hi; d++) {
       const ymd = ymdOf(d), dow = new Date(d * 86400000).getUTCDay();
       if (leaveLike && s !== e && (dow === 0 || dow === 6)) continue; // 여러 날 휴가는 주말을 쉬는 날로 세지 않는다(출장·휴일근무는 주말도 포함)
-      out.push({emp: String(a.empCd || ''), name: a.korNm || a.empNm || '', dept: a.deptNm || '', date: ymd, item: a.atNm || '', appStart: a.startTm || '', appEnd: a.endTm || '', come: '', leave: '', result: '', mine: !!meCd && String(a.empCd) === String(meCd), pending: String(a.approState) !== '1'});
+      out.push({emp: String(a.empCd || ''), name: a.korNm || a.empNm || '', dept: a.deptNm || '', date: ymd, item: a.atNm || '', appStart: a.startTm || '', appEnd: a.endTm || '', come: '', leave: '', result: '', mine: !!meCd && String(a.empCd) === String(meCd), pending: String(a.approState) !== '1', info: appInfo(a)});
     }
   }
   return out;
@@ -1127,6 +1154,7 @@ export function wrapUpModel({now = new Date(), ownOtToday = null, tomorrowItems 
 // 업데이트 내역: 새 버전을 낼 때 맨 위에 한 줄을 추가한다(하네스가 현재 버전과 맞는지 검사).
 // 4.2~4.6 사이 세부 항목은 릴리스 제목만 근거로 적어 간단하다.
 export const CHANGELOG = [
+  {v: "0.35.0", date: "2026-11-10", old: "", title: "근태 세부 내역(시간·장소·사유) 표시", items: ["일정 달력의 직원 휴가·출장·교육 칩과 날짜 상세에 시간, 출장지, 사유·목적을 표시. 홈 “오늘 자리 비움”에도 시간과 장소를 함께 표시","근태·연차 화면: 날짜를 누르면 그날의 신청 내용(시간, 장소, 경로, 사유·목적, 교통, 문서번호, 결재 중 여부), 연차·휴가 내역 표에 시간·장소·사유 칸 추가","확인이 필요한 근태 항목의 상세 창에도 같은 신청 내용을 표시. 근태신청과 출장신청 현황 두 목록을 신청 한 건으로 합쳐 읽고 10분 동안 모든 화면이 같이 사용(읽기 전용, 신청일 기준 최근 150일)"]},
   {v: "0.34.1", date: "2026-11-10", old: "", title: "구글 일정: 캘린더별 색 구분", items: ["구글 일정에서 캘린더마다 구글 캘린더 원본과 같은 색으로 일정을 구분해서 표시하고, 화면 위에 색 범례(이름)를 보여 줌","설정 화면이 한 줄에 하나 “캘린더ID #색상 이름” 형식의 목록으로 바뀜. 색과 이름은 생략할 수 있고, 0.34.0에서 저장한 캘린더 목록은 그대로 읽음"]},
   {v: "0.34.0", date: "2026-11-10", old: "", title: "구글 일정 메뉴", items: ["왼쪽 메뉴 “구글 일정”(일정 달력 바로 아래, 명령창에서도 검색): 내 Google 캘린더를 업무센터 안에서 주·월·목록으로 봄. 첫 사용 때 구글 이메일 한 번만 입력","다른 캘린더(부서·개인 등)는 캘린더 ID를 쉼표로 더하면 함께 표시. “새 일정”과 “구글 캘린더 열기” 버튼은 구글 캘린더를 새 탭으로 엶","구글에서 제공하는 퍼가기 화면을 그대로 보여 주는 읽기 전용 화면이며, 일정 내용은 업무센터가 읽거나 저장하지 않음(이메일·보기 방식만 저장). 관리자 정책 googleCalendar로 끌 수 있음"]},
   {v: "0.33.0","date":"2026-11-10","old":"","title":"자료 보호와 설치·동기화 안정성 종합 개선","items":["여러 탭의 할 일·숨김·미루기·설정을 변경분 기준으로 합치고 삭제한 항목의 재등장을 막음. 주간 보고 동시 편집 충돌 시 다른 초안을 보관하고 보고서 화면에서 복구","계정 전환 때 결재 추가 페이지·검색·근태·예산·예약·되돌리기 캐시를 비우고 이전 사용자로 시작한 지연 응답을 폐기","결재 더 보기: 중복 클릭 잠금, 페이지 번호 별도 추적, 문서 ID 중복 제거, 새로고침 이후 오래된 응답 차단","작성 중인 기안·근태·회신의 자동 입력 전 덮어쓰기 확인과 취소 전파 보강. 존재하지 않는 날짜를 신청서에 넣지 않도록 검증","동기화 자료와 체크포인트를 실제 저장 바이트 기준으로 검사하고 최신 브라우저 자료가 과거 파일로 교체되는 것을 차단","원본이 누락된 문서를 표시하되 다른 업로드와 기존 추출 근거는 유지","같은 코드로 빌드하면 같은 실행 검증값 생성, 관리자 정책 보존, 격리 빌드·회귀 검사로 배포본이 테스트 중 바뀌지 않도록 개선","저장 실패를 자동 저장 성공으로 표시하지 않음. 감사 기록 삭제 전에 확인하고 초기화 기록을 남김. 숨겨진 업무센터 탭의 불필요한 자동 조회를 줄임"]},

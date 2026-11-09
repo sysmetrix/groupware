@@ -45,6 +45,21 @@ ${teamDayPanel()}
   const TEAM_STATE = {ok: ['✓', '퇴근 지문 확인'], miss: ['✗', '지문 없음'], short: ['!', '신청 종료 전 퇴근'], wait: ['…', '아직 진행 전'], info: ['', '']};
   function teamCfg() { const cs = S.cal; cs.layers = cs.layers || {leave: true, trip: true, ot: true}; cs.day = cs.day || ''; return cs; }
   function monthKey() { const b = new Date(); b.setDate(1); b.setMonth(b.getMonth() + S.cal.offset); return `${b.getFullYear()}${String(b.getMonth() + 1).padStart(2, '0')}`; }
+  // 근태·출장 신청 내역(시간·장소·사유)을 한 번만 읽어 10분 동안 모든 화면이 같이 쓴다.
+  function loadApps() {
+    const c = S.appsC;
+    if (c && c.user === currentKey && Date.now() - c.at < 10 * 60000) return c.p;
+    const owner = currentKey;
+    const p = GW.teamPlanned().then(r => { const out = {apps: r.apps, me: r.me, idx: R.appInfoIndex(r.apps)}; if (S.appsC && S.appsC.p === p) S.appsC.data = out; return out; });
+    S.appsC = {at: Date.now(), user: owner, p, data: null};
+    p.then(() => { if (owner === currentKey && S.open && ['attendance', 'calendar', 'today'].includes(S.view) && !S.focus) render(); }, e => logError('apps', e.message));
+    return p;
+  }
+  const myAppInfos = d8 => { const dt = S.appsC && S.appsC.user === currentKey && S.appsC.data; return dt ? (dt.idx[`${dt.me}|${d8}`] || []) : null; };
+  const appsReady = () => !!(S.appsC && S.appsC.data);
+  function appInfoHtml(list) {
+    return list.map(i => `<div style="line-height:1.75;margin-top:4px"><b>${esc(i.item)}</b>${i.pending ? ' <span class="bdg info">결재 중</span>' : ''}${i.time ? ` · ${esc(i.time)}` : ''}${i.place ? `<br><span class="muted">장소</span> ${esc(i.place)}` : ''}${i.route ? `<br><span class="muted">경로</span> ${esc(i.route)}` : ''}${i.reason ? `<br><span class="muted">사유·목적</span> ${esc(i.reason)}` : ''}${i.transport ? `<br><span class="muted">교통</span> ${esc(i.transport)}` : ''}${i.noDoc ? ` <span class="muted">(${esc(i.noDoc)})</span>` : ''}</div>`).join('');
+  }
   function ensureTeam(mk) {
     S.team = S.team || {};
     const cur = S.team[mk], todayKey = R.kstNow(new Date()).date;
@@ -58,9 +73,10 @@ ${teamDayPanel()}
     // 지문이 있는 과거·오늘은 근태 기록, 아직 오지 않은 날은 신청 현황(결재 중 포함)으로 채운다
     const yest = R.kstNow(new Date(Date.now() - 86400000)).date.replace(/-/g, ''); // 근태 기록 조회는 오늘을 포함하면 빈 결과가 나와 어제까지만 읽는다
     const past = mk + '01' <= yest ? GW.teamAttendance({from: mk + '01', to: monthEnd < yest ? monthEnd : yest}) : Promise.resolve([]);
-    const planned = monthEnd >= todayY && GW.teamPlanned ? GW.teamPlanned().then(p => R.expandPlanned(p.apps, {fromYmd: mk + '01', toYmd: monthEnd, todayYmd: todayY, meCd: p.me})).catch(() => []) : Promise.resolve([]);
-    Promise.all([past, planned])
-      .then(([rows, fut]) => { if (owner !== currentKey) return; const all = [...rows, ...fut]; S.team[mk] = {busy: false, rows: all, err: '', cal: R.buildTeamCalendar(all, new Date()), at: Date.now(), asOf: todayY === R.kstNow(new Date()).date.replace(/-/g, '') ? R.kstNow(new Date()).date : todayY, user: currentKey, planned: fut.length}; })
+    const appsP = GW.teamPlanned ? loadApps().catch(() => null) : Promise.resolve(null);
+    const planned = appsP.then(p => (p && monthEnd >= todayY ? R.expandPlanned(p.apps, {fromYmd: mk + '01', toYmd: monthEnd, todayYmd: todayY, meCd: p.me}) : []));
+    Promise.all([past, planned, appsP])
+      .then(([rows, fut, ap]) => { if (owner !== currentKey) return; const all = [...rows, ...fut]; S.team[mk] = {busy: false, rows: all, err: '', cal: R.buildTeamCalendar(all, new Date(), ap && ap.idx), at: Date.now(), asOf: todayY === R.kstNow(new Date()).date.replace(/-/g, '') ? R.kstNow(new Date()).date : todayY, user: currentKey, planned: fut.length}; })
       .catch(e => { if (owner !== currentKey) return; S.team[mk] = {busy: false, rows: null, err: String(e.message || e).slice(0, 80), at: Date.now(), user: currentKey}; logError('team', e.message); })
       .finally(() => { if (S.view === 'calendar' || S.view === 'today') renderMain(); });
   }
@@ -89,7 +105,7 @@ ${teamDayPanel()}
     const s = R.teamHomeSummary(t.cal, new Date());
     { const dp = effDept(t.cal.depts); if (dp) { s.leave = s.leave.filter(x => x.dept === dp); s.trip = s.trip.filter(x => x.dept === dp); } }
     if (p.d <= 7 && pt && pt.cal) s.problems = [...s.problems, ...R.teamHomeSummary({byDate: {}, problems: pt.cal.problems}, new Date(Date.now() - 0)).problems, ...pt.cal.problems.filter(x => x.date >= R.kstNow(new Date(Date.now() - 7 * 86400000)).date.replace(/-/g, ''))].filter((x, i, a) => a.findIndex(y => y.name === x.name && y.date === x.date) === i);
-    const nm = x => esc(x.name) + (x.mine ? '(나)' : '') + ' <span class="muted">' + esc(x.label.replace(/^(관내|관외)/, '$1 ')) + '</span>';
+    const nm = x => esc(x.name) + (x.mine ? '(나)' : '') + ' <span class="muted">' + esc(x.label.replace(/^(관내|관외)/, '$1 ')) + (x.time ? ' ' + esc(x.time) : '') + (x.place ? ' · ' + esc(x.place) : '') + '</span>';
     const away = s.leave.length + s.trip.length;
     const left = away
       ? `<div class="card2"><div class="ct">오늘 자리 비움 <span class="bdg info">${away}명</span></div><div style="line-height:1.9">${s.leave.length ? '휴가: ' + s.leave.map(nm).join(' · ') + '<br>' : ''}${s.trip.length ? '출장·교육: ' + s.trip.map(nm).join(' · ') : ''}</div></div>`
@@ -125,7 +141,7 @@ ${teamDayPanel()}
     if (!l.length) return '';
     const grp = [['ot', '시간외 근무'], ['leave', '휴가'], ['trip', '출장·교육']];
     return `<div class="box" style="margin-top:12px"><b>${esc(d8.slice(0, 4))}-${esc(d8.slice(4, 6))}-${esc(d8.slice(6))}</b> 직원 근태 <button class="btn sm ghost" data-act="calDay" data-v="">닫기</button>
-      ${grp.map(([k, n]) => { const g = l.filter(x => x.kind === k); return g.length ? `<div style="margin-top:8px"><span class="muted">${n} ${g.length}명</span>${g.map(x => { const st = TEAM_STATE[x.state] || TEAM_STATE.info; return `<div class="tp ${x.mine ? 'me' : ''}"><b>${esc(x.name)}</b> <span class="muted">${esc(x.dept)}</span> · ${esc(x.label)}${x.kind === 'ot' ? ` <span class="bdg ${x.state === 'ok' ? 'confirm' : x.state === 'miss' ? 'urgent' : x.state === 'wait' ? 'info' : 'check'}">${st[0]} ${st[1]}</span> <span class="muted">${esc(x.detail)}</span>` : ''}</div>`; }).join('')}</div>` : ''; }).join('')}</div>`;
+      ${grp.map(([k, n]) => { const g = l.filter(x => x.kind === k); return g.length ? `<div style="margin-top:8px"><span class="muted">${n} ${g.length}명</span>${g.map(x => { const st = TEAM_STATE[x.state] || TEAM_STATE.info; return `<div class="tp ${x.mine ? 'me' : ''}"><b>${esc(x.name)}</b> <span class="muted">${esc(x.dept)}</span> · ${esc(x.label)}${x.kind !== 'ot' && x.detail ? ` <span class="muted">${esc(x.detail)}</span>` : ''}${x.kind === 'ot' ? ` <span class="bdg ${x.state === 'ok' ? 'confirm' : x.state === 'miss' ? 'urgent' : x.state === 'wait' ? 'info' : 'check'}">${st[0]} ${st[1]}</span> <span class="muted">${esc(x.detail)}</span>` : ''}</div>`; }).join('')}</div>` : ''; }).join('')}</div>`;
   }
 
   // ----- 예산 집행 (customizable: pick any foundation project & subject, pin to my list) -----

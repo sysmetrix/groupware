@@ -15,7 +15,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '0.34.1';
+  const VERSION = '0.35.0';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
@@ -398,8 +398,15 @@
       call('/human/hrd0220/0hr00001', {coCd: ctx.erpCompSeq, dateFg: '1', appDtFrom: from, appDtTo: to, approStateList: ['0', '1', '5'], deleteRequest: false, noDoc: '', divCdList: [], deptCdList: [], empCdList: [], atItemCdList: [], atCdList: [], htypCdList: [], prtyCdList: [], keyword: '', administrator: false, searchType: 'deptCd'}).catch(() => []),
       call('/human/hrd1130/0hr00004', {coCd: ctx.erpCompSeq, appDtFrom: from, appDtTo: to, startDt: '', endDt: '', divCdList: [], deptCdList: [], empCdList: [], approvalStatusCdList: ['0', '1', '2', '3', '5']}).catch(() => []),
     ]);
-    const pick = r => ({empCd: str(r.empCd, 12), korNm: str(r.korNm || r.empNm, 20), deptNm: str(r.deptNm, 30), atNm: str(r.atNm, 30), atItemNm: str(r.atItemNm, 20), startDt: str(r.startDt, 8), endDt: str(r.endDt, 8), startTm: str(r.startTm, 4), endTm: str(r.endTm, 4), appDt: str(r.appDt, 8), appSq: str(r.appSq, 12), approState: str(r.approState, 2), deleteReqYn: str(r.deleteReqYn, 1), docdelYn: str(r.docdelYn, 1)});
-    return {apps: [...arr(leave), ...arr(trip)].map(pick), me: String(ctx.erpEmpSeq || '')};
+    const pick = r => ({empCd: str(r.empCd, 12), korNm: str(r.korNm || r.empNm, 20), deptNm: str(r.deptNm, 30), atNm: str(r.atNm, 30), atItemNm: str(r.atItemNm, 20), startDt: str(r.startDt, 8), endDt: str(r.endDt, 8), startTm: str(r.startTm, 4), endTm: str(r.endTm, 4), appDt: str(r.appDt, 8), appSq: str(r.appSq, 12), approState: str(r.approState, 2), deleteReqYn: str(r.deleteReqYn, 1), docdelYn: str(r.docdelYn, 1),
+      title: str(r.titleDc, 80), noDoc: str(r.noDoc, 40), reason: str(r.appRmkDc || r.biztrPpsDc || r.taskDc, 200), place: str(r.biztrDc, 80), depart: str(r.depatNm, 40), stop: str(r.stopvNm, 40), arrive: str(r.arrivNm, 40), transport: str(r.transCtdNm, 30)});
+    // 같은 신청이 두 목록에 모두 있으면(관내출장 등) 비어 있는 칸을 서로 채워 한 건으로 합친다(출장지·목적은 출장 목록에만 있다).
+    const merged = new Map();
+    for (const r of [...arr(leave), ...arr(trip)]) {
+      const p = pick(r), k = [p.empCd, p.appDt, p.appSq, p.atNm].join('|'), o = merged.get(k);
+      if (!o) merged.set(k, p); else for (const f of Object.keys(p)) if (!o[f] && p[f]) o[f] = p[f];
+    }
+    return {apps: [...merged.values()], me: String(ctx.erpEmpSeq || '')};
   }
   async function collectAttendance(ctx) {
     const p = kstParts();

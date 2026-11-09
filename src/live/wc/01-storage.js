@@ -79,7 +79,7 @@
     S.focus = null; S.multi.clear(); S.undo = []; S.raw = null; S.a = null;
     previewCache.clear(); routingFailAt = 0; S.mailDet = {}; S.mailDetBusy = {}; S.bodyOpen = false;
     S.search = {kw: '', types: ['doc', 'mail', 'board', 'file', 'person'], period: '', res: null, busy: false, more: {}};
-    S.mailSearch = {kw: '', res: null}; S.team = {}; S.res = null; S.expBar = null; S.aiHist = [];
+    S.mailSearch = {kw: '', res: null}; S.team = {}; S.appsC = null; S.res = null; S.expBar = null; S.aiHist = [];
     S.att = {month: '', rows: null, busy: false, seq: (S.att?.seq || 0) + 1, day: ''};
     S.budget = {project: '', filter: '', table: null, ledger: null, monthly: null, month: '', busy: false, q: '', seq: (S.budget?.seq || 0) + 1};
     if (typeof $ === 'function') { const frame = $('#frame'); if (frame) frame.replaceChildren(); const overlay = $('#overlay'); if (overlay) overlay.replaceChildren(); }

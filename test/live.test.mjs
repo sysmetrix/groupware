@@ -714,3 +714,22 @@ test('v0.32 usability: mail view does not trigger reply compose', async () => {
   assert.match(wc, /case 'mailOpenItem'/, 'mailOpenItem event handler must exist');
 });
 
+
+import {appInfoIndex, appInfoLine} from '../src/live/briefing.mjs';
+test('attendance detail: time/place/reason shown for past trip rows via application index; ot reason appended', () => {
+  const apps = [
+    {empCd: '016005', korNm: '이예재', deptNm: '전략경영실', atNm: '관내출장', startDt: '20261106', endDt: '20261106', startTm: '1400', endTm: '1600', approState: '1', appDt: '20261105', appSq: '1', place: '부천시청', reason: '조직개편 관련 협의 등', depart: '재단', arrive: '부천시청'},
+    {empCd: '016005', korNm: '이예재', deptNm: '전략경영실', atNm: '연차', startDt: '20261106', endDt: '20261106', startTm: '0000', endTm: '0000', approState: '0', appDt: '20261105', appSq: '2'},
+    {empCd: '016025', korNm: '서원하', deptNm: '전략경영실', atNm: '연장근무', startDt: '20261106', endDt: '20261106', startTm: '1800', endTm: '2000', approState: '1', appDt: '20261105', appSq: '3', reason: '예산 마감'},
+  ];
+  const idx = appInfoIndex(apps);
+  assert.equal(appInfoLine(idx['016005|20261106'][0]), '14:00~16:00 · 부천시청 · 조직개편 관련 협의 등');
+  assert.equal(idx['016005|20261106'][1].time, ''); // 시간이 0000~0000이면 시간 없음
+  assert.ok(appInfoLine(idx['016005|20261106'][1]).endsWith('(결재 중)'));
+  assert.equal(idx['016005|20261106'][0].route, '재단 → 부천시청');
+  const rows = [{emp: '016005', name: '이예재', dept: '전략경영실', date: '20261106', item: '관내출장'}, {emp: '016025', name: '서원하', dept: '전략경영실', date: '20261106', item: '연장근무', appStart: '1800', appEnd: '2000', leave: '2010', mine: true}];
+  const cal = buildTeamCalendar(rows, new Date('2026-11-09T10:00:00+09:00'), idx);
+  const trip = cal.byDate['20261106'].find(x => x.kind === 'trip'), ot = cal.byDate['20261106'].find(x => x.kind === 'ot');
+  assert.equal(trip.place, '부천시청'); assert.equal(trip.time, '14:00~16:00'); assert.match(trip.detail, /조직개편/);
+  assert.match(ot.detail, /사유 예산 마감/);
+});

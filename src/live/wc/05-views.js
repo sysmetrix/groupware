@@ -103,6 +103,7 @@
     if (S.view === 'report') { const f = $('#briefFrame'); if (f) f.srcdoc = R.renderHtml(S.a); }
     if (S.view === 'budget' && !S.budget.table && !S.budget.busy) loadBudget();
     if (S.view === 'attendance' && !S.att.rows && !S.att.busy) loadAttendance();
+    if (S.view === 'attendance' && GW.teamPlanned) loadApps().catch(() => {});
     if (S.view === 'resource' && !resState().bookings && !resState().busy && !resState().err) resLoad();
     if (S.view === 'approval' && ['distWaiting', 'deptWaiting'].includes(S.apTab) && !S.routing && !routingBusy() && !routingFailedRecently()) loadRouting().then(() => { if (S.view === 'approval') renderMain(); });
   }
