@@ -70,3 +70,4 @@
 .gs-memo-k{font-size:13px;font-weight:700;color:var(--muted);margin-top:6px}
 .gs-memo{margin:4px 0 8px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);font:inherit;font-size:14px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere}
 @container (max-width:700px){.gs-l{grid-template-columns:1fr}.gs-sub{grid-column:1}.gs-main{align-items:flex-start;flex-direction:column}}
+.gs-found{margin:6px 0;padding:8px 10px;border-radius:8px;background:var(--ok-soft);color:var(--fg);font-size:14px}

@@ -9,7 +9,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '0.37.0';
+  const VERSION = '0.37.1';
   let api = null;
   const lazy = {
     version: VERSION,
@@ -22,6 +22,9 @@
     install(src) { if (typeof src !== 'string' || src.length < 1000) return false; try { localStorage.setItem('bwyfgw:wc:src', src); return true; } catch { return false; } },
     state() { return api ? api.state() : {booted: false}; },
     debug() { return api ? api.debug() : null; },
+    // 구글 캘린더 대조(스킬 bwyf-gcal-sync): 대조할 날짜·후보를 얻고, 읽어 온 구글 일정을 넣는다.
+    gsyncPlan() { if (!api) api = boot(); return api.gsyncPlan(); },
+    gsyncImport(payload) { if (!api) api = boot(); return api.gsyncImport(payload); },
   };
   if (window.BWYFGW_WC && typeof window.BWYFGW_WC.destroy === 'function') { try { window.BWYFGW_WC.destroy(); } catch {} }
   window.BWYFGW_WC = Object.freeze(lazy);
@@ -34,6 +37,7 @@
   schedule();
   return {open, close, destroy, refresh,
     state: () => ({booted: true, open: S.open, view: S.view, loading: S.loading, error: S.error, actions: S.a ? S.a.actions.length : 0, high: S.a ? S.a.summary.high : 0, focus: S.focus ? {i: S.focus.i, n: S.focus.keys.length} : null, lastRefresh: S.lastRefresh}),
+    gsyncPlan: gsyncPlanForAgent, gsyncImport,
     debug: () => ({view: S.view, sel: S.sel, paneUrl: S.pane.url, mounted: S.pane.mounted, multi: [...S.multi], todos: S.todos.length, plan: Object.keys(S.plan).length, hidden: Object.keys(S.hidden).length, undo: S.undo.length})};
   }
 })();

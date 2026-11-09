@@ -239,7 +239,7 @@
       const p = gsyncGet();
       if (!p) return chatNotReady();
       const todo = p.items.filter(i => i.state === 'ready');
-      const text = todo.length ? `구글 캘린더에 아직 올리지 않은 일정이 ${todo.length}건 있습니다(결재 중 보류 ${p.counts.hold}건 제외). 올리기 화면에서 하나씩 확인하고 저장하세요.` : `구글 캘린더에 올릴 일정이 없습니다(등록함 ${p.counts.synced}건, 결재 중 보류 ${p.counts.hold}건).`;
-      return {ok: true, text, data: {to_upload: todo.length, on_hold: p.counts.hold, marked_synced: p.counts.synced}, cards: [...(todo.length ? [{type: 'list', title: '등록 전 일정', items: todo.slice(0, 6).map(i => ({title: i.title, sub: gsyncMd(i) + (i.time ? ' ' + i.time : ''), badge: i.source === 'deadline' ? '기한' : '근태', tone: 'info'})), more: Math.max(0, todo.length - 6)}] : []), {type: 'nav', label: '구글 동기화 화면 열기', view: 'gsync'}]};
+      const text = !p.compared ? `아직 구글 캘린더와 대조하지 않아 올렸는지 알 수 없습니다. 후보는 ${p.items.length - p.counts.hold}건입니다. Aside에게 “구글 캘린더와 대조해줘”라고 하면 읽어서 알려 드립니다.` : todo.length ? `대조 결과 구글 캘린더에 없는 일정이 ${todo.length}건 있습니다(비슷한 일정 ${p.counts.similar}건, 대조 전 ${p.counts.unverified}건 별도). 올리기 화면에서 하나씩 확인하고 저장하세요.` : `대조한 날짜 안에서는 구글에 없는 일정이 없습니다(등록됨 ${p.counts.synced}건, 비슷한 일정 ${p.counts.similar}건, 대조 전 ${p.counts.unverified}건).`;
+      return {ok: true, text, data: {compared: p.compared, missing_in_google: todo.length, similar: p.counts.similar, unverified: p.counts.unverified, on_hold: p.counts.hold, registered: p.counts.synced}, cards: [...(todo.length ? [{type: 'list', title: '구글에 없는 일정', items: todo.slice(0, 6).map(i => ({title: i.title, sub: gsyncMd(i) + (i.time ? ' ' + i.time : ''), badge: i.source === 'deadline' ? '기한' : '근태', tone: 'info'})), more: Math.max(0, todo.length - 6)}] : []), {type: 'nav', label: '구글 동기화 화면 열기', view: 'gsync'}]};
     },
   });

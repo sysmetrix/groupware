@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {gsyncKind, gsyncHours, gsyncDates, gsyncAttendMemo, gsyncDeadlineMemo, gsyncCalendarId, gsyncUrl, gsyncPlan, GSYNC_LAYERS} from '../src/live/gcal-sync.mjs';
+import {gsyncTitle, gsyncKindOfTitle, gsyncParseDayText, gsyncNormalizeExisting, gsyncNeedDates, gsyncMatch, gsyncKind, gsyncHours, gsyncDates, gsyncAttendMemo, gsyncDeadlineMemo, gsyncCalendarId, gsyncUrl, gsyncPlan, GSYNC_LAYERS} from '../src/live/gcal-sync.mjs';
 
 const NOW = new Date('2026-11-10T12:00:00+09:00');
 const CALS = [{id: 'a@gmail.com', name: '1 Daily'}, {id: 'att@group.calendar.google.com', name: '5 BWYF 근태'}, {id: 'per@group.calendar.google.com', name: '4 BWYF 개인'}];
@@ -57,13 +57,13 @@ test('gsyncPlan: mine only, approved ready/pending hold, dedupe, synced, layers,
   ];
   const first = gsyncPlan({apps, me: '016025', cals: CALS, now: NOW});
   assert.equal(first.items.length, 4);
-  assert.deepEqual(first.items.map(i => i.title), ['관내출장(8)', '시간외(3)', '오전반차(4)', '대체휴가(16)']);
-  assert.deepEqual(first.counts, {ready: 3, hold: 1, synced: 0});
+  assert.deepEqual(first.items.map(i => i.title), ['관내출장(8)', '시간외(보상3)', '오전반차(4)', '대체휴가']);
+  assert.deepEqual(first.counts, {ready: 0, hold: 1, synced: 0, similar: 0, unverified: 3}); // 구글과 대조하기 전에는 "등록 전"이라고 단정하지 않는다
   assert.equal(first.items[2].state, 'hold'); assert.equal(first.items[2].pending, true);
   assert.equal(first.items[0].calId, 'att@group.calendar.google.com'); assert.equal(first.items[0].layer, '5 BWYF 근태'); assert.equal(first.items[0].location, '부천시청');
   assert.equal(first.items[3].allDay, true); assert.equal(first.items[3].dates, '20261120/20261122');
   const again = gsyncPlan({apps, me: '016025', cals: CALS, now: NOW, synced: {[first.items[0].key]: 1}});
-  assert.equal(again.items[0].state, 'synced'); assert.deepEqual(again.counts, {ready: 2, hold: 1, synced: 1});
+  assert.equal(again.items[0].state, 'synced'); assert.equal(again.items[0].verified, 'user'); assert.deepEqual(again.counts, {ready: 0, hold: 1, synced: 1, similar: 0, unverified: 2});
   assert.deepEqual(gsyncPlan({apps, me: '', now: NOW}).items, []); assert.deepEqual(gsyncPlan({}).items, []);
 });
 
@@ -77,4 +77,64 @@ test('gsyncPlan: deadlines go to the personal layer with provenance, invalid one
   assert.equal(a.dates, '20261120T160000/20261120T163000'); assert.match(a.details, /\[출처 메타데이터\]/); assert.match(a.details, /출처 시스템: 그룹웨어 전자결재/); assert.match(a.details, /2026\.11\.20\(금\) 16:00/);
   assert.equal(p.items[1].allDay, true);
   assert.match(gsyncDeadlineMemo({date: '2026-11-25', title: 't', source: ''}, NOW), /출처 시스템: 그룹웨어 문서/);
+});
+
+const DAYTXT = {
+  trip: '09:00~18:00, 관내출장(8), 캘린더: 5 BWYF 근태, 위치 없음, 2026년 7월 4일 관내출장(8) 09:00~18:00',
+  ot: '18:00~21:00, 시간외(3, 보상), 캘린더: 5 BWYF 근태, 위치 없음, 2026년 6월 24일 시간외(3, 보상) 18:00~21:00',
+  allday: '성과계획서 제출 종일, 성과계획서 제출, 캘린더: 4 BWYF 개인, 위치 없음, 2026년 6월 24일',
+  daily: '09:00~10:00, 대체휴일, 1 Daily, 위치 없음, 2026년 11월 9일 대체휴일 09:00~10:00',
+  place: '09:30~14:00, 청소년 네트워크, 캘린더: 3 BWYF 부서, 위치: 부천시청, 2026년 7월 9일 청소년 네트워크 09:30~14:00',
+  multi: '2026년 7월 4일 14:00~2026년 7월 5일 13:00, 청소년 참여기구 연합캠프, 캘린더: 3 BWYF 부서, 위치: 인천청소년수련관, 청소년 참여기구 연합캠프 14:00~13:00 인천',
+};
+test('gsyncParseDayText parses real Google day-view sentences, skips tasks and birthdays', () => {
+  assert.deepEqual(gsyncParseDayText(DAYTXT.trip, '20260704'), {date: '20260704', cal: '5 BWYF 근태', title: '관내출장(8)', from: '09:00', to: '18:00'});
+  assert.equal(gsyncParseDayText(DAYTXT.ot, '20260624').title, '시간외(3, 보상)'); // 제목 안의 쉼표
+  const a = gsyncParseDayText(DAYTXT.allday, '20260624'); assert.equal(a.title, '성과계획서 제출'); assert.equal(a.cal, '4 BWYF 개인'); assert.equal(a.from, '');
+  const d = gsyncParseDayText(DAYTXT.daily, '20261109'); assert.equal(d.cal, '1 Daily'); assert.equal(d.title, '대체휴일');
+  assert.equal(gsyncParseDayText(DAYTXT.place, '20260709').cal, '3 BWYF 부서');
+  assert.equal(gsyncParseDayText(DAYTXT.multi, '20260704').title, '청소년 참여기구 연합캠프');
+  assert.equal(gsyncParseDayText('할 일: 연간계획 송부, 완료됨, 2026년 6월 24일, 14:00~15:00', '20260624'), null);
+  assert.equal(gsyncParseDayText('cake 부천여성청소년재단님의 생일 생일:', '20261105'), null); assert.equal(gsyncParseDayText('', 'x'), null);
+  assert.equal(gsyncKindOfTitle('시간외보상(3)'), 'ot'); assert.equal(gsyncKindOfTitle('대체휴일(2월7일 건)'), 'leave'); assert.equal(gsyncKindOfTitle('제12회 포럼'), '');
+});
+
+test('gsyncMatch and plan with existing Google events: exact / similar / none / unknown', () => {
+  const existing = gsyncNormalizeExisting({at: 1, days: {
+    '20261110': [DAYTXT.trip.replace('2026년 7월 4일', '2026년 11월 10일').replace('09:00~18:00, 관내출장(8)', '09:00~18:00, 관내출장(8)')],
+    '20261109': [DAYTXT.daily],
+    '20261111': ['09:00~10:00, 회의, 캘린더: 3 BWYF 부서, 위치 없음, 2026년 11월 11일'],
+  }});
+  assert.equal(existing.records.length, 3); assert.deepEqual(existing.dates, ['20261109', '20261110', '20261111']);
+  const apps = [
+    app({}), // 11/10 관내출장 09:00~18:00 -> 근태 레이어에 있음
+    app({atNm: '대체휴가', startDt: '20261109', endDt: '20261109', startTm: '0900', endTm: '1000', appTm: 60, noDoc: 'L-1', appSq: '2', place: ''}), // 다른 캘린더·다른 이름
+    app({startDt: '20261111', endDt: '20261111', noDoc: 'N-1', appSq: '3'}), // 그 날에 근태 일정 없음
+    app({startDt: '20261112', endDt: '20261112', noDoc: 'U-1', appSq: '4'}), // 읽지 않은 날
+    app({startDt: '20261113', endDt: '20261113', noDoc: 'H-1', appSq: '5', approState: '0'}),
+  ];
+  const p = gsyncPlan({apps, me: '016025', cals: CALS, now: NOW, existing});
+  assert.deepEqual(p.items.map(i => [i.docNo, i.state]), [['L-1', 'similar'], ['전략경영실-8000', 'synced'], ['N-1', 'ready'], ['U-1', 'unverified'], ['H-1', 'hold']]);
+  assert.equal(p.items[0].match.cal, '1 Daily'); assert.equal(p.items[1].verified, 'google'); assert.equal(p.compared, true);
+  assert.deepEqual(p.counts, {ready: 1, hold: 1, synced: 1, similar: 1, unverified: 1});
+  assert.deepEqual(gsyncNeedDates(p.items), ['20261109', '20261110', '20261111', '20261112']); // 보류 건의 날은 제외
+  assert.equal(gsyncMatch({startYmd: '20261110', endYmd: '20261110', layer: '5 BWYF 근태', kind: 'trip', time: '', source: 'attend'}, null).level, 'unknown');
+  // 같은 시간 정확히 일치하는 근태 레이어 일정은 종류가 달라도 비슷한 일정으로 본다(근무일대체를 관내출장으로 올린 경우)
+  const ex2 = gsyncNormalizeExisting({days: {'20260704': [DAYTXT.trip]}});
+  assert.equal(gsyncMatch({startYmd: '20260704', endYmd: '20260704', layer: '5 BWYF 근태', kind: 'ot', time: '09:00~18:00', source: 'attend'}, ex2).level, 'similar');
+  assert.equal(gsyncMatch({startYmd: '20260704', endYmd: '20260704', layer: '5 BWYF 근태', kind: 'ot', time: '10:00~12:00', source: 'attend'}, ex2).level, 'none');
+});
+
+test('gsyncMatch for deadlines: personal layer title match', () => {
+  const ex = gsyncNormalizeExisting({days: {'20260624': [DAYTXT.allday]}});
+  const p = gsyncPlan({apps: [], me: '1', cals: CALS, now: new Date('2026-06-20T09:00:00+09:00'), existing: ex, deadlines: [{date: '2026-06-24', title: '성과계획서 제출', source: '전자결재', key: 'd1'}]});
+  assert.equal(p.items[0].state, 'synced');
+});
+
+test('gsyncTitle follows the user calendar conventions', () => {
+  assert.equal(gsyncTitle({atNm: '연장근무', appTm: 180}, 'ot'), '시간외(3)'); assert.equal(gsyncTitle({atNm: '연장근무(보상)', appTm: 180}, 'ot'), '시간외(보상3)');
+  assert.equal(gsyncTitle({atNm: '휴일근무', appTm: 480}, 'ot'), '휴일근무(8)'); assert.equal(gsyncTitle({atNm: '근무일대체', appTm: 480}, 'ot'), '휴일근무(8)');
+  assert.equal(gsyncTitle({atNm: '외출', appTm: 90}, 'leave'), '외출(1.5)'); assert.equal(gsyncTitle({atNm: '조퇴', appTm: 120}, 'leave'), '조퇴(2)');
+  assert.equal(gsyncTitle({atNm: '오후반차(보상)', appTm: 240}, 'leave'), '오후반차(4)'); assert.equal(gsyncTitle({atNm: '대체휴가', appTm: 480}, 'leave'), '대체휴가');
+  assert.equal(gsyncTitle({atNm: '관외출장', appTm: 540}, 'trip'), '관외출장(9)');
 });
