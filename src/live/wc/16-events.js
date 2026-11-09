@@ -125,7 +125,7 @@
       case 'bellItem': closeOverlay(); go('today'); selectAction(el.dataset.k); break;
       case 'fsUp': fontStep(1); if (S.menuOpen === 'view') { S.menuOpen = ''; openMenu('view'); } break;
       case 'fsDown': fontStep(-1); if (S.menuOpen === 'view') { S.menuOpen = ''; openMenu('view'); } break;
-      case 'theme': toggleTheme(); if (S.menuOpen === 'view') { S.menuOpen = ''; openMenu('view'); } break;
+      case 'theme': toggleTheme(); toast(S.settings.theme === 'dark' ? '다크 모드' : '라이트 모드'); if (S.menuOpen === 'view') { S.menuOpen = ''; openMenu('view'); } break;
       case 'openPalette': closeOverlay(); openPalette(''); break;
       case 'palRun': { const c = palItems[Number(el.dataset.i)]; closeOverlay(); if (c) c.run(); break; }
       case 'tileLevel': S.filter.level = S.filter.level === v ? 'all' : v; S.filter.area = 'all'; renderMain(); break;

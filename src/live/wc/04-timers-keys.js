@@ -45,6 +45,7 @@
     }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const c = e.code;
+    if (c === 'KeyD' && e.shiftKey) { e.preventDefault(); toggleTheme(); toast(S.settings.theme === 'dark' ? '다크 모드' : '라이트 모드'); return; }
     if (c === 'Slash' && e.shiftKey) { toggleHelp(); return; }
     if (c === 'Slash') { e.preventDefault(); $('#gsearch').focus(); return; }
     if (c === 'KeyH') { goHome(); return; }

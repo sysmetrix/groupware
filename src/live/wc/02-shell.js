@@ -68,6 +68,8 @@
   const WC_CSS = '/*@WC_CSS@*/';
   // One small line-icon set (stroke icons, 24px grid) so every screen uses the same visual language.
   const ICONS = {
+    sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+    moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/>',
     car: '<path d="M5 17h14M5 17a2 2 0 1 1-4 0m22 0a2 2 0 1 1-4 0M3 17v-5l2-5h14l2 5v5"/><path d="M3 12h18"/>',
     home: '<path d="M3 11 12 4l9 7"/><path d="M5 10v10h5v-6h4v6h5V10"/>',
     inbox: '<path d="M4 13h4l2 3h4l2-3h4"/><path d="M5 5h14l1 8v6H4v-6z"/>',
@@ -109,7 +111,8 @@
 <button class="hb primary" data-act="openCmd" title="AI 업무 지시창 (자연어로 기안·회신·신청 자동화)">${ic('star')}AI 지시</button>
 <button class="hb" data-act="menuNew" title="새 메일·새 기안·근태신청">${ic('plus')}새로 만들기</button>
 <button class="hb icon" data-act="openHistory" title="자동화 작업 내역 및 검증 로그" aria-label="작업 내역">${ic('clock')}</button>
-<button class="hb icon" data-act="menuBell" id="bell" title="새로 들어온 항목" aria-label="알림">${ic('bell')}</button>
+<button class="hb icon" data-act="theme" id="themeBtn" title="다크/라이트 모드 전환 (Shift+D)" aria-label="화면 모드 전환"></button>
+      <button class="hb icon" data-act="menuBell" id="bell" title="새로 들어온 항목" aria-label="알림">${ic('bell')}</button>
 <button class="hb" data-act="help" title="사용법·단축키 (?)">${ic('help')}도움말</button>
 <button class="hb back" data-act="close" title="업무센터를 접고 원래 그룹웨어 화면으로 (화면 위 가운데 '업무센터' 버튼이나 Alt+G로 다시 열기)">${ic('back')}그룹웨어로 돌아가기</button></header>
 <div class="band" id="band" role="status" aria-live="polite"></div><nav id="nav" aria-label="업무센터 메뉴"></nav><main id="main" tabindex="-1"></main><div class="split" id="split" title="끌어서 오른쪽 창 너비 조절"></div><aside id="pane" aria-label="선택한 항목"></aside><div id="overlay"></div></div>`;
@@ -118,6 +121,7 @@
   const applyLook = () => {
     wcEl.dataset.fs = S.settings.fontSize;
     wcEl.classList.toggle('dark', S.settings.theme === 'dark');
+  { const tb = wcEl.querySelector('#themeBtn'); if (tb) { tb.innerHTML = ic(S.settings.theme === 'dark' ? 'sun' : 'moon'); tb.title = (S.settings.theme === 'dark' ? '라이트 모드로' : '다크 모드로') + ' 전환 (Shift+D)'; } }
     wcEl.style.setProperty('--paneW', `${Math.max(360, Math.min(window.innerWidth * 0.75, S.settings.paneWidth))}px`);
   };
   applyLook();
