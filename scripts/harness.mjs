@@ -103,6 +103,8 @@ if (!FAST) {
     const ver = f => fs.readFile(path.join(root, f), 'utf8').then(t => (t.match(/const VERSION = '([\d.]+)'/) || [])[1]);
     const [vw, vc] = [await ver('src/live/workcenter.browser.js'), await ver('src/live/collector.browser.js')];
     const manifest = JSON.parse(await fs.readFile(path.join(root, 'build', 'live', 'extension', 'manifest.json'), 'utf8')).version;
+    const clTop = ((await fs.readFile(path.join(root, 'src/live/briefing.mjs'), 'utf8')).match(/export const CHANGELOG = \[\s*\{v: '([\d.]+)'/) || [])[1];
+    if (clTop !== vw) fails.push(`업데이트 내역 맨 위 버전(${clTop})이 현재 버전(${vw})과 다름: briefing.mjs의 CHANGELOG에 새 항목을 추가하세요`);
     if (new Set([vw, vc, manifest]).size !== 1) fails.push(`버전 불일치: 업무센터 ${vw}, 수집기 ${vc}, 확장 ${manifest}`);
     const sha = (await fs.readFile(path.join(root, 'build', 'live', 'gw-live.sha256'), 'utf8')).trim().split(/\s+/)[0];
     const { createHash } = await import('node:crypto');

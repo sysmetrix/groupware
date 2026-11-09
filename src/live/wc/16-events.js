@@ -48,6 +48,7 @@
         break;
       }
       case 'openPay': openPaymentHub(); break;
+    case 'openChangelog': openChangelog(); break;
     case 'goResource': closeOverlay(); go('resource'); break;
     case 'resSel': resSel(el.dataset.v); break;
     case 'resDay': resDay(el.dataset.v); break;

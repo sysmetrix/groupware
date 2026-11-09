@@ -25,6 +25,7 @@
     if (document.activeElement && document.activeElement !== document.body) { try { document.activeElement.blur(); } catch {} }
     if (!S.a || !S.lastRefresh || Date.now() - S.lastRefresh.getTime() > 60_000) refresh();
     const noticed = showNoticeIfNeeded();
+    if (!noticed && S.settings.seenVersion !== VERSION) { const first = !S.settings.seenVersion; S.settings.seenVersion = VERSION; saveLocal(); if (!first) setTimeout(() => { if (S.open && !S.paletteOpen) openChangelog(); }, 1500); }
     if (!noticed && !S.settings.tourDone) setTimeout(() => startCoach(), 900);
     checkUpdate(false).then(i => { if (i && i.latest && R.compareVersions(i.latest, VERSION) > 0 && !S.updToast) { S.updToast = true; toast(`새 버전 ${i.latest} 이 있습니다. 관리자에게 알려 주세요.`); } }).catch(() => {});
   }

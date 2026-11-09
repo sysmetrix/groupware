@@ -90,7 +90,7 @@
     };
     const item = (v, i) => { const c = counts[v.id]; return `<a data-act="view" data-v="${v.id}" class="${S.view === v.id ? 'on' : ''}" role="link" tabindex="0" aria-current="${S.view === v.id ? 'page' : 'false'}" title="${esc(v.label)} (숫자키 ${i + 1})">${ic(VIEW_ICON[v.id])}<span class="lb">${esc(v.label)}</span>${c && c.n !== '' && c.n !== 0 ? `<span class="n ${c.cls || ''}" title="${v.id === 'today' ? '내 처리할 일' : v.id === 'board' ? '보드의 남은 카드' : v.id === 'calendar' ? '7일 안에 기한이 있는 내 처리할 일' : '내 처리할 일 중 이 영역'}">${c.n}</span>` : ''}</a>`; };
     $('#nav').innerHTML = VIEWS.slice(0, 9).map(item).join('') + '<div class="sep"></div>' + VIEWS.slice(9).map((v, i) => item(v, i + 9)).join('')
-      + `<div class="foot"><a data-act="help" role="link" tabindex="0">${ic('help')}<span class="lb">사용법</span></a><a data-act="coach" role="link" tabindex="0">${ic('play')}<span class="lb">처음 안내</span></a></div>`;
+      + `<div class="foot"><a data-act="help" role="link" tabindex="0">${ic('help')}<span class="lb">사용법</span></a><a data-act="coach" role="link" tabindex="0">${ic('play')}<span class="lb">처음 안내</span></a><a data-act="openChangelog" role="link" tabindex="0" title="버전과 업데이트 내역">${ic('doc')}<span class="lb">v${VERSION} 업데이트 내역</span></a></div>`;
   }
   function boardCount() { return (S.a ? S.a.actions.filter(x => onBoard(x) && bucketOfAction(x) !== 'done').length : 0) + S.todos.filter(t => bucketOfTodo(t) !== 'done').length; }
   function renderMain() {
