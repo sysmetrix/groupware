@@ -284,6 +284,13 @@
       case 'chatOpenItem':
       case 'chatNav':
       case 'navMore':
+      case 'gsyncOpen':
+      case 'gsyncStatus':
+      case 'gsyncLayer':
+      case 'gsyncUp':
+      case 'gsyncNext':
+      case 'gsyncFind':
+      case 'gsyncMark':
         HOME_ACTS[act](actEl, v, e); break; // 홈·채팅 화면의 처리기 등록소(29~30번 조각)
       default: break;
     }

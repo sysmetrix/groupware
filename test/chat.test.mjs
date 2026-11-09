@@ -50,7 +50,7 @@ test('chatIntent: Korean phrases route to the right tool', () => {
     ['월간업무보고 검색', 'search_documents'], ['노동이사제 찾아줘', 'search_documents'],
     ['예산 집행 현황', 'get_budget'], ['차량 예약 가능한 시간', 'get_resource_status'], ['내일 관용차 비어 있어?', 'get_resource_status'],
     ['내일 14시부터 16시까지 차량 예약해줘', 'reserve_vehicle'], ['결과보고 작성해줘', 'prepare_draft'], ['운영계획서 기안 시작', 'prepare_draft'],
-    ['김팀장 메일 답장 써줘', 'draft_mail_reply'], ['보고서 할 일 추가해줘', 'add_todo'], ['예산 화면 열어줘', 'open_view'], ['메일 보여줘', 'open_view'],
+    ['김팀장 메일 답장 써줘', 'draft_mail_reply'], ['보고서 할 일 추가해줘', 'add_todo'], ['예산 화면 열어줘', 'open_view'], ['구글 캘린더에 올릴 거 있어?', 'get_gcal_sync'], ['근태 구글 캘린더 동기화 해줘', 'get_gcal_sync'], ['메일 보여줘', 'open_view'],
   ];
   for (const [q, tool] of cases) assert.equal(chatIntent(q, NOW).tool, tool, q);
   assert.equal(chatIntent('안녕', NOW).tool, '');

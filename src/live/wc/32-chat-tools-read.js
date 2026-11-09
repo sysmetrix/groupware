@@ -227,3 +227,19 @@
       return {ok: true, text: `“${x.title}” 항목을 열었습니다.`};
     },
   });
+
+  chatRegisterTool({
+    name: 'get_gcal_sync', label: '구글 캘린더 동기화 확인', kind: 'read',
+    description: '그룹웨어의 내 결재완료 근태·기한 중 아직 구글 캘린더에 올리지 않은 것을 알려준다. 등록 자체는 하지 않고 동기화 화면으로 안내한다.',
+    params: {type: 'object', properties: {}},
+    run: async () => {
+      if (!allowed('googleCalendar')) return {ok: false, text: '구글 캘린더 기능이 관리자 설정으로 꺼져 있습니다.'};
+      if (!S.a) return chatNotReady();
+      try { if (typeof loadApps === 'function') await loadApps(); } catch (e) { return {ok: false, text: '근태 신청 내역을 읽지 못했습니다: ' + String(e.message || e).slice(0, 80)}; }
+      const p = gsyncGet();
+      if (!p) return chatNotReady();
+      const todo = p.items.filter(i => i.state === 'ready');
+      const text = todo.length ? `구글 캘린더에 아직 올리지 않은 일정이 ${todo.length}건 있습니다(결재 중 보류 ${p.counts.hold}건 제외). 올리기 화면에서 하나씩 확인하고 저장하세요.` : `구글 캘린더에 올릴 일정이 없습니다(등록함 ${p.counts.synced}건, 결재 중 보류 ${p.counts.hold}건).`;
+      return {ok: true, text, data: {to_upload: todo.length, on_hold: p.counts.hold, marked_synced: p.counts.synced}, cards: [...(todo.length ? [{type: 'list', title: '등록 전 일정', items: todo.slice(0, 6).map(i => ({title: i.title, sub: gsyncMd(i) + (i.time ? ' ' + i.time : ''), badge: i.source === 'deadline' ? '기한' : '근태', tone: 'info'})), more: Math.max(0, todo.length - 6)}] : []), {type: 'nav', label: '구글 동기화 화면 열기', view: 'gsync'}]};
+    },
+  });

@@ -52,7 +52,7 @@ ${teamDayPanel()}
     const owner = currentKey;
     const p = GW.teamPlanned().then(r => { const out = {apps: r.apps, me: r.me, idx: R.appInfoIndex(r.apps)}; if (S.appsC && S.appsC.p === p) S.appsC.data = out; return out; });
     S.appsC = {at: Date.now(), user: owner, p, data: null};
-    p.then(() => { if (owner === currentKey && S.open && ['attendance', 'calendar', 'today', 'home'].includes(S.view) && !S.focus) render(); }, e => logError('apps', e.message));
+    p.then(() => { if (owner === currentKey && S.open && ['attendance', 'calendar', 'today', 'home', 'gsync'].includes(S.view) && !S.focus) render(); }, e => logError('apps', e.message));
     return p;
   }
   const myAppInfos = d8 => { const dt = S.appsC && S.appsC.user === currentKey && S.appsC.data; return dt ? (dt.idx[`${dt.me}|${d8}`] || []) : null; };

@@ -95,6 +95,7 @@ export function chatIntent(text, now = new Date()) {
   if (/(결과보고|계획서|운영계획|기안|지급 ?건의|물품)/.test(t) && /(작성|써|만들|기안|시작|올려)/.test(t)) return make('prepare_draft', {kind: /결과/.test(t) ? 'result' : /계획/.test(t) ? 'plan' : /지급|지출/.test(t) ? 'payment' : /물품/.test(t) ? 'goods' : 'result', hint: ''});
   if (/(할 ?일|메모|리마인드|알려줘야)/.test(t) && /(추가|등록|넣어|적어|메모)/.test(t)) return make('add_todo', {title: t.replace(/(할 ?일|추가|등록|넣어줘|넣어 줘|해줘|해 줘|메모|적어줘|적어 줘)/g, ' ').replace(/\s+/g, ' ').trim(), due: dt ? dt.date : ''});
   // --- 읽기 ---
+  if (/(구글|캘린더)/.test(t) && /(동기화|올려|올릴|등록|연동|반영)/.test(t) && !/(신청|예약)/.test(t)) return make('get_gcal_sync', {});
   if (/(열어|이동|가줘|가 줘|보여|띄워|켜줘|화면)/.test(t) && !/(일정|스케줄|급한|할 ?일|누가|언제)/.test(t)) { for (const [re, view] of CH_VIEWS) if (re.test(t)) return make('open_view', {view}); }
   const name = chatExtractName(t);
   if (name && /(출장|휴가|연차|교육|언제|자리|어디|있어|있나|근태|일정)/.test(t) && !/내 /.test(t)) return make('get_staff_status', {name, date: dt ? dt.date : 'today', days: dt && dt.end ? 5 : 7});
