@@ -32,7 +32,7 @@
   async function checkUpdate(force) {
     if (!allowed('updateCheck')) return null;
     const cached = store.get('updateInfo', null);
-    if (!force && cached && Date.now() - cached.at < 12 * 3600e3) return cached;
+    if (!force && cached && /^0\./.test(cached.latest || '') && Date.now() - cached.at < 12 * 3600e3) return cached; // 옛 번호 체계(4.x 등)로 저장된 확인 결과는 버린다
     try {
       const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 6000);
       const r = await fetch('https://api.github.com/repos/sysmetrix/groupware/releases/latest', {signal: ctl.signal, headers: {Accept: 'application/vnd.github+json'}});
@@ -40,7 +40,7 @@
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const j = await r.json();
       const tag = String(j.tag_name || '').replace(/^v/, '');
-      const info = {at: Date.now(), latest: /^\d+\.\d+\.\d+$/.test(tag) ? tag : '', url: /^https:\/\/github\.com\/sysmetrix\//.test(j.html_url || '') ? j.html_url : ''};
+      const info = {at: Date.now(), latest: /^0\.\d+\.\d+$/.test(tag) ? tag : '', url: /^https:\/\/github\.com\/sysmetrix\//.test(j.html_url || '') ? j.html_url : ''};
       store.set('updateInfo', info);
       return info;
     } catch (e) { const info = {at: Date.now(), latest: '', url: '', err: String(e.message || e).slice(0, 80)}; store.set('updateInfo', info); return info; }
