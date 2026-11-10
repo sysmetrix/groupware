@@ -229,6 +229,8 @@
       case 'bUnpin': { e.stopPropagation(); S.settings.budget.splice(Number(el.dataset.i), 1); /* allow empty budget */ saveLocal(); renderMain(); toast('내 관심 사업에서 뺐습니다.'); break; }
       case 'loadBudget': S.budget.project = $('#bcode').value.trim(); S.budget.filter = $('#bfilter').value.trim(); if (!S.budget.project) { toast('프로젝트 코드를 입력하세요.'); break; } loadBudget(); break;
       case 'ledger': loadLedger(el.dataset.code); break;
+      case 'bSearchRetry': loadBudgetAll(true); break;
+      case 'bHit': { const d = el.dataset; if (d.empty) { toast('이 과목은 올해 예산·집행이 없습니다(공통 과목표에만 있는 과목).'); break; } const b = S.budget; b.project = d.p; b.filter = d.h || ''; b.q = ''; b.pendingLedger = d.lv === '세' && Number(d.x) > 0 ? d.code : ''; loadBudget(); break; }
       case 'loadMonthly': loadMonthly(); break;
       case 'budgetMonth': { const m = S.budget.month === v ? '' : v; if (!S.budget.ledger || S.budget.ledger.bgtCd !== '__ALL') { await loadLedgerAll(); } S.budget.month = m; renderMain(); break; }
       case 'ledgerAll': loadLedgerAll(); break;
@@ -311,7 +313,7 @@
     if (t.id === 'bproj' && t.value === '__custom') { S.budget.custom = true; renderMain(); }
     if (t.id === 'bproj' && t.value !== '__custom') { S.budget.custom = false; const [p, f] = t.value.split('|'); S.budget.project = p; S.budget.filter = f; loadBudget(); }
     if (t.id === 'bCatProj') { S.budget.project = t.value; S.budget.filter = ''; loadBudget(); }
-    if (t.id === 'bq') renderMain();
+    if (t.id === 'bq') budgetQuery();
     if (t.id === 'resDate') resGo();
     if (t.id === 'payPlan') payPlanChanged();
     if (t.id === 'resTitle') resSyncForm(); // 예약명만 바꾸면 겹침 확인 결과는 그대로 둔다(다시 그리면 누르려던 버튼이 사라져 클릭이 씹힘)
@@ -319,7 +321,7 @@
     if (t.classList && t.classList.contains('setc')) saveSettingField(t);
     if (t.dataset && t.dataset.b) saveBudgetRows();
   });
-  root.addEventListener('keyup', e => { const t = e.composedPath()[0]; if (t.id === 'bq' && !e.isComposing && e.key === 'Enter') renderMain(); });
+  root.addEventListener('keyup', e => { const t = e.composedPath()[0]; if (t.id === 'bq' && !e.isComposing && e.key === 'Enter') budgetQuery(); });
   // Drag & drop: board columns and calendar dates.
   root.addEventListener('dragstart', e => { const n = e.composedPath().find(x => x && x.dataset && x.dataset.drag); if (n) { e.dataTransfer.setData('text/plain', n.dataset.drag); e.dataTransfer.effectAllowed = 'move'; } });
   root.addEventListener('dragover', e => { const z = e.composedPath().find(x => x && x.dataset && (x.dataset.drop || x.dataset.dropDate)); if (z) { e.preventDefault(); z.classList.add('drop'); } });
