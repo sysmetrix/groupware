@@ -55,7 +55,7 @@
   function chatView() {
     const st = chatState();
     queueMicrotask(() => { const l = $('#chLog'); if (l) l.scrollTop = l.scrollHeight; chatAutosize($('#chInput')); });
-    return `<section class="ch" aria-label="AI 도우미"><div class="ch-log" id="chLog" role="log" aria-live="polite" aria-relevant="additions" tabindex="0">${chatLogHtml()}</div><div class="ch-chips" id="chChips">${chatChipsHtml()}</div><div class="ch-composer" role="group" aria-label="AI에게 지시하기"><textarea class="ch-input" id="chInput" rows="1" maxlength="1000" placeholder="예) 내일 일정 알려줘 · 김지은 언제 출장이야? · 11/12 연차 신청해줘" aria-label="AI에게 지시하기">${esc(st.draft || '')}</textarea><span id="chBtns">${chatBtnsHtml()}</span></div><div class="ch-foot" id="chFoot">${chatFootHtml()}</div><div class="ch-sr" id="chStatus" role="status" aria-live="polite"></div></section>`;
+    return `<section class="ch" aria-label="AI 도우미"><div class="ch-log" id="chLog" role="log" aria-live="polite" aria-relevant="additions" tabindex="0">${chatLogHtml()}</div><div class="ch-chips" id="chChips">${chatChipsHtml()}</div><div class="ch-composer" role="group" aria-label="AI에게 지시하기"><textarea class="ch-input" id="chInput" rows="1" maxlength="1000" placeholder="예) 내일 일정 알려줘 · 직원 이름 + 언제 출장이야? · 11/12 연차 신청해줘" aria-label="AI에게 지시하기">${esc(st.draft || '')}</textarea><span id="chBtns">${chatBtnsHtml()}</span></div><div class="ch-foot" id="chFoot">${chatFootHtml()}</div><div class="ch-sr" id="chStatus" role="status" aria-live="polite"></div></section>`;
   }
   const chatBtnsHtml = () => (chatState().busy ? `<button class="ch-stop" data-act="chatStop" aria-label="중지">${ic('x')}<span>중지</span></button>` : `<button class="ch-send" data-act="chatSend" aria-label="보내기">${ic('play')}<span>보내기</span></button>`);
 

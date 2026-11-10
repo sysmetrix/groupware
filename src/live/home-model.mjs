@@ -46,7 +46,7 @@ export function homeTimelineCompact(items = [], max = 5) {
   return {rows: all.slice(0, m), more: Math.max(0, all.length - m)};
 }
 
-/** 자리 비움 한 줄: '이승봉 출장 · 김소연 휴가 외 2명' */
+/** 자리 비움 한 줄: '(이름) 출장 · (이름) 휴가 외 2명' */
 export function homeAwayLine(people = [], max = 3) {
   const p = (Array.isArray(people) ? people : []).filter(x => x && x.name);
   if (!p.length) return '';

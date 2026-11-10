@@ -145,7 +145,7 @@
     params: {type: 'object', properties: {name: {type: 'string'}}, required: ['name']},
     run: async a => {
       const q = String(a.name || '').trim();
-      if (q.length < 2) return {ok: false, text: '찾을 직원 이름을 알려 주세요. 예) 김지은 전화번호'};
+      if (q.length < 2) return {ok: false, text: '찾을 직원 이름을 알려 주세요. 예) 직원 이름 + 전화번호'};
       let res; try { res = await GW.search(q, {types: ['person'], pageSize: 5}); } catch (e) { return {ok: false, text: '직원 검색에 실패했습니다: ' + String(e.message || e).slice(0, 80)}; }
       const g = res.groups.person, list = (g && g.items) || [];
       if (!list.length) return {ok: true, text: `“${q}” 님을 조직도에서 찾지 못했습니다. 이름을 확인해 주세요.`, data: {count: 0}};
