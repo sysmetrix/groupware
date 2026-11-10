@@ -27,6 +27,7 @@
     "evaluate:model": "node --env-file-if-exists=.env scripts/evaluate-model.mjs",
     "attach:extract": "node --env-file-if-exists=.env scripts/attach-extract.mjs",
     "live:build": "node scripts/live-build.mjs",
+    "live:demo": "node scripts/live-demo.mjs --serve",
     "harness": "node scripts/harness.mjs",
     "harness:fast": "node scripts/harness.mjs --fast",
     "loop": "node scripts/loop.mjs",

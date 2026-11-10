@@ -101,9 +101,24 @@ export async function readSources(root = ROOT) {
   };
 }
 
+/**
+ * 한 줄 전체가 // 주석인 줄을 빈 줄로 바꾼다(번들 크기 절감, 줄 번호는 그대로라 오류 위치 표시는 변하지 않는다).
+ * 여러 줄 템플릿 문자열 안의 줄은 건드리지 않도록 백틱 짝을 세고, 짝이 맞지 않는 파일은 손대지 않고 그대로 돌려준다.
+ */
+export function stripCommentLines(src) {
+  let inTpl = false;
+  const out = src.split('\n').map(line => {
+    if (!inTpl && line.trimStart().startsWith('//')) return '';
+    if (((line.replace(/\\./g, '').match(/`/g) || []).length) % 2) inTpl = !inTpl;
+    return line;
+  });
+  return inTpl ? src : out.join('\n');
+}
+
 /** Assembles the bundle text from sources. Pure: same input, same output. Returns a line map for error reporting. */
 export function assemble({collector, css, parts, template, briefing: briefingSrc}) {
   if (parts.length < 10) throw new Error('work center parts missing');
+  collector = stripCommentLines(collector); briefingSrc = stripCommentLines(briefingSrc); parts = parts.map(p => ({...p, src: stripCommentLines(p.src)}));
   const halves = template.split(PARTS_MARK);
   if (halves.length !== 2) throw new Error('work center parts were not assembled (workcenter.browser.js needs exactly one /*@WC_PARTS@*/ marker)');
   const wcCss = css.replace(/\n+/g, '\n');
