@@ -30,6 +30,7 @@
     add('결과보고 작성', '내 계획서에서 이어서', () => openResultPlanPicker(), '결과 보고 기안');
     add('운영·참가계획 작성', '과거 계획서 서식', () => autoStartDraft('plan'), '계획 기안');
     add('지급·지출 문서', '지급 건의·물품·지출결의', () => openPaymentHub(), '지출 지급 결의 카드 이체');
+    add('근태 신청 (구분 선택)', '근태신청', () => quickAttendanceApplication(''), '출장 휴가 시간외 휴일근무 연차 반차 외출 조퇴');
     add('출장 신청', '근태신청', () => quickAttendanceApplication('trip'), '관내 관외 출장');
     add('연차·반차 신청', '근태신청', () => quickAttendanceApplication('leave'), '휴가 대체');
     add('시간외·휴일근무 신청', '근태신청', () => quickAttendanceApplication('overtime'), '연장 야근');

@@ -75,7 +75,7 @@ export function chatExtractName(text) {
   while ((m = re.exec(t))) { const n = m[1]; if (!CH_STOP.has(n) && !/^(무슨|어떤|무엇|누구|언제|이번|다음)/.test(n)) return n; }
   return '';
 }
-/** "김지은 전화번호", "이승봉 팀장 부서" 같은 말에서 이름만 뽑는다. */
+/** "(이름) 전화번호", "(이름) 팀장 부서" 같은 말에서 이름만 뽑는다. */
 export function chatExtractPerson(text) {
   const m = String(text ?? '').match(/([가-힣]{2,4})\s*(?:님|씨|팀장|실장|과장|대리|주임|센터장|선생님)?\s*(?:의|은|는|이)?\s*(?:전화|연락처|내선|이메일|메일 ?주소|부서|직급|직책|번호|어느 ?팀|어디 ?소속)/);
   return m && !CH_STOP.has(m[1]) && !/^(내|제|우리|담당|부서|직원)$/.test(m[1]) ? m[1] : '';

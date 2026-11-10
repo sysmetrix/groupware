@@ -672,6 +672,50 @@ export function predictDraftMeta(model, {title = '', sourceDocNo = '', sourceTit
   }
   return {...PAT_DEFAULT, binder: (model && model.defaultBinder) || '', basis: '가장 많이 쓴 기록물철(확인 필요)', confidence: 'default'};
 }
+// ---------------------------------------------------------------------------
+// 근태신청 제목: 내 지난 근태 문서 제목에서 규칙(형식·종류별 문구·이름)을 읽어 새 신청의 제목을 정한다.
+// 지난 제목 예: "(11-09)대체휴가(이름)", "(10-08~10-09)관외출장(이름)", "(10-21)시간외근무신청(이름)"
+// ---------------------------------------------------------------------------
+const ATT_TITLE_RE = /^\(([^)]+)\)(.+)\(([^()]+)\)$/;
+export function attendanceCategory(a = {}) {
+  const s = `${a.atItemNm || ''} ${a.atNm || ''}`;
+  if (/근무일대체|휴일대체/.test(s)) return 'swap';
+  if (/출장/.test(s)) return 'trip';
+  if (/초과근무|연장근무|휴일근무|조기근무/.test(s)) return 'overtime';
+  return 'leave';
+}
+const bump = (m, k, v) => { const o = m[k] || (m[k] = {}); o[v] = (o[v] || 0) + 1; };
+const topOf = o => { const e = Object.entries(o || {}).sort((a, b) => b[1] - a[1])[0]; return e ? {mid: e[0], count: e[1]} : null; };
+export function learnAttendanceTitles(apps = [], meCd = '') {
+  const kind = {}, cat = {}, names = {};
+  let n = 0;
+  for (const a of apps) {
+    if (!a || !meCd || String(a.empCd) !== String(meCd)) continue;
+    const m = ATT_TITLE_RE.exec(String(a.title || '').replace(/\s+/g, ' ').trim());
+    if (!m || /취소신청/.test(a.title) || Number(a.appTm) < 0) continue;
+    const c = attendanceCategory(a);
+    if (c === 'swap') continue;
+    n++; bump(kind, a.atNm, m[2]); bump(cat, c, m[2]);
+    if (a.korNm) bump(names, 'name', a.korNm);
+  }
+  const name = (topOf(names.name) || {}).mid || '';
+  return {n, name, kind: Object.fromEntries(Object.entries(kind).map(([k, v]) => [k, topOf(v)])), cat: Object.fromEntries(Object.entries(cat).map(([k, v]) => [k, topOf(v)]))};
+}
+const attMd = ymd => ymd.slice(5, 10);
+const CAT_LABEL = {trip: '출장', leave: '휴가', overtime: '시간외·휴일근무'};
+/** type: trip|leave|overtime, kind: 그룹웨어 근태항목명(관내출장·오전반차·연장근무(보상) …), from/to: YYYY-MM-DD */
+export function predictAttendanceTitle(model, {type = 'leave', kind = '', from = '', to = ''} = {}) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from)) return null;
+  const end = /^\d{4}-\d{2}-\d{2}$/.test(to) && to > from ? to : from;
+  const m = model || {n: 0, name: '', kind: {}, cat: {}};
+  let mid = kind, basis = '지난 신청 기록이 없어 기본 형식을 씁니다(확인 필요)';
+  if (type === 'overtime') mid = '시간외근무신청';
+  const byKind = m.kind && m.kind[kind], byCat = m.cat && m.cat[type];
+  if (byKind) { mid = byKind.mid; basis = `내 지난 “${kind}” 신청 ${byKind.count}건의 제목 형식과 같게 정했습니다`; }
+  else if (byCat) { mid = type === 'leave' ? kind : byCat.mid; basis = `“${kind}” 신청 이력이 없어 내 지난 ${CAT_LABEL[type] || ''} 신청 ${byCat.count}건의 형식을 따랐습니다`; }
+  const dates = end === from ? attMd(from) : `${attMd(from)}~${attMd(end)}`;
+  return {title: `(${dates})${mid}${m.name ? `(${m.name})` : ''}`, basis, confidence: byKind ? 'kind' : byCat ? 'category' : 'default'};
+}
 // "전략경영실-7679 (2026.10.23)" -> "전략경영실-7679(2026. 10. 23.)"
 export function formatRunRef(runday = '') {
   const m = String(runday).match(/^\s*(\S+?)\s*\((\d{4})\.(\d{1,2})\.(\d{1,2})\)/);
@@ -1127,7 +1171,7 @@ export function buildDayTimeline(items = [], ymd, now = new Date()) {
   const k = kstNow(now), nowMin = k.date.replace(/-/g, '') === ymd ? k.hh * 60 + k.mm : null;
   return {segs, allDay, lo: DAY_LO, hi: DAY_HI, nowMin: nowMin !== null && nowMin >= DAY_LO && nowMin <= DAY_HI ? nowMin : null};
 }
-// 내 상신문서 중 결재가 끝나지 않았는데 오래 머문 것. 상태 문구 예: "결재중(이승봉)"
+// 내 상신문서 중 결재가 끝나지 않았는데 오래 머문 것. 상태 문구 예: "결재중(결재자 이름)"
 export function stalledSubmitted(docs = [], now = new Date(), {days = 2} = {}) {
   const today = dayNumber(kstNow(now).date);
   const out = [];
@@ -1154,7 +1198,8 @@ export function wrapUpModel({now = new Date(), ownOtToday = null, tomorrowItems 
 // 업데이트 내역: 새 버전을 낼 때 맨 위에 한 줄을 추가한다(하네스가 현재 버전과 맞는지 검사).
 // 4.2~4.6 사이 세부 항목은 릴리스 제목만 근거로 적어 간단하다.
 export const CHANGELOG = [
-  {v: "0.38.0", date: "2026-11-10", old: "", title: "홈 AI 채팅을 실제로 쓸 만하게: 모델 자동 전환, 즉시 답, 간결한 정리", items: ["원인: 채팅이 쓰던 gemini-3.6-flash의 무료 사용량이 바닥나(429) 답이 “일부만 처리했습니다”나 긴 원자료 나열로 나왔음. 이제 한도가 넉넉하고 빠른 lite 계열 모델부터 쓰고, 한도·없음·과부하가 나면 그 모델을 쉬게 하고 다음 모델로 자동 전환(모델별 쉬는 시간 기억, 한도 소진 시 안내 문구)","답 방식 변경: 말을 먼저 로컬 라우터로 알아듣고 조회 결과를 즉시 보여 준 뒤, AI가 있으면 그 결과를 근거로 한 번만 더 3~5줄로 정리(실패해도 즉시 답은 남음). 로컬이 못 알아들은 말만 AI가 도구를 골라 부름(최대 3단계)","직원 근태 답은 같은 일정을 한 줄로 묶음(예: 김보라·김소연·이승봉·홍미소 — 관내출장 12:00~18:00). 답이 길면 자세한 목록은 “자세히 보기”로 접음. “답장 필요한 메일 있어?”는 초안 작성이 아니라 목록 조회로, “김지은 전화번호”는 조직도 검색으로 처리","홈을 2단으로: 왼쪽 채팅, 오른쪽 핵심 요약(급한 일·할 일·대기·일정·자리 비움·지금 할 일·오늘 일정)이 한 화면에 함께 보임. 처음엔 시작 카드 6개. 대화 기록에 카드도 보관. 상단 “AI 지시” 버튼은 홈 채팅창으로 이동"]},
+  {v: "0.39.0", date: "2026-11-10", old: "", title: "근태 신청 준비: 구분 선택, 일시 선택, 제목 자동 결정, 교통수단 선택 안 함이 기본", items: ["한 창에서 출장·휴가·시간외/휴일근무를 고르고 종류(관내/관외, 연차·반차·외출 등, 연장/휴일/조기, 수당/보상)를 바꿀 수 있음","시작·종료를 날짜가 아니라 일시(날짜+시각)로 고름. 외출·조퇴·출장·시간외는 시각을 신청서의 시작/종료시간 칸에 넣고, 연차·반차·대체휴가처럼 시간이 정해진 종류는 날짜만 반영","제목은 내 지난 근태 문서 제목(예: 종류별 문구, 이름 표기, 날짜 형식)을 읽어 같은 형식으로 정하고, 근거(몇 건을 따랐는지)를 함께 보여 줌. 직접 고칠 수 있음","출장 교통수단은 ‘선택 안 함’이 기본이며 고른 경우에만 신청서 칸을 채움"]},
+  {v: "0.38.0", date: "2026-11-10", old: "", title: "홈 AI 채팅을 실제로 쓸 만하게: 모델 자동 전환, 즉시 답, 간결한 정리", items: ["원인: 채팅이 쓰던 gemini-3.6-flash의 무료 사용량이 바닥나(429) 답이 “일부만 처리했습니다”나 긴 원자료 나열로 나왔음. 이제 한도가 넉넉하고 빠른 lite 계열 모델부터 쓰고, 한도·없음·과부하가 나면 그 모델을 쉬게 하고 다음 모델로 자동 전환(모델별 쉬는 시간 기억, 한도 소진 시 안내 문구)","답 방식 변경: 말을 먼저 로컬 라우터로 알아듣고 조회 결과를 즉시 보여 준 뒤, AI가 있으면 그 결과를 근거로 한 번만 더 3~5줄로 정리(실패해도 즉시 답은 남음). 로컬이 못 알아들은 말만 AI가 도구를 골라 부름(최대 3단계)","직원 근태 답은 같은 일정을 한 줄로 묶음(예: 여러 직원 이름 — 관내출장 12:00~18:00). 답이 길면 자세한 목록은 “자세히 보기”로 접음. “답장 필요한 메일 있어?”는 초안 작성이 아니라 목록 조회로, “직원 이름 + 전화번호”는 조직도 검색으로 처리","홈을 2단으로: 왼쪽 채팅, 오른쪽 핵심 요약(급한 일·할 일·대기·일정·자리 비움·지금 할 일·오늘 일정)이 한 화면에 함께 보임. 처음엔 시작 카드 6개. 대화 기록에 카드도 보관. 상단 “AI 지시” 버튼은 홈 채팅창으로 이동"]},
   {v: "0.37.1", date: "2026-11-10", old: "", title: "구글 동기화: 구글 캘린더를 실제로 읽어 대조", items: ["0.37.0은 구글 캘린더에 이미 있는지 확인하지 않고 모두 “등록 전”으로 보여 준 잘못이 있었음. 이제 후보 날짜의 구글 캘린더 “일 보기”를 읽어 대조한 결과로만 표시: 등록됨(구글에서 확인) / 비슷한 일정 있음(다른 캘린더·다른 이름) / 구글에 없음 / 대조 전 / 결재 중 보류","대조는 Aside가 구글 캘린더를 읽어 반영하며(스킬 bwyf-gcal-sync의 compareGwWithGcal, “구글 캘린더와 대조해줘”), 업무센터는 대조 시각과 건수를 표시. 월 보기는 칸마다 일정이 가려져 누락되므로 일 보기만 사용","일정명을 사용자의 실제 구글 캘린더 관례에 맞춤(시간외(3), 시간외(보상3), 휴일근무(8), 외출(3), 조퇴(2), 오전반차(4), 대체휴가). 광고·참고 문서의 기한은 후보에서 제외"]},
   {v: "0.37.0", date: "2026-11-10", old: "", title: "구글 캘린더 동기화 (그룹웨어 → 구글)", items: ["왼쪽 메뉴 더보기에 “구글 동기화”: 그룹웨어에서 결재완료된 내 근태(출장·시간외·휴가·외출 등)와 문서에서 읽은 기한을 구글 캘린더에 올릴 후보로 정리. 결재 중인 건은 보류","스킬 bwyf-gcal-sync 원칙 적용: 근태는 5 BWYF 근태, 기한은 4 BWYF 개인으로 레이어를 나누고, 일정명은 관내출장(8)·시간외(3)처럼, 메모는 “결재문서제목, 문서번호 / - 출장목적 / - 행선지 / - 근무내용 / - 휴고사유” 표준 서식, 기한은 출처 메타데이터 서식으로 생성","[구글에 올리기]는 내용과 캘린더가 채워진 구글 일정 작성 화면을 새 탭으로 열 뿐이며 저장은 사용자가 직접 누름(사전 승인 원칙). 구글 캘린더 내용은 읽지 않아 “올렸어요(등록함 표시)”는 사용자가 표시하는 값이고, [구글에서 찾아보기]로 중복을 확인할 수 있음","채팅에서 “구글 캘린더에 올릴 거 있어?”로 등록 전 건수를 물을 수 있음. 부서 행사·메신저 일정은 원문 확인이 필요해 자동 후보에서 제외"]},
   {v: "0.36.0", date: "2026-11-10", old: "", title: "새 첫 화면: AI 채팅 + 핵심 요약, 메뉴 정리", items: ["첫 화면이 “홈”으로 바뀜: 맨 위에 AI에게 말로 지시하는 채팅창, 아래에 핵심 5개(급한 일, 내 할 일, 결재 대기 중, 오늘 일정, 오늘 자리 비움), 지금 먼저 할 일 한 가지, 압축된 오늘 일정. 기존 목록은 “할 일 목록” 메뉴로 그대로 있음","채팅으로 할 수 있는 일: 요약·할 일·일정·직원 휴가/출장(시간·장소·사유)·내 근태와 남은 연차·문서/메일 검색·차량 예약 현황 조회와 화면 이동. 구글 AI 키가 없어도 정해진 문장은 이해하고, 키를 연결하면 자유로운 말로 시킬 수 있음(함수 호출 방식, 최대 4단계)","신청·기안·메일 답장·차량 예약은 AI가 직접 하지 않고 “확인 카드”만 만듦. 카드의 버튼을 사용자가 직접 눌러야 기존의 미리 채워진 화면이 열리며, 신청완료·보내기는 그 화면에서 사람이 누름(차량 예약만 확정 버튼이 곧 저장이라 위험 표시). 외부 AI에는 제목·상태·건수 등 최소 정보만 보내고 본문·계좌·타 직원 시간외/지문은 보내지 않음","왼쪽 메뉴 정리: 홈, 할 일 목록, 결재·문서유통, 메일, 일정 달력, 근태·연차만 기본으로 보이고 나머지는 “더보기”로 접음. 입력창에서는 단축키가 동작하지 않고 Enter 전송, Shift+Enter 줄바꿈, 한글 조합 중 Enter 무시"]},
