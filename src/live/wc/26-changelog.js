@@ -1,4 +1,4 @@
-// GW 통합 업무센터 · 버전과 업데이트 내역
+// GW 비서 · 버전과 업데이트 내역
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
 
   function openChangelog() {

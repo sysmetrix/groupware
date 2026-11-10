@@ -1,4 +1,4 @@
-// GW 통합 업무센터 · 그룹웨어 기록기 (동작 기록 · 변수화 · 재생)
+// GW 비서 · 그룹웨어 기록기 (동작 기록 · 변수화 · 재생)
 // 처리 창(#frame)에 열린 그룹웨어 화면에서 클릭·입력·선택을 기록해 두었다가 같은 순서로 재생한다.
 // 비밀번호 입력은 기록하지 않고, 상신·결재·발송·삭제 같은 비가역 버튼은 재생 때마다 사용자 확인을 받는다.
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
@@ -175,6 +175,7 @@
         if (!window.confirm(`비가역 버튼(“${nm}”)을 누릅니다. 진행할까요?`)) throw new Error('사용자가 비가역 동작을 거부하여 안전 중단');
         return exec(na, vars, true);
       }
+      if (aborted) throw new Error('재생 중단됨');
       const {el, used} = await waitTarget(step.frame, step.selectors, step.timeoutMs || 8000);
       const dl = step.type === 'assert' || step.type === 'waitFor' ? '' : recDanger(el);
       if (step.type === 'key' && (step.key === 'Enter' || step.ctrlKey) && !confirmed) {
@@ -183,6 +184,7 @@
       if (dl && !confirmed) {
         if (!window.confirm(`비가역 버튼(“${dl}”)을 누릅니다. 진행할까요?`)) throw new Error(`“${dl}” 실행 거부로 중단`);
       }
+      if (aborted) throw new Error('재생 중단됨');
       if (dl) AUTO.allow = true; // 사용자가 확인한 이 한 번의 동작만 가드를 통과시킨다
       try {
       el.scrollIntoView({block: 'center', inline: 'center'});
@@ -203,12 +205,13 @@
         const results = [];
         for (let i = 0; i < macro.steps.length; i++) {
           const step = macro.steps[i];
+          if (aborted) { results.push({ok:false, detail:'재생 중단됨'}); onProgress(i, results[i]); return {ok:false, at:i, results}; }
           if (beforeStep && !(await beforeStep(step, i))) { results.push({ok: false, detail: '사용자가 중단'}); onProgress(i, results[i]); return {ok: false, at: i, results}; }
           const t0 = Date.now();
           let res = null;
           for (let a = 1; a <= maxRetries; a++) {
             try { res = {ok: true, detail: await exec(step, vars, false), ms: Date.now() - t0}; break; }
-            catch (e) { if (aborted || step.type === 'confirm' || /거부|중단/.test(e.message) || a >= maxRetries) { res = {ok: false, detail: e.message, ms: Date.now() - t0}; break; } await wait(Math.max(150, 400 / speed)); }
+            catch (e) { if (aborted || !['assert','waitFor'].includes(step.type) || /거부|중단/.test(e.message) || a >= maxRetries) { res = {ok: false, detail: e.message, ms: Date.now() - t0}; break; } await wait(Math.max(150, 400 / speed)); }
           }
           results.push(res); onProgress(i, res);
           if (!res.ok) return {ok: false, at: i, results};
@@ -230,7 +233,7 @@
     if (s.type === 'confirm') return `⚠ ${s.nextAction ? stepLabel(s.nextAction) : t} (재생 때 확인)`;
     return `${esc(t)} · ${esc(s.label || String(s.value ?? sel).slice(0, 34))}`;
   };
-  let recorder = null, player = null;
+  let recorder = null, player = null, pendingRecording = null;
 
   function updateRecBar() {
     let bar = root.querySelector('#recbar');
@@ -240,6 +243,7 @@
   }
   function recStart() {
     if (gated('recorder')) return;
+    if (pendingRecording) { toast('저장하지 않은 기록을 먼저 저장하세요.'); openRecorder(); return; }
     const d = recFrameDocNow();
     if (!d) { toast('먼저 기록할 그룹웨어 화면을 처리 창에 열어 주세요 (예: 새로 만들기 → 양식 열기, 또는 항목의 “원래 화면 열기”).'); return; }
     closeOverlay();
@@ -256,31 +260,38 @@
     recorder = null; updateRecBar();
     if (!steps.length) { toast('기록된 동작이 없습니다.'); return; }
     // 사용자를 알 수 없는 상태(default)에서는 store.set이 macros 저장을 막는다(01-storage). 저장했다고 말하지 않는다.
-    if (currentKey === 'default') { toast(`기록한 ${steps.length}단계를 저장하지 못했습니다: 로그인 사용자 정보를 읽지 못해 기록 저장이 막혀 있습니다. 그룹웨어에 다시 로그인한 뒤 기록하세요.`); return; }
-    const name = (prompt(`기록한 ${steps.length}단계의 이름을 입력하세요.`, `기록 ${new Date().toLocaleString('ko-KR', {timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'})}`) || '').trim();
-    if (!name) { toast('이름이 없어 저장하지 않았습니다.'); return; }
+    pendingRecording = steps;
+    if (currentKey === 'default') { toast('로그인 사용자를 확인하지 못했습니다. 기록은 현재 화면에서 보관 중입니다.'); openRecorder(); return; }
+    savePendingRecording();
+  }
+  async function savePendingRecording() {
+    const steps = pendingRecording; if (!steps || !steps.length) return;
+    const name = (await askText(`기록 저장 (${steps.length}단계)`, '기록 이름', `기록 ${new Date().toLocaleString('ko-KR', {timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'})}`) || '').trim();
+    if (!name) { toast('저장하지 않은 기록을 보관 중입니다. 기록기에서 다시 저장할 수 있습니다.'); openRecorder(); return; }
     const m = macroLoad();
     m.unshift({version: '1.0', id: 'm' + Date.now().toString(36), name, createdAt: Date.now(), vars: {}, steps});
     macroSave(m);
     const saved = macroLoad().some(x => x.id === m[0].id); // 실제로 다시 읽혀야 저장된 것
-    if (!saved) { toast(`“${name}”을(를) 저장하지 못했습니다 (브라우저 저장 공간이 부족하거나 막혀 있습니다).`); return; }
+    if (!saved) { toast(`“${name}”을(를) 저장하지 못했습니다. 기록은 이 화면을 닫지 않는 동안 보관됩니다.`); openRecorder(); return; }
+    pendingRecording = null;
     toast(`“${name}” ${steps.length}단계를 저장했습니다.`);
     openRecorder();
   }
   function openRecorder() {
     if (gated('recorder')) return;
-    closeOverlay();
-    S.paletteOpen = true;
-    const ms = macroLoad();
-    $('#overlay').innerHTML = `<div class="modal" data-act="closeOverlay"><div class="dlg" data-stop="1" style="width:min(780px,95vw);padding:22px 24px;max-height:88vh;overflow:auto" role="dialog" aria-label="그룹웨어 기록기">
+    closeOverlay(); S.paletteOpen = true;
+    const ms = macroLoad(), ready = !!recFrameDocNow();
+    $('#overlay').innerHTML = `<div class="modal" data-act="closeOverlay"><div class="dlg rec-dialog" data-stop="1" role="dialog" aria-label="반복 작업 기록기">
       <button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button>
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px"><div class="cmd-logo" style="background:#b3261e">${ic('play')}</div><div><h2 style="margin:0;font-size:18px">그룹웨어 기록기</h2><div class="muted">처리 창에서 한 작업을 기록해 두었다가 그대로 재생합니다. 값은 변수로 바꿔 매번 다르게 넣을 수 있습니다.</div></div></div>
-      <div class="acts"><button class="btn primary" data-act="recStart">● 기록 시작</button><button class="btn" data-act="recImport">가져오기(JSON)</button></div>
-      <div class="box tip" style="margin-top:10px">안전: 비밀번호는 기록하지 않고, 상신·결재·임시저장·발송·삭제 버튼은 재생 때마다 확인을 받습니다. 실패하면 즉시 멈춥니다.</div>
-      <div class="sec"><div class="sh">내 기록 (${ms.length})</div>
-      ${ms.length ? ms.map((m, i) => `<div class="box" style="margin:8px 0"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b style="flex:1;min-width:140px">${esc(m.name)}</b><span class="muted">${m.steps.length}단계${recVarsOf(m).length ? ` · 변수 ${recVarsOf(m).map(v => '{{' + esc(v) + '}}').join(' ')}` : ''}</span></div>
-        <div class="acts" style="margin-top:6px"><button class="btn sm primary" data-act="recPlay" data-i="${i}" data-mode="auto">▶ 재생</button><button class="btn sm" data-act="recPlay" data-i="${i}" data-mode="step">한 단계씩</button><button class="btn sm" data-act="recDetail" data-i="${i}">단계 보기·변수화</button><button class="btn sm" data-act="recExport" data-i="${i}">내보내기</button><button class="btn sm danger ghost" data-act="recDel" data-i="${i}">삭제</button></div></div>`).join('') : '<div class="muted">저장된 기록이 없습니다. “기록 시작” 후 처리 창에서 작업하세요.</div>'}
-      </div></div></div>`;
+      <div class="rec-head"><span class="rec-mark">${ic('play')}</span><div><h2>반복 작업 기록기</h2><p>같은 그룹웨어 화면에서 반복하는 입력과 클릭을 다시 실행합니다.</p></div></div>
+      <div class="rec-status ${ready ? 'ready' : ''}"><b>${ready ? '기록할 화면이 열려 있습니다' : '먼저 그룹웨어 화면을 열어 주세요'}</b><span>${ready ? '오른쪽 처리 창의 동작만 기록합니다.' : '결재 양식이나 업무 항목을 오른쪽 처리 창에서 연 뒤 기록할 수 있습니다.'}</span></div>
+      ${pendingRecording ? `<div class="rec-pending"><b>저장하지 않은 기록 ${pendingRecording.length}단계</b><span>현재 탭을 닫거나 새로고침하면 사라집니다.</span><button class="btn primary" data-act="recSavePending">이름을 정해 저장</button></div>` : ''}
+      <div class="rec-how"><div><b>1</b><span>처리 창 열기</span></div><div><b>2</b><span>작업을 직접 기록</span></div><div><b>3</b><span>단계를 확인하고 재생</span></div></div>
+      <div class="rec-actions"><button class="btn primary" data-act="recStart" ${!ready || pendingRecording ? 'disabled' : ''}>기록 시작</button><button class="btn" data-act="recImport">기록 가져오기</button></div>
+      <div class="rec-notice"><b>사용 전 확인</b><span>입력한 내용은 이 브라우저에 저장됩니다. 비밀번호만 제외되므로 개인정보·민감정보는 기록하지 마세요. 화면 위치가 바뀌면 재생이 실패하거나 다른 대상을 찾을 수 있습니다. 결재·저장 등 중요한 버튼은 재생 전 확인합니다.</span></div>
+      <div class="rec-list-head"><h3>저장된 기록</h3><span>${ms.length}개 · 이 브라우저에만 저장</span></div>
+      ${ms.length ? ms.map((m, i) => `<div class="rec-item"><div><strong>${esc(m.name)}</strong><span>${m.steps.length}단계${recVarsOf(m).length ? ' · 입력 변수 '+recVarsOf(m).length+'개' : ''}</span></div><div class="rec-item-actions"><button class="btn sm primary" data-act="recDetail" data-i="${i}">확인하고 실행</button><button class="btn sm" data-act="recExport" data-i="${i}">내보내기</button><button class="btn sm danger ghost" data-act="recDel" data-i="${i}">삭제</button></div></div>`).join('') : '<div class="rec-empty">아직 저장된 기록이 없습니다.<br>처리 창에서 반복 작업을 한 번 기록해 보세요.</div>'}
+    </div></div>`;
   }
   function recDetail(i) {
     const m = macroLoad()[i];
@@ -289,7 +300,7 @@
       <button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button>
       <h2 style="margin:0 0 4px;font-size:18px">${esc(m.name)}</h2><div class="muted" style="margin-bottom:8px">입력 단계의 “변수로”를 누르면 값을 {{이름}}으로 바꿔, 재생할 때마다 새 값을 넣을 수 있습니다.</div>
       ${m.steps.map((s, k) => `<div style="display:flex;gap:8px;align-items:center;padding:4px 0;border-top:1px solid var(--line)"><span class="muted" style="width:28px">${k + 1}</span><span style="flex:1;min-width:0">${stepLabel(s)}</span>${s.type === 'type' || s.type === 'select' ? `<button class="btn sm" data-act="recVar" data-i="${i}" data-s="${k}">변수로</button>` : ''}<button class="btn sm ghost" data-act="recStepDel" data-i="${i}" data-s="${k}">삭제</button></div>`).join('')}
-      <div class="acts" style="margin-top:12px;justify-content:flex-end"><button class="btn sm" data-act="openRec">목록으로</button></div></div></div>`;
+      <div class="acts" style="margin-top:18px;justify-content:flex-end"><button class="btn sm" data-act="openRec">목록으로</button><button class="btn sm" data-act="recPlay" data-i="${i}" data-mode="step">한 단계씩 실행</button><button class="btn sm primary" data-act="recPlay" data-i="${i}" data-mode="auto">확인 후 실행</button></div></div></div>`;
   }
   function recVar(i, k) {
     const ms = macroLoad(), m = ms[i], s = m && m.steps[k];
@@ -317,12 +328,14 @@
     const m = macroLoad()[i];
     if (!m) return;
     if (!recFrameDocNow()) { toast('재생할 그룹웨어 화면을 처리 창에 먼저 열어 주세요.'); return; }
+    if (!confirm(`“${m.name}” ${m.steps.length}단계를 현재 처리 창에서 실행합니다. 같은 화면인지, 입력 내용과 단계가 맞는지 확인했나요?\n실제 입력과 클릭이 실행됩니다.`)) return;
     const vars = {};
     for (const v of recVarsOf(m)) { const val = prompt(`“${v}” 값을 입력하세요.`, (m.vars || {})[v] ?? ''); if (val === null) return; vars[v] = val; }
     closeOverlay();
     const log = [];
     const render = () => { const el = $('#recplay'); if (el) el.innerHTML = m.steps.map((s, k) => `<div style="display:flex;gap:8px;padding:3px 0;border-top:1px solid var(--line)"><b style="width:18px;color:${log[k] ? (log[k].ok ? 'var(--ok)' : 'var(--hi)') : 'var(--muted)'}">${log[k] ? (log[k].ok ? '✓' : '✗') : (k === log.length ? '▶' : '·')}</b><span style="flex:1">${stepLabel(s)}${log[k] && !log[k].ok ? `<div class="err" style="font-size:12px">${esc(log[k].detail)}</div>` : ''}</span></div>`).join(''); };
-    $('#overlay').innerHTML = `<div class="modal"><div class="dlg" data-stop="1" style="width:min(620px,94vw);padding:18px 22px;position:absolute;right:24px;bottom:24px;top:auto;left:auto;transform:none;max-height:70vh;overflow:auto" role="dialog" aria-label="기록 재생"><h2 id="recplayTitle" style="margin:0 0 6px;font-size:16px">▶ ${esc(m.name)} 재생 중</h2><div id="recplay"></div><div class="acts" style="margin-top:8px;justify-content:flex-end"><button class="btn sm danger" data-act="recAbort">중지</button><button class="btn sm primary" data-act="closeHelp">닫기</button></div></div></div>`;
+    $('#overlay').innerHTML = `<div class="modal"><div class="dlg" data-stop="1" style="width:min(620px,94vw);padding:18px 22px;position:absolute;right:24px;bottom:24px;top:auto;left:auto;transform:none;max-height:70vh;overflow:auto" role="dialog" aria-label="기록 재생"><h2 id="recplayTitle" style="margin:0 0 6px;font-size:16px">▶ ${esc(m.name)} 재생 중</h2><div id="recplay"></div><div class="acts" style="margin-top:8px;justify-content:flex-end"><button class="btn sm danger" data-act="recAbort">중지</button><button class="btn sm primary" data-act="closeHelp" disabled>닫기</button></div></div></div>`;
+    S.paletteOpen = true;
     render();
     player = createPlayer({getRootDocs: () => { const x = recFrameDocNow(); return x ? [x] : []; }, onProgress: (k, res) => { log[k] = res; render(); },
       beforeStep: mode === 'step' ? async (s, k) => window.confirm(`${k + 1}/${m.steps.length}단계를 실행할까요?\n${stepLabel(s).replace(/<[^>]+>/g, '')}`) : null});
@@ -335,6 +348,7 @@
     if (tEl) { tEl.textContent = `${r.ok ? '✓' : '✗'} ${m.name} ${r.ok ? '재생 완료' : `${r.at + 1}단계에서 중단`}`; tEl.style.color = r.ok ? 'var(--ok)' : 'var(--hi)'; }
     if (!r.ok && r.results.length === 1 && !log.length) { const el = $('#recplay'); if (el) el.insertAdjacentHTML('afterbegin', `<div class="err" style="font-size:12px;margin-bottom:6px">${esc(r.results[0].detail)}</div>`); }
     $('#overlay').querySelector('[data-act="recAbort"]')?.remove();
+    const closeButton = $('#overlay').querySelector('[data-act="closeHelp"]'); if (closeButton) closeButton.disabled = false;
     S.paletteOpen = true; // 끝난 뒤에는 Esc·바깥 클릭으로 닫히게
     logActionRecord({command: `기록 재생: ${m.name}`, type: '기록기', target: m.name, summary: r.ok ? `${m.steps.length}단계를 모두 재생했습니다.` : `${r.at + 1}단계에서 중단했습니다: ${(r.results[r.at] || {}).detail || ''}`, steps: r.results.map((x, k) => `${x.ok ? '✓' : '✗'} ${k + 1}. ${x.detail}`), verified: r.ok});
     toast(r.ok ? `“${m.name}” 재생을 마쳤습니다.` : `재생을 중단했습니다: ${(r.results[r.at] || {}).detail || ''}`);

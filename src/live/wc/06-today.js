@@ -1,4 +1,4 @@
-// GW 통합 업무센터 · 오늘 할 일
+// GW 비서 · 오늘 할 일
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
   // ----- 오늘 할 일 -----
   function vToday() {

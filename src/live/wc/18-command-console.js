@@ -1,4 +1,4 @@
-// GW 통합 업무센터 · AI 업무 지시창, 지능형 명령 실행 엔진 및 작업 내역 검증 로그
+// GW 비서 · AI 업무 지시창, 지능형 명령 실행 엔진 및 작업 내역 검증 로그
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
 // 원칙: 화면의 "완료/확인됨" 표시는 실제로 다시 읽어 확인한 결과일 때만 쓴다. 확인하지 못한 것은 그대로 알린다.
 

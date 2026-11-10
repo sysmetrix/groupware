@@ -1,4 +1,4 @@
-// GW 통합 업무센터 · 새 첫 화면 "홈" (AI 채팅창 + 핵심 요약)
+// GW 비서 · 새 첫 화면 "홈" (AI 채팅창 + 핵심 요약)
 // 읽기 전용 요약. 숫자는 '오늘 할 일'과 같은 기준(mineVisible, stateOf)을 쓴다.
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
 

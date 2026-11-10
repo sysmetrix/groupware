@@ -91,7 +91,7 @@ ToolResult = { ok: boolean, text: '사람이 읽는 한두 문장', data?: {...L
 </section>
 ```
 CSS 카드 클래스(I2·I6 공통): `ch-card`, `ch-card-list`, `ch-li`, `ch-li-t/-s/-b`, `ch-card-kpi`, `ch-kpi`, `ch-card-nav`, `ch-card-note`, `ch-card-time`, `ch-card-confirm`, `ch-rows`, `ch-risk-high`, `ch-actions`, `ch-btn`, `ch-btn-primary`, `ch-btn-ghost`, `ch-dots`(입력 중 표시), `ch-tool`(도구 진행 칩). 새 클래스가 필요하면 마크업 쪽 에이전트가 최종 보고에 "CSS 요청"으로 적고, 최종 통합 단계에서 맞춘다.
-이벤트(data-act): `chatChip`(v=질문), `chatSend`, `chatStop`, `chatClear`, `chatConfirm`(v=id), `chatCancel`(v=id), `chatSetupAi`, `chatFocus`, `homeTile`(v=타일 id), `homeNext`, `homeOpenToday`. 입력창 키 처리: Enter 전송, Shift+Enter 줄바꿈, IME 조합 중(`e.isComposing`) Enter 무시, `/`로 입력창 포커스(입력 중이 아닐 때), Esc는 업무센터 닫기를 막지 않도록 주의(04-timers-keys.js 규칙 확인).
+이벤트(data-act): `chatChip`(v=질문), `chatSend`, `chatStop`, `chatClear`, `chatConfirm`(v=id), `chatCancel`(v=id), `chatSetupAi`, `chatFocus`, `homeTile`(v=타일 id), `homeNext`, `homeOpenToday`. 입력창 키 처리: Enter 전송, Shift+Enter 줄바꿈, IME 조합 중(`e.isComposing`) Enter 무시, `/`로 입력창 포커스(입력 중이 아닐 때), Esc는 GW 비서 닫기를 막지 않도록 주의(04-timers-keys.js 규칙 확인).
 
 ## 7. 홈에 보일 핵심(하루 요약만; 목록은 '오늘 할 일'로)
 타일 4~5개: 급한 일(`overdue+urgent`), 내 할 일(todo+check), 결재 대기 중(`wait`) 또는 확인할 근태, 오늘 일정 수(일정+자원예약), 오늘 자리 비움 인원. "지금 할 일 한 가지": 가장 높은 우선순위 1건 + 열기 버튼. 오늘 타임라인: 기존 `25-home.js`의 `homeDayCard` 데이터를 재사용/압축(그 파일은 수정하지 않음 — 함수 `homeDayCard`는 호출만 가능, 구조 변경이 필요하면 I1이 자기 파일에 새로 만든다).

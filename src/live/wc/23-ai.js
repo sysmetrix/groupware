@@ -1,4 +1,4 @@
-// GW 통합 업무센터 · AI 도우미 (Google Gemini)
+// GW 비서 · AI 도우미 (Google Gemini)
 // 내 업무 요약(제목, 상태, 마감)만 보내 우선순위 정리와 질문 답변을 받는다. 메일·문서 본문과 계좌번호는 보내지 않는다.
 // API 키는 이 PC의 이 브라우저에만 저장한다. 키 발급은 화면 안내를 따라 3분이면 된다(무료 사용량 있음).
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
@@ -52,7 +52,7 @@
       </ol>
       <div style="display:flex;gap:8px"><input id="aiKey" class="inp" style="flex:1;height:40px" type="password" placeholder="AIza 또는 AQ. 로 시작하는 키 붙여넣기" autocomplete="off" aria-label="Gemini API 키"><button class="btn primary" data-act="aiSaveKey">연결 시험</button></div>
       ${msg ? `<div class="box warn" style="margin-top:10px">${esc(msg)}</div>` : ''}
-      <div class="muted" style="font-size:12px;margin-top:10px">키는 이 PC의 브라우저에만 저장되며 업무센터 밖으로 보내지 않습니다(구글 호출에만 사용). 키가 새어 나갔다고 느끼면 같은 페이지에서 삭제하고 새로 만드세요.</div>`);
+      <div class="muted" style="font-size:12px;margin-top:10px">키는 이 PC의 브라우저에만 저장되며 GW 비서 밖으로 보내지 않습니다(구글 호출에만 사용). 키가 새어 나갔다고 느끼면 같은 페이지에서 삭제하고 새로 만드세요.</div>`);
   }
 
   async function aiRequest(path, body, key) {

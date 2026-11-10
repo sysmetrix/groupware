@@ -1,4 +1,4 @@
-// GW 통합 업무센터 · 결재·문서유통
+// GW 비서 · 결재·문서유통
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
   // ----- 결재·문서유통 -----
   const AP_VERB = {distWaiting: '배부하기', deptWaiting: '접수하기', pending: '결재하기', sendWaiting: '발송하기', viewing: '열람하기', submitted: '열기'};

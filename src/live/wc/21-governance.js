@@ -1,4 +1,4 @@
-// GW 통합 업무센터 · 거버넌스 (관리자 정책, 데이터 관리, 진단, 업데이트 확인, 사용 안내)
+// GW 비서 · 거버넌스 (관리자 정책, 데이터 관리, 진단, 업데이트 확인, 사용 안내)
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
 
   // ---------- 관리자 정책 (확장 폴더의 policy.js가 window.BWYFGW_POLICY로 지정) ----------
@@ -72,7 +72,7 @@
       ${inv.map(r => `<tr style="border-top:1px solid var(--line)"><td style="padding:6px 4px"><b>${esc(r.label)}</b>${r.note ? `<div class="muted" style="font-size:12px">${esc(r.note)}</div>` : ''}</td><td style="text-align:right;white-space:nowrap">${r.kb}KB</td><td style="text-align:right">${['patterns', 'macros', 'errors', 'routing', 'forms', 'weekly'].includes(r.key) ? `<button class="btn sm danger ghost" data-act="govDel" data-k="${esc(r.key)}">지우기</button>` : ''}</td></tr>`).join('')}
       </tbody></table>
       <div class="muted" style="margin-top:6px">합계 약 ${Math.round(total)}KB</div>
-      <div class="acts" style="margin-top:12px"><button class="btn sm" data-act="govExportAudit">감사 기록 내보내기(JSON)</button><button class="btn sm" data-act="openDiag">진단 열기</button><button class="btn sm danger" data-act="resetAll">내 업무센터 자료 모두 지우기</button></div>
+      <div class="acts" style="margin-top:12px"><button class="btn sm" data-act="govExportAudit">감사 기록 내보내기(JSON)</button><button class="btn sm" data-act="openDiag">진단 열기</button><button class="btn sm danger" data-act="resetAll">내 GW 비서 자료 모두 지우기</button></div>
       <div class="muted" style="font-size:12px;margin-top:8px">공용 PC에서는 사용 후 위 버튼으로 모두 지워 주세요. 로그인 정보와 비밀번호는 저장하지 않습니다.</div></div></div>`;
   }
   function govDel(k) {
@@ -87,7 +87,7 @@
     const list = store.get('actionHistory', []);
     const out = JSON.stringify({exportedAt: new Date().toISOString(), version: VERSION, integrity: auditState(), records: list}, null, 2);
     copyText(out);
-    try { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([out], {type: 'application/json'})); a.download = `업무센터_감사기록_${new Date().toISOString().slice(0, 10)}.json`; a.click(); } catch {}
+    try { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([out], {type: 'application/json'})); a.download = `GW 비서_감사기록_${new Date().toISOString().slice(0, 10)}.json`; a.click(); } catch {}
     toast('감사 기록을 복사하고 파일로 저장했습니다.');
   }
 
@@ -95,8 +95,8 @@
   function diagChecks() {
     const out = [];
     const add = (name, ok, detail) => out.push({name, ok, detail});
-    add('업무센터 버전', true, `${VERSION} (수집기 ${GW.version})`);
-    add('관리자 정책', POLICY.enabled, POLICY.enabled ? `${POLICY.orgName || '기본 정책'} · 꺼진 기능 ${Object.entries(POLICY.features).filter(([, v]) => !v).map(([k]) => FEATURE_NAME[k]).join(', ') || '없음'}` : '관리자가 업무센터를 끈 상태입니다');
+    add('GW 비서 버전', true, `${VERSION} (수집기 ${GW.version})`);
+    add('관리자 정책', POLICY.enabled, POLICY.enabled ? `${POLICY.orgName || '기본 정책'} · 꺼진 기능 ${Object.entries(POLICY.features).filter(([, v]) => !v).map(([k]) => FEATURE_NAME[k]).join(', ') || '없음'}` : '관리자가 GW 비서를 끈 상태입니다');
     let ui = null; try { ui = JSON.parse(sessionStorage.getItem('userInfo') || 'null'); } catch {}
     add('로그인 세션', !!ui, ui ? '사용자 정보 확인됨' : '그룹웨어 로그인 정보를 읽지 못했습니다');
     add('사용자별 저장소', currentKey !== 'default', currentKey !== 'default' ? '사용자별로 분리되어 저장됩니다' : '사용자를 식별하지 못해 공용 저장소를 쓰는 중입니다');
@@ -116,7 +116,7 @@
   }
   function diagText(rows) {
     const errs = store.get('errors', []).slice(-10).map(e => `- ${new Date(e.at).toISOString()} ${e.where}: ${e.msg}`).join('\n');
-    return R.maskSensitive(`GW 통합 업무센터 진단 보고서\n생성: ${new Date().toISOString()}\n버전: ${VERSION}\n브라우저: ${navigator.userAgent}\n\n` + rows.map(r => `[${r.ok ? 'OK' : '확인필요'}] ${r.name}: ${r.detail}`).join('\n') + (errs ? `\n\n최근 오류\n${errs}` : ''));
+    return R.maskSensitive(`GW 비서 진단 보고서\n생성: ${new Date().toISOString()}\n버전: ${VERSION}\n브라우저: ${navigator.userAgent}\n\n` + rows.map(r => `[${r.ok ? 'OK' : '확인필요'}] ${r.name}: ${r.detail}`).join('\n') + (errs ? `\n\n최근 오류\n${errs}` : ''));
   }
   async function openDiag() {
     closeOverlay();
@@ -140,7 +140,7 @@
     if (S.settings.noticeAck === NOTICE_VER) return false;
     S.paletteOpen = true;
     $('#overlay').innerHTML = `<div class="modal"><div class="dlg" data-stop="1" style="width:min(640px,95vw);padding:24px 26px;max-height:88vh;overflow:auto" role="dialog" aria-label="사용 안내">
-      <h2 style="margin:0 0 8px;font-size:19px">GW 통합 업무센터 사용 안내</h2>
+      <h2 style="margin:0 0 8px;font-size:19px">GW 비서 사용 안내</h2>
       <ul style="line-height:1.8;padding-left:18px;margin:0 0 10px">
         <li>이 도구는 <b>내 화면에서 조회</b>하고, 기안 화면에 <b>값을 채워 주는 보조 도구</b>입니다.</li>
         <li><b>상신·결재·임시저장·발송·삭제는 하지 않습니다.</b> 모든 자동 입력은 결재 직전에서 멈추며, 내용 확인과 상신은 본인이 합니다.</li>

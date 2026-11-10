@@ -1,4 +1,4 @@
-// GW 통합 업무센터 · 그룹웨어 → 구글 캘린더 동기화 계획(순수 함수). 스킬 bwyf-gcal-sync의 원칙을 코드로 옮긴 것이다.
+// GW 비서 · 그룹웨어 → 구글 캘린더 동기화 계획(순수 함수). 스킬 bwyf-gcal-sync의 원칙을 코드로 옮긴 것이다.
 //  - 레이어 격리: 근태 → "5 BWYF 근태", 문서에서 읽은 기한 → "4 BWYF 개인". (부서 행사·메신저 일정은 원문 확인이 필요해 자동 계획에서 제외)
 //  - 결재완료 건만 등록 후보. 결재 중인 건은 보류. 추측으로 만든 일정은 없다(모든 후보는 그룹웨어의 실제 신청·문서에서 나온다).
 //  - 메모 서식: 근태 "{결재문서제목}, {문서번호}\n- 출장목적/근무내용/휴고사유: …", 그 밖은 출처 메타데이터 표준.
@@ -11,7 +11,7 @@ const gsDow = ymd => '일월화수목금토'[new Date(Date.UTC(+ymd.slice(0, 4),
 const gsDash = ymd => `${ymd.slice(0, 4)}.${ymd.slice(4, 6)}.${ymd.slice(6, 8)}(${gsDow(ymd)})`;
 const gsPlus = (ymd, n) => new Date(Date.UTC(+ymd.slice(0, 4), +ymd.slice(4, 6) - 1, +ymd.slice(6, 8) + n)).toISOString().slice(0, 10).replace(/-/g, '');
 const gsValidYmd = s => /^\d{8}$/.test(String(s || '')) && gsPlus(String(s), 0) === String(s);
-const gsValidTm = s => /^\d{4}$/.test(String(s || '')) && +String(s).slice(0, 2) <= 24 && +String(s).slice(2) < 60;
+const gsValidTm = s => /^\d{4}$/.test(String(s || '')) && (+String(s).slice(0, 2) < 24 || String(s) === '2400') && +String(s).slice(2) < 60;
 const gsHm = s => `${s.slice(0, 2)}:${s.slice(2)}`;
 const gsOne = s => String(s ?? '').replace(/\s+/g, ' ').trim();
 
@@ -48,6 +48,7 @@ export function gsyncTitle(a, kind) {
 export function gsyncDates(startYmd, endYmd, startTm, endTm) {
   const s = String(startYmd), e = String(endYmd || startYmd);
   if (!gsValidYmd(s) || !gsValidYmd(e) || e < s) return null;
+  if ((startTm && (!gsValidTm(startTm) || startTm === '2400')) || (endTm && !gsValidTm(endTm))) return null;
   const timed = s === e && gsValidTm(startTm) && gsValidTm(endTm) && !(startTm === '0000' && endTm === '0000') && startTm !== endTm;
   if (!timed) return {allDay: true, dates: `${s}/${gsPlus(e, 1)}`};
   const next = endTm <= startTm || endTm === '2400';
@@ -197,6 +198,10 @@ export function gsyncPlan({apps = [], me = '', deadlines = [], cals = [], synced
     const layer = GSYNC_LAYERS.personal;
     items.push({key, source: 'deadline', kind: 'deadline', layer, calId: gsyncCalendarId(cals, layer), title: `[마감] ${gsOne(d.title).slice(0, 80)}`, startYmd: ymd, endYmd: ymd, allDay: dt.allDay, dates: dt.dates, time: dt.allDay ? '' : `${tm.slice(0, 2)}:${tm.slice(2)}`, location: '', details: gsyncDeadlineMemo(d, now), docNo: '', pending: false, label: '마감'});
     gsyncSettle(items[items.length - 1], synced, existing, true);
+  }
+  for (const ev of items) {
+    if (ev.source !== 'attend' || ev.verified !== 'google') continue;
+    if (items.some(other => other !== ev && !other.pending && other.source === 'attend' && other.layer === ev.layer && other.kind === ev.kind && other.startYmd === ev.startYmd && other.endYmd === ev.endYmd && other.time === ev.time)) { ev.state = 'similar'; ev.match = {...ev.match, level: 'similar'}; delete ev.verified; }
   }
   items.sort((x, y) => x.startYmd.localeCompare(y.startYmd) || x.title.localeCompare(y.title, 'ko'));
   const counts = {ready: 0, hold: 0, synced: 0, similar: 0, unverified: 0};

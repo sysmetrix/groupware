@@ -1,5 +1,5 @@
 /*
- * GW 통합 업무센터 v4.2.2 — one interactive page on top of the logged-in https://gw.bwyf.or.kr tab.
+ * GW 비서 v4.2.2 — one interactive page on top of the logged-in https://gw.bwyf.or.kr tab.
  *
  * Data comes from window.BWYFGW (allow-listed read/search APIs) and window.BWYFGW_REPORT (analysis).
  * The right-hand pane embeds the groupware's own screens (approval document, board article, mail
@@ -9,7 +9,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '0.40.0';
+  const VERSION = '0.45.0';
   let api = null;
   const lazy = {
     version: VERSION,

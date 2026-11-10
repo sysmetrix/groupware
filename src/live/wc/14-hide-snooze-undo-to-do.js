@@ -1,4 +1,4 @@
-// GW 통합 업무센터 · hide / snooze / undo / to-do
+// GW 비서 · hide / snooze / undo / to-do
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
   // ---------- hide / snooze / undo / to-do ----------
   function pushUndo(label) { S.undo.push({label, hidden: {...S.hidden}, snooze: {...S.snooze}, plan: {...S.plan}, todos: JSON.parse(JSON.stringify(S.todos)), rel: label === '관련성 규칙' ? JSON.parse(JSON.stringify((S.settings && S.settings.rel) || null)) : undefined}); if (S.undo.length > 20) S.undo.shift(); }
@@ -9,11 +9,11 @@
   }
   function hide(keys) { pushUndo(`${keys.length}건 숨기기`); for (const k of keys) S.hidden[k] = Date.now(); S.multi.clear(); saveLocal(); afterMark(); toastUndo(`${keys.length}건을 이 화면에서 숨겼습니다. 그룹웨어에서 처리해야 완전히 사라집니다.`); }
   function snooze(keys) { pushUndo(`${keys.length}건 미루기`); const t = tomorrow8(); for (const k of keys) S.snooze[k] = t; S.multi.clear(); saveLocal(); afterMark(); toastUndo(`${keys.length}건을 내일 오전 8시까지 미뤘습니다.`); }
-  // 끝냄 표시(업무센터 목록에서만). 그룹웨어 처리 여부와 별개라는 점을 문구로 분명히 한다.
+  // 끝냄 표시(GW 비서 목록에서만). 그룹웨어 처리 여부와 별개라는 점을 문구로 분명히 한다.
   function markDoneKeys(keys) {
     if (!keys.length) return;
     pushUndo('끝냄 ' + keys.length + '건'); for (const k of keys) S.hidden[k] = Date.now(); S.multi.clear(); saveLocal(); afterMark();
-    toastUndo(keys.every(k => k.startsWith('att:')) ? '확인 끝냄으로 표시했습니다. 그룹웨어 기록이 3일 뒤에도 그대로면 다시 보여 드립니다.' : '끝냄으로 표시했습니다(업무센터 목록에서만). 그룹웨어에 아직 남아 있으면 하루 뒤 다시 보여 드립니다.');
+    toastUndo(keys.every(k => k.startsWith('att:')) ? '확인 끝냄으로 표시했습니다. 그룹웨어 기록이 3일 뒤에도 그대로면 다시 보여 드립니다.' : '끝냄으로 표시했습니다(GW 비서 목록에서만). 그룹웨어에 아직 남아 있으면 하루 뒤 다시 보여 드립니다.');
   }
   function afterMark() { if (S.view === 'today') refreshQueue(); else render(); if (S.sel && S.sel.type === 'action' && (isHidden(S.sel.key) || isSnoozed(S.sel.key)) && !S.focus) { const q = queue(); if (q[0]) selectAction(q[0].key); else { S.sel = null; renderPane(); } } }
   function addTodo(title, due = '', source = '', url = '', key = '') {

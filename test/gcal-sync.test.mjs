@@ -138,3 +138,16 @@ test('gsyncTitle follows the user calendar conventions', () => {
   assert.equal(gsyncTitle({atNm: '오후반차(보상)', appTm: 240}, 'leave'), '오후반차(4)'); assert.equal(gsyncTitle({atNm: '대체휴가', appTm: 480}, 'leave'), '대체휴가');
   assert.equal(gsyncTitle({atNm: '관외출장', appTm: 540}, 'trip'), '관외출장(9)');
 });
+
+test('invalid 24-hour times do not create calendar dates', () => {
+  assert.equal(gsyncDates('20261110', '20261110', '2401', '2402'), null);
+  assert.equal(gsyncDates('20261110', '20261110', '2400', '0100'), null);
+  assert.equal(gsyncDates('20261110', '20261110', '2300', '2400').dates, '20261110T230000/20261111T000000');
+});
+test('indistinguishable attendance records require review instead of false synced status', () => {
+  const existing = {dates: ['20261110'], records: [{date:'20261110', cal:'5 BWYF 근태', title:'관내출장(8)', from:'09:00', to:'18:00'}]};
+  const result = gsyncPlan({apps:[app({noDoc:'doc1'}),app({noDoc:'doc2'})],me:'016025',existing,now:NOW});
+  assert.deepEqual(result.items.map(x => x.state), ['similar','similar']);
+  const confirmed = gsyncPlan({apps:[app({noDoc:'doc1'}),app({noDoc:'doc2'})],me:'016025',existing,now:NOW,synced:{'gs:doc1:20261110:관내출장':1}});
+  assert.equal(confirmed.items.find(x => x.docNo === 'doc1').state, 'synced');
+});

@@ -1,4 +1,4 @@
-// GW 통합 업무센터 · 근태·연차 (calendar heat grid)
+// GW 비서 · 근태·연차 (calendar heat grid)
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
   // ----- 근태·연차 (calendar heat grid) -----
   function vAttendance() {

@@ -1,4 +1,4 @@
-// GW 통합 업무센터 · 현황 (charts moved off the home screen)
+// GW 비서 · 현황 (charts moved off the home screen)
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
   // ----- 현황 (charts moved off the home screen) -----
   function vOverview() {
