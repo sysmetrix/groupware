@@ -161,7 +161,7 @@ mark{background:#fff1a8;color:inherit;border-radius:2px}.wc.dark mark{background
 .wc.dark .att .c.okd{background:#16301d}.wc.dark .att .c.bad{background:#3b1f1f}.wc.dark .att .c.part{background:#3a2f12}.wc.dark .att .c.lv{background:#1c2c48}
 .board{display:grid;grid-template-columns:repeat(6,minmax(170px,1fr));gap:10px;align-items:start}
 .col{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:10px;min-height:200px}.col.drop{outline:2px dashed var(--accent)}
-.col .ch{font-weight:800;margin-bottom:8px;display:flex;justify-content:space-between}
+.col .col-h{font-weight:800;margin-bottom:8px;display:flex;justify-content:space-between}
 .col .hint{border:1px dashed var(--line2);border-radius:9px;padding:14px 8px;text-align:center;color:var(--muted);font-size:13px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:9px 10px;margin-bottom:8px;cursor:grab;font-size:14px;box-shadow:var(--sh)}.card:active{cursor:grabbing}.card .d{color:var(--muted);font-size:12px;margin-top:2px}
 .card.todo{border-left:4px solid #f0a500}.card.act{border-left:4px solid var(--accent)}.card.act.high{border-left-color:var(--hi)}

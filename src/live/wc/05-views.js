@@ -55,6 +55,8 @@
     const age = S.lastRefresh ? Math.floor((Date.now() - S.lastRefresh.getTime()) / 60000) : null;
     m.className = 'stat' + (age !== null && age >= 10 ? ' stale' : '');
     m.innerHTML = S.loading ? '<span class="spin"></span> 읽는 중' : S.lastRefresh ? `${ic('refresh')}${hhmm(S.lastRefresh)} 기준${age ? ` · ${age}분 전` : ''}` : `${ic('refresh')}새로고침`;
+    // 기관명: 관리자 정책 > 로그인한 사용자의 소속 기관 > 기본 문구
+    try { const on = $('#orgName'), nm = POLICY.orgName || (S.raw && S.raw.principal && S.raw.principal.compName) || ''; if (on && nm) on.textContent = nm; } catch {}
     const unseen = S.activity.filter(x => x.at > S.seenActivity).length;
     $('#bell').innerHTML = `${ic('bell')}${unseen ? `<span class="dot">${unseen > 99 ? '99+' : unseen}</span>` : ''}`;
     const urgent = S.a ? mineVisible().filter(x => ['overdue', 'urgent'].includes(stateOf(x))).length : 0;
@@ -74,7 +76,7 @@
     b.innerHTML = parts.join('');
   }
   const MODNAME = {mail: '메일', approval: '전자결재', notice: '공지', schedule: '일정', attendance: '근태', leave: '연차', budget: '예산', alerts: '알림'};
-  const VIEW_ICON = {home: 'inbox', today: 'inbox', overview: 'chart', approval: 'doc', mail: 'mail', search: 'search', board: 'board', calendar: 'cal', gcal: 'gcal', gsync: 'gcal', budget: 'wallet', attendance: 'clock', resource: 'car', report: 'report', settings: 'gear'};
+  const VIEW_ICON = {home: 'home', today: 'inbox', overview: 'chart', approval: 'doc', mail: 'mail', search: 'search', board: 'board', calendar: 'cal', gcal: 'gcal', gsync: 'gcal', budget: 'wallet', attendance: 'clock', resource: 'car', report: 'report', settings: 'gear'};
   function renderNav() {
     const u = S.a ? S.a.unknown : {};
     const mine = S.a ? mineVisible() : [];

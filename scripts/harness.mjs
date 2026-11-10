@@ -157,7 +157,7 @@ await stage('안전 규칙', async () => {
   const okHosts = /^(gw\.bwyf\.or\.kr|api\.github\.com|github\.com|www\.w3\.org|localhost|127\.0\.0\.1|generativelanguage\.googleapis\.com|aistudio\.google\.com|calendar\.google\.com)$/;
   for (const h of hosts) if (!okHosts.test(h)) warns.push(`허용 목록에 없는 외부 주소: ${h}`);
   // 글자 크기 12px 미만 금지 (접근성)
-  const css = (await read('src/live/wc-style.css')) + (await read('src/live/wc-theme.css')) + (await read('src/live/wc-home.css')) + (await read('src/live/wc-chat.css'));
+  const css = (await read('src/live/wc-style.css')) + (await read('src/live/wc-theme.css')) + (await read('src/live/wc-home.css')) + (await read('src/live/wc-chat.css')) + (await read('src/live/wc-premium.css'));
   for (const x of css.matchAll(/font-size:\s*(\d+(?:\.\d+)?)px/g)) if (+x[1] < BUDGET.minFontPx) { fails.push(`글자 크기 ${x[1]}px < ${BUDGET.minFontPx}px`); break; }
   return {fails, warns, info: `읽기 전용 주소 ${eps.length}개, 외부 호스트 ${hosts.size}개`};
 });
