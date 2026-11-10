@@ -15,7 +15,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '0.39.0';
+  const VERSION = '0.40.0';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
@@ -452,7 +452,7 @@
     const year = Number(opt.year || t.year || kstParts().y);
     // 기수(회계기수): 2026년 = 12기 (observed). Override with opt.gisu if the foundation renumbers.
     const gisu = String(opt.gisu || t.gisu || year - 2014);
-    const body = {bgtFrYm: `${year}01`, bgtToYm: `${year}12`, bgtBeforeFrYm: '', bgtBeforeToYm: '', bgtStartFrYm: `${year}0101`, summaryYn: 'Y', abgtFg: '1', divCds: `${ctx.erpCompSeq}|`, mgtCds: `${t.project}|`, bottomCds: '', mgtBottomList: [], bgtCnt: '1', abdocuFg: '1', acctdefFg: 'N001', abdocuDtFg: '1', grFg: '0', zeroFg: '2', divFg: '8', sumRtFg: '2', ctrCd05: '3', ctrCd10: '1', optionBN03: '1', optionBN10: '1', optionBN11: '0', optionBN14: '0', pOptionBn15: '0', coCd: ctx.erpCompSeq, gisu, empCd: ctx.erpEmpSeq, gisuFrDt: `${year}0101`, gisuToDt: `${year}1231`};
+    const body = {bgtFrYm: `${year}01`, bgtToYm: `${year}12`, bgtBeforeFrYm: '', bgtBeforeToYm: '', bgtStartFrYm: `${year}0101`, summaryYn: 'Y', abgtFg: '1', divCds: `${ctx.erpCompSeq}|`, mgtCds: `${t.project}|`, bottomCds: '', mgtBottomList: [], bgtCnt: '1', abdocuFg: '1', acctdefFg: 'N001', abdocuDtFg: '1', grFg: '0', zeroFg: opt.zero ? '1' : '2', divFg: '8', sumRtFg: '2', ctrCd05: '3', ctrCd10: '1', optionBN03: '1', optionBN10: '1', optionBN11: '0', optionBN14: '0', pOptionBn15: '0', coCd: ctx.erpCompSeq, gisu, empCd: ctx.erpEmpSeq, gisuFrDt: `${year}0101`, gisuToDt: `${year}1231`};
     const d = await call('/nonprofit/NCC0610/0BN00002', body, {timeoutMs: 30000});
     const all = arr(d && d.printList).map(budgetRow);
     const rows = t.filter ? all.filter(r => r.path.split('|').includes(t.filter)) : all;
@@ -529,6 +529,35 @@
     return list.map(x => ({project: str(x.pjtCd || x.mgtCd, 20), name: str(x.pjtNm || x.mgtNm, 80)})).filter(x => x.project);
   }
   async function budgetProject(t, opt = {}) { return budgetTable(context(), t, opt); }
+
+  // 모든 사업의 과목표(검색용). 기본 화면은 예산·집행이 있는 과목만 주므로(zeroFg=2), 사업마다 한 번씩 읽고
+  // 예산·집행이 전혀 없는 과목(예: 쓰지 않은 여비 과목)은 전체 코드표(zeroFg=1)에서 한 번만 따로 읽어 덧붙인다. 10분 보관.
+  const BUDGET_ALL = {key: '', at: 0, data: null};
+  async function budgetAll({year, force = false} = {}) {
+    const ctx = context(), y = Number(year || kstParts().y), key = [ctx.erpCompSeq, ctx.erpEmpSeq, y].join('|');
+    if (!force && BUDGET_ALL.key === key && BUDGET_ALL.data && Date.now() - BUDGET_ALL.at < 10 * 60000) return BUDGET_ALL.data;
+    const cat = await budgetCatalog();
+    const projects = new Array(cat.length);
+    let next = 0;
+    const worker = async () => {
+      while (next < cat.length) {
+        const i = next++, c = cat[i];
+        try { const t = await budgetTable(ctx, {project: c.project}, {year: y}); projects[i] = {project: c.project, name: c.name, rows: t.rows}; }
+        catch (e) { projects[i] = {project: c.project, name: c.name, rows: [], error: e.code || 'ERROR', message: e.message}; }
+      }
+    };
+    await Promise.all([worker(), worker(), worker()]);
+    let empty = [], names = {}, emptyError = '';
+    try {
+      const z = await budgetTable(ctx, {project: cat[0] ? cat[0].project : 'A201'}, {year: y, zero: true});
+      const used = new Set(projects.flatMap(p => p.rows.map(r => r.code)));
+      empty = z.rows.filter(r => !used.has(r.code));
+      for (const r of z.rows) names[r.code] = r.name;
+    } catch (e) { emptyError = e.message; }
+    const data = {year: y, projects, empty, names, emptyError, at: Date.now()};
+    if (!emptyError && !projects.some(p => p.error)) { BUDGET_ALL.key = key; BUDGET_ALL.at = Date.now(); BUDGET_ALL.data = data; }
+    return data;
+  }
 
   async function budgetLedger({project, bgtCd, year, gisu, from, to} = {}) {
     if (!project || !bgtCd) throw new GwError('BAD_QUERY', '프로젝트 코드와 예산과목 코드가 필요합니다.');
@@ -738,7 +767,7 @@
   }
 
   window.BWYFGW = Object.freeze({
-    version: VERSION, collect, call, search, budgetCatalog, budgetProject, budgetLedger, budgetMonthly, attendanceDays, teamAttendance, teamPlanned, resourceList, resourceBookings, resourceDetail, resourceCheck, reserveResource, routingHistory, submittedRange, approvalPage, docPreview, frequentForms, findReply, mailDetail, mailAttachment, mailAttachmentPreview, saveBlob,
+    version: VERSION, collect, call, search, budgetCatalog, budgetProject, budgetAll, budgetLedger, budgetMonthly, attendanceDays, teamAttendance, teamPlanned, resourceList, resourceBookings, resourceDetail, resourceCheck, reserveResource, routingHistory, submittedRange, approvalPage, docPreview, frequentForms, findReply, mailDetail, mailAttachment, mailAttachmentPreview, saveBlob,
     context: () => { const c = context(); return {name: c.name, deptName: c.deptName, compName: c.compName, duty: c.duty, position: c.position}; },
     readOnlyEndpoints: () => [...READ_ONLY], routes: ROUTES, links: LINKS, searchLabels: SEARCH_LABELS, defaults: DEFAULTS,
   });

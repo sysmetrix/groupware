@@ -673,6 +673,57 @@ export function predictDraftMeta(model, {title = '', sourceDocNo = '', sourceTit
   return {...PAT_DEFAULT, binder: (model && model.defaultBinder) || '', basis: '가장 많이 쓴 기록물철(확인 필요)', confidence: 'default'};
 }
 // ---------------------------------------------------------------------------
+// 예산 과목 검색: 모든 사업의 과목을 이름·상위 과목·코드로 찾는다. 띄어쓰기는 무시하고, 단어마다 비슷한 말을 함께 찾는다.
+// 예) "출장 여비" → 국내여비, 국외여비, 관내여비 …  (과목 이름에 ‘출장’이 없어도 여비 과목을 찾는다)
+// ---------------------------------------------------------------------------
+const BGT_SYN = [
+  ['출장', '여비', '출장비', '출장여비', '교통비', '국내여비', '국외여비', '관내여비', '관외여비'],
+  ['시간외', '초과근무', '연장근무', '휴일근무', '야근'],
+];
+const bgtNorm = s => String(s || '').toLowerCase().replace(/[\s○●·ㆍ_\-/()（）[\],.:]+/g, '');
+function bgtAlternatives(tok) {
+  const alts = new Set([tok]);
+  for (const g of BGT_SYN) if (g.some(m => { const n = bgtNorm(m); return n.length >= 2 && tok.includes(n); })) g.forEach(m => alts.add(bgtNorm(m)));
+  return [...alts];
+}
+/** budgetAll() 결과 → 검색용 한 줄씩 (관·항·목·세 모두). 예산·집행이 없는 코드표 과목은 empty:true. */
+export function budgetRecords(all = {}) {
+  const names = {...(all.names || {})};
+  for (const p of all.projects || []) for (const r of p.rows || []) names[r.code] = r.name;
+  const clean = s => String(s || '').replace(/^[○●·\s]+/, '').trim();
+  const mk = (r, p, empty) => {
+    const codes = String(r.path || '').split('|').filter(Boolean);
+    const trail = codes.slice(0, -1).map(c => clean(names[c])).filter(Boolean);
+    return {project: p ? p.project : '', projectName: p ? p.name : '', level: r.level, code: r.code, name: clean(r.name), trail, hang: codes[1] || (r.level === '항' ? r.code : ''), budget: r.budget, executed: r.executed, balance: r.balance, rate: r.rate, empty};
+  };
+  const out = [];
+  for (const p of all.projects || []) for (const r of p.rows || []) out.push(mk(r, p, false));
+  for (const r of all.empty || []) out.push(mk(r, null, true));
+  return out;
+}
+const BGT_LV = {세: 3, 목: 2, 항: 1, 관: 0};
+export function searchBudget(records = [], query = '', {max = 300} = {}) {
+  const toks = String(query || '').trim().split(/\s+/).map(bgtNorm).filter(Boolean);
+  if (!toks.length) return {rows: [], mode: '', literal: 0, total: 0};
+  const alts = toks.map(bgtAlternatives);
+  const scored = [];
+  for (const r of records) {
+    const own = bgtNorm(r.name + r.code), ctx = bgtNorm(r.trail.join('') + r.projectName);
+    const hay = own + ctx;
+    const lit = toks.every(t => hay.includes(t));
+    const syn = alts.every(a => a.some(t => hay.includes(t)));
+    const any = alts.some(a => a.some(t => hay.includes(t)));
+    scored.push({r, lit, syn, any, ownHits: alts.filter(a => a.some(t => own.includes(t))).length});
+  }
+  // 과목 이름 자체에 단어가 있는 것을 우선한다(상위 과목 이름만 맞는 하위 과목은 제외). 하나도 없으면 사업·상위 과목 이름으로 찾는 것으로 보고 포함한다.
+  let pick = scored.filter(s => s.syn && s.ownHits > 0), mode = 'all';
+  if (!pick.length) pick = scored.filter(s => s.syn);
+  if (!pick.length) { pick = scored.filter(s => s.any); mode = pick.length ? 'any' : ''; }
+  pick.sort((a, b) => (b.lit - a.lit) || (b.ownHits - a.ownHits) || (a.r.empty - b.r.empty) || ((BGT_LV[b.r.level] || 0) - (BGT_LV[a.r.level] || 0)) || (b.r.executed - a.r.executed));
+  return {rows: pick.slice(0, max).map(s => s.r), mode, literal: pick.filter(s => s.lit).length, total: pick.length};
+}
+
+// ---------------------------------------------------------------------------
 // 근태신청 제목: 내 지난 근태 문서 제목에서 규칙(형식·종류별 문구·이름)을 읽어 새 신청의 제목을 정한다.
 // 지난 제목 예: "(11-09)대체휴가(이름)", "(10-08~10-09)관외출장(이름)", "(10-21)시간외근무신청(이름)"
 // ---------------------------------------------------------------------------
@@ -1198,6 +1249,7 @@ export function wrapUpModel({now = new Date(), ownOtToday = null, tomorrowItems 
 // 업데이트 내역: 새 버전을 낼 때 맨 위에 한 줄을 추가한다(하네스가 현재 버전과 맞는지 검사).
 // 4.2~4.6 사이 세부 항목은 릴리스 제목만 근거로 적어 간단하다.
 export const CHANGELOG = [
+  {v: "0.40.0", date: "2026-11-10", old: "", title: "예산 과목 검색: 모든 사업에서 찾기, 비슷한 말(출장↔여비), 예산 없는 과목도 표시", items: ["과목 찾기가 지금 보는 사업·단위사업 안에서만, 글자가 이어진 그대로일 때만 찾던 문제를 고침. 이제 모든 사업의 과목을 한 번에 찾고(처음 한 번 읽는 동안 잠시 걸림), 띄어쓰기를 무시하며, ‘출장 여비’처럼 쓰면 국내여비·국외여비·관내여비 과목도 찾음","결과마다 사업·상위 과목·예산·집행·잔액·집행률을 보여 주고, 누르면 그 사업의 단위사업으로 이동해 결의 내역까지 연다","예산과 집행이 모두 없는 과목(코드표에만 있는 과목)도 ‘예산 배정 없음’으로 따로 보여 줌"]},
   {v: "0.39.0", date: "2026-11-10", old: "", title: "근태 신청 준비: 구분 선택, 일시 선택, 제목 자동 결정, 교통수단 선택 안 함이 기본", items: ["한 창에서 출장·휴가·시간외/휴일근무를 고르고 종류(관내/관외, 연차·반차·외출 등, 연장/휴일/조기, 수당/보상)를 바꿀 수 있음","시작·종료를 날짜가 아니라 일시(날짜+시각)로 고름. 외출·조퇴·출장·시간외는 시각을 신청서의 시작/종료시간 칸에 넣고, 연차·반차·대체휴가처럼 시간이 정해진 종류는 날짜만 반영","제목은 내 지난 근태 문서 제목(예: 종류별 문구, 이름 표기, 날짜 형식)을 읽어 같은 형식으로 정하고, 근거(몇 건을 따랐는지)를 함께 보여 줌. 직접 고칠 수 있음","출장 교통수단은 ‘선택 안 함’이 기본이며 고른 경우에만 신청서 칸을 채움"]},
   {v: "0.38.0", date: "2026-11-10", old: "", title: "홈 AI 채팅을 실제로 쓸 만하게: 모델 자동 전환, 즉시 답, 간결한 정리", items: ["원인: 채팅이 쓰던 gemini-3.6-flash의 무료 사용량이 바닥나(429) 답이 “일부만 처리했습니다”나 긴 원자료 나열로 나왔음. 이제 한도가 넉넉하고 빠른 lite 계열 모델부터 쓰고, 한도·없음·과부하가 나면 그 모델을 쉬게 하고 다음 모델로 자동 전환(모델별 쉬는 시간 기억, 한도 소진 시 안내 문구)","답 방식 변경: 말을 먼저 로컬 라우터로 알아듣고 조회 결과를 즉시 보여 준 뒤, AI가 있으면 그 결과를 근거로 한 번만 더 3~5줄로 정리(실패해도 즉시 답은 남음). 로컬이 못 알아들은 말만 AI가 도구를 골라 부름(최대 3단계)","직원 근태 답은 같은 일정을 한 줄로 묶음(예: 여러 직원 이름 — 관내출장 12:00~18:00). 답이 길면 자세한 목록은 “자세히 보기”로 접음. “답장 필요한 메일 있어?”는 초안 작성이 아니라 목록 조회로, “직원 이름 + 전화번호”는 조직도 검색으로 처리","홈을 2단으로: 왼쪽 채팅, 오른쪽 핵심 요약(급한 일·할 일·대기·일정·자리 비움·지금 할 일·오늘 일정)이 한 화면에 함께 보임. 처음엔 시작 카드 6개. 대화 기록에 카드도 보관. 상단 “AI 지시” 버튼은 홈 채팅창으로 이동"]},
   {v: "0.37.1", date: "2026-11-10", old: "", title: "구글 동기화: 구글 캘린더를 실제로 읽어 대조", items: ["0.37.0은 구글 캘린더에 이미 있는지 확인하지 않고 모두 “등록 전”으로 보여 준 잘못이 있었음. 이제 후보 날짜의 구글 캘린더 “일 보기”를 읽어 대조한 결과로만 표시: 등록됨(구글에서 확인) / 비슷한 일정 있음(다른 캘린더·다른 이름) / 구글에 없음 / 대조 전 / 결재 중 보류","대조는 Aside가 구글 캘린더를 읽어 반영하며(스킬 bwyf-gcal-sync의 compareGwWithGcal, “구글 캘린더와 대조해줘”), 업무센터는 대조 시각과 건수를 표시. 월 보기는 칸마다 일정이 가려져 누락되므로 일 보기만 사용","일정명을 사용자의 실제 구글 캘린더 관례에 맞춤(시간외(3), 시간외(보상3), 휴일근무(8), 외출(3), 조퇴(2), 오전반차(4), 대체휴가). 광고·참고 문서의 기한은 후보에서 제외"]},
