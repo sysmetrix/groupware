@@ -35,8 +35,8 @@ if (process.platform === 'win32') {
     const exe = await fs.open(path.join(root, 'data/control-panel/GroupwareControl.exe'));
     try { const bytes = Buffer.alloc(2); await exe.read(bytes, 0, 2, 0); assert.equal(bytes.toString(), 'MZ'); } finally { await exe.close(); }
     const icon = await fs.readFile(path.join(root, 'desktop/assets/groupware-control.ico'));
-    assert.equal(icon.readUInt16LE(2), 1); assert.equal(icon.readUInt16LE(4), 7);
-    return '실행 파일 존재·형식 및 7개 아이콘 크기 확인 (GUI 조작은 별도)';
+    assert.equal(icon.readUInt16LE(2), 1); assert.equal(icon.readUInt16LE(4), 5);
+    return '실행 파일 존재·형식 및 5개 아이콘 크기 확인 (GUI 조작은 별도)';
   }, 'npm run setup:control을 실행하세요.');
 }
 await check('분리된 앱 실행·파비콘·브리핑·검색·감사 기록', async () => {
