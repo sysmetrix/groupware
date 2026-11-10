@@ -1,4 +1,4 @@
-// GW 통합 업무센터 · detail pane
+// GW 비서 · detail pane
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
   // ---------- detail pane ----------
   function renderPane() {

@@ -1,4 +1,4 @@
-// GW 통합 업무센터 · 홈 모델(순수 함수). 화면/DOM/브라우저 값에 의존하지 않는다.
+// GW 비서 · 홈 모델(순수 함수). 화면/DOM/브라우저 값에 의존하지 않는다.
 // briefing.mjs 뒤에 이어 붙어 한 범위로 번들되므로 import 금지, 비공개 이름은 hmo 접두, 내보내기 이름은 homeXxx.
 export const HOME_MODEL_VERSION = 1;
 
@@ -19,7 +19,7 @@ export function homeGreeting({hour = 9, name = '', urgent = 0, total = 0, loadin
 /** 핵심 타일: 값이 0이어도 자리는 유지(위치가 바뀌면 혼란스럽다). view는 눌렀을 때 이동할 곳. */
 export function homeTiles({urgent = 0, todo = 0, check = 0, wait = 0, events = 0, away = 0, loaded = true} = {}) {
   const v = x => (loaded ? hmoN(x) : '–');
-  const open = hmoN(todo) + hmoN(check);
+  const open = hmoN(urgent) + hmoN(todo) + hmoN(check);
   return [
     {id: 'urgent', label: '급한 일', value: v(urgent), sub: hmoN(urgent) ? '기한이 지났거나 오늘까지' : '없음', tone: loaded && hmoN(urgent) ? 'urgent' : 'ok', view: 'today'},
     {id: 'todo', label: '내 할 일', value: v(open), sub: hmoN(check) ? `확인 필요 ${hmoN(check)}건 포함` : '처리할 일', tone: loaded && open ? 'todo' : 'ok', view: 'today'},

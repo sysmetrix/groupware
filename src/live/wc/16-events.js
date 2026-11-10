@@ -1,4 +1,4 @@
-// GW 통합 업무센터 · events
+// GW 비서 · events
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
   // ---------- events ----------
   root.addEventListener('click', async e => {
@@ -8,6 +8,7 @@
     const act = actEl ? actEl.dataset.act : '';
     const v = actEl ? actEl.dataset.v : '';
 
+    if (AUTO.running && $('#recplay') && !hasStop) { recAbort(); toast('재생 중지를 요청했습니다.'); return; }
     // 1. If any overlay, dropdown menu, modal, or coachmark is open, clicking outside it closes it IMMEDIATELY
     if ((S.menuOpen || S.paletteOpen || S.helpOpen || S.coach) && !hasStop) {
       if (!['menuNew', 'menuBell', 'menuView', 'help', 'openPalette', 'rowMenu'].includes(act)) {
@@ -90,6 +91,7 @@
     case 'goodsRun': goodsRun(el.dataset.id); break;
     case 'openRec': openRecorder(); break;
     case 'recStart': recStart(); break;
+    case 'recSavePending': savePendingRecording(); break;
     case 'recStop': recStop(); break;
     case 'recPlay': recPlay(+el.dataset.i, el.dataset.mode); break;
     case 'recDetail': recDetail(+el.dataset.i); break;
@@ -207,7 +209,7 @@
       case 'copy': copyText(v); break;
       case 'paneExpand': S.pane.expanded = !S.pane.expanded; renderPane(); break;
       case 'closePane': if (S.focus) { stopFocus(); break; } if (!leavePane()) break; S.pane.dirty = false; S.sel = null; S.pane.url = ''; S.pane.expanded = false; render(); break;
-      case 'todoFromSel': { const t = selInfo(); const x = selectedAction(); addTodo(t.title, x && x.deadline && x.deadline.date || '', x ? x.kind : '업무센터 항목', t.url, x ? x.key : ''); break; }
+      case 'todoFromSel': { const t = selInfo(); const x = selectedAction(); addTodo(t.title, x && x.deadline && x.deadline.date || '', x ? x.kind : 'GW 비서 항목', t.url, x ? x.key : ''); break; }
       case 'todoFromExtract': { const nx = S.pane.extract && R.nextDeadline(S.pane.extract.deadlines); const t = selInfo(); if (nx) addTodo(t.title, nx.date, '원문 기한 자동 추출', t.url); break; }
       case 'boardCard': { const k = el.dataset.k; if (path.some(n => n && n.tagName === 'BUTTON')) break; if (k.startsWith('todo:')) { const t = S.todos.find(x => `todo:${x.id}` === k); if (t && t.url) { S.sel = {type: 'frame', title: t.title, url: t.url}; openUrl(t.url, {title: t.title}); } } else { go('today'); selectAction(k); } break; }
       case 'addTodo': addTodoFromInput(); break;
@@ -270,7 +272,7 @@
       }
       case 'resetDone': pushUndo('표시 초기화'); S.hidden = {}; S.snooze = {}; S.plan = {}; saveLocal(); render(); toastUndo('숨기기·미루기·보드 계획을 지웠습니다.'); break;
       case 'resetRouting': S.routing = null; store.del('routing'); toast('추천 이력을 지웠습니다.'); break;
-      case 'resetAll': if (confirm('이 브라우저에 저장된 내 업무센터 설정·할 일·표시를 모두 지울까요? (그룹웨어 자료는 바뀌지 않습니다)')) { const p = getPrefix(); for (const k of Object.keys(localStorage)) if (k.startsWith(p)) localStorage.removeItem(k); for (const k of Object.keys(localStorage)) if (k.startsWith('bwyfgw:wc:migrated:') && localStorage.getItem(k) === currentKey) localStorage.removeItem('bwyfgw:wc:' + k.slice('bwyfgw:wc:migrated:'.length)); reloadUserState(); clearUserViews(); localBaseline = localValues(); schedule(); applyLook(); refresh(); } break;
+      case 'resetAll': if (confirm('이 브라우저에 저장된 내 GW 비서 설정·할 일·표시를 모두 지울까요? (그룹웨어 자료는 바뀌지 않습니다)')) { const p = getPrefix(); for (const k of Object.keys(localStorage)) if (k.startsWith(p)) localStorage.removeItem(k); for (const k of Object.keys(localStorage)) if (k.startsWith('bwyfgw:wc:migrated:') && localStorage.getItem(k) === currentKey) localStorage.removeItem('bwyfgw:wc:' + k.slice('bwyfgw:wc:migrated:'.length)); reloadUserState(); clearUserViews(); localBaseline = localValues(); schedule(); applyLook(); refresh(); } break;
       case 'toastUndo': undo(); root.querySelector('.toast')?.remove(); break;
       case 'homeTile':
       case 'homeNext':

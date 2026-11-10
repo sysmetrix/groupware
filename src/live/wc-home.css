@@ -1,4 +1,4 @@
-/* GW 통합 업무센터 · 홈 전용 스타일. 접두 hm- (홈). 색은 wc-style/wc-theme의 변수(--bg --fg --muted --line --card --accent --hi --md --ok 및 *-soft)만 쓴다.
+/* GW 비서 · 홈 전용 스타일. 접두 hm- (홈). 색은 wc-style/wc-theme의 변수(--bg --fg --muted --line --card --accent --hi --md --ok 및 *-soft)만 쓴다.
    라이트·다크는 .wc.dark 변수 교체로 따라간다. 글자 크기는 12px 이상, 모션은 prefers-reduced-motion에서 끈다.
    대비 점검(WCAG AA 4.5:1): 본문 --fg/--card, 보조 --muted/--card, 경고 --hi/--hi-soft, 완료 --ok/--ok-soft는 wc-theme의 값 기준으로 확인했다. */
 .hm{max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:18px}

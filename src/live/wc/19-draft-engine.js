@@ -1,4 +1,4 @@
-// GW 통합 업무센터 · 기안 패턴 학습 및 풀 자동 기입 엔진
+// GW 비서 · 기안 패턴 학습 및 풀 자동 기입 엔진
 // 사용자 본인의 지난 결재문서(제목·기록물철·기본항목·참조문서·본문 문단 서식)를 읽어 조직 서식 그대로 새 기안을 채운다.
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
 

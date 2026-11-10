@@ -1,4 +1,4 @@
-// GW 통합 업무센터 · timers & keys
+// GW 비서 · timers & keys
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
   // ---------- timers & keys ----------
   let timer = null;
@@ -19,9 +19,17 @@
     const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName || '') || t.isContentEditable;
     e.stopPropagation(); // keep groupware shortcuts from firing behind the work center
     if (e.isComposing || e.keyCode === 229) return;
+    if (e.key === 'Tab') {
+      const dialog = $('#overlay .modal .dlg');
+      if (dialog) {
+        const els = [...dialog.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')].filter(x => x.getClientRects().length);
+        if (els.length) { const i = els.indexOf(root.activeElement); if (i < 0 || (e.shiftKey && i === 0) || (!e.shiftKey && i === els.length - 1)) { e.preventDefault(); els[e.shiftKey ? els.length - 1 : 0].focus(); } }
+      }
+    }
     if ((e.ctrlKey || e.metaKey) && e.code === 'KeyK') { e.preventDefault(); openPalette(typing && t.id === 'gsearch' ? t.value : ''); return; }
     if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ' && !typing) { e.preventDefault(); undo(); return; }
     if (e.key === 'Escape') {
+      if (AUTO.running && $('#recplay')) { e.preventDefault(); recAbort(); toast('재생 중지를 요청했습니다.'); return; }
       if (S.coach) { endCoach(); return; }
       if (S.paletteOpen || S.helpOpen || S.menuOpen) { closeOverlay(); return; }
       if (typing) { t.blur(); return; }

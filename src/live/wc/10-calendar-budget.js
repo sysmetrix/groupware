@@ -1,4 +1,4 @@
-// GW 통합 업무센터 · 일정 달력 (month grid, drag to change to-do due)
+// GW 비서 · 일정 달력 (month grid, drag to change to-do due)
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
   // ----- 일정 달력 (month grid, drag to change to-do due) -----
   function vCalendar() {

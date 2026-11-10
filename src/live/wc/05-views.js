@@ -1,4 +1,4 @@
-// GW 통합 업무센터 · views
+// GW 비서 · views
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
   // ---------- views ----------
   const VIEWS = [
@@ -60,7 +60,7 @@
     const urgent = S.a ? mineVisible().filter(x => ['overdue', 'urgent'].includes(stateOf(x))).length : 0;
     const total = S.a ? mineVisible().length : 0;
     { const st = !S.a ? 'idle' : urgent ? 'urgent' : total ? 'todo' : 'ok'; const sum = !S.a ? '불러오는 중' : urgent ? `급한 일 ${urgent}건 · 전체 ${total}건` : total ? `처리할 일 ${total}건` : '오늘 처리할 일 없음'; fab.dataset.st = st;
-      fab.innerHTML = `<span class="lg"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><path d="m14 17 2 2 4-4"/></svg></span><span class="t">업무센터</span><span class="sm">${sum}</span>${S.a ? `<span class="b">${urgent || total || '✓'}</span>` : ''}<kbd>Alt G</kbd>`; }
+      fab.innerHTML = `<span class="lg">${brandImage}</span><span class="t">GW 비서</span><span class="sm">${sum}</span>${S.a ? `<span class="b">${urgent || total || '✓'}</span>` : ''}<kbd>Alt G</kbd>`; }
   }
   function renderBand() {
     const b = $('#band');
@@ -88,9 +88,9 @@
       board: S.a ? {n: boardCount()} : null,
       calendar: S.a ? (() => { const n = mine.filter(x => x.deadline && x.deadline.dday >= 0 && x.deadline.dday <= 7).length; return {n, cls: n ? 'mine' : ''}; })() : null,
     };
-    const item = (v, i) => { const c = counts[v.id]; return `<a data-act="view" data-v="${v.id}" class="${S.view === v.id ? 'on' : ''}" role="link" tabindex="0" aria-current="${S.view === v.id ? 'page' : 'false'}" title="${esc(v.label)}${i < 9 ? ` (숫자키 ${i + 1})` : ''}">${ic(VIEW_ICON[v.id])}<span class="lb">${esc(v.label)}</span>${c && c.n !== '' && c.n !== 0 ? `<span class="n ${c.cls || ''}" title="${v.id === 'today' ? '내 처리할 일' : v.id === 'board' ? '보드의 남은 카드' : v.id === 'calendar' ? '7일 안에 기한이 있는 내 처리할 일' : '내 처리할 일 중 이 영역'}">${c.n}</span>` : ''}</a>`; };
+    const item = (v) => { const i = VIEWS.indexOf(v); const c = counts[v.id]; return `<a data-act="view" data-v="${v.id}" class="${S.view === v.id ? 'on' : ''}" role="link" tabindex="0" aria-current="${S.view === v.id ? 'page' : 'false'}" title="${esc(v.label)}${i < 9 ? ` (숫자키 ${i + 1})` : ''}">${ic(VIEW_ICON[v.id])}<span class="lb">${esc(v.label)}</span>${c && c.n !== '' && c.n !== 0 ? `<span class="n ${c.cls || ''}" title="${v.id === 'today' ? '내 처리할 일' : v.id === 'board' ? '보드의 남은 카드' : v.id === 'calendar' ? '7일 안에 기한이 있는 내 처리할 일' : '내 처리할 일 중 이 영역'}">${c.n}</span>` : ''}</a>`; };
     const primary = VIEWS.slice(0, 6), more = VIEWS.slice(6), moreOpen = !!S.settings.navMore || more.some(v => v.id === S.view);
-    $('#nav').innerHTML = primary.map(item).join('') + '<div class="sep"></div>' + `<a data-act="navMore" role="button" tabindex="0" aria-expanded="${moreOpen}" class="navmore">${ic('board')}<span class="lb">더보기 ${moreOpen ? '▴' : '▾'}</span></a>` + (moreOpen ? more.map((v, i) => item(v, i + 6)).join('') : '')
+    $('#nav').innerHTML = '<div class="nav-label">내 업무</div>' + primary.map(item).join('') + '<div class="sep"></div>' + `<a data-act="navMore" role="button" tabindex="0" aria-expanded="${moreOpen}" class="navmore">${ic('board')}<span class="lb">전체 메뉴</span><span class="nav-chevron" aria-hidden="true">${moreOpen ? '▴' : '▾'}</span></a>` + (moreOpen ? more.map(item).join('') : '')
       + `<div class="foot"><a data-act="help" role="link" tabindex="0">${ic('help')}<span class="lb">사용법</span></a><a data-act="coach" role="link" tabindex="0">${ic('play')}<span class="lb">처음 안내</span></a><a data-act="openChangelog" role="link" tabindex="0" title="버전과 업데이트 내역">${ic('doc')}<span class="lb">v${VERSION} 업데이트 내역</span></a></div>`;
   }
   function boardCount() { return (S.a ? S.a.actions.filter(x => onBoard(x) && bucketOfAction(x) !== 'done').length : 0) + S.todos.filter(t => bucketOfTodo(t) !== 'done').length; }

@@ -1,4 +1,4 @@
-/* GW 통합 업무센터 · AI 채팅 전용 스타일. 접두 ch- (채팅). 색은 wc 변수만 쓴다. 글자 12px 이상, 버튼·칩은 높이 40px 안팎,
+/* GW 비서 · AI 채팅 전용 스타일. 접두 ch- (채팅). 색은 wc 변수만 쓴다. 글자 12px 이상, 버튼·칩은 높이 40px 안팎,
    모션은 prefers-reduced-motion에서 끈다. CLASS INDEX: ch ch-log ch-empty(-t) ch-msg ch-user ch-ai ch-sys ch-err ch-bubble ch-tools ch-tool(-run/-ok/-err)
    ch-cards ch-card(-list/-kpi/-nav/-note/-time/-confirm) ch-card-t ch-card-empty ch-card-more ch-ul ch-li(-t/-s/-b/-btn) ch-kpi ch-time ch-rows ch-warn ch-result
    ch-risk-low/high ch-done ch-actions ch-btn(-primary/-ghost/-danger) ch-chips ch-chip ch-composer ch-input ch-send ch-stop ch-foot ch-mode ch-link ch-dots ch-sr ch-tone-* */

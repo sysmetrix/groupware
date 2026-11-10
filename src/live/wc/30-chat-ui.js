@@ -1,4 +1,4 @@
-// GW 통합 업무센터 · 채팅 화면(메시지 목록, 입력창, 추천 질문, 카드 렌더링)
+// GW 비서 · 채팅 화면(메시지 목록, 입력창, 추천 질문, 카드 렌더링)
 // 모든 동적 문자열은 esc()를 거친다. AI 답변은 굵게·목록·줄바꿈만 허용하는 작은 마크다운으로 그린다(링크·HTML 불가).
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
 

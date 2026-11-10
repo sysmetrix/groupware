@@ -14,7 +14,7 @@ test('homeGreeting: time of day, urgent/total/loading/empty', () => {
 test('homeTiles: always 5 stable tiles, dashes while loading, safe on garbage', () => {
   const t = homeTiles({urgent: 2, todo: 3, check: 1, wait: 1, events: 4, away: 2});
   assert.deepEqual(t.map(x => x.id), ['urgent', 'todo', 'wait', 'schedule', 'away']);
-  assert.equal(t[0].value, 2); assert.equal(t[0].tone, 'urgent'); assert.equal(t[1].value, 4); assert.match(t[1].sub, /확인 필요 1건/);
+  assert.equal(t[0].value, 2); assert.equal(t[0].tone, 'urgent'); assert.equal(t[1].value, 6); assert.match(t[1].sub, /확인 필요 1건/);
   const z = homeTiles({}); assert.equal(z[0].value, 0); assert.equal(z[0].tone, 'ok'); assert.equal(z[1].tone, 'ok');
   assert.equal(homeTiles({loaded: false})[0].value, '–');
   assert.equal(homeTiles({urgent: -3, todo: 'abc'})[0].value, 0);

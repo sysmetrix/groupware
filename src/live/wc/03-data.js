@@ -1,4 +1,4 @@
-// GW 통합 업무센터 · data
+// GW 비서 · data
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
   // ---------- data ----------
   async function refresh({silent = false, announce = false} = {}) {
@@ -98,7 +98,7 @@
     if (!items.length) return;
     toast(`새 긴급 항목 ${items.length}건: ${items[0].title.slice(0, 40)}`);
     if (S.settings.notify && 'Notification' in window && Notification.permission === 'granted') {
-      try { new Notification('GW 업무센터 · 새 긴급 항목 ' + items.length + '건', {body: items.slice(0, 3).map(x => `[${x.kind}] ${x.title}`).join('\n'), tag: 'bwyfgw-wc'}); } catch {}
+      try { new Notification('GW 비서 · 새 긴급 항목 ' + items.length + '건', {body: items.slice(0, 3).map(x => `[${x.kind}] ${x.title}`).join('\n'), tag: 'bwyfgw-wc'}); } catch {}
     }
   }
   // 배부·접수 이력: 진행 중 요청은 하나만, 실패하면 1분 동안 자동 재시도하지 않는다(무한 재조회·재렌더링 방지).

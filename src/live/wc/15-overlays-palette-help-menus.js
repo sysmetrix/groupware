@@ -1,4 +1,4 @@
-// GW 통합 업무센터 · overlays: palette, help, menus
+// GW 비서 · overlays: palette, help, menus
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
   // ---------- overlays: palette, help, menus ----------
   let palItems = [], palIndex = 0;
@@ -91,13 +91,13 @@
   function toggleHelp(force) {
     S.helpOpen = force === undefined ? !S.helpOpen : force; S.paletteOpen = false; S.menuOpen = '';
     if (!S.helpOpen) { $('#overlay').innerHTML = ''; return; }
-    $('#overlay').innerHTML = `<div class="modal" data-act="closeOverlay"><div class="dlg" data-stop="1" role="dialog" aria-label="사용법"><button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button><h2 style="margin-top:0">GW 통합 업무센터 사용법</h2>
+    $('#overlay').innerHTML = `<div class="modal" data-act="closeOverlay"><div class="dlg" data-stop="1" role="dialog" aria-label="사용법"><button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button><h2 style="margin-top:0">GW 비서 사용법</h2>
 <p><b>1. 오늘 할 일</b>에는 <b>내가 처리해야 할 일</b>만 급한 순서로 나옵니다. 위 숫자(급한 일·할 일·확인 필요·끝났는지 확인)를 누르면 그것만 봅니다. 나와 직접 관련이 적은 항목은 맨 아래 <b>참고</b>에 접혀 있습니다.</p>
 <p><b>2. 줄을 누르면</b> 오른쪽에 내용이 나옵니다. <b>열기</b> 또는 <b>원래 화면 열기</b>를 누르면 그룹웨어 원래 화면이 옆에 열리고, 그 화면의 버튼으로 결재·접수·배부·발송·답장을 합니다.</p>
 <p><b>3. 메일 첨부</b>는 오른쪽 창의 <b>받기</b>(또는 <b>모두 받기</b>)로 바로 내려받습니다.</p>
 <p><b>4. 하나씩 처리하기</b>를 누르면 처리할 일을 차례로 엽니다. 처리 후 초록 버튼을 누르면 그룹웨어에서 실제로 처리됐는지 확인합니다.</p>
 <p><b>5. 줄 오른쪽 ⋯</b>에서 내일 다시 보기, 할 일 보드에 추가, 숨기기, 나와 상관없음(같은 보낸 곳·종류 모두 빼기)을 고릅니다. 실수했으면 <kbd>Ctrl</kbd>+<kbd>Z</kbd>.</p>
-<p><b>6. 돌아가기</b> 왼쪽 위 <b>업무센터</b>는 첫 화면, 오른쪽 위 <b>그룹웨어로 돌아가기</b>는 원래 그룹웨어입니다. 다시 열 때는 화면 오른쪽 아래의 <b>업무센터</b> 버튼(끌어서 옮겼다면 그 자리)이나 <kbd>Alt</kbd>+<kbd>G</kbd>.</p>
+<p><b>6. 돌아가기</b> 왼쪽 위 <b>GW 비서</b>는 첫 화면, 오른쪽 위 <b>그룹웨어로 돌아가기</b>는 원래 그룹웨어입니다. 다시 열 때는 화면 오른쪽 아래의 <b>GW 비서</b> 버튼(끌어서 옮겼다면 그 자리)이나 <kbd>Alt</kbd>+<kbd>G</kbd>.</p>
 <h3>용어</h3><p><span class="term">배부</span> 기관 밖에서 온 공문을 담당 부서로 나눠 보내는 일 · <span class="term">부서 접수</span> 부서로 온 문서를 담당자가 받는 일 · <span class="term">열람</span> 참고하라고 보내 준 문서 · <span class="term">발송 대기</span> 결재가 끝나 밖으로 보낼 차례인 문서 · <span class="term">근무일대체</span> 휴일 근무 대신 다른 날 쉬는 것</p>
 <h3>안전</h3><p>이 화면이 자료를 읽을 때(목록·검색·미리보기)는 그룹웨어를 바꾸지 않습니다. 처리 창에 열린 그룹웨어 화면의 버튼은 실제로 처리되니 평소처럼 확인하고 누르세요. 미열람 문서를 처리 창에 열면 열람으로 기록되어 미리 물어봅니다.</p>
 <h3>단축키</h3><p><kbd>J</kbd>/<kbd>K</kbd> 이동 · <kbd>Enter</kbd> 내용 보기 · <kbd>X</kbd> 숨기기 · <kbd>S</kbd> 미루기 · <kbd>T</kbd> 할 일 · <kbd>F</kbd> 연속 처리 · <kbd>R</kbd> 새로고침 · <kbd>/</kbd> 검색 · <kbd>Shift</kbd>+<kbd>D</kbd> 다크/라이트 · <kbd>Ctrl</kbd>+<kbd>K</kbd> 명령 · <kbd>Ctrl</kbd>+<kbd>Z</kbd> 되돌리기 · <kbd>Alt</kbd>+<kbd>G</kbd> 열기·닫기 (한글 입력 상태에서도 동작)</p>
@@ -108,24 +108,22 @@
     if (S.menuOpen === which) { closeOverlay(); return; }
     S.menuOpen = which; S.paletteOpen = false; S.helpOpen = false; S.coach = null;
     if (which === 'new') {
-      $('#overlay').innerHTML = `<div class="menu" data-stop="1" style="min-width:380px">
-        <div class="mh">⚡ 전자결재 기안 (내 지난 결재문서 패턴 그대로)</div>
-        <div class="mi" data-act="quickDraft" data-t="result">📝 <b>결과보고</b> — 내 계획서를 골라 이어서 작성 (기록물철·본문·참조문서 자동)</div>
-        <div class="mi" data-act="quickDraft" data-t="plan">📝 <b>운영·참가계획</b> — 같은 사업의 과거 계획서 서식으로 작성</div>
-        <div class="mi" data-act="quickDraft" data-t="goods">📦 <b>물품매입품의서</b> (운영물품 구입 품의)</div>
-      <div class="mi" data-act="openPay">💳 <b>지급 문서</b> — 지급 건의 작성, 물품매입, 지출결의서 차례 확인</div>
-      <div class="mi" data-act="goResource">🚗 <b>자원 예약</b> — 공용차량 현황 확인, 바로 예약</div>
-      <div class="mi" data-act="openAi">✨ <b>AI 도우미</b> — 오늘 우선순위 정리, 업무 질문 (Gemini)</div>
-      <div class="mi" data-act="openRec">🎬 <b>기록기</b> — 그룹웨어 동작을 기록해 그대로 재생</div>
-
-        <div class="mh">🚗 근태·출장·휴가 연동 신청 (공식 근태관리 화면)</div>
-        <div class="mi" data-act="quickAtt" data-t="trip">🚗 <b>관내·관외 출장신청</b> (사유 자동 준비)</div>
-        <div class="mi" data-act="quickAtt" data-t="leave">🌴 <b>연차·반차·대체휴가</b> (사유 자동 준비)</div>
-        <div class="mi" data-act="quickAtt" data-t="overtime">⏰ <b>휴일근무·시간외근무</b> (일자 자동 파싱)</div>
-
-        <div class="mh">📂 전체 양식 및 메일</div>
-        <div class="mi" data-act="openUrl" data-url="${esc(GW.links.route(GW.routes.draft))}" data-title="결재작성">📂 전자결재 전체 양식함에서 고르기</div>
-        <div class="mi" data-act="openUrl" data-url="${esc(GW.links.compose('plain'))}" data-title="새 메일 쓰기">✉ 새 메일 쓰기</div>
+      const action = (type, label, desc, icon, extra = '') => `<button type="button" class="new-action" data-act="${type}" ${extra}><span class="new-icon">${ic(icon)}</span><span class="new-copy"><b>${label}</b><small>${desc}</small></span></button>`;
+      $('#overlay').innerHTML = `<div class="menu new-menu" data-stop="1" aria-label="새로 만들기"><div class="new-heading"><strong>새로 만들기</strong><span>업무에 필요한 작업을 선택하세요</span></div><div class="new-section">전자결재</div>
+        ${action('quickDraft','결과보고','계획서를 바탕으로 작성','doc','data-t="result"')}
+        ${action('quickDraft','운영·참가계획','이전 계획서 서식으로 작성','doc','data-t="plan"')}
+        ${action('quickDraft','물품매입품의','운영물품 구입 품의','doc','data-t="goods"')}
+        ${action('openPay','지급·지출 문서','지급 건의와 지출결의 준비','wallet')}
+        <div class="new-section">근태 및 예약</div>
+        ${action('quickAtt','출장 신청','관내·관외 출장 준비','car','data-t="trip"')}
+        ${action('quickAtt','휴가 신청','연차·반차·대체휴가 준비','cal','data-t="leave"')}
+        ${action('quickAtt','시간외·휴일근무','신청 일시와 사유 준비','clock','data-t="overtime"')}
+        ${action('goResource','자원 예약','공용차량·회의실 현황 확인','car')}
+        <div class="new-section">기타</div>
+        ${action('openAi','AI 도우미','업무 질문과 우선순위 확인','star')}
+        ${action('openRec','기록기','자주 하는 화면 작업 기록','play')}
+        ${action('openUrl','전자결재 전체 양식','양식함에서 직접 선택','doc', 'data-url="'+esc(GW.links.route(GW.routes.draft))+'" data-title="결재작성"')}
+        ${action('openUrl','새 메일 쓰기','메일 작성 화면 열기','mail', 'data-url="'+esc(GW.links.compose('plain'))+'" data-title="새 메일 쓰기"')}
       </div>`;
     } else if (which.startsWith('row:')) {
       const key = which.slice(4);
@@ -147,16 +145,17 @@
       $('#overlay').innerHTML = `<div class="menu" data-stop="1"><div class="mh">글자 크기: ${fsName[S.settings.fontSize] || '보통'}</div><div class="mi" data-act="fsUp">가+ 글자 크게</div><div class="mi" data-act="fsDown">가− 글자 작게</div><div class="mi" data-act="theme">${S.settings.theme === 'dark' ? '밝은 테마로' : '어두운 테마로'}</div><div class="mi" data-act="help">? 사용법·용어·단축키</div><div class="mi" data-act="openPalette">Ctrl+K 명령 찾기</div><div class="mi" data-act="view" data-v="settings">설정</div></div>`;
     } else if (which === 'bell') {
       const items = S.activity.slice(-40).reverse();
-      $('#overlay').innerHTML = `<div class="menu" data-stop="1"><div class="mh">새로 들어온 항목 (업무센터가 확인한 시각 기준)</div>${items.map(x => `<div class="mi" data-act="bellItem" data-k="${esc(x.key)}"><span class="pill ${x.priority || 'low'}">${PRI[x.priority] || '참고'}</span>${esc(x.title)}<div class="muted">${esc(x.kind)} · ${hhmm(new Date(x.at))}${x.at > S.seenActivity ? ' · 새' : ''}</div></div>`).join('') || '<div class="mi muted">아직 없습니다.</div>'}</div>`;
+      $('#overlay').innerHTML = `<div class="menu" data-stop="1"><div class="mh">새로 들어온 항목 (GW 비서가 확인한 시각 기준)</div>${items.map(x => `<div class="mi" data-act="bellItem" data-k="${esc(x.key)}"><span class="pill ${x.priority || 'low'}">${PRI[x.priority] || '참고'}</span>${esc(x.title)}<div class="muted">${esc(x.kind)} · ${hhmm(new Date(x.at))}${x.at > S.seenActivity ? ' · 새' : ''}</div></div>`).join('') || '<div class="mi muted">아직 없습니다.</div>'}</div>`;
       S.seenActivity = Date.now(); saveLocal(); renderHead();
     }
+    $('#overlay').querySelectorAll('.mi[data-act]').forEach(el => { if (!el.hasAttribute('role')) el.setAttribute('role', 'button'); el.tabIndex = 0; });
   }
   // 3-step on-screen guide pointing at the real controls.
   const COACH = [
     {sel: '#qlist .row, #qlist .empty', title: '① 처리할 일', text: '내가 처리해야 할 일만 급한 순서로 모았습니다. 줄을 누르면 오른쪽에 내용이 나옵니다.'},
     {sel: '#qlist .row .btn.primary, .hello .btn.primary', title: '② 원래 화면에서 처리', text: '"열기"를 누르면 그룹웨어 원래 화면이 오른쪽에 열립니다. 거기 있는 결재·접수·보내기 버튼으로 평소처럼 처리하세요.'},
-    {sel: 'header .home', title: '③ 처음 화면', text: '언제든 왼쪽 위 "업무센터"를 누르면 이 첫 화면으로 돌아옵니다.'},
-    {sel: 'header .back', title: '④ 그룹웨어로 돌아가기', text: '오른쪽 위 버튼을 누르면 원래 그룹웨어 화면으로 돌아갑니다. 다시 열 때는 화면 오른쪽 아래의 "업무센터" 버튼(또는 Alt+G)을 누르세요.'},
+    {sel: 'header .home', title: '③ 처음 화면', text: '언제든 왼쪽 위 "GW 비서"를 누르면 이 첫 화면으로 돌아옵니다.'},
+    {sel: 'header .back', title: '④ 그룹웨어로 돌아가기', text: '오른쪽 위 버튼을 누르면 원래 그룹웨어 화면으로 돌아갑니다. 다시 열 때는 화면 오른쪽 아래의 "GW 비서" 버튼(또는 Alt+G)을 누르세요.'},
   ];
   function startCoach() { closeOverlay(); if (S.view !== 'today') go('today'); S.coach = {i: 0}; drawCoach(); }
   function coachNext() { if (!S.coach) return; S.coach.i++; if (S.coach.i >= COACH.length) endCoach(); else drawCoach(); }

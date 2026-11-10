@@ -1,4 +1,4 @@
-// GW 통합 업무센터 · 통합검색
+// GW 비서 · 통합검색
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
   // ----- 통합검색 -----
   const cleanSnip = t => String(t || '').replace(/^[\s\S]{0,80}?수신자[\s\S]{0,160}?제목\s*/, '').replace(/\s+/g, ' ').trim();

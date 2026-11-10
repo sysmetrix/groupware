@@ -1,4 +1,4 @@
-// GW 통합 업무센터 · 채팅 도구(읽기 전용): 요약, 할 일, 일정, 직원 근태, 내 근태, 검색, 자원, 화면 이동
+// GW 비서 · 채팅 도구(읽기 전용): 요약, 할 일, 일정, 직원 근태, 내 근태, 검색, 자원, 화면 이동
 // 모든 숫자는 '오늘 할 일'과 같은 기준(mineVisible, stateOf). 아직 읽지 못한 자료는 빈 결과로 단정하지 않고 "불러오는 중"이라고 답한다.
 // `llm` 필드는 외부 AI에 돌려줄 짧은 문장(개인정보 최소화)이고, `text`는 화면에 보이는 답이다.
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
@@ -236,7 +236,7 @@
 
   chatRegisterTool({
     name: 'open_view', label: '화면 열기', kind: 'read',
-    description: '업무센터의 화면을 연다. view: home, today(할 일 목록), approval, mail, search, board, calendar, gcal, budget, attendance, resource, overview, report, settings.',
+    description: 'GW 비서의 화면을 연다. view: home, today(할 일 목록), approval, mail, search, board, calendar, gcal, budget, attendance, resource, overview, report, settings.',
     params: {type: 'object', properties: {view: {type: 'string'}}, required: ['view']},
     run: async a => {
       const v = VIEWS.find(x => x.id === a.view);

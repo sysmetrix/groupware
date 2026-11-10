@@ -1,4 +1,4 @@
-// GW 통합 업무센터 · storage
+// GW 비서 · storage
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
   // ---------- storage (per-user isolation) ----------
   function getUserKey() {

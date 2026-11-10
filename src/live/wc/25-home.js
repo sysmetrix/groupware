@@ -1,4 +1,4 @@
-// GW 통합 업무센터 · 홈 하루 요약 (오늘 타임라인, 퇴근 정리, 내 상신문서 결재 지연)
+// GW 비서 · 홈 하루 요약 (오늘 타임라인, 퇴근 정리, 내 상신문서 결재 지연)
 // 읽기 전용. 이미 가져온 일정·근태·자원·상신문서 자료를 한 곳에 모아 보여 준다.
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
 
