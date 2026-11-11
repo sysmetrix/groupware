@@ -48,3 +48,26 @@
 .wc .ch-foot{order:2}
 .wc .ch-sr{order:3}
 .wc .ch-chip{min-height:30px;padding:0 11px;font-size:12.5px}
+
+/* 문서 찾기: 기안=파랑(--accent), 접수=초록(--ok), 발송=주황(--md). 줄 왼쪽 띠와 배지 색으로 구분한다. */
+.wc .df-b{min-width:38px;justify-content:center;font-weight:700}
+.wc .df-b.df-draft{background:var(--accent-soft);color:var(--accent)}
+.wc .df-b.df-recv{background:var(--ok-soft);color:var(--ok)}
+.wc .df-b.df-send{background:var(--md-soft);color:var(--md)}
+.wc .row.lean.df-row{box-shadow:inset 3px 0 0 var(--line2)}
+.wc .row.lean.df-row.df-draft{box-shadow:inset 3px 0 0 var(--accent)}
+.wc .row.lean.df-row.df-recv{box-shadow:inset 3px 0 0 var(--ok)}
+.wc .row.lean.df-row.df-send{box-shadow:inset 3px 0 0 var(--md)}
+.wc .df-dept.me{color:var(--accent);font-weight:700}
+.wc .seg .df-k i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:1px}
+.wc .seg .df-k.df-draft i{background:var(--accent)}.wc .seg .df-k.df-recv i{background:var(--ok)}.wc .seg .df-k.df-send i{background:var(--md)}
+.wc .teambar .seg .df-k.on::before{content:none}
+.wc select.f.on{border-color:var(--accent);color:var(--accent)}
+.wc .df-quick{margin-top:-4px}
+.wc .df-quick:empty{display:none}
+.wc .df-chipw{display:inline-flex;align-items:center}
+.wc .df-x{display:inline-grid;place-items:center;width:24px;height:24px;margin-left:-4px;border:0;border-radius:50%;background:none;color:var(--muted);cursor:pointer}
+.wc .df-x:hover{background:var(--soft);color:var(--hi)}
+.wc .df-x .i{width:12px;height:12px}
+.wc .df-help{margin:6px 0 0 18px;padding:0;line-height:1.9;font-size:14px}
+.wc .df-foot{margin-top:12px;font-size:12.5px}

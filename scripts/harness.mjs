@@ -29,7 +29,7 @@ async function stage(name, fn) {
 // Standalone files. The src/live/wc fragments are bodies of boot(), so checkLiveSyntax parses them in that shape
 // and also parses the assembled bundle.
 const liveFiles = async () => {
-  return [path.join(root, 'src', 'live', 'collector.browser.js'), path.join(root, 'src', 'live', 'workcenter.browser.js'), path.join(root, 'src', 'live', 'briefing.mjs'), path.join(root, 'src', 'live', 'home-model.mjs'), path.join(root, 'src', 'live', 'chat.mjs'), path.join(root, 'src', 'live', 'gcal-sync.mjs'), path.join(root, 'src', 'live', 'settings-transfer.mjs'),
+  return [path.join(root, 'src', 'live', 'collector.browser.js'), path.join(root, 'src', 'live', 'workcenter.browser.js'), path.join(root, 'src', 'live', 'briefing.mjs'), path.join(root, 'src', 'live', 'home-model.mjs'), path.join(root, 'src', 'live', 'chat.mjs'), path.join(root, 'src', 'live', 'gcal-sync.mjs'), path.join(root, 'src', 'live', 'settings-transfer.mjs'), path.join(root, 'src', 'live', 'doc-find.mjs'),
     path.join(root, 'scripts', 'live-build.mjs'), path.join(root, 'scripts', 'harness.mjs'), path.join(root, 'scripts', 'graph.mjs'),
     path.join(root, 'scripts', 'check.mjs'), path.join(root, 'scripts', 'lib', 'test-results.mjs')];
 };

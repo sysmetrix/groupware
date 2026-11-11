@@ -227,7 +227,7 @@ ${mailFilesBox(m)}
   }
   function searchPane(it) {
     if (!it) return {title: '검색 결과를 찾을 수 없습니다', url: '', body: ''};
-    const kw = S.search.res && S.search.res.keyword;
+    const kw = (S.sel && S.sel.kw) || (S.search.res && S.search.res.keyword);
     if (it.type === 'doc' || it.type === 'board') {
       const dl = R.extractAllDeadlines(it.text || '').filter(x => x.dday >= -1);
       const meta = it.type === 'doc' ? `<b>문서번호</b><span>${esc(it.docNo)}</span><b>양식</b><span>${esc(it.form)}</span><b>기안</b><span>${esc(it.dept)} ${esc(it.drafter)}</span><b>일자</b><span>${esc(ymd8(it.date))}</span>` : `<b>게시판</b><span>${esc(it.catTitle)}</span><b>작성</b><span>${esc(it.writer)}</span><b>등록</b><span>${esc(it.date)}</span>`;

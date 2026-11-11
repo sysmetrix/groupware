@@ -15,7 +15,7 @@ import crypto from 'node:crypto';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const DEFAULT_OUT_DIR = path.join(ROOT, 'build', 'live');
-export const EXTRA_MODULES = ['home-model.mjs', 'chat.mjs', 'gcal-sync.mjs', 'settings-transfer.mjs'];
+export const EXTRA_MODULES = ['home-model.mjs', 'chat.mjs', 'gcal-sync.mjs', 'settings-transfer.mjs', 'doc-find.mjs'];
 const PARTS_MARK = '  /*@WC_PARTS@*/';
 const CSS_MARK = "'/*@WC_CSS@*/'";
 const lf = s => s.replace(/\r\n?/g, '\n');

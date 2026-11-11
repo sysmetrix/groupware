@@ -286,6 +286,8 @@
       case 'chatClear':
       case 'chatConfirm':
       case 'chatCancel':
+      case 'dfSearch': case 'dfChip': case 'dfMore': case 'dfKind': case 'dfDept': case 'dfReset': case 'dfSave': case 'dfUnsave': case 'dfSel':
+        dfAct(act, actEl, v); break; // 문서 찾기(35번 조각)
       case 'chatSetupAi':
       case 'chatFocus':
       case 'chatOpenItem':
@@ -308,13 +310,15 @@
   root.addEventListener('input', e => {
     const t = e.composedPath()[0];
     if (t.id === 'qfilter') { S.filter.q = t.value; if (!e.isComposing) refreshQueue(); }
+    else if (t.id === 'dfIn') { dfState().filter.q = t.value; if (!e.isComposing) dfRefreshList(); }
     else if (t.id === 'bq') { S.budget.q = t.value; }
     else if (t.id === 'weekly') { const shown = t.dataset.prev ?? t.defaultValue; if (S.weekly && S.weekly !== shown) store.set('weeklyRecovery', {at: Date.now(), text: S.weekly}); /* 다른 탭에서 바뀐 초안을 덮기 전에 보관 */ S.weekly = t.value; t.dataset.prev = t.value; const saved = saveLocal(); const w = $('#wkSaved'); if (w) { w.classList.toggle('on', saved); w.textContent = saved ? '자동 저장됨' : '저장 실패 · 내용을 복사하세요'; } }
     else if (t.id === 'palq') palRender(t.value);
   });
-  root.addEventListener('compositionend', e => { const t = e.composedPath()[0]; if (t.id === 'qfilter') { S.filter.q = t.value; refreshQueue(); } });
+  root.addEventListener('compositionend', e => { const t = e.composedPath()[0]; if (t.id === 'qfilter') { S.filter.q = t.value; refreshQueue(); } else if (t.id === 'dfIn') { dfState().filter.q = t.value; dfRefreshList(); } });
   root.addEventListener('change', e => {
     const t = e.composedPath()[0];
+    if (t.id && t.id.startsWith('df') && dfChange(t)) return;
     if (t.id === 'bproj' && t.value === '__custom') { S.budget.custom = true; renderMain(); }
     if (t.id === 'bproj' && t.value !== '__custom') { S.budget.custom = false; const [p, f] = t.value.split('|'); S.budget.project = p; S.budget.filter = f; loadBudget(); }
     if (t.id === 'bCatProj') { S.budget.project = t.value; S.budget.filter = ''; loadBudget(); }

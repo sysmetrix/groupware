@@ -14,7 +14,7 @@
     const cmds = [];
     const qq = q.trim();
     const add = (label, hint, run, extra = '', icon = 'play') => cmds.push({label, hint, run, icon, text: label + ' ' + hint + ' ' + extra});
-    const VIEW_WORDS = {today: '할 일 오늘 긴급 대시보드', approval: '배부 접수 결재 발송 열람 공문 문서유통', mail: '메일 답장 받은메일', search: '검색 찾기', board: '할 일 계획 보드', calendar: '일정 달력 기한', gcal: '구글 일정 캘린더 google calendar 내 일정', gsync: '구글 동기화 캘린더 올리기 등록 연동 근태 출장 시간외', budget: '예산 집행 결의 예실', attendance: '근태 연차 휴가 출근 퇴근', report: '보고서 주간 브리핑 실적', settings: '설정 글자 테마 알림'};
+    const VIEW_WORDS = {docs: '문서 찾기 부서 문서 기안 접수 발송 시행 공문 검색 재단 전체', today: '할 일 오늘 긴급 대시보드', approval: '배부 접수 결재 발송 열람 공문 문서유통', mail: '메일 답장 받은메일', search: '검색 찾기', board: '할 일 계획 보드', calendar: '일정 달력 기한', gcal: '구글 일정 캘린더 google calendar 내 일정', gsync: '구글 동기화 캘린더 올리기 등록 연동 근태 출장 시간외', budget: '예산 집행 결의 예실', attendance: '근태 연차 휴가 출근 퇴근', report: '보고서 주간 브리핑 실적', settings: '설정 글자 테마 알림'};
     for (const v of VIEWS) add(`${v.label}`, '화면으로 이동', () => go(v.id), VIEW_WORDS[v.id] || '', VIEW_ICON[v.id]);
     add('연속 처리 시작', '처리할 일을 하나씩', () => startFocus(), '처리 모드');
     add('새로고침', '자료 다시 읽기', () => refresh());
