@@ -53,6 +53,7 @@
       if (t.id === 'aiKey') { e.preventDefault(); aiSaveKey(); return; }
       else if (t.id === 'sq') { S.search.kw = t.value.trim(); runSearch(); }
       else if (t.id === 'mailq') runMailSearch(t.value.trim());
+      else if (t.id === 'dfq') dfRun(t.value);
       else if (t.id === 'tdTitle') addTodoFromInput();
       else if (t.id === 'bcode' || t.id === 'bfilter') { S.budget.project = $('#bcode').value.trim(); S.budget.filter = $('#bfilter').value.trim(); loadBudget(); }
       return;
