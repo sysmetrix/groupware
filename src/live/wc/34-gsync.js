@@ -76,5 +76,5 @@
     await loadApps();
     const p = gsyncGet();
     if (!p) return null;
-    return {compared: p.compared, counts: p.counts, needDates: R.gsyncNeedDates(p.items), items: p.items.map(i => ({key: i.key, title: i.title, layer: i.layer, startYmd: i.startYmd, endYmd: i.endYmd, time: i.time, state: i.state, docNo: i.docNo, match: i.match || null}))};
+    return {compared: p.compared, counts: p.counts, needDates: R.gsyncNeedDates(p.items), items: p.items.map(i => ({key: i.key, title: i.title, layer: i.layer, source: i.source, kind: i.kind, calId: i.calId || '', startYmd: i.startYmd, endYmd: i.endYmd, time: i.time, state: i.state, docNo: i.docNo, match: i.match || null, url: i.state === 'ready' && i.source === 'attend' && i.calId ? R.gsyncUrl(i, i.calId) : ''}))};
   }
