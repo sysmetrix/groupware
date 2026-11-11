@@ -142,7 +142,7 @@
       $('#overlay').innerHTML = `<div class="menu" data-stop="1" style="right:auto;left:50%;top:30%;transform:translateX(-50%);min-width:360px"><div class="mh">${head}</div><div class="mi" data-act="relAdd" data-l="${list}" data-t="key" data-v="${esc(key)}" data-label="${esc(x.title.slice(0, 40))}">이 항목만 <span class="muted">${esc(x.title.slice(0, 28))}</span></div>${who ? `<div class="mi" data-act="relAdd" data-l="${list}" data-t="sender" data-v="${esc(who)}" data-label="보낸 곳: ${esc(who)}">보낸 곳이 ‘${esc(who)}’인 항목 모두</div>` : ''}${RULE_KIND[x.base] ? `<div class="mi" data-act="relAdd" data-l="${list}" data-t="kind" data-v="${esc(x.base)}" data-label="종류: ${esc(kindName)}">‘${esc(kindName)}’ 종류 모두</div>` : ''}<div class="mi muted" data-act="closeOverlay">취소</div></div>`;
     } else if (which === 'view') {
       const fsName = {s: '작게', m: '보통', l: '크게', xl: '아주 크게'};
-      $('#overlay').innerHTML = `<div class="menu" data-stop="1"><div class="mh">글자 크기: ${fsName[S.settings.fontSize] || '보통'}</div><div class="mi" data-act="fsUp">가+ 글자 크게</div><div class="mi" data-act="fsDown">가− 글자 작게</div><div class="mi" data-act="theme">${S.settings.theme === 'dark' ? '밝은 테마로' : '어두운 테마로'}</div><div class="mi" data-act="help">? 사용법·용어·단축키</div><div class="mi" data-act="openPalette">Ctrl+K 명령 찾기</div><div class="mi" data-act="view" data-v="settings">설정</div></div>`;
+      $('#overlay').innerHTML = `<div class="menu" data-stop="1"><div class="mh">글자 크기: ${fsName[S.settings.fontSize] || '보통'}</div><div class="mi" data-act="fsUp">가+ 글자 크게</div><div class="mi" data-act="fsDown">가− 글자 작게</div><div class="mi" data-act="theme">${ic(S.settings.theme === 'dark' ? 'sun' : 'moon')}${S.settings.theme === 'dark' ? '밝은 화면으로' : '어두운 화면으로'}</div><div class="mi" data-act="help">${ic('help')}사용법·용어·단축키</div><div class="mi" data-act="coach">${ic('play')}처음 안내 다시 보기</div><div class="mi" data-act="openHistory">${ic('clock')}자동화 작업 내역</div><div class="mi" data-act="openChangelog">${ic('doc')}업데이트 내역 <span class="muted">v${esc(VERSION)}</span></div><div class="mi" data-act="openPalette">${ic('search')}명령 찾기 <span class="muted">Ctrl+K</span></div><div class="mi" data-act="view" data-v="settings">${ic('gear')}설정</div></div>`;
     } else if (which === 'bell') {
       const items = S.activity.slice(-40).reverse();
       $('#overlay').innerHTML = `<div class="menu" data-stop="1"><div class="mh">새로 들어온 항목 (GW 비서가 확인한 시각 기준)</div>${items.map(x => `<div class="mi" data-act="bellItem" data-k="${esc(x.key)}"><span class="pill ${x.priority || 'low'}">${PRI[x.priority] || '참고'}</span>${esc(x.title)}<div class="muted">${esc(x.kind)} · ${hhmm(new Date(x.at))}${x.at > S.seenActivity ? ' · 새' : ''}</div></div>`).join('') || '<div class="mi muted">아직 없습니다.</div>'}</div>`;
@@ -152,8 +152,8 @@
   }
   // 3-step on-screen guide pointing at the real controls.
   const COACH = [
-    {sel: '#qlist .row, #qlist .empty', title: '① 처리할 일', text: '내가 처리해야 할 일만 급한 순서로 모았습니다. 줄을 누르면 오른쪽에 내용이 나옵니다.'},
-    {sel: '#qlist .row .btn.primary, .hello .btn.primary', title: '② 원래 화면에서 처리', text: '"열기"를 누르면 그룹웨어 원래 화면이 오른쪽에 열립니다. 거기 있는 결재·접수·보내기 버튼으로 평소처럼 처리하세요.'},
+    {sel: '#qlist .row, #qlist .empty', title: '① 처리할 일', text: '내가 처리해야 할 일만 급한 순서로 한 줄씩 모았습니다. 줄을 누르면 오른쪽에 자세한 내용이 나옵니다.'},
+    {sel: '#pane .btn.primary, #qlist .row', title: '② 원래 화면에서 처리', text: '줄을 고른 뒤 오른쪽 창의 "원래 화면 열기"를 누르면 그룹웨어 원래 화면이 열립니다. 거기 있는 결재·접수·보내기 버튼으로 평소처럼 처리하세요.'},
     {sel: 'header .home', title: '③ 처음 화면', text: '언제든 왼쪽 위 "GW 비서"를 누르면 이 첫 화면으로 돌아옵니다.'},
     {sel: 'header .back', title: '④ 그룹웨어로 돌아가기', text: '오른쪽 위 버튼을 누르면 원래 그룹웨어 화면으로 돌아갑니다. 다시 열 때는 화면 오른쪽 아래의 "GW 비서" 버튼(또는 Alt+G)을 누르세요.'},
   ];

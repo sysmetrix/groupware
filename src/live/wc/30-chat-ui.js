@@ -42,11 +42,11 @@
 
   function chatLogHtml() {
     const st = chatState();
-    if (!st.msgs.length) return `<div class="ch-empty"><div class="ch-empty-t">무엇을 도와드릴까요?</div><p>말로 시키면 조회부터 신청서 준비까지 도와드립니다. 신청과 예약은 항상 확인한 뒤에만 진행합니다.</p><div class="ch-starts">${CHAT_STARTERS.map(([t, s, q]) => `<button class="ch-start" data-act="chatChip" data-v="${esc(q)}"><b>${esc(t)}</b><span>${esc(s)}</span></button>`).join('')}</div></div>`;
+    if (!st.msgs.length) return `<div class="ch-empty"><p>말로 시키면 조회부터 신청서 준비까지 돕습니다. 신청과 예약은 항상 확인한 뒤에만 진행합니다.</p></div>`;
     return st.msgs.map(chatMsgHtml).join('');
   }
   const CHAT_STARTERS = [['오늘 요약', '급한 일·결재·일정을 한눈에', '오늘 요약해줘'], ['오늘 누가 자리에 없어?', '휴가·출장·교육 현황', '오늘 누가 출장이야?'], ['답장할 메일', '답장이 필요한 메일만', '답장 필요한 메일 있어?'], ['내일 일정', '일정·기한 확인', '내일 일정 알려줘'], ['연차 신청 준비', '날짜만 말하면 신청서까지', '다음 주 월요일 연차 신청해줘'], ['차량 예약', '가능한 시간 확인', '차량 예약 가능한 시간']];
-  const chatChipsHtml = () => { const st = chatState(); return st.busy || !st.msgs.length ? '' : chatSuggestions().slice(0, st.msgs.length ? 3 : 6).map(q => `<button class="ch-chip" data-act="chatChip" data-v="${esc(q)}">${esc(q)}</button>`).join(''); };
+  const chatChipsHtml = () => { const st = chatState(); if (!st.busy && !st.msgs.length) return CHAT_STARTERS.map(([t, s, q]) => `<button class="ch-chip" data-act="chatChip" data-v="${esc(q)}" title="${esc(s)}">${esc(t)}</button>`).join(''); return st.busy ? '' : chatSuggestions().slice(0, st.msgs.length ? 3 : 6).map(q => `<button class="ch-chip" data-act="chatChip" data-v="${esc(q)}">${esc(q)}</button>`).join(''); };
   function chatFootHtml() {
     const m = chatMode();
     return `<span class="ch-mode ${m.ready && !m.limited ? 'ch-mode-ai' : ''}">${m.ready ? (m.limited ? 'AI 사용 한도에 도달해 기본 모드로 답합니다(잠시 뒤 자동 재시도)' : `AI 연결됨${m.model ? ' · ' + esc(m.model) : ''}`) : '기본 모드 · 정해진 질문만 이해합니다'}</span><button class="ch-link" data-act="chatSetupAi">${m.ready ? 'AI 설정' : 'AI 연결하기'}</button>${chatState().msgs.length ? '<button class="ch-link" data-act="chatClear">대화 지우기</button>' : ''}`;

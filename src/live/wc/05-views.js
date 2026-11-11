@@ -2,10 +2,21 @@
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
   // ---------- views ----------
   const VIEWS = [
-    {id: 'home', label: '홈'}, {id: 'today', label: '할 일 목록'}, {id: 'approval', label: '결재·문서유통'}, {id: 'mail', label: '메일'}, {id: 'calendar', label: '일정 달력'}, {id: 'attendance', label: '근태·연차'},
-    {id: 'search', label: '통합검색'}, {id: 'board', label: '할 일 보드'}, {id: 'gcal', label: '구글 일정'}, {id: 'gsync', label: '구글 동기화'}, {id: 'budget', label: '예산 집행'}, {id: 'resource', label: '자원 예약'},
+    {id: 'home', label: '홈'}, {id: 'today', label: '할 일'}, {id: 'approval', label: '결재·문서유통'}, {id: 'mail', label: '메일'}, {id: 'calendar', label: '일정'}, {id: 'attendance', label: '근태·연차'},
+    {id: 'search', label: '통합검색'}, {id: 'budget', label: '예산 집행'}, {id: 'resource', label: '자원 예약'},
     {id: 'overview', label: '현황 차트'}, {id: 'report', label: '보고서'}, {id: 'settings', label: '설정'},
+    {id: 'board', label: '할 일 보드'}, {id: 'gcal', label: '구글 일정'}, {id: 'gsync', label: '구글 동기화'},
   ];
+  // 메뉴에 따로 두지 않고 상위 화면 안의 탭으로 들어가는 화면(기능은 그대로, 메뉴만 합침).
+  const VIEW_PARENT = {board: 'today', gcal: 'calendar', gsync: 'calendar'};
+  const navView = () => VIEW_PARENT[S.view] || S.view;
+  function viewTabs() {
+    const tab = (id, label, n) => `<button role="tab" aria-selected="${S.view === id}" class="${S.view === id ? 'on' : ''}" data-act="view" data-v="${id}">${label}${n ? `<span class="c">${n}</span>` : ''}</button>`;
+    const p = navView();
+    if (p === 'today') return `<div class="vtabs"><div class="seg" role="tablist" aria-label="할 일 보기 방식">${tab('today', '목록')}${tab('board', '보드', boardCount())}</div></div>`;
+    if (p === 'calendar' && allowed('googleCalendar')) return `<div class="vtabs"><div class="seg" role="tablist" aria-label="일정 종류">${tab('calendar', '그룹웨어')}${tab('gcal', '구글 일정')}${tab('gsync', '구글 동기화')}</div></div>`;
+    return '';
+  }
   // Charts: shown on big screens, folded on laptops unless the user chose otherwise.
   const showCharts = () => S.settings.showCharts ?? (window.innerHeight >= 860 && window.innerWidth >= 1500);
   const go = v => { if (S.view !== v && !S.focus) { if (!leavePane()) return; S.sel = null; S.pane.url = ''; } if (S.view !== v) S.apTabPinned = false; S.view = v; S.multi.clear(); S.pane.expanded = false; render(); const mm = $('#main'); if (mm) mm.scrollTop = 0; };
@@ -87,13 +98,11 @@
       approval: S.a ? (u.approval ? {n: '?'} : {n: byArea('결재'), cls: byArea('결재') ? 'mine' : ''}) : null,
       mail: S.a ? (u.mail ? {n: '?'} : {n: byArea('메일'), cls: byArea('메일') ? 'mine' : ''}) : null,
       attendance: S.a ? {n: byArea('근태'), cls: byArea('근태') ? 'mine' : ''} : null,
-      board: S.a ? {n: boardCount()} : null,
       calendar: S.a ? (() => { const n = mine.filter(x => x.deadline && x.deadline.dday >= 0 && x.deadline.dday <= 7).length; return {n, cls: n ? 'mine' : ''}; })() : null,
     };
-    const item = (v) => { const i = VIEWS.indexOf(v); const c = counts[v.id]; return `<a data-act="view" data-v="${v.id}" class="${S.view === v.id ? 'on' : ''}" role="link" tabindex="0" aria-current="${S.view === v.id ? 'page' : 'false'}" title="${esc(v.label)}${i < 9 ? ` (숫자키 ${i + 1})` : ''}">${ic(VIEW_ICON[v.id])}<span class="lb">${esc(v.label)}</span>${c && c.n !== '' && c.n !== 0 ? `<span class="n ${c.cls || ''}" title="${v.id === 'today' ? '내 처리할 일' : v.id === 'board' ? '보드의 남은 카드' : v.id === 'calendar' ? '7일 안에 기한이 있는 내 처리할 일' : '내 처리할 일 중 이 영역'}">${c.n}</span>` : ''}</a>`; };
-    const primary = VIEWS.slice(0, 6), more = VIEWS.slice(6), moreOpen = !!S.settings.navMore || more.some(v => v.id === S.view);
-    $('#nav').innerHTML = '<div class="nav-label">내 업무</div>' + primary.map(item).join('') + '<div class="sep"></div>' + `<a data-act="navMore" role="button" tabindex="0" aria-expanded="${moreOpen}" class="navmore">${ic('board')}<span class="lb">전체 메뉴</span><span class="nav-chevron" aria-hidden="true">${moreOpen ? '▴' : '▾'}</span></a>` + (moreOpen ? more.map(item).join('') : '')
-      + `<div class="foot"><a data-act="help" role="link" tabindex="0">${ic('help')}<span class="lb">사용법</span></a><a data-act="coach" role="link" tabindex="0">${ic('play')}<span class="lb">처음 안내</span></a><a data-act="openChangelog" role="link" tabindex="0" title="버전과 업데이트 내역">${ic('doc')}<span class="lb">v${VERSION} 업데이트 내역</span></a></div>`;
+    const item = (v) => { const i = VIEWS.indexOf(v); const c = counts[v.id]; return `<a data-act="view" data-v="${v.id}" class="${navView() === v.id ? 'on' : ''}" role="link" tabindex="0" aria-current="${navView() === v.id ? 'page' : 'false'}" title="${esc(v.label)}${i < 9 ? ` (숫자키 ${i + 1})` : ''}">${ic(VIEW_ICON[v.id])}<span class="lb">${esc(v.label)}</span>${c && c.n !== '' && c.n !== 0 ? `<span class="n ${c.cls || ''}" title="${v.id === 'today' ? '내 처리할 일' : v.id === 'calendar' ? '7일 안에 기한이 있는 내 처리할 일' : '내 처리할 일 중 이 영역'}">${c.n}</span>` : ''}</a>`; };
+    const primary = VIEWS.slice(0, 6), more = VIEWS.slice(6).filter(v => !VIEW_PARENT[v.id]), moreOpen = !!S.settings.navMore || more.some(v => v.id === S.view);
+    $('#nav').innerHTML = '<div class="nav-label">내 업무</div>' + primary.map(item).join('') + '<div class="sep"></div>' + `<a data-act="navMore" role="button" tabindex="0" aria-expanded="${moreOpen}" class="navmore">${ic('more')}<span class="lb">더 보기</span><span class="nav-chevron" aria-hidden="true">${moreOpen ? '▴' : '▾'}</span></a>` + (moreOpen ? more.map(item).join('') : '');
   }
   function boardCount() { return (S.a ? S.a.actions.filter(x => onBoard(x) && bucketOfAction(x) !== 'done').length : 0) + S.todos.filter(t => bucketOfTodo(t) !== 'done').length; }
   function renderMain() {
@@ -102,7 +111,7 @@
     const scroll = el.scrollTop;
     if (S.view === 'home' && typeof homePartialRefresh === 'function' && homePartialRefresh()) return; // 홈이 이미 그려져 있으면 입력창을 건드리지 않고 요약만 갱신
     const fn = {home: vHome, today: vToday, overview: vOverview, approval: vApproval, mail: vMail, search: vSearch, board: vBoard, calendar: vCalendar, gcal: vGcal, gsync: vGsync, budget: vBudget, attendance: vAttendance, resource: vResource, report: vReport, settings: vSettings}[S.view] || vToday;
-    el.innerHTML = fn();
+    el.innerHTML = viewTabs() + fn();
     el.scrollTop = scroll;
     if (S.view === 'report') { const f = $('#briefFrame'); if (f) f.srcdoc = R.renderHtml(S.a); }
     if (S.view === 'budget' && !S.budget.table && !S.budget.busy) loadBudget();

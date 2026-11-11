@@ -93,7 +93,7 @@ export async function readSources(root = ROOT) {
   const partNames = (await fs.readdir(path.join(live, 'wc'))).filter(n => n.endsWith('.js')).sort();
   return {
     collector: await read('collector.browser.js'),
-    css: (await read('wc-style.css')) + '\n' + (await read('wc-theme.css')) + '\n' + (await read('wc-home.css').catch(() => '')) + '\n' + (await read('wc-chat.css').catch(() => '')) + '\n' + (await read('wc-premium.css').catch(() => '')),
+    css: (await read('wc-style.css')) + '\n' + (await read('wc-theme.css')) + '\n' + (await read('wc-home.css').catch(() => '')) + '\n' + (await read('wc-chat.css').catch(() => '')) + '\n' + (await read('wc-premium.css').catch(() => '')) + '\n' + (await read('wc-lean.css').catch(() => '')),
     parts: await Promise.all(partNames.map(async file => ({file, src: await read(`wc/${file}`)}))),
     template: await read('workcenter.browser.js'),
     // 순수 로직 모듈: briefing.mjs 뒤에 이어 붙여 한 범위(R.*)로 내보낸다. 서로 import 하지 않고, 이름이 겹치지 않도록 home-model은 hm*, chat은 ch* 접두를 쓴다.

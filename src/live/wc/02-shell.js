@@ -113,10 +113,8 @@
 <button class="stat" id="meta" data-act="refresh" title="지금 다시 읽기 (R)"></button>
 <button class="hb primary" data-act="openCmd" title="AI에게 말로 지시하기 (홈의 채팅창, 단축키 /)">${ic('star')}AI 지시</button>
 <button class="hb" data-act="menuNew" title="새 메일·새 기안·근태신청">${ic('plus')}새로 만들기</button>
-<button class="hb icon" data-act="openHistory" title="자동화 작업 내역 및 검증 로그" aria-label="작업 내역">${ic('clock')}</button>
-<button class="hb icon" data-act="theme" id="themeBtn" title="다크/라이트 모드 전환 (Shift+D)" aria-label="화면 모드 전환"></button>
-      <button class="hb icon" data-act="menuBell" id="bell" title="새로 들어온 항목" aria-label="알림">${ic('bell')}</button>
-<button class="hb" data-act="help" title="사용법·단축키 (?)">${ic('help')}도움말</button>
+<button class="hb icon" data-act="menuBell" id="bell" title="새로 들어온 항목" aria-label="알림">${ic('bell')}</button>
+<button class="hb icon" data-act="menuView" title="더 보기: 화면 모드·글자 크기·사용법·작업 내역·업데이트 내역" aria-label="더 보기" aria-haspopup="menu">${ic('more')}</button>
 <button class="hb back" data-act="close" aria-label="그룹웨어로 돌아가기" title="GW 비서를 접고 원래 그룹웨어 화면으로 (화면 위 가운데 'GW 비서' 버튼이나 Alt+G로 다시 열기)">${ic('back')}그룹웨어로 돌아가기</button></header>
 <div class="band" id="band" role="status" aria-live="polite"></div><nav id="nav" aria-label="GW 비서 메뉴"></nav><main id="main" tabindex="-1"></main><div class="split" id="split" title="끌어서 오른쪽 창 너비 조절"></div><aside id="pane" aria-label="선택한 항목"></aside><div id="overlay"></div></div>`;
   const $ = sel => root.querySelector(sel);
