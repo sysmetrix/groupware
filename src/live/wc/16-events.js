@@ -79,6 +79,8 @@
     case 'expGo': expGo(); break;
     case 'expClose': expClose(); break;
     case 'openData': openDataCenter(); break;
+      case 'setExport': settingsExport(); break;
+      case 'setImport': { const fi = $('#setImportFile'); if (fi) fi.click(); break; }
     case 'openDiag': openDiag(); break;
     case 'govDel': govDel(el.dataset.k); break;
     case 'govExportAudit': govExportAudit(); break;
@@ -320,6 +322,7 @@
     if (t.id === 'payPlan') payPlanChanged();
     if (t.id === 'resTitle') resSyncForm(); // 예약명만 바꾸면 겹침 확인 결과는 그대로 둔다(다시 그리면 누르려던 버튼이 사라져 클릭이 씹힘)
     if (t.id === 'resStart' || t.id === 'resEnd') { resSyncForm(); const rs = resState(); if (rs.check) { rs.rev++; rs.check = null; renderMain(); } }
+    if (t.id === 'setImportFile') settingsImport(t);
     if (t.classList && t.classList.contains('setc')) saveSettingField(t);
     if (t.dataset && t.dataset.b) saveBudgetRows();
   });
