@@ -44,7 +44,7 @@
       <div class="box" id="gcalSetup"><div style="display:flex;flex-direction:column;gap:10px;max-width:700px">
         <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)">내 구글 계정 이메일<input class="inp" id="gcalEmail" type="email" value="${esc(c.email || '')}" placeholder="예) name@gmail.com" style="height:36px"></label>
         <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)">캘린더 목록과 색 (한 줄에 하나: 캘린더ID 색상 이름)<textarea class="inp" id="gcalExtra" rows="9" style="font-family:inherit" placeholder="name@gmail.com #e7ba51 일상&#10;xxxx@group.calendar.google.com #489160 성장">${esc(gcalLines(c))}</textarea></label>
-        <div class="muted" style="font-size:12px">색상(#e7ba51 같은 6자리)과 이름은 생략해도 됩니다. 색은 구글 캘린더 화면의 색과 같게 적으면 원본처럼 구분됩니다. 캘린더 ID는 구글 캘린더 → 해당 캘린더 설정 → "캘린더 통합"에 있습니다. 이 브라우저에서 구글에 로그인되어 있어야 하며, 일정 내용은 GW 비서에 저장되지 않고 구글 화면이 그대로 표시됩니다.</div>
+        <div class="muted" style="font-size:12px">색상(#e7ba51 같은 6자리)과 이름은 생략해도 됩니다. 색은 구글 캘린더 화면의 색과 같게 적으면 원본처럼 구분됩니다. 캘린더 ID는 구글 캘린더 → 해당 캘린더 설정 → "캘린더 통합"에 있습니다. 다른 PC에서 이미 설정했다면 입력하지 말고 설정 → “다른 PC로 설정 옮기기”에서 파일로 가져오세요. 이 브라우저에서 구글에 로그인되어 있어야 하며, 일정 내용은 GW 비서에 저장되지 않고 구글 화면이 그대로 표시됩니다.</div>
         <div class="acts"><button class="btn primary" data-act="gcalSave">저장하고 보기</button>${c.email ? '<button class="btn" data-act="gcalCancel">취소</button>' : ''}</div>
       </div></div>`;
     }

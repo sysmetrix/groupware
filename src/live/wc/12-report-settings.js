@@ -34,6 +34,8 @@ ${S.weekly ? `<h2>주간 업무 실적 초안 <span class="saved on" id="wkSaved
 <div class="si"><b>예산 관심 사업</b><div><div id="budgetRows">${st.budget.map((b, i) => `<div class="bar"><input class="inp" data-b="label" data-i="${i}" value="${esc(b.label || '')}" placeholder="이름 (예: 전략경영실 운영)" style="flex:1"><input class="inp" data-b="project" data-i="${i}" value="${esc(b.project)}" placeholder="사업 코드" style="width:110px" title="예실대비현황의 프로젝트 코드"><input class="inp" data-b="filter" data-i="${i}" value="${esc(b.filter || '')}" placeholder="세부 코드(선택)" style="width:130px"><button class="btn sm ghost icon" data-act="budgetRowDel" data-i="${i}" aria-label="삭제">${ic('x')}</button></div>`).join('')}</div><button class="btn sm" data-act="budgetRowAdd">${ic('plus')}직접 추가</button> <button class="btn sm primary" data-act="goBudgetPick">예산 화면에서 목록 보고 고르기</button></div></div>
 <div class="si"><b>받은메일 읽는 수</b><div><select class="f setc" data-k="mailCount">${[50, 100, 200].map(n => `<option value="${n}" ${Number(st.mailCount) === n ? 'selected' : ''}>최근 ${n}통</option>`).join('')}</select></div></div>
 </div>
+<h2>다른 PC로 설정 옮기기</h2>
+<div class="set"><div class="si"><b>설정 파일</b><div>집·사무실처럼 PC나 브라우저가 다르면 설정이 따로 저장됩니다. 한쪽에서 <b>내보내기</b>로 파일을 만들고, 다른 쪽에서 <b>가져오기</b>로 불러오면 같은 설정이 됩니다.<div class="muted">옮기는 것: 내 업무 범위, 긴급 키워드, 새로고침·알림, 글자 크기·테마, 예산 관심 사업, 구글 일정(계정·캘린더·색). 옮기지 않는 것: AI 키, 할 일·숨기기·미루기 같은 작업 자료, 그룹웨어 로그인 정보. 파일에 구글 이메일과 캘린더 ID가 들어 있으니 본인 PC와 메일로만 옮기세요.</div><div class="acts"><button class="btn sm primary" data-act="setExport">설정 내보내기</button><button class="btn sm" data-act="setImport">설정 가져오기</button><input type="file" id="setImportFile" accept=".json,application/json" hidden></div></div></div></div>
 <h2>이 PC에 저장된 자료</h2>
 <div class="set"><div class="si"><b>저장 내용</b><div>숨기기·미루기 표시, 내 할 일, 설정, 최근 처리 기록(최대 40일)과 배부 추천용 이력(12시간 보관)이 이 브라우저에만 저장됩니다. 현재 약 ${usedKB}KB. 로그인 정보는 저장하지 않습니다. 여러 사람이 쓰는 PC라면 다 쓴 뒤 지워 주세요.<div class="acts"><button class="btn sm" data-act="resetDone">숨기기·미루기 초기화</button><button class="btn sm" data-act="resetRouting">추천 이력 지우기</button><button class="btn sm danger" data-act="resetAll">GW 비서 자료 모두 지우기</button></div></div></div>
 <div class="si"><b>관리·진단</b><div>저장된 자료 확인·삭제, 감사 기록 무결성, 환경 진단을 볼 수 있습니다.<div class="acts"><button class="btn sm" data-act="openData">데이터 관리</button><button class="btn sm" data-act="openDiag">진단</button><button class="btn sm" data-act="openChangelog">업데이트 내역</button></div></div></div>
@@ -50,6 +52,32 @@ ${S.weekly ? `<h2>주간 업무 실적 초안 <span class="saved on" id="wkSaved
     saveLocal(); applyLook();
     const s = $('#setSaved'); if (s) { s.classList.add('on'); clearTimeout(saveSettingField.t); saveSettingField.t = setTimeout(() => s.classList.remove('on'), 1600); }
     renderNav(); renderHead();
+  }
+  // 설정 옮기기: 내보내기는 허용 목록 항목만 파일로, 가져오기는 검증 후 바뀌는 항목을 보여 주고 확인받아 덮어쓴다.
+  function settingsExport() {
+    download(R.setxFileName(), R.setxBuild(S.settings, {version: VERSION}), 'application/json;charset=utf-8');
+    toast('설정 파일을 내려받았습니다. 다른 PC의 GW 비서 설정에서 “설정 가져오기”로 불러오세요.');
+  }
+  async function settingsImport(input) {
+    const f = input.files && input.files[0];
+    input.value = '';
+    if (!f) return;
+    if (f.size > 512 * 1024) { toast('설정 파일이 너무 큽니다. GW 비서에서 내보낸 파일인지 확인하세요.'); return; }
+    let text;
+    try { text = await f.text(); } catch { toast('파일을 읽지 못했습니다.'); return; }
+    const r = R.setxParse(text, S.settings);
+    if (!r.ok) { toast(r.error); return; }
+    if (!r.changed.length) { toast('이 PC의 설정이 파일 내용과 이미 같습니다.'); return; }
+    const when = r.exportedAt ? new Date(r.exportedAt).toLocaleString('ko-KR') : '';
+    const msg = `${when ? when + '에 내보낸 ' : ''}설정 파일로 아래 항목을 바꿉니다.\n\n- ${r.changed.map(c => c.label).join('\n- ')}${r.skipped.length ? '\n\n형식이 맞지 않아 건너뛰는 항목: ' + r.skipped.join(', ') : ''}\n\n이 PC의 해당 설정은 파일 내용으로 덮어쓰입니다. 계속할까요?`;
+    if (!confirm(msg)) return;
+    const gc = r.patch.gcal ? {...r.patch.gcal, synced: r.patch.gcal.synced || (S.settings.gcal || {}).synced} : undefined;
+    Object.assign(S.settings, r.patch);
+    if (gc) { if (!gc.synced) delete gc.synced; S.settings.gcal = gc; }
+    saveLocal(); applyLook(); schedule();
+    if (S.raw) reanalyze();
+    renderNav(); renderHead(); renderMain();
+    toast(`설정 ${r.changed.length}개 항목을 가져왔습니다.`);
   }
   function saveBudgetRows() {
     const rows = {};
