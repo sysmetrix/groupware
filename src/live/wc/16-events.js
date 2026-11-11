@@ -219,6 +219,7 @@
       case 'todoEdit': { const t = S.todos.find(x => x.id === el.dataset.id); if (!t) break; askForm({title: '할 일 고치기', fields: [{label: '할 일 내용', value: t.title}, {label: '기한 (예: 11/20 또는 2026-11-20, 비우면 없음)', value: t.due || ''}]}).then(v => { const cur = S.todos.find(x => x.id === t.id); if (!v || !v[0]) return; if (!cur) { toast('다른 탭에서 지워진 할 일입니다.'); return; } pushUndo('할 일 수정'); cur.title = v[0]; cur.due = v[1] ? parseDue(v[1]) : ''; saveLocal(); renderMain(); renderNav(); toastUndo('할 일을 고쳤습니다.'); }); break; }
       case 'calLayer': { const cf = teamCfg(); cf.layers[el.dataset.v] = !cf.layers[el.dataset.v]; renderMain(); break; }
     case 'calDept': teamCfg().dept = el.dataset.v; renderMain(); break;
+    case 'calOpts': S.cal.opts = !S.cal.opts; renderMain(); break;
     case 'calMine': { const cf = teamCfg(); cf.mine = !cf.mine; renderMain(); break; }
     case 'calDay': { const cf = teamCfg(); cf.day = el.dataset.v === cf.day ? '' : el.dataset.v; renderMain(); break; }
     case 'calTeamReload': delete (S.team || {})[monthKey()]; renderMain(); break;

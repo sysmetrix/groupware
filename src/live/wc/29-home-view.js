@@ -47,23 +47,29 @@
     return `<div class="hm-head"><div><h1 class="hm-hello">${esc(g.title)}</h1><p class="hm-sub hm-tone-${g.tone}">${esc(g.sub)}</p></div></div>`;
   }
 
-  function homeDashHtml(d) {
+  // 맨 위: 핵심 숫자 한 줄 + 지금 가장 먼저 할 일 한 가지.
+  function homeTopHtml(d) {
     if (!d.loaded) return `<section class="hm-tiles" aria-label="핵심 현황">${'<div class="hm-tile hm-skel" aria-hidden="true"></div>'.repeat(5)}</section>`;
     const tiles = R.homeTiles({urgent: d.urgent, todo: d.todo, check: d.check, wait: d.wait, events: d.events.length, away: d.away.length, loaded: true});
     const tileHtml = tiles.map(t => `<button class="hm-tile hm-tone-${t.tone}" data-act="homeTile" data-v="${t.id}" aria-label="${esc(t.label + ' ' + t.value + ' ' + t.sub)}"><span class="hm-tile-l">${esc(t.label)}</span><b class="hm-tile-v">${esc(t.value)}</b><span class="hm-tile-s">${esc(t.sub)}</span></button>`).join('');
     const next = R.homeNextAction(d.mine.map(x => ({key: x.key, title: x.title, headline: x.headline, area: x.area, state: stateOf(x), deadline: x.deadline && x.deadline.date ? x.deadline.date.slice(5) + (x.deadline.time ? ' ' + x.deadline.time : '') : ''})));
     const nextHtml = next
-      ? `<section class="hm-next" aria-label="지금 할 일 한 가지"><div class="hm-next-k">지금 가장 먼저 할 일 <span class="hm-badge hm-tone-${next.state === 'overdue' || next.state === 'urgent' ? 'urgent' : 'todo'}">${esc(STATE_NAME[next.state] || '')}</span></div><div class="hm-next-t">${esc(next.title)}</div>${next.sub || next.deadline ? `<div class="hm-next-s">${esc([next.sub, next.deadline ? '기한 ' + next.deadline : ''].filter(Boolean).join(' · '))}</div>` : ''}<div class="hm-next-a"><button class="ch-btn ch-btn-primary" data-act="homeNext" data-v="${esc(next.key)}">열어서 처리</button><button class="ch-btn ch-btn-ghost" data-act="homeOpenToday">할 일 전체 ${d.urgent + d.todo + d.check}건 보기</button></div></section>`
-      : `<section class="hm-next hm-next-ok" aria-label="지금 할 일"><div class="hm-next-k">지금 처리할 일이 없습니다</div><div class="hm-next-s">${d.refN ? `부서 참고 공문 ${d.refN}건이 등록되어 있습니다.` : '새로 도착한 일이 없습니다.'}</div><div class="hm-next-a"><button class="ch-btn ch-btn-ghost" data-act="homeOpenToday">할 일 목록 열기</button></div></section>`;
+      ? `<section class="hm-next" aria-label="지금 할 일 한 가지"><div class="hm-next-b"><div class="hm-next-k">지금 가장 먼저 할 일 <span class="hm-badge hm-tone-${next.state === 'overdue' || next.state === 'urgent' ? 'urgent' : 'todo'}">${esc(STATE_NAME[next.state] || '')}</span></div><div class="hm-next-t">${esc(next.title)}</div>${next.sub || next.deadline ? `<div class="hm-next-s">${esc([next.sub, next.deadline ? '기한 ' + next.deadline : ''].filter(Boolean).join(' · '))}</div>` : ''}</div><div class="hm-next-a"><button class="ch-btn ch-btn-primary" data-act="homeNext" data-v="${esc(next.key)}">열어서 처리</button><button class="ch-btn ch-btn-ghost" data-act="homeOpenToday">할 일 전체 ${d.urgent + d.todo + d.check}건 보기</button></div></section>`
+      : `<section class="hm-next hm-next-ok" aria-label="지금 할 일"><div class="hm-next-b"><div class="hm-next-k">지금 처리할 일이 없습니다</div><div class="hm-next-s">${d.refN ? `부서 참고 공문 ${d.refN}건이 등록되어 있습니다.` : '새로 도착한 일이 없습니다.'}</div></div><div class="hm-next-a"><button class="ch-btn ch-btn-ghost" data-act="homeOpenToday">할 일 목록 열기</button></div></section>`;
+    return `<section class="hm-tiles" aria-label="핵심 현황">${tileHtml}</section>${nextHtml}`;
+  }
+  // 채팅 옆: 오늘 일정과 자리 비움.
+  function homeDashHtml(d) {
+    if (!d.loaded) return '';
     const tl = R.homeTimelineCompact(d.timeline, 5);
     const awayLine = R.homeAwayLine(d.away.map(x => ({name: x.name, label: x.label})), 3);
     const tlHtml = `<section class="hm-today" aria-label="오늘 일정"><div class="hm-today-k">오늘 일정</div>${tl.rows.length ? `<ul class="hm-tl">${tl.rows.map(r => `<li class="hm-tl-${esc(r.kind)}"><span class="hm-tl-t">${r.allDay ? '종일' : esc(r.from) + (r.to ? '~' + esc(r.to) : '')}</span><span class="hm-tl-l">${esc(r.label)}</span></li>`).join('')}</ul>${tl.more ? `<div class="hm-more">외 ${tl.more}건 · <button class="hm-link" data-act="homeTile" data-v="schedule">일정 달력에서 보기</button></div>` : ''}` : '<div class="hm-empty">오늘 시간이 정해진 일정이 없습니다.</div>'}${awayLine ? `<div class="hm-away"><span class="hm-away-k">자리 비움</span> ${esc(awayLine)}</div>` : ''}</section>`;
-    return `<section class="hm-tiles" aria-label="핵심 현황">${tileHtml}</section>${nextHtml}${tlHtml}`;
+    return tlHtml;
   }
 
   function vHome() {
     const d = homeData();
-    return `<div class="hm" id="hm"><div id="hmHead">${homeHeadHtml(d)}</div><div class="hm-grid"><div class="hm-chatcol">${typeof chatView === 'function' ? chatView() : ''}</div><div id="hmDash">${homeDashHtml(d)}</div></div></div>`;
+    return `<div class="hm" id="hm"><div id="hmHead">${homeHeadHtml(d)}</div><div id="hmTop">${homeTopHtml(d)}</div><div class="hm-grid"><div class="hm-chatcol">${typeof chatView === 'function' ? chatView() : ''}</div><div id="hmDash">${homeDashHtml(d)}</div></div></div>`;
   }
   // 홈이 이미 그려져 있으면 입력창을 건드리지 않고 머리말과 요약만 새로 그린다(비동기 자료가 도착할 때 입력 중 포커스를 잃지 않게). 그렸으면 true.
   function homePartialRefresh() {
@@ -71,6 +77,7 @@
     if (S.view !== 'home' || !head || !dash) return false;
     const d = homeData();
     head.innerHTML = homeHeadHtml(d); dash.innerHTML = homeDashHtml(d);
+    const top = $('#hmTop'); if (top) top.innerHTML = homeTopHtml(d);
     return true;
   }
 

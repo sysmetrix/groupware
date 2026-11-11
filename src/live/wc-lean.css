@@ -1,0 +1,50 @@
+/* GW 비서 · 간결 화면(v0.48). 볼 것만 한 줄로, 자세한 내용은 고른 항목만 오른쪽 창에서 본다.
+   색은 wc-style/wc-theme의 변수만 쓴다. 글자 크기는 12px 이상. 마지막에 이어 붙으므로 앞의 규칙을 덮어쓴다. */
+.vtabs{display:flex;margin:0 0 12px}
+.wc .btn.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.lean-note{margin:0 0 8px;font-size:13px}
+
+/* 한 줄 목록 */
+.wc .row.lean{display:flex;align-items:center;gap:10px;padding:6px 8px 6px 14px;min-height:44px}
+.wc .row.lean .ck,.wc .row.lean .type-icon{flex:0 0 auto}
+.wc .row.lean>.bdg{flex:0 0 auto}
+.wc .row.lean .mn{flex:1;min-width:0;display:flex;align-items:baseline;gap:10px}
+.wc .row.lean .t{display:block;flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14.5px;font-weight:600;line-height:1.5}
+.wc .row.lean .what{flex:0 1000 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px;color:var(--muted)}
+.wc .row.lean .what.urgent,.wc .row.lean .what.overdue{color:var(--hi);font-weight:600}
+.wc .row.lean .what.check{color:var(--md)}.wc .row.lean .what.confirm{color:var(--ok)}
+.wc .row.lean .w{flex:0 0 auto;min-width:40px;font-size:13px}
+.wc .row.lean .qa{flex:0 0 auto;gap:0;opacity:0;transition:opacity .12s}
+.wc .row.lean:hover .qa,.wc .row.lean:focus-within .qa,.wc .row.lean.sel .qa{opacity:1}
+.wc .row.lean.ref{padding:6px 8px 6px 14px}
+@media (hover:none){.wc .row.lean .qa{opacity:1}}
+@container (max-width:640px){.wc .row.lean .what{display:none}.wc .row.lean .w{display:none}}
+@media (prefers-reduced-motion:reduce){.wc .row.lean .qa{transition:none}}
+
+/* 홈: 핵심 숫자 한 줄 + 지금 할 일 한 가지가 맨 위 */
+.wc .hm{gap:14px}
+.wc .hm-hello{font-size:21px}
+.wc .hm-sub{font-size:14px;margin-top:2px}
+#hmTop{display:flex;flex-direction:column;gap:12px;min-width:0}
+#hmTop:empty{display:none}
+#hmTop .hm-tiles{grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+#hmTop .hm-tile,#hmTop .hm-skel{min-height:68px;padding:10px 14px}
+#hmTop .hm-tile-v{font-size:24px}
+#hmTop .hm-tile-s{display:none}
+.wc .hm-next{display:flex;align-items:center;gap:8px 18px;flex-wrap:wrap;padding:12px 16px}
+.wc .hm-next-b{flex:1;min-width:220px}
+.wc .hm-next-k{margin-bottom:2px}
+.wc .hm-next-t{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wc .hm-next-s{margin-top:0;font-size:13px}
+.wc .hm-next-a{margin-top:0}
+#hmDash:empty{display:none}
+@container (max-width:760px){#hmTop .hm-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}.wc .hm-next-t{white-space:normal}}
+
+/* 홈 채팅: 처음엔 안내 한 줄, 추천 질문은 입력창 아래 작은 칩 */
+.wc .ch-log:has(.ch-empty){min-height:0;padding:14px 20px 2px}
+.wc .ch-empty{padding:0;text-align:left}
+.wc .ch-empty p{font-size:13px}
+.wc .ch-chips{order:1}
+.wc .ch-foot{order:2}
+.wc .ch-sr{order:3}
+.wc .ch-chip{min-height:30px;padding:0 11px;font-size:12.5px}
