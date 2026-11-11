@@ -94,14 +94,8 @@
 @media (prefers-reduced-motion:reduce){.ch-dots i{animation:none;opacity:.6}.ch-log{scroll-behavior:auto}.ch-chip,.ch-composer{transition:none}}
 
 /* 시작 카드 + 접이식 자세히 보기 */
-.ch-starts{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-top:16px;text-align:left}
-.ch-start{display:flex;flex-direction:column;gap:2px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--fg);cursor:pointer;min-height:64px;transition:border-color .15s ease,transform .15s ease}
-.wc.dark .ch-start{background:var(--soft)}
-.ch-start:hover{border-color:var(--accent);transform:translateY(-1px)}
-.ch-start b{font-size:14px}.ch-start span{font-size:13px;color:var(--muted)}
 .ch-more{border:1px solid var(--line);border-radius:12px;background:var(--bg);padding:2px 12px}
 .wc.dark .ch-more{background:var(--soft)}
 .ch-more summary{cursor:pointer;min-height:40px;display:flex;align-items:center;font-size:13px;font-weight:700;color:var(--accent)}
 .ch-more[open] summary{margin-bottom:4px}
 .ch-more .ch-card{border:0;background:transparent;padding:4px 0}
-@media (prefers-reduced-motion:reduce){.ch-start{transition:none}.ch-start:hover{transform:none}}
