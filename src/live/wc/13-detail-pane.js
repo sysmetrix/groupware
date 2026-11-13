@@ -15,15 +15,15 @@
     ph.className = 'ph' + (S.pane.url ? (isViewer ? ' viewer' : '') : ' min');
     const x = selectedAction();
     const st = x ? stateOf(x) : '';
-    ph.innerHTML = `<div class="top"><button class="btn sm ghost" data-act="closePane" title="상세 창 닫기 (Esc)">${ic('x')}닫기</button><span class="sp"></span>${isViewer ? '<span class="muted">문서 미리보기</span>' : ''}${S.pane.url ? `<button class="btn sm ghost" data-act="paneExpand" title="${S.pane.expanded ? '목록과 나란히 보기' : '원래 화면을 넓게 보기'}">${ic('expand')}${S.pane.expanded ? '나란히' : '넓게'}</button><a class="btn sm ghost" href="${esc(S.pane.url)}" target="_blank" rel="noopener" title="새 창으로 열기">${ic('ext')}새 창</a>` : ''}</div>
+    ph.innerHTML = `<div class="top"><button class="btn sm ghost" data-act="closePane" title="상세 창 닫기 (Esc)">${ic('x')}닫기</button>${S.pane.previewBack ? `<button class="btn sm ghost" data-act="returnAttachmentPreview" title="첨부 미리보기 전의 메일 처리 화면으로 돌아가기">${ic('back')}이전 메일 처리 화면으로</button>` : ''}<span class="sp"></span>${isViewer ? '<span class="muted">문서 미리보기</span>' : ''}${S.pane.url ? `<button class="btn sm ghost" data-act="paneExpand" title="${S.pane.expanded ? '목록과 나란히 보기' : '원래 화면을 넓게 보기'}">${ic('expand')}${S.pane.expanded ? '나란히' : '넓게'}</button><a class="btn sm ghost" href="${esc(S.pane.url)}" target="_blank" rel="noopener" title="새 창으로 열기">${ic('ext')}새 창</a>` : ''}</div>
 <div class="in"><div class="box warn" id="dirtyNote" style="display:${S.pane.dirty ? 'block' : 'none'};margin:0 0 10px">${ic('alert')} 원래 화면에 입력 중입니다. 보내기·저장·상신 전에 다른 곳으로 옮기면 먼저 여쭤봅니다.</div>
 ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.headline ? `<b class="${['overdue', 'urgent'].includes(st) ? 'err' : ''}">${esc(x.headline)}</b>` : ''}</div>` : ''}<div class="t">${esc(info.title || '')}</div>${info.body || ''}</div>`;
     ph.scrollTop = keepScroll;
     const frame = $('#frame');
     if (S.pane.url !== S.pane.mounted) {
-      frame.innerHTML = '';
+      if (!S.pane.previewBack || !S.pane.previewBack.frame) frame.innerHTML = '';
       S.pane.dirty = false;
-      if (S.pane.url) { const f = document.createElement('iframe'); f.src = S.pane.url; f.title = '그룹웨어 원래 화면'; const u = S.pane.url; f.addEventListener('load', () => { hookFrameWindow(f, u); scanFrame(f, u); watchDirty(f, u); }); frame.append(f); }
+      if (S.pane.url) { const f = document.createElement('iframe'); f.src = S.pane.url; f.title = '그룹웨어 원래 화면'; if (S.pane.previewBack) f.dataset.panePreview = '1'; const u = S.pane.url; f.addEventListener('load', () => { hookFrameWindow(f, u); scanFrame(f, u); watchDirty(f, u); }); frame.append(f); }
       S.pane.mounted = S.pane.url;
     }
     frame.classList.toggle('idle', !S.pane.url);
@@ -88,16 +88,18 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
     };
     w.close = function () {
       if (!live()) return nativeClose.call(w);
-      S.pane.dirty = false; S.pane.url = ''; S.pane.expanded = false; render();
+      S.pane.dirty = false; delete S.pane.previewBack; S.pane.url = ''; S.pane.expanded = false; render();
       toast('그룹웨어 화면이 닫혔습니다. 처리 결과는 목록을 새로 읽어 확인합니다.');
       setTimeout(() => { try { refresh({silent: true}); } catch {} }, 1200);
     };
   }
   // Ask before throwing away what the user typed in the pane.
   function leavePane() {
-    if (!S.pane.url || !S.pane.dirty) return true;
+    const back = S.pane.previewBack;
+    const dirty = S.pane.dirty || !!(back && back.dirty);
+    if (!S.pane.url || !dirty) { delete S.pane.previewBack; return true; }
     const ok = confirm('처리 창에 입력하던 내용이 있습니다(답장·의견·기안 등).\n보내기·저장·상신을 하지 않았다면 이동할 때 사라집니다.\n(메일은 그룹웨어 설정에 따라 임시보관함에 자동 저장됐을 수 있습니다.)\n그래도 이동할까요?');
-    if (ok) S.pane.dirty = false;
+    if (ok) { S.pane.dirty = false; delete S.pane.previewBack; }
     return ok;
   }
   // After the user opens a document, read its text (same origin) and pull out deadlines.
@@ -245,7 +247,8 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
       ...c.bigFiles.map(f => fileRow(f.name, `${f.size} · 대용량${c.bigUntil ? ` · ${c.bigUntil}까지 받을 수 있음` : ''}`, `<a class="btn sm" href="${esc(f.href)}" target="_blank" rel="noopener">${ic('down')}받기</a>`)),
     ];
     const text = c.text ? c.text.replace(/대용량 파일첨부[\s\S]*?보관\)/, '').trim() : '';
-    return `${text ? `<div class="sec"><div class="sh">${ic('mail')}본문</div><div class="body-text ${S.bodyOpen ? 'open' : ''}" id="bodyText">${esc(text.slice(0, 6000))}</div>${text.length > 240 ? `<button class="btn sm ghost" data-act="bodyToggle" style="margin-top:6px">${S.bodyOpen ? '접기' : '본문 전체 보기'}</button>` : ''}</div>` : ''}
+    const highlights = R.mailHighlights(text);
+    return `<div class="sec"><div class="sh">${ic('mail')}핵심 내용 <span class="muted">본문에서 발췌 · 외부 전송 없음</span></div>${highlights.length ? `<ul class="box" style="margin:0;padding:12px 14px 12px 30px;line-height:1.6">${highlights.map(s => `<li>${esc(s)}</li>`).join('')}</ul>` : '<div class="muted">발췌할 본문이 없습니다. 원문에서 확인해 주세요.</div>'}<div class="muted" style="margin-top:6px;font-size:12px">본문 앞부분(최대 4,000자)에서 자동 발췌하므로 중요한 내용이 빠질 수 있습니다. 전체 내용은 원문에서 확인하세요.</div></div>
 <div class="sec"><div class="sh">${ic('clip')}첨부파일 ${n}개${c.files.length > 1 ? `<button class="btn sm" data-act="dlAll" data-uid="${esc(m.uid)}" style="margin-left:auto">${ic('down')}모두 받기</button>` : ''}</div>${n ? `<div class="files">${rows.join('')}</div>` : '<div class="muted">첨부파일이 없습니다.</div>'}${c.readUrl ? `<div class="acts"><button class="btn sm ghost" data-act="openUrl" data-url="${esc(c.readUrl)}" data-title="메일 원문: ${esc(m.subject)}">${ic('ext')}그룹웨어에서 메일 원문 보기</button></div>` : ''}</div>`;
   }
   function mailPane(m, action, why) {
@@ -324,6 +327,29 @@ ${mailFilesBox(m)}
     } else {
       S.pane.expanded = false;
     }
+    renderPane();
+    return true;
+  }
+  // Keep the original mail iframe mounted while an attachment viewer is open: detaching it loses unsaved editor input.
+  function enterAttachmentPreview(url) {
+    if (!url || S.pane.previewBack) return false;
+    const frame = $('#frame');
+    const original = frame && frame.querySelector('iframe');
+    S.pane.previewBack = {url: S.pane.url, mounted: S.pane.mounted, expanded: S.pane.expanded, dirty: S.pane.dirty, frame: original};
+    if (original) original.hidden = true;
+    S.pane.url = url; S.pane.extract = null; S.pane.expanded = true;
+    renderPane();
+    return true;
+  }
+  function returnFromAttachmentPreview() {
+    const back = S.pane.previewBack;
+    if (!back) return false;
+    const frame = $('#frame');
+    const preview = frame && frame.querySelector('iframe[data-pane-preview="1"]');
+    if (preview) preview.remove();
+    if (back.frame) back.frame.hidden = false;
+    Object.assign(S.pane, {url: back.url, mounted: back.mounted, expanded: back.expanded, dirty: back.dirty});
+    delete S.pane.previewBack;
     renderPane();
     return true;
   }
