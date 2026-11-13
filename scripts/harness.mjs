@@ -14,7 +14,8 @@ import {testEnv, verdict} from './lib/test-results.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = new Set(process.argv.slice(2));
 const FAST = args.has('--fast'), AS_JSON = args.has('--json');
-const BUDGET = {bundleKB: 900, wcFileLines: 600, minFontPx: 12};
+// 안전성 검증과 회귀 방지 기능 추가분을 포함한 번들 바이트 상한.
+const BUDGET = {bundleKB: 920, wcFileLines: 600, minFontPx: 12};
 const node = process.execPath;
 const sh = (cmd, a, opt = {}) => spawnSync(cmd, a, {cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, ...opt});
 

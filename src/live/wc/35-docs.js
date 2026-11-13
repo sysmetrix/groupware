@@ -18,7 +18,7 @@
     if (st.busy) return;
     const page = more ? st.page + 1 : 1, seq = ++st.seq;
     st.kw = k; st.busy = true; st.err = '';
-    if (!more) { st.items = []; st.total = 0; st.page = 0; st.filter.form = ''; st.filter.q = ''; if (!['all', 'mine'].includes(st.filter.dept)) st.filter.dept = 'all'; }
+    if (!more) { st.items = []; st.total = 0; st.page = 0; st.searched = ''; st.done = false; st.widened = false; st.filter.form = ''; st.filter.q = ''; if (!['all', 'mine'].includes(st.filter.dept)) st.filter.dept = 'all'; }
     if (S.view !== 'docs') go('docs'); else renderMain();
     try {
       const r = await GW.search(k, {types: ['doc'], pageSize: DF_PAGE, page, from: periodFrom(st.period)});

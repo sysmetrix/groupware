@@ -6,7 +6,7 @@
 <div class="cards"><div class="card2"><div class="ct">주간 업무 실적 초안</div><div class="muted">최근 7일 상신문서와 내가 접수한 문서로 만듭니다.</div><div class="acts"><button class="btn primary" data-act="mkWeekly">${ic('report')}${S.weekly ? '다시 만들기' : '초안 만들기'}</button>${S.weekly ? `<button class="btn" data-act="richWeekly">한글용 복사</button><button class="btn" data-act="dlWeekly">${ic('down')}TXT 저장</button>` : ''}</div></div>
 <div class="card2"><div class="ct">오늘 브리핑</div><div class="muted">처리할 일과 참고 항목을 한 장으로 정리합니다.</div><div class="acts"><button class="btn primary" data-act="richBrief">한글용 복사</button><button class="btn" data-act="printBrief">인쇄·PDF</button><button class="btn" data-act="dlBrief">${ic('down')}HTML 저장</button><button class="btn" data-act="csvQueue">${ic('down')}엑셀(CSV)</button></div></div></div>
 ${store.get('weeklyRecovery', null) ? `<div class="box warn">다른 탭에서 작성한 주간 보고 초안이 보관되어 있습니다. <button class="btn sm" data-act="recoverWeekly">보관 초안 복구</button></div>` : ''}
-${S.weekly ? `<h2>주간 업무 실적 초안 <span class="saved on" id="wkSaved">${ic('check')}자동 저장됨</span></h2><textarea id="weekly" aria-label="주간 업무 실적 초안" rows="${Math.min(30, Math.max(10, S.weekly.split('\n').length + 2))}">${esc(S.weekly)}</textarea>` : ''}
+<h2>주간 업무 실적 초안 <span class="saved on" id="wkSaved">${ic('check')}자동 저장됨</span></h2><textarea id="weekly" aria-label="주간 업무 실적 초안" rows="${Math.min(30, Math.max(10, S.weekly.split('\n').length + 2))}">${esc(S.weekly)}</textarea>
 <h2>오늘 브리핑 미리보기</h2><iframe id="briefFrame" title="오늘 브리핑" sandbox="allow-popups allow-popups-to-escape-sandbox allow-modals" style="width:100%;height:640px;border:1px solid var(--line);border-radius:12px;background:#fff"></iframe>`;
   }
   const weeklyHtml = text => `<div style="font-family:'함초롬바탕','맑은 고딕',serif;font-size:11pt;line-height:1.7">${text.split('\n').map(l => l.startsWith('□') ? `<p><b>${esc(l)}</b></p>` : l.startsWith('○') ? `<p style="margin-left:10pt"><b>${esc(l)}</b></p>` : l.startsWith('  -') ? `<p style="margin-left:24pt">${esc(l.trim())}</p>` : l.startsWith('※') ? `<p style="color:#666;font-size:9pt">${esc(l)}</p>` : l ? `<p>${esc(l)}</p>` : '').join('')}</div>`;
@@ -63,8 +63,11 @@ ${S.weekly ? `<h2>주간 업무 실적 초안 <span class="saved on" id="wkSaved
     input.value = '';
     if (!f) return;
     if (f.size > 512 * 1024) { toast('설정 파일이 너무 큽니다. GW 비서에서 내보낸 파일인지 확인하세요.'); return; }
+    const importKey = currentKey;
+    if (getUserKey() !== importKey) { toast('계정이 변경되어 설정 가져오기를 중단했습니다.'); return; }
     let text;
     try { text = await f.text(); } catch { toast('파일을 읽지 못했습니다.'); return; }
+    if (currentKey !== importKey || getUserKey() !== importKey) { toast('계정이 변경되어 설정 가져오기를 중단했습니다.'); return; }
     const r = R.setxParse(text, S.settings);
     if (!r.ok) { toast(r.error); return; }
     if (!r.changed.length) { toast('이 PC의 설정이 파일 내용과 이미 같습니다.'); return; }
@@ -74,17 +77,28 @@ ${S.weekly ? `<h2>주간 업무 실적 초안 <span class="saved on" id="wkSaved
     const gc = r.patch.gcal ? {...r.patch.gcal, synced: r.patch.gcal.synced || (S.settings.gcal || {}).synced} : undefined;
     Object.assign(S.settings, r.patch);
     if (gc) { if (!gc.synced) delete gc.synced; S.settings.gcal = gc; }
-    saveLocal(); applyLook(); schedule();
+    const saved = saveLocal(); applyLook(); schedule();
     if (S.raw) reanalyze();
     renderNav(); renderHead(); renderMain();
+    if (!saved) { toast('일부 항목을 저장하지 못했습니다. 설정과 저장 공간을 확인한 뒤 다시 시도하세요.'); return; }
     toast(`설정 ${r.changed.length}개 항목을 가져왔습니다.`);
   }
   function saveBudgetRows() {
     const rows = {};
     root.querySelectorAll('#budgetRows input').forEach(i => { (rows[i.dataset.i] = rows[i.dataset.i] || {})[i.dataset.b] = i.value.trim(); });
-    const list = Object.values(rows).filter(b => /^[A-Za-z0-9가-힣]+$/.test(b.project || '')).map(b => ({project: b.project, filter: b.filter || '', label: b.label || ''}));
+    const saved = $('#setSaved');
+    if (saved) saved.classList.remove('on');
+    const invalid = Object.values(rows).some(b => !/^[A-Za-z0-9가-힣]+$/.test(b.project || ''));
+    if (invalid) {
+      toast('예산 사업 코드를 확인하세요. 영문·숫자·한글만 입력할 수 있으며, 수정 전까지 저장하지 않습니다.');
+      return;
+    }
+    const list = Object.values(rows).map(b => ({project: b.project, filter: b.filter || '', label: b.label || ''}));
     S.settings.budget = list; S.budget.table = null;
-    saveLocal();
-    const s = $('#setSaved'); if (s) { s.classList.add('on'); setTimeout(() => s.classList.remove('on'), 1600); }
+    if (!saveLocal()) {
+      toast('예산 설정을 저장하지 못했습니다. 저장 공간과 브라우저 설정을 확인한 뒤 다시 시도하세요.');
+      return;
+    }
+    if (saved) { saved.classList.add('on'); setTimeout(() => saved.classList.remove('on'), 1600); }
   }
 

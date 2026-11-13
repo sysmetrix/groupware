@@ -13,8 +13,9 @@
     const s = resState();
     if (!s.date) s.date = resToday();
     const sel = (s.list || []).find(r => r.resSeq === s.sel);
+    const bookingsLoaded = Array.isArray(s.bookings);
     const dayB = (s.bookings || []).filter(b => R.bookingSpanOnDay(b, s.date)).sort((a, b) => a.start.localeCompare(b.start));
-    const free = s.bookings ? R.freeSlots(dayB, s.date) : [];
+    const free = bookingsLoaded ? R.freeSlots(dayB, s.date) : [];
     const opts = R.timeOptions();
     const selOpt = (v, cur) => opts.map(o => `<option value="${o}" ${o === cur ? 'selected' : ''}>${o}</option>`).join('');
     const upcoming = (s.bookings || []).filter(b => b.end.slice(0, 8) >= resToday()).sort((a, b) => a.start.localeCompare(b.start)).slice(0, 12);
@@ -30,8 +31,8 @@
           <button class="btn sm" data-act="resDay" data-v="0">오늘</button></div>
         <div class="muted" style="margin:4px 0 8px">${esc(sel ? sel.name : '')} · ${esc(ymdDash(s.date))}(${wdName(s.date)})${sel && sel.apprYn === 'Y' ? ' · <b>예약 후 관리자 승인이 필요한 자원입니다</b>' : ''}</div>
         <div class="cards">
-          <div class="card2"><div class="ct">이 날의 예약 ${s.busy ? '<span class="spin"></span>' : ''}</div>${dayB.length ? dayB.map(b => `<div class="trow"><span><b>${esc(b.start.slice(8, 10))}:${esc(b.start.slice(10))}~${esc(b.end.slice(8, 10))}:${esc(b.end.slice(10))}</b> ${esc(b.title)}</span><span class="muted">${esc(b.who)}${me && b.who === me ? ' (나)' : ''}</span></div>`).join('') : '<span class="muted">예약이 없습니다</span>'}</div>
-          <div class="card2"><div class="ct">비어 있는 시간 (09:00~18:00)</div>${free.length ? free.map(f => `<button class="chip" data-act="resFree" data-s="${esc(f.start)}" data-e="${esc(f.end)}">${esc(f.start)}~${esc(f.end)}</button>`).join(' ') : '<span class="muted">이 날은 빈 시간이 없습니다</span>'}<div class="muted" style="font-size:12px;margin-top:6px">누르면 아래 예약 칸에 채워집니다</div></div>
+          <div class="card2"><div class="ct">이 날의 예약 ${s.busy ? '<span class="spin"></span>' : ''}</div>${!bookingsLoaded ? '<span class="muted">예약 현황을 조회하는 중입니다…</span>' : dayB.length ? dayB.map(b => `<div class="trow"><span><b>${esc(b.start.slice(8, 10))}:${esc(b.start.slice(10))}~${esc(b.end.slice(8, 10))}:${esc(b.end.slice(10))}</b> ${esc(b.title)}</span><span class="muted">${esc(b.who)}${me && b.who === me ? ' (나)' : ''}</span></div>`).join('') : '<span class="muted">예약이 없습니다</span>'}</div>
+          <div class="card2"><div class="ct">비어 있는 시간 (09:00~18:00)</div>${!bookingsLoaded ? '<span class="muted">빈 시간을 조회하는 중입니다…</span>' : free.length ? free.map(f => `<button class="chip" data-act="resFree" data-s="${esc(f.start)}" data-e="${esc(f.end)}">${esc(f.start)}~${esc(f.end)}</button>`).join(' ') : '<span class="muted">이 날은 빈 시간이 없습니다</span>'}${bookingsLoaded && free.length ? '<div class="muted" style="font-size:12px;margin-top:6px">누르면 아래 예약 칸에 채워집니다</div>' : ''}</div>
         </div>
         <h2>예약하기</h2>
         <div class="box" id="resForm"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
@@ -41,8 +42,8 @@
           <button class="btn primary" data-act="resCheck" ${s.busy ? 'disabled' : ''}>예약 가능한지 확인</button></div>
           ${s.check ? `<div class="box ${s.check.ok ? 'tip' : 'warn'}" style="margin-top:10px">${s.check.ok ? `<b>예약할 수 있습니다</b> ${esc(ymdDash(s.date))}(${wdName(s.date)}) ${esc(s.form.start)}~${esc(s.form.end)} · ${esc(s.form.title)}${sel && sel.apprYn === 'Y' ? '<div class="muted">예약을 올리면 관리자 승인 대기 상태가 됩니다.</div>' : ''}<div class="acts"><button class="btn primary" data-act="resBook">이 내용으로 예약 확정</button><button class="btn ghost" data-act="resCancelForm">취소</button></div>` : s.check.errors.map(x => `<div style="color:var(--hi)">✗ ${esc(x)}</div>`).join('')}</div>` : ''}
           ${s.done ? `<div class="box tip" style="margin-top:10px"><b>예약을 올렸습니다.</b> ${esc(s.done)}<div class="muted">변경·취소는 그룹웨어 자원 화면의 “나의예약현황”에서 합니다.</div></div>` : ''}</div>
-        <h2>다가오는 예약 <span class="muted">${upcoming.length}건</span></h2>
-        ${upcoming.length ? `<div class="list">${upcoming.map(b => `<div class="row" style="grid-template-columns:150px 1fr auto"><span class="muted">${esc(fmtB(b))}</span><div class="mn"><div class="t">${esc(b.title)}</div></div><div class="w">${esc(b.who)}${me && b.who === me ? ' (나)' : ''}</div></div>`).join('')}</div>` : '<div class="list"><div class="empty"><b>다가오는 예약이 없습니다</b></div></div>'}`;
+        <h2>다가오는 예약 ${bookingsLoaded ? `<span class="muted">${upcoming.length}건</span>` : ''}</h2>
+        ${!bookingsLoaded ? '<div class="list"><div class="empty">예약 현황을 조회하는 중입니다…</div></div>' : upcoming.length ? `<div class="list">${upcoming.map(b => `<div class="row" style="grid-template-columns:150px 1fr auto"><span class="muted">${esc(fmtB(b))}</span><div class="mn"><div class="t">${esc(b.title)}</div></div><div class="w">${esc(b.who)}${me && b.who === me ? ' (나)' : ''}</div></div>`).join('')}</div>` : '<div class="list"><div class="empty"><b>다가오는 예약이 없습니다</b></div></div>'}`;
     return `${pgh('자원 예약', '공용차량 현황과 바로 예약', `<a class="btn sm" href="${esc(GW.links.route('#/UK/UKA/UKA0000?specialLnb=Y&moduleCode=UK&menuCode=UKA&pageCode=UKA0000'))}" target="_blank" rel="noopener">${ic('ext')}그룹웨어 자원 화면</a>`)}${body}`;
   }
 

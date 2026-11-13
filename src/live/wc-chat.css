@@ -10,6 +10,7 @@
 .ch-empty p{margin:0;font-size:14px;line-height:1.6}
 
 .ch-msg{display:flex;flex-direction:column;gap:6px;max-width:100%}
+.ch-msg small{font-size:12px;color:var(--muted)}
 .ch-user{align-items:flex-end}
 .ch-user .ch-bubble{background:var(--accent);color:#fff;border-radius:16px 16px 4px 16px;padding:9px 14px;max-width:min(80%,640px);font-size:15px;line-height:1.55;overflow-wrap:anywhere}
 .wc.dark .ch-user .ch-bubble{background:var(--accent-soft);color:var(--fg);border:1px solid var(--line2)}

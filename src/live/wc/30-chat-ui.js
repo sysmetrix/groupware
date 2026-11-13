@@ -29,18 +29,44 @@
     return '';
   }
 
+  // 저장된 at은 응답이 만들어진 시각이다. 과거의 '오늘/내일'을 현재로 오인하지 않도록 절대 시각을 표시한다.
+  const chatHistoryCurrent = (at, now = Date.now()) => {
+    if (typeof at !== 'number' || !Number.isFinite(at) || at <= 0 || at > now + 60000) return false;
+    const d = new Date(at + 9 * 3600000), n = new Date(now + 9 * 3600000);
+    return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === n.toISOString().slice(0, 10);
+  };
+  function chatTimeHtml(m, now = Date.now()) {
+    const at = typeof m.at === 'number' && Number.isFinite(m.at) && m.at > 0 && m.at <= now + 60000 ? m.at : 0;
+    const date = at ? new Date(at + 9 * 3600000) : null;
+    const iso = date && !Number.isNaN(date.getTime()) ? date.toISOString() : '';
+    const today = new Date(now + 9 * 3600000).toISOString().slice(0, 10);
+    const label = iso ? iso.slice(0, 10) + ' ' + iso.slice(11, 16) + ' KST' : '시각 확인 불가';
+    const warning = m.role !== 'user' && (!iso || iso.slice(0, 10) !== today)
+      ? ' · 이전 기록: 당시 기준 응답입니다. 최신 정보는 다시 질문해 주세요.' : '';
+    return `<div><small>${esc(label + warning)}</small></div>`;
+  }
   function chatMsgHtml(m) {
-    if (m.role === 'user') return `<article class="ch-msg ch-user"><div class="ch-bubble">${esc(m.text).replace(/\n/g, '<br>')}</div></article>`;
+    const time = chatTimeHtml(m);
+    if (m.role === 'user') return `<article class="ch-msg ch-user"><div class="ch-bubble">${esc(m.text).replace(/\n/g, '<br>')}</div>${time}</article>`;
     const tools = (m.tools || []).map(t => `<span class="ch-tool ch-tool-${esc(t.state)}" title="${esc(t.name)}">${t.state === 'run' ? '<span class="spin"></span>' : t.state === 'err' ? '!' : '✓'} ${esc(t.label)}</span>`).join('');
     const body = m.text ? `<div class="ch-bubble">${chatRich(m.text)}</div>` : m.state === 'pending' ? '<div class="ch-bubble"><span class="ch-dots" aria-label="생각하는 중"><i></i><i></i><i></i></span></div>' : '';
     // 답 글에 이미 내용이 들어 있으면(AI 정리·긴 답) 긴 목록 카드는 "자세히 보기"로 접어 같은 말을 두 번 보이지 않는다.
     const cards = m.cards || [], fold = m.composed || (m.text && m.text.length >= 80);
     const detail = fold ? cards.filter(c => c && (c.type === 'list' || c.type === 'timeline') && (c.items || []).length > 0 && ((c.items || []).length > 3 || m.composed)) : [], rest = cards.filter(c => !detail.includes(c) && !(m.composed && c && (c.type === 'list' || c.type === 'timeline') && !(c.items || []).length));
     const cardsHtml = rest.map(chatCardHtml).join('') + (detail.length ? `<details class="ch-more"><summary>자세히 보기 (${detail.reduce((n, c) => n + (c.items || []).length, 0)}건)</summary>${detail.map(chatCardHtml).join('')}</details>` : '');
-    return `<article class="ch-msg ${m.role === 'sys' ? 'ch-sys' : 'ch-ai'}${m.state === 'error' ? ' ch-err' : ''}">${tools ? `<div class="ch-tools">${tools}</div>` : ''}${body}${cardsHtml ? `<div class="ch-cards">${cardsHtml}</div>` : ''}</article>`;
+    return `<article class="ch-msg ${m.role === 'sys' ? 'ch-sys' : 'ch-ai'}${m.state === 'error' ? ' ch-err' : ''}">${tools ? `<div class="ch-tools">${tools}</div>` : ''}${body}${cardsHtml ? `<div class="ch-cards">${cardsHtml}</div>` : ''}${time}</article>`;
   }
 
+  // 화면을 자정 넘겨 열어 둔 경우에도 이전 답변의 날짜 경고를 갱신한다.
+  let chatRenderedDay = '';
+  setInterval(() => {
+    const day = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+    if (chatRenderedDay && day !== chatRenderedDay && $('#chLog')) chatRefresh();
+    chatRenderedDay = day;
+  }, 30000);
+
   function chatLogHtml() {
+    chatRenderedDay = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
     const st = chatState();
     if (!st.msgs.length) return `<div class="ch-empty"><p>말로 시키면 조회부터 신청서 준비까지 돕습니다. 신청과 예약은 항상 확인한 뒤에만 진행합니다.</p></div>`;
     return st.msgs.map(chatMsgHtml).join('');
@@ -98,11 +124,11 @@
   HOME_ACTS.chatCancel = (el, v) => chatCancel(v);
   HOME_ACTS.chatSetupAi = () => { if (typeof openAi === 'function') openAi(); };
   HOME_ACTS.chatFocus = () => chatFocusInput();
-  HOME_ACTS.chatOpenItem = (el, v) => { if (!v) return; go('today'); selectAction(v); };
+  HOME_ACTS.chatOpenItem = (el, v) => { if (v && go('today')) selectAction(v); };
   HOME_ACTS.chatNav = (el, v) => {
     const [view, param] = String(v || '').split('|');
     if (!VIEWS.some(x => x.id === view)) return;
-    if (view === 'search' && param) { S.search.kw = param; go('search'); runSearch(); return; }
+    if (view === 'search' && param) { if (go('search')) { S.search.kw = param; runSearch(); } return; }
     go(view);
   };
 

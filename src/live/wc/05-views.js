@@ -19,7 +19,7 @@
   }
   // Charts: shown on big screens, folded on laptops unless the user chose otherwise.
   const showCharts = () => S.settings.showCharts ?? (window.innerHeight >= 860 && window.innerWidth >= 1500);
-  const go = v => { if (S.view !== v && !S.focus) { if (!leavePane()) return; S.sel = null; S.pane.url = ''; } if (S.view !== v) S.apTabPinned = false; S.view = v; S.multi.clear(); S.pane.expanded = false; render(); const mm = $('#main'); if (mm) mm.scrollTop = 0; };
+  const go = v => { if (S.view !== v && !S.focus) { if (!leavePane()) return false; S.sel = null; S.pane.url = ''; } if (S.view !== v) S.apTabPinned = false; S.view = v; S.multi.clear(); S.pane.expanded = false; render(); const mm = $('#main'); if (mm) mm.scrollTop = 0; return true; };
   // Home: back to a clean "오늘 할 일" (asks first if something is being typed in the pane).
   function goHome() {
     if (S.focus) { stopFocus(); if (S.focus) return; }
@@ -104,7 +104,7 @@
     const primary = VIEWS.slice(0, 7), more = VIEWS.slice(7).filter(v => !VIEW_PARENT[v.id]), moreOpen = !!S.settings.navMore || more.some(v => v.id === S.view);
     $('#nav').innerHTML = '<div class="nav-label">내 업무</div>' + primary.map(item).join('') + '<div class="sep"></div>' + `<a data-act="navMore" role="button" tabindex="0" aria-expanded="${moreOpen}" class="navmore">${ic('more')}<span class="lb">더 보기</span><span class="nav-chevron" aria-hidden="true">${moreOpen ? '▴' : '▾'}</span></a>` + (moreOpen ? more.map(item).join('') : '');
   }
-  function boardCount() { return (S.a ? S.a.actions.filter(x => onBoard(x) && bucketOfAction(x) !== 'done').length : 0) + S.todos.filter(t => bucketOfTodo(t) !== 'done').length; }
+  function boardCount() { return (S.a ? S.a.actions.filter(x => onBoard(x) && !boardLinked(x) && bucketOfAction(x) !== 'done').length : 0) + S.todos.filter(t => bucketOfTodo(t) !== 'done').length; }
   function renderMain() {
     const el = $('#main');
     if (!S.a) { el.innerHTML = S.error && S.error !== 'SESSION' ? `<div class="empty"><div class="ill">${ic('alert')}</div><b>자료를 읽지 못했습니다</b>${esc(S.error)}<div class="acts" style="justify-content:center"><button class="btn primary" data-act="refresh">다시 시도</button></div></div>` : `<div class="pgh"><h1>그룹웨어 자료를 읽는 중입니다</h1><span class="spin"></span></div><div class="list">${'<div class="sk row"></div>'.repeat(6)}</div>`; return; }

@@ -82,10 +82,8 @@
   }
 
   HOME_ACTS.homeTile = (el, v) => {
-    if (v === 'urgent') { S.filter = {...S.filter, level: 'urgent', area: 'all', q: ''}; S.todayTab = 'mine'; go('today'); }
-    else if (v === 'todo') { S.filter = {...S.filter, level: 'all', area: 'all', q: ''}; S.todayTab = 'mine'; go('today'); }
-    else if (v === 'wait') go('approval');
-    else go('calendar');
+    if (['urgent', 'todo', 'wait'].includes(v)) { S.filter = {...S.filter, level: v === 'urgent' ? 'urgent' : v === 'wait' ? 'wait' : 'all', area: 'all', q: '', onlyNew: false, showHidden: false}; S.todayTab = 'mine'; go('today'); }
+    else if (v === 'schedule' || v === 'away') { S.cal.offset = 0; if (v === 'away') teamCfg().day = today().replace(/-/g, ''); go('calendar'); }
   };
-  HOME_ACTS.homeNext = (el, v) => { if (!v) return; go('today'); selectAction(v); };
-  HOME_ACTS.homeOpenToday = () => { S.filter = {...S.filter, level: 'all', area: 'all', q: ''}; S.todayTab = 'mine'; go('today'); };
+  HOME_ACTS.homeNext = (el, v) => { if (!v) return; go('today'); if (S.view !== 'today') return; S.filter = {...S.filter, level: 'all', area: 'all', q: '', onlyNew: false, showHidden: false}; S.todayTab = 'mine'; renderMain(); selectAction(v); };
+  HOME_ACTS.homeOpenToday = () => { S.filter = {...S.filter, level: 'all', area: 'all', q: '', onlyNew: false, showHidden: false}; S.todayTab = 'mine'; go('today'); };

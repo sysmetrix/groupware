@@ -283,7 +283,7 @@
     let r = null, err = '';
     try { r = await GW.findReply({subject, since}); } catch (e) { err = e && e.message ? e.message : String(e); }
     if (err || !r || r.checked === false) {
-      const why = err || '보낸메일함을 찾지 못했습니다';
+      const why = err || '보낸 메일과 원본의 답장 관계를 확인할 수 없습니다';
       cmdStep('step2', `2. 보낸메일함을 확인하지 못했습니다: ${why}`, 'fail');
       cmdResultBox(`<b>✗ 확인하지 못했습니다</b><br>${esc(why)}<br><span class="muted">그룹웨어 보낸메일함에서 직접 확인하세요.</span>`, 'errb');
       logActionRecord({command: q, type: '검증', target: x.title, summary: `보낸메일함 확인 실패: ${why}`, steps: [`원메일 제목: ${subject}`], status: 'error', verified: false});

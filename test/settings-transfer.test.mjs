@@ -6,7 +6,8 @@ const CAL = 'e142f88deed8876c3e0f96578c6ce1e03c725948bfd953c60cb56c28ab16c4fd@gr
 const SETTINGS = {
   refreshMin: 10, notify: true, mailCount: 200, days: 14, fontSize: 'l', theme: 'dark', urgentWords: ['행정사무감사', ' 시의회 '],
   roles: {deptReceiver: true, distributor: false, sender: true, extra: 'x'},
-  budget: [{project: 'A1', filter: 'B', label: '운영'}, {project: '잘못된 코드!', label: 'x'}],
+  budget: [{project: 'A1', filter: 'B', label: '운영'}],
+  rel: {mute: [{t: 'key', v: 'doc:1', label: '문서', at: 123, secret: 'REL_SECRET'}], mine: [{t: 'sender', v: '홍길동'}]},
   gcal: {email: 'me@gmail.com', mode: 'MONTH', cals: [{id: 'me@gmail.com', color: '#E7BA51', name: '1 Daily'}, {id: CAL, color: 'red', name: '4 BWYF 개인'}], synced: {k1: {at: 1}}},
   // 옮기면 안 되는 값
   seenVersion: '0.46.0', tourDone: true, noticeAck: 'v1', fabTipShown: true, palRecent: ['a'], paneWidth: 700, ai: {key: 'AIzaSECRET'}, key: 'AIzaSECRET',
@@ -25,6 +26,9 @@ test('setxBuild exports only allow-listed, sanitized settings', () => {
   assert.equal(doc.settings.gcal.cals[0].color, '#e7ba51');
   assert.equal(doc.settings.gcal.cals[1].color, '');
   assert.equal(doc.settings.gcal.mode, 'MONTH');
+  assert.equal('synced' in doc.settings.gcal, false);
+  assert.deepEqual(doc.settings.rel, {mute: [{t: 'key', v: 'doc:1', label: '문서', at: 123}], mine: [{t: 'sender', v: '홍길동'}]});
+  assert.ok(!text.includes('REL_SECRET'));
 });
 
 test('round trip: parse restores values and reports changed items', () => {
@@ -75,4 +79,41 @@ test('gcal import converts old "extra" ids and drops duplicates', () => {
 test('setxFileName uses the Korean date', () => {
   assert.equal(setxFileName(new Date('2026-11-11T16:00:00Z')), 'GW비서_설정_2026-11-12.json');
   assert.equal(setxFileName(new Date('2026-11-11T00:00:00Z')), 'GW비서_설정_2026-11-11.json');
+});
+
+const fileWith = settings => JSON.stringify({kind: SETX_KIND, format: SETX_VERSION, settings});
+
+test('invalid budget rows skip the whole setting rather than erase or partially replace it', () => {
+  const current = {budget: [{project: 'A1', filter: '', label: '기존'}]};
+  for (const budget of [[{project: '잘못된 코드!'}], [{project: 'A2'}, {project: '잘못된 코드!'}], [null], [{project: 123}], [...Array.from({length: 30}, () => ({project: 'A2'})), {project: '!'}]]) {
+    const result = setxParse(fileWith({budget, theme: 'dark'}), current);
+    assert.equal(result.ok, true);
+    assert.equal('budget' in result.patch, false);
+    assert.ok(result.skipped.includes('예산 관심 사업'));
+    assert.equal('budget' in JSON.parse(setxBuild({budget})).settings, false);
+  }
+  assert.deepEqual(setxParse(fileWith({budget: []}), current).patch.budget, []);
+  assert.equal(setxParse(fileWith({budget: [{project: '!'}]}), current).ok, false);
+});
+
+test('old calendar synced data is ignored on import and comparison', () => {
+  const gcal = {email: 'me@gmail.com', cals: [], synced: {secret: 'GCAL_SECRET'}};
+  const r = setxParse(fileWith({gcal}), {gcal: {...gcal, synced: {local: 1}}});
+  assert.equal(r.ok, true);
+  assert.equal('synced' in r.patch.gcal, false);
+  assert.ok(r.same.includes('구글 일정(계정·캘린더·색)'));
+  assert.ok(!setxBuild({gcal}).includes('GCAL_SECRET'));
+});
+
+test('relevance rules retain only supported fields and malformed lists are skipped', () => {
+  const rel = {mute: [{t: 'kind', v: 'mail', label: '메일', at: 12, private: {secret: 'REL_SECRET'}}], mine: []};
+  const result = setxParse(fileWith({rel}), {});
+  assert.deepEqual(result.patch.rel, {mute: [{t: 'kind', v: 'mail', label: '메일', at: 12}], mine: []});
+  assert.ok(!setxBuild({rel}).includes('REL_SECRET'));
+  for (const bad of [{mute: [{t: 'key', v: 'ok'}, {t: 'unknown', v: 'x'}]}, {mute: 'bad'}, {mine: [{t: 'sender', v: 4}]}, {mine: [{t: 'key', v: 'x', at: 'bad'}]}]) {
+    const r = setxParse(fileWith({rel: bad, theme: 'dark'}), {rel});
+    assert.equal('rel' in r.patch, false);
+    assert.ok(r.skipped.includes('내 일로/목록에서 뺀 지정'));
+  }
+  assert.deepEqual(setxParse(fileWith({rel: {}})).patch.rel, {mute: [], mine: []});
 });

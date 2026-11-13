@@ -1,0 +1,33 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert/strict');
+const root=require('path').resolve(__dirname,'..')+'/';
+const source=fs.readFileSync(root+'src/live/collector.browser.js','utf8');
+let response={}; const client={call(){},post:async(path,body)=>({resultCode:0,resultData:await response(path,body)})};
+const req=()=>({default:client}); req.m={a:function(){ /* wehago-sign getTransactionId */ }};
+const window={webpackChunkklago_ui_gw:{push(x){x[2](req)}}};
+vm.runInNewContext(source,{window,location:{origin:'https://gw.bwyf.or.kr'},sessionStorage:{getItem:()=>JSON.stringify({ucUserInfo:{empSeq:'1'}})},Intl,Date,URLSearchParams,setTimeout,clearTimeout,console});
+const gw=window.BWYFGW;
+const text=fs.readFileSync(root+'src/live/wc/14-hide-snooze-undo-to-do.js','utf8');
+const start=text.indexOf('  async function focusNext('),end=text.indexOf('  function focusPrev()',start);
+const code=text.slice(start,end)+'\nthis.run=focusNext;';
+async function focus(action,api){ const S={focus:{keys:['key'],i:0,results:{},busy:false},a:{actions:[{key:'key',...action}]},hidden:{}}; const ctx={S,GW:api,leavePane:()=>true,$:()=>({innerHTML:''}),focusBar:()=>'',toast:()=>{},findMail:()=>({subject:'제목',date:'2026-11-14'}),finishFocus:()=>{},focusOpen:()=>{},pushUndo:()=>{throw Error('unexpected hide')},saveLocal:()=>{throw Error('unexpected save')}}; vm.runInNewContext(code,ctx); await ctx.run(); return {result:S.focus.results.key,hidden:S.hidden}; }
+(async()=>{
+response=async(p,b)=> p.includes('mail000')?{mailboxList:[{name:'SENT',mboxSeq:1}]}:p.includes('mail003')?{Records:[{muid:1,subject:'Re: 제목',tooltipDate:'2026-11-14 10:00'}],TotalRecordCount:300}:{list:[],totalCount:0};
+let r=await gw.findReply({subject:'제목'}); assert.equal(r.checked,false); assert.equal(r.found,false); assert.equal(r.candidate.uid,'1');
+assert.equal((await gw.findReply({subject:''})).candidate,null);
+let ap=await gw.approvalPage('pending',1,{size:200}); assert.equal(ap.reliableTotal,0);
+response=async()=>({list:[],startCount:0}); ap=await gw.approvalPage('pending',1); assert.equal(ap.reliableTotal,null);
+response=async()=>({list:[],totalCount:'garbage'}); ap=await gw.approvalPage('pending',1); assert.equal(ap.reliableTotal,null);
+const doc={type:'doc',ref:{kind:'pending',docId:'target'},when:'2026-11-14'};
+const rows=(a,b)=>Array.from({length:b-a},(_,i)=>({docId:String(i+a)})); const pg=(docs,total=201)=>({docs,reliableTotal:total,from:'20260801',to:'20261114'});
+assert.equal((await focus(doc,{approvalPage:async(k,n)=>n===1?pg(rows(0,200)):pg([{docId:'target'}])})).result,'remain');
+assert.equal((await focus(doc,{approvalPage:async(k,n)=>n===1?pg(rows(0,200)):pg([{docId:'other'}])})).result,'done');
+assert.equal((await focus(doc,{approvalPage:async()=>pg(rows(0,200))})).result,'unknown');
+assert.equal((await focus(doc,{approvalPage:async(k,n)=>n===1?pg(rows(0,200)):pg([],201)})).result,'unknown');
+assert.equal((await focus(doc,{approvalPage:async()=>pg([],null)})).result,'unknown');
+assert.equal((await focus(doc,{approvalPage:async()=>({...pg([],0),from:'20261115'})})).result,'unknown');
+assert.equal((await focus(doc,{approvalPage:async()=>{throw Error('fail')}})).result,'unknown');
+assert.equal((await focus({...doc,when:''},{approvalPage:async()=>pg([],0)})).result,'unknown');
+assert.equal((await focus(doc,{approvalPage:async()=>pg([],0)})).result,'done');
+const mail=await focus({type:'mail',title:'제목',ref:{box:'INBOX',uid:'1'}},{findReply:async()=>({checked:true,found:true,date:'2026-11-14 11:00'})}); assert.equal(mail.result,'unknown'); assert.equal(Object.keys(mail.hidden).length,0);
+console.log('PASS: collector and focus regression cases (14 assertions, mocked GW)');
+})().catch(e=>{console.error(e);process.exitCode=1});
