@@ -346,22 +346,24 @@
     if (x.key) {
       // selectAction은 이미 선택된 항목을 다시 부르면 선택을 해제하므로, 같은 항목이면 다시 부르지 않는다
       if (!(S.sel && S.sel.type === 'action' && S.sel.key === x.key)) selectAction(x.key);
-      if (!(S.sel && S.sel.key === x.key)) { toast('작성 중인 화면이 있어 메일을 바꾸지 않았습니다.'); return; }
-    } else { if (!leavePane()) return; S.sel = {type: 'mail', box: x.ref.box, uid: x.ref.uid}; }
+      if (!(S.sel && S.sel.key === x.key)) { toast('작성 중인 화면이 있어 메일을 바꾸지 않았습니다.'); return 'cancel'; }
+    } else { if (!leavePane()) return 'cancel'; S.sel = {type: 'mail', box: x.ref.box, uid: x.ref.uid}; }
     // 열지 않았으면(입력 중인 화면을 지키기로 함) 그 화면에 회신 문구를 넣지 않는다
-    if (!openUrl(GW.links.compose('re', {box: x.ref.box, uid: x.ref.uid}), {title: `답장: ${x.title}`})) { toast('작성 중인 화면을 그대로 두고 회신 문구를 넣지 않았습니다.'); return; }
-    const ready = await waitMailEditor(15000);
-    if (ready && S.sel && (x.key ? S.sel.key === x.key : S.sel.uid === x.ref.uid)) autoFillMail(template);
-    else toast('메일 작성 화면의 에디터를 찾지 못해 회신문을 넣지 않았습니다. 화면이 열리면 [회신 자동 기입] 버튼을 누르세요.');
+    // 안 읽은 메일은 답장 창을 열면 읽음으로 바뀌므로 상세 창의 답장 버튼처럼 먼저 묻는다.
+    const unread = typeof marksRead === 'function' ? marksRead({type: 'mail', ref: x.ref}) : false;
+    if (!openUrl(GW.links.compose('re', {box: x.ref.box, uid: x.ref.uid}), {title: `답장: ${x.title}`, unread, what: '메일'})) { toast('답장 화면을 열지 않았고 회신 문구도 넣지 않았습니다.'); return 'cancel'; }
+    // 편집기가 뜨고 원문 인용이 채워질 때까지 기다렸다가 넣고, 실제로 들어갔는지까지 확인한 결과를 받는다(실패 안내는 autoFillMail이 한다).
+    const ready = !!(S.sel && (x.key ? S.sel.key === x.key : S.sel.uid === x.ref.uid)) && await autoFillMail(template);
     logActionRecord({
       command: q,
       type: '메일',
       target: x.title,
-      summary: ready ? '회신 화면을 열었습니다(문구 삽입은 화면에서 확인).' : '회신 화면을 열었지만 에디터를 찾지 못해 문구를 넣지 않았습니다.',
-      steps: [`대상 메일: ${x.title}`, `회신문 종류: ${template === 'submit' ? '자료 제출' : '확인'}`, ready ? '에디터 확인 후 회신문 삽입 시도' : '에디터를 찾지 못함'],
+      summary: ready ? '회신 화면을 열고 회신 문구를 본문에 넣었습니다.' : '회신 화면을 열었지만 회신 문구는 넣지 못했습니다.',
+      steps: [`대상 메일: ${x.title}`, `회신문 종류: ${template === 'submit' ? '자료 제출' : '확인'}`, ready ? '편집기 확인 후 회신문 삽입, 본문에 남아 있는지 확인' : '회신문을 넣지 못함(편집기 미준비 또는 화면 이동)'],
       verified: false,
       details: '본문을 확인하고 직접 [보내기]를 누르세요.'
     });
+    return ready ? 'filled' : 'opened';
   }
 
   // Execute Command with Live Step-by-Step Observable Progress Runner

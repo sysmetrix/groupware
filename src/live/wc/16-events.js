@@ -78,6 +78,7 @@
     case 'expCheck': expCheck(); break;
     case 'expGo': expGo(); break;
     case 'expClose': expClose(); break;
+    case 'expBarClear': S.expBar = null; renderPane(); toast('지출 값 복사 막대를 지웠습니다.'); break;
     case 'openData': openDataCenter(); break;
       case 'setExport': settingsExport(); break;
       case 'setImport': { const fi = $('#setImportFile'); if (fi) fi.click(); break; }

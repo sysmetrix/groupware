@@ -23,7 +23,7 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
     if (S.pane.url !== S.pane.mounted) {
       frame.innerHTML = '';
       S.pane.dirty = false;
-      if (S.pane.url) { const f = document.createElement('iframe'); f.src = S.pane.url; f.title = '그룹웨어 원래 화면'; const u = S.pane.url; f.addEventListener('load', () => { scanFrame(f, u); watchDirty(f, u); }); frame.append(f); }
+      if (S.pane.url) { const f = document.createElement('iframe'); f.src = S.pane.url; f.title = '그룹웨어 원래 화면'; const u = S.pane.url; f.addEventListener('load', () => { hookFrameWindow(f, u); scanFrame(f, u); watchDirty(f, u); }); frame.append(f); }
       S.pane.mounted = S.pane.url;
     }
     frame.classList.toggle('idle', !S.pane.url);
@@ -53,6 +53,45 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
     const scan = () => { if (!f.isConnected || S.pane.url !== url) return false; try { const walk = doc => { attach(doc); for (const i of doc.querySelectorAll('iframe')) { try { walk(i.contentDocument); } catch {} } }; walk(f.contentDocument); } catch {} return true; };
     scan();
     const t = setInterval(() => { if (!scan()) clearInterval(t); }, 1500);
+  }
+  // 메일 쓰기(새 메일·답장·전체답장·전달) 화면인가. 메일 읽기 화면(UDAP007)과 구분한다.
+  const isMailCompose = u => /MicroModuleCode=mail/.test(u || '') && /callComp=UDAP001(?:&|$)/.test(u || '');
+  // 지금 처리 창에서 다루는 메일(목록에서 고른 메일 · 할 일 · 검색 결과).
+  function paneMailRef() {
+    const sel = S.sel;
+    if (!sel) return null;
+    if (sel.type === 'mail' && sel.uid) return findMail(sel.box, sel.uid) || {uid: sel.uid, box: sel.box, subject: '', seen: true};
+    if (sel.type === 'action') { const x = selectedAction(); return x && x.type === 'mail' && x.ref && x.ref.uid ? (findMail(x.ref.box, x.ref.uid) || {uid: x.ref.uid, box: x.ref.box, subject: x.title || '', seen: true}) : null; }
+    if (sel.type === 'search' && sel.item && sel.item.type === 'mail' && sel.item.uid) return {uid: sel.item.uid, box: sel.item.box, subject: sel.item.subject || '', seen: true};
+    return null;
+  }
+  // 처리 창 안의 그룹웨어 화면이 새 창을 띄우려 할 때: 메일 쓰기(답장·전체답장·전달)는 새 창 대신 이 처리 창에 연다.
+  // 새 창으로 뜨면 회신 문구를 넣을 수 없고 화면도 흩어진다. 그 밖의 팝업은 그룹웨어가 하던 대로 둔다.
+  // 그룹웨어 화면이 스스로 닫으려 하면(보내기·취소 뒤) 처리 창을 닫아 준다. 프레임 안에서는 window.close()가 아무 일도 하지 않기 때문이다.
+  function hookFrameWindow(f, url) {
+    let w = null;
+    try { w = f.contentWindow; if (!w || w.__bwyfgwHooked) return; w.__bwyfgwHooked = true; } catch { return; }
+    const nativeOpen = w.open, nativeClose = w.close;
+    const live = () => f.isConnected && S.pane.url === url;
+    w.open = function (target, ...rest) {
+      try {
+        const s = String(target || '');
+        if (live() && /#\/?popup\?/.test(s) && isMailCompose(s)) {
+          const abs = new URL(s, location.origin).href;
+          setTimeout(() => { if (live() && openUrl(abs, {title: '메일 쓰기'})) toast('답장·전달 화면을 새 창 대신 이 처리 창에 열었습니다. 위의 회신문 버튼을 쓸 수 있습니다.'); }, 0);
+          const noop = () => {}; return {closed: false, focus: noop, blur: noop, close: noop, postMessage: noop};
+        }
+      } catch {}
+      // 기록기는 처리 창 안의 화면만 기록한다. 새 창으로 나가면 알려 준다.
+      try { if (live() && recorder) toast('새 창이 열렸습니다. 새 창에서 한 동작은 기록기에 기록되지 않습니다.'); } catch {}
+      return nativeOpen.call(w, target, ...rest);
+    };
+    w.close = function () {
+      if (!live()) return nativeClose.call(w);
+      S.pane.dirty = false; S.pane.url = ''; S.pane.expanded = false; render();
+      toast('그룹웨어 화면이 닫혔습니다. 처리 결과는 목록을 새로 읽어 확인합니다.');
+      setTimeout(() => { try { refresh({silent: true}); } catch {} }, 1200);
+    };
   }
   // Ask before throwing away what the user typed in the pane.
   function leavePane() {
@@ -316,6 +355,8 @@ ${mailFilesBox(m)}
           openUrl(det.readUrl, {title: `메일: ${m.subject}`, unread: false, what});
           return;
         }
+        // loadMailDetail은 실패를 던지지 않고 {error}로 돌려준다. 조용히 메일함 목록으로 바꾸지 않고 이유를 알린다.
+        toast(`이 메일의 원문 화면을 열지 못했습니다${det && det.error ? `(${det.error})` : ''}. 받은메일함을 대신 엽니다.`);
       } catch (err) {
         toast(`메일 원문을 불러오지 못했습니다: ${err.message}`);
       }
@@ -387,14 +428,59 @@ ${mailFilesBox(m)}
   
   // 근태 빠른 신청은 27-attendance-request.js (값을 먼저 묻고 신청서를 채움)
 
+  // 메일 쓰기 화면의 본문 편집기(프레임 안쪽의 편집 가능한 문서)를 찾는다.
+  function mailEditorBody(doc) {
+    if (!doc) return null;
+    for (const ifr of doc.querySelectorAll('iframe')) {
+      try {
+        const idoc = ifr.contentDocument, ibody = idoc && idoc.body;
+        if (ibody && (ibody.isContentEditable || idoc.designMode === 'on')) return ibody;
+        const inner = mailEditorBody(idoc);
+        if (inner) return inner;
+      } catch {}
+    }
+    return null;
+  }
+  // 편집기가 뜬 뒤 그룹웨어가 원문 인용·서명을 채워 넣을 때까지 기다린다(먼저 넣으면 덮여 사라진다).
+  async function waitMailEditorSettled(url, ms = 20000) {
+    const t0 = Date.now();
+    let last = -1, same = 0;
+    while (Date.now() - t0 < ms) {
+      if (S.pane.url !== url) return null;
+      let body = null;
+      try { body = mailEditorBody($('#frame iframe')?.contentDocument); } catch {}
+      if (body) {
+        const len = body.innerHTML.length;
+        same = len === last ? same + 1 : 0; last = len;
+        if (same >= 3 && (body.innerText.trim().length > 0 || Date.now() - t0 > 4000)) return body;
+      }
+      await new Promise(r => setTimeout(r, 300));
+    }
+    return null;
+  }
   async function autoFillMail(templateType) {
+    if (S.pane.fillBusy) return false;
+    S.pane.fillBusy = true;
+    try { return await autoFillMailRun(templateType); } finally { S.pane.fillBusy = false; }
+  }
+  async function autoFillMailRun(templateType) {
+    // 메일 읽기 화면이나 빈 처리 창에서 눌러도, 고른 메일의 답장 화면을 처리 창에 먼저 연다.
+    if (!isMailCompose(S.pane.url)) {
+      const m = paneMailRef();
+      if (!m) { toast('답장할 메일을 먼저 고르세요. 메일 목록에서 메일을 누른 뒤 회신문 버튼을 누르면 됩니다.'); return false; }
+      if (!openUrl(GW.links.compose('re', m), {title: `답장: ${m.subject || ''}`, unread: m.seen === false, what: '메일'})) return false;
+      toast('답장 화면을 여는 중입니다. 준비되면 회신 문구를 넣습니다.');
+    }
+    const url = S.pane.url;
+    const ready = await waitMailEditorSettled(url);
+    if (S.pane.url !== url) return false;
     const f = $('#frame iframe');
     const d = f?.contentDocument;
-    if (!d) { toast('메일 작성 화면이 열려 있지 않습니다.'); return; }
+    if (!ready || !d) { toast('메일 편집기가 아직 준비되지 않았습니다. 답장 화면이 다 뜬 뒤 회신문 버튼을 다시 누르세요.'); return false; }
 
-    const sel = S.sel;
-    const item = sel && sel.type === 'action' ? selectedAction() : (sel && sel.type === 'mail' ? findMail(sel.box, sel.uid) : null);
-    const originTitle = (item ? item.title || item.subject : '').replace(/^\s*((re|fw|fwd|전달|회신|답장)\s*:\s*)+/i, '').trim();
+    const item = paneMailRef();
+    const typedSubject = (() => { try { return [...d.querySelectorAll('input[type=text],input:not([type])')].map(i => i.value || '').find(v => /^\s*(re|fw|fwd)\s*:/i.test(v)) || ''; } catch { return ''; } })();
+    const originTitle = ((item && (item.subject || item.title)) || typedSubject || '').replace(/^\s*((re|fw|fwd|전달|회신|답장)\s*:\s*)+/i, '').trim();
     const myName = (S.raw && S.raw.principal && S.raw.principal.name) || '';
     const myDept = (S.raw && S.raw.principal && S.raw.principal.deptName) || '';
     const myDuty = (S.raw && S.raw.principal && (S.raw.principal.duty || S.raw.principal.position)) || '';
@@ -432,27 +518,21 @@ ${mailFilesBox(m)}
 <p>일정에 차질을 드려 양해 부탁드리며, 신속히 검토하여 제출하도록 하겠습니다. 감사합니다.</p><p><br></p>`;
     }
 
-    let injected = false;
-    const walk = (doc) => {
-      if (!doc) return;
-      for (const ifr of doc.querySelectorAll('iframe')) {
-        try {
-          const idoc = ifr.contentDocument;
-          const ibody = idoc?.body;
-          if (ibody && (ibody.isContentEditable || idoc.designMode === 'on')) {
-            const old = ibody.querySelector('[data-bwyfgw-tpl]'); if (old) old.remove();
-            ibody.insertAdjacentHTML('afterbegin', `<div data-bwyfgw-tpl="1">${bodyText}</div>`);
-            ibody.dispatchEvent(new Event('input', {bubbles: true}));
-            injected = true;
-            return;
-          }
-          walk(idoc);
-        } catch (e) {}
-      }
+    const put = () => {
+      let ibody = null;
+      try { ibody = mailEditorBody($('#frame iframe')?.contentDocument); } catch {}
+      if (!ibody) return false;
+      const old = ibody.querySelector('[data-bwyfgw-tpl]'); if (old) old.remove();
+      ibody.insertAdjacentHTML('afterbegin', `<div data-bwyfgw-tpl="1">${bodyText}</div>`);
+      ibody.dispatchEvent(new Event('input', {bubbles: true}));
+      return true;
     };
-    walk(d);
+    const has = () => { try { const b = mailEditorBody($('#frame iframe')?.contentDocument); return !!(b && b.querySelector('[data-bwyfgw-tpl]')); } catch { return false; } };
+    let injected = put();
+    // 그룹웨어가 본문을 뒤늦게 다시 채워 문구가 지워졌으면 한 번 더 넣는다.
+    if (injected) { await new Promise(r => setTimeout(r, 900)); if (S.pane.url !== url) return false; if (!has()) injected = put() && has(); }
     if (injected) toast(`회신 문구를 본문 맨 위에 넣었습니다. 괄호 칸을 채우고${templateType === 'submit' && !hasAttach ? ' 첨부파일을 붙인 뒤' : ''} 직접 보내세요.`);
-    else toast('메일 편집기를 찾지 못했습니다. 화면이 다 뜬 뒤 다시 누르세요.');
+    else toast('메일 편집기를 찾지 못했습니다. 답장 화면이 다 뜬 뒤 회신문 버튼을 다시 누르세요.');
     return injected;
   }
 
@@ -474,13 +554,16 @@ ${mailFilesBox(m)}
     const isMail = u.includes('MicroModuleCode=mail');
     const isDraft = u.includes('MicroModuleCode=ea') && !u.includes('diKeyCode');
     const isAtt = u.includes('HPD0100') || u.includes('HPD0110');
-    if (u.includes('NCA0020') && S.expBar) return `<div class="autofill-bar"><span class="lbl">${ic('star')} 지출 값 복사:</span>${S.expBar.items.map(([k, v]) => `<button class="btn sm" data-act="copy" data-v="${esc(v)}" title="${esc(v)}">${esc(k)}</button>`).join('')}<span class="muted" style="font-size:12px">결의서입력에서 [결재상신]은 직접 누르세요</span></div>`;
+    if (u.includes('NCA0020') && S.expBar) return `<div class="autofill-bar"><span class="lbl" title="${esc(S.expBar.title || '')}">${ic('star')} 지출 값 복사 · ${esc(String(S.expBar.title || '').slice(0, 24))}${String(S.expBar.title || '').length > 24 ? '…' : ''}:</span><button class="btn sm ghost" data-act="expBarClear" title="다른 건을 입력할 때는 이 값을 지우세요">이 값 지우기</button>${S.expBar.items.map(([k, v]) => `<button class="btn sm" data-act="copy" data-v="${esc(v)}" title="${esc(v)}">${esc(k)}</button>`).join('')}<span class="muted" style="font-size:12px">결의서입력에서 [결재상신]은 직접 누르세요</span></div>`;
     
     if (isMail) {
-      return `<div class="autofill-bar"><span class="lbl">${ic('star')} 회신 자동 기입:</span><button class="btn sm" data-act="autoFillMail" data-v="confirm">✉️ 확인 회신문</button><button class="btn sm" data-act="autoFillMail" data-v="submit">✉️ 자료 제출 회신문</button><button class="btn sm" data-act="autoFillMail" data-v="extend">✉️ 기한 연장 요청</button></div>`;
+      // 답장 쓰기 화면이면 바로 넣고, 읽기 화면이면 고른 메일의 답장 화면을 이 창에 연 뒤 넣는다.
+      const compose = isMailCompose(u);
+      if (compose ? /mailKind=(plain|fw|fwd)(&|$)/.test(u) : !paneMailRef()) return ''; // 새 메일·전달에는 "보내주신 … 건" 회신문이 맞지 않는다
+      return `<div class="autofill-bar"><span class="lbl">${ic('star')} ${compose ? '회신 자동 기입:' : '답장 화면을 열고 회신문 넣기:'}</span><button class="btn sm" data-act="autoFillMail" data-v="confirm">${ic('mail')}확인 회신문</button><button class="btn sm" data-act="autoFillMail" data-v="submit">${ic('mail')}자료 제출 회신문</button><button class="btn sm" data-act="autoFillMail" data-v="extend">${ic('mail')}기한 연장 요청</button></div>`;
     }
     if (isDraft) {
-      return `<div class="autofill-bar"><span class="lbl">${ic('star')} 새로 쓰기 (내 결재문서 패턴):</span><button class="btn sm primary" data-act="quickDraft" data-t="result">📝 결과보고(계획서 선택)</button><button class="btn sm" data-act="quickDraft" data-t="plan">📝 계획서</button><button class="btn sm" data-act="quickDraft" data-t="goods">📦 물품구입</button></div>`;
+      return `<div class="autofill-bar"><span class="lbl">${ic('star')} 새로 쓰기 (내 결재문서 패턴):</span><button class="btn sm primary" data-act="quickDraft" data-t="result">${ic('doc')}결과보고(계획서 선택)</button><button class="btn sm" data-act="quickDraft" data-t="plan">${ic('doc')}계획서</button><button class="btn sm" data-act="quickDraft" data-t="goods">${ic('doc')}물품구입</button></div>`;
     }
     if (isAtt) {
       return `<div class="autofill-bar"><span class="lbl">${ic('star')} 신청서 채우기:</span><button class="btn sm" data-act="quickAtt" data-t="trip">출장</button><button class="btn sm" data-act="quickAtt" data-t="leave">휴가</button><button class="btn sm" data-act="quickAtt" data-t="overtime">시간외·휴일근무</button><button class="btn sm ghost" data-act="autoFillAtt">대체휴무 사유 복사</button></div>`;

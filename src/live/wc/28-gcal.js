@@ -69,4 +69,6 @@
     const c = gcalCfg(); c.email = email; c.cals = cals.slice(0, 12); delete c.extra;
     S.gcalEdit = false; saveLocal(); renderMain(); toast('구글 일정을 저장했습니다.');
   }
-  const gcalOpenTab = url => { const w = window.open(url, '_blank', 'noopener'); if (!w) toast('새 탭이 막혔습니다. 팝업 허용 후 다시 눌러 주세요.'); };
+  // noopener를 주면 window.open은 탭이 열려도 항상 null을 돌려주므로, 연 뒤에 opener를 끊는다(막힘 여부를 정확히 알기 위해).
+  const openExternalTab = url => { const w = window.open(url, '_blank'); if (w) { try { w.opener = null; } catch {} } return !!w; };
+  const gcalOpenTab = url => { if (!openExternalTab(url)) toast('새 탭이 막혔습니다. 팝업 허용 후 다시 눌러 주세요.'); };
