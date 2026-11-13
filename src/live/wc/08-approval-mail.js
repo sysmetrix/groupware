@@ -53,19 +53,47 @@ ${docs.length < total ? `<div class="acts"><button class="btn" data-act="apMore"
 
   // ----- 메일 -----
   const cleanPreview = p => String(p || '').replace(/대용량 파일첨부[\s\S]*?보관\)/, '').replace(/\s+/g, ' ').trim();
+  function mailDateValue(value) {
+    const s = String(value || '').trim();
+    const m = s.match(/^(\d{4})\s*(?:[-./]|년)\s*(\d{1,2})\s*(?:[-./]|월)\s*(\d{1,2})(?:\s*일)?(?:[ T,]+(?:(오전|오후|AM|PM)\s*)?(\d{1,2}):(\d{2})(?::(\d{2}))?)?\s*$/i);
+    if (m) {
+      const [, ys, ms, ds, meridiem, hs = '0', mins = '0', ss = '0'] = m;
+      const y = Number(ys), month = Number(ms), day = Number(ds), minute = Number(mins), second = Number(ss);
+      let hour = Number(hs);
+      if (meridiem) { if (hour < 1 || hour > 12) return null; hour = (hour % 12) + (/오후|PM/i.test(meridiem) ? 12 : 0); }
+      if (month < 1 || month > 12 || day < 1 || hour > 23 || minute > 59 || second > 59) return null;
+      const at = Date.UTC(y, month - 1, day, hour, minute, second), d = new Date(at);
+      return d.getUTCFullYear() === y && d.getUTCMonth() === month - 1 && d.getUTCDate() === day ? at : null;
+    }
+    const rfc = s.match(/^(?:[A-Za-z]{3},\s*)?(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(?:([+-])(\d{2})(\d{2})|GMT|UTC)?$/i);
+    if (!rfc) return null;
+    const months = {jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11};
+    const [, ds, mon, ys, hs, mins, ss = '0', sign, zhs = '0', zms = '0'] = rfc, y = Number(ys), month = months[mon.toLowerCase()], day = Number(ds), hour = Number(hs), minute = Number(mins), second = Number(ss), zoneHour = Number(zhs), zoneMinute = Number(zms);
+    if (month === undefined || day < 1 || hour > 23 || minute > 59 || second > 59 || zoneHour > 23 || zoneMinute > 59) return null;
+    const local = Date.UTC(y, month, day, hour, minute, second), d = new Date(local);
+    if (d.getUTCFullYear() !== y || d.getUTCMonth() !== month || d.getUTCDate() !== day) return null;
+    const offset = (zoneHour * 60 + zoneMinute) * 60000;
+    return local + (sign === '+' ? -offset : sign === '-' ? offset : 0);
+  }
+  function sortMailNewest(records) {
+    return records.map((mail, index) => ({mail, index, at: mailDateValue(mail.date)})).sort((a, b) => (b.at ?? -Infinity) - (a.at ?? -Infinity) || a.index - b.index).map(x => x.mail);
+  }
+  function mailWhen(value) { return mailDateValue(value) === null ? '날짜 확인 불가' : shortWhen(value); }
   function vMail() {
     const m = S.a.mail;
-    const all = [...(S.raw.data.mail?.inbox.records || []), ...(S.raw.data.mail?.otherUnseen || [])];
+    const all = sortMailNewest([...(S.raw.data.mail?.inbox.records || []), ...(S.raw.data.mail?.otherUnseen || [])]);
     const actKeys = new Map(S.a.actions.filter(x => x.type === 'mail').map(x => [x.ref.box + x.ref.uid, x]));
     const f = S.mailFilter;
     const rows = all.filter(x => f === 'all' || (f === 'unread' && !x.seen) || (f === 'todo' && actKeys.has(x.box + x.uid) && isMine(actKeys.get(x.box + x.uid))) || (f === 'attach' && (x.attach || /대용량 파일첨부/.test(x.preview))) || (f === 'other' && x.box !== 'INBOX'));
     const sr = S.mailSearch.res;
-    const rowHtml = x => { const a = actKeys.get(x.box + x.uid); const st = a ? stateOf(a) : ''; const att = x.attach || /대용량 파일첨부/.test(x.preview); return `<div class="row ${S.sel && S.sel.type === 'mail' && S.sel.uid === x.uid ? 'sel' : ''}" role="listitem" tabindex="0" data-act="selMail" data-box="${esc(x.box)}" data-uid="${esc(x.uid)}" style="grid-template-columns:170px 1fr auto"><div style="${x.seen ? '' : 'font-weight:800'}">${x.seen ? '' : '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);margin-right:6px"></span>'}${esc(x.from)}</div><div class="mn"><div class="t" style="${x.seen ? 'font-weight:600' : ''}">${esc(x.subject || '(제목 없음)')}</div><div class="hl">${a && st !== 'info' ? `<span class="bdg ${st}">${STATE_NAME[st]}</span>` : ''}${att ? `<span class="bdg tag">${ic('clip')}첨부</span>` : ''}${x.box !== 'INBOX' ? `<span class="bdg tag">${esc(x.box)}</span>` : ''}<span class="muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:520px">${esc(cleanPreview(x.preview).slice(0, 90))}</span></div></div><div class="w">${esc(shortWhen(x.date))}</div></div>`; };
+    const rowHtml = x => { const a = actKeys.get(x.box + x.uid); const st = a ? stateOf(a) : ''; const att = x.attach || /대용량 파일첨부/.test(x.preview); return `<div class="row ${S.sel && S.sel.type === 'mail' && S.sel.box === x.box && S.sel.uid === x.uid ? 'sel' : ''}" role="listitem" tabindex="0" data-act="selMail" data-box="${esc(x.box)}" data-uid="${esc(x.uid)}" style="grid-template-columns:170px 1fr auto"><div style="${x.seen ? '' : 'font-weight:800'}">${x.seen ? '' : '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);margin-right:6px"></span>'}${esc(x.from)}</div><div class="mn"><div class="t" style="${x.seen ? 'font-weight:600' : ''}">${esc(x.subject || '(제목 없음)')}</div><div class="hl">${a && st !== 'info' ? `<span class="bdg ${st}">${STATE_NAME[st]}</span>` : ''}${att ? `<span class="bdg tag">${ic('clip')}첨부</span>` : ''}${x.box !== 'INBOX' ? `<span class="bdg tag">${esc(x.box)}</span>` : ''}<span class="muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:520px">${esc(cleanPreview(x.preview).slice(0, 90))}</span></div></div><div class="w">${esc(mailWhen(x.date))}</div></div>`; };
     const listHtml = rows.length ? `<div class="list" role="list">${rows.map(rowHtml).join('')}</div>` : `<div class="list"><div class="empty"><b>해당하는 메일이 없습니다</b></div></div>`;
     return `${pgh('메일', `처리할 메일 ${S.a.actions.filter(x => x.type === 'mail' && isMine(x)).length}통 · 안 읽음 ${all.filter(x => !x.seen).length}통 · 최근 ${all.length}통`, `<a class="btn sm" href="${esc(m.url)}" target="_blank" rel="noopener">${ic('ext')}받은메일함</a><button class="btn sm primary" data-act="openUrl" data-url="${esc(GW.links.compose('plain'))}" data-title="새 메일 쓰기">${ic('plus')}새 메일</button>`)}
 <div class="bar"><div class="seg" role="tablist">${[['all', '전체'], ['todo', '처리할 메일'], ['unread', '안 읽음'], ['attach', '첨부 있음'], ['other', '내 메일함']].map(([k, n]) => `<button role="tab" aria-selected="${f === k}" class="${f === k ? 'on' : ''}" data-act="mailFilter" data-v="${k}">${n}</button>`).join('')}</div>
 <input class="inp grow" id="mailq" placeholder="메일 본문까지 검색 후 Enter" value="${esc(S.mailSearch.kw)}" aria-label="메일 검색">${S.mailSearch.busy ? '<span class="spin"></span>' : ''}</div>
-${sr ? `<h2>"${esc(sr.keyword)}" 검색 결과 ${sr.groups.mail?.total ?? 0}건 <button class="btn sm ghost" data-act="clearMailSearch">${ic('x')}지우기</button></h2><div class="list">${(sr.groups.mail?.items || []).map(x => `<div class="row" tabindex="0" data-act="selMailSearch" data-uid="${esc(x.uid)}" style="grid-template-columns:170px 1fr auto"><div>${esc(x.from)}</div><div class="mn"><div class="t">${hl(x.subject || '(제목 없음)', sr.keyword)}</div><div class="fx">${hl(x.snippet, sr.keyword)}</div></div><div class="w">${esc(shortWhen(x.date))}</div></div>`).join('') || '<div class="empty"><b>결과가 없습니다</b>다른 단어로 찾아보세요.</div>'}</div><h2>최근 메일</h2>` : ''}
+${sr ? `<h2>"${esc(sr.keyword)}" 검색 결과 ${sr.groups.mail?.total ?? 0}건 <button class="btn sm ghost" data-act="clearMailSearch">${ic('x')}지우기</button></h2><div class="list">${(sr.groups.mail?.items || []).map(x => `<div class="row" tabindex="0" data-act="selMailSearch" data-uid="${esc(x.uid)}" style="grid-template-columns:170px 1fr auto"><div>${esc(x.from)}</div><div class="mn"><div class="t">${hl(x.subject || '(제목 없음)', sr.keyword)}</div><div class="fx">${hl(x.snippet, sr.keyword)}</div></div><div class="w">${esc(shortWhen(x.date))}</div></div>`).join('') || '<div class="empty"><b>결과가 없습니다</b>다른 단어로 찾아보세요.</div>'}</div>` : ''}
+<h2>최근 메일 · 최신순 <span class="muted" style="font-size:12px">조회된 ${rows.length}건</span></h2>
+<div class="muted" style="margin:4px 0 10px">받은메일함 최근 ${S.raw.data.mail?.inbox?.fetched ?? 0}건과 다른 메일함의 조회된 안 읽은 메일을 합쳐 받은 시각이 최근인 순서로 표시합니다. 전체 보관 메일은 그룹웨어 메일함 또는 검색에서 확인하세요.</div>
 ${listHtml}
 <p class="muted" style="margin-top:12px">메일 목록을 보는 것만으로는 읽음 처리되지 않습니다.</p>`;
   }
