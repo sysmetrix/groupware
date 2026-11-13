@@ -15,7 +15,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '0.50.0';
+  const VERSION = '0.51.0';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
@@ -316,7 +316,7 @@
     const prefix = m[1];
     const chunks = [];
     for (let s = 1; s <= 400; s += 100) { const ids = []; for (let i = s; i < s + 100 && i <= 999; i++) ids.push(prefix + String(i).padStart(3, '0')); chunks.push(ids); }
-    const lists = await Promise.all(chunks.map(ids => call('/human/hrd0410/selectTab2', {admin: true, appWorkTm: -1, appWorkTmFlag: '1', atDtTo: to, atDtFrom: from, empArr: ids, isIncludeHoliday: true, searchType: '1'}).catch(() => [])));
+    const lists = await Promise.all(chunks.map(ids => call('/human/hrd0410/selectTab2', {admin: true, appWorkTm: -1, appWorkTmFlag: '1', atDtTo: to, atDtFrom: from, empArr: ids, isIncludeHoliday: true, searchType: '1'})));
     return lists.flatMap(arr).map(r => ({
       emp: str(r.empCd, 12), name: str(r.korNm, 20), dept: str(r.deptNm, 30), date: str(r.atDt, 8), item: str(r.atNm, 30), result: str(r.attresultNm, 20),
       appStart: str(r.appStartTm, 4), appEnd: str(r.appEndTm, 4), come: str(r.comeTm, 4), leave: str(r.leaveTm, 4),
@@ -395,8 +395,8 @@
     const ctx = context();
     const now = new Date(), to = ymd(now), from = ymd(addDays(now, -150));
     const [leave, trip] = await Promise.all([
-      call('/human/hrd0220/0hr00001', {coCd: ctx.erpCompSeq, dateFg: '1', appDtFrom: from, appDtTo: to, approStateList: ['0', '1', '5'], deleteRequest: false, noDoc: '', divCdList: [], deptCdList: [], empCdList: [], atItemCdList: [], atCdList: [], htypCdList: [], prtyCdList: [], keyword: '', administrator: false, searchType: 'deptCd'}).catch(() => []),
-      call('/human/hrd1130/0hr00004', {coCd: ctx.erpCompSeq, appDtFrom: from, appDtTo: to, startDt: '', endDt: '', divCdList: [], deptCdList: [], empCdList: [], approvalStatusCdList: ['0', '1', '2', '3', '5']}).catch(() => []),
+      call('/human/hrd0220/0hr00001', {coCd: ctx.erpCompSeq, dateFg: '1', appDtFrom: from, appDtTo: to, approStateList: ['0', '1', '5'], deleteRequest: false, noDoc: '', divCdList: [], deptCdList: [], empCdList: [], atItemCdList: [], atCdList: [], htypCdList: [], prtyCdList: [], keyword: '', administrator: false, searchType: 'deptCd'}),
+      call('/human/hrd1130/0hr00004', {coCd: ctx.erpCompSeq, appDtFrom: from, appDtTo: to, startDt: '', endDt: '', divCdList: [], deptCdList: [], empCdList: [], approvalStatusCdList: ['0', '1', '2', '3', '5']}),
     ]);
     const pick = r => ({empCd: str(r.empCd, 12), korNm: str(r.korNm || r.empNm, 20), deptNm: str(r.deptNm, 30), atNm: str(r.atNm, 30), atItemNm: str(r.atItemNm, 20), startDt: str(r.startDt, 8), endDt: str(r.endDt, 8), startTm: str(r.startTm, 4), endTm: str(r.endTm, 4), appDt: str(r.appDt, 8), appSq: str(r.appSq, 12), approState: str(r.approState, 2), deleteReqYn: str(r.deleteReqYn, 1), docdelYn: str(r.docdelYn, 1), appTm: num(r.appTm), appDy: num(r.appDy),
       title: str(r.titleDc, 80), noDoc: str(r.noDoc, 40), reason: str(r.appRmkDc || r.biztrPpsDc || r.taskDc, 200), place: str(r.biztrDc, 80), depart: str(r.depatNm, 40), stop: str(r.stopvNm, 40), arrive: str(r.arrivNm, 40), transport: str(r.transCtdNm, 30)});
@@ -412,16 +412,21 @@
     const p = kstParts();
     const today = `${p.y}${p.m}${p.d}`;
     const monthFrom = `${p.y}${p.m}01`, monthTo = `${p.y}${p.m}${String(lastDayOfMonth(p.y, p.m)).padStart(2, '0')}`;
-    const [todayInfo, month, days] = await Promise.all([
+    const yesterday = ymd(addDays(new Date(), -1));
+    const [todayInfo, month, days, fingerprintDays, planned] = await Promise.all([
       call('/human/common/judgeTimeManagement/getTodayComeLeaveInfo', {empCd: ctx.erpEmpSeq, coCd: ctx.erpCompSeq, workDt: today}).catch(e => ({error: e.code})),
       call('/personal/hpd0220/0hr00001', {atDtFrom: monthFrom, atDtTo: monthTo}).catch(e => ({error: e.code})),
-      attendanceDays({from: monthFrom, to: today}).catch(e => ({error: e.code})),
+      attendanceDays({from: monthFrom, to: today}).catch(e => ({error: e.code || 'QUERY_FAILED'})),
+      attendanceDays({from: ymd(addDays(new Date(), -30)), to: yesterday}).catch(e => ({error: e.code || 'QUERY_FAILED'})),
+      call('/human/hrd0220/0hr00001', {coCd: ctx.erpCompSeq, dateFg: '1', appDtFrom: ymd(addDays(new Date(), -150)), appDtTo: today, approStateList: ['0', '1', '5'], deleteRequest: false, noDoc: '', divCdList: [], deptCdList: [], empCdList: [], atItemCdList: [], atCdList: [], htypCdList: [], prtyCdList: [], keyword: '', administrator: false, searchType: 'deptCd'}).catch(e => ({error: e.code || 'QUERY_FAILED'})),
     ]);
     const mins = v => (v === null || v === undefined || v === '') ? null : num(v);
     return {
       today: {date: today, come: str(todayInfo && todayInfo.comeTm, 12), leave: str(todayInfo && todayInfo.leaveTm, 12), error: todayInfo && todayInfo.error || ''},
       month: {from: monthFrom, to: monthTo, recognizedMin: mins(month.appworkTm), basicMin: mins(month.basicworkTm), overtimeMin: mins(month.overworkTm), exceptMin: mins(month.exceptworkTm), nightMin: mins(month.nightworkTm), error: month.error || ''},
       days: Array.isArray(days) ? days : [], daysError: Array.isArray(days) ? '' : days.error,
+      overtime: {me: String(ctx.erpEmpSeq || ''), days: Array.isArray(fingerprintDays) ? fingerprintDays : [], daysError: Array.isArray(fingerprintDays) ? '' : fingerprintDays.error,
+        apps: Array.isArray(planned) ? planned.filter(r => String(r.empCd || '') === String(ctx.erpEmpSeq || '')).map(r => ({empCd: str(r.empCd, 12), atNm: str(r.atNm, 30), atItemNm: str(r.atItemNm, 20), startDt: str(r.startDt, 8), endDt: str(r.endDt, 8), startTm: str(r.startTm, 4), endTm: str(r.endTm, 4), approState: str(r.approState, 2), deleteReqYn: str(r.deleteReqYn, 1), docdelYn: str(r.docdelYn, 1)})) : [], appsError: Array.isArray(planned) ? '' : (planned.error || 'QUERY_FAILED')},
       url: LINKS.route(ROUTES.worktime), requestUrl: LINKS.route(ROUTES.attendanceRequest),
     };
   }

@@ -139,6 +139,25 @@ async function loadCollector({respond, userInfo = {ucUserInfo: {empSeq: '1', gro
   return {api: window.BWYFGW, calls};
 }
 
+test('attendance collection scopes overtime to self and preserves read failures', async () => {
+  const seen = [];
+  const userInfo = {ucUserInfo: {empSeq: '1', groupSeq: 'g', compSeq: 'c', deptSeq: 'd', loginId: 'u', erpEmpSeq: '016001', empName: '홍길동'}};
+  const {api} = await loadCollector({userInfo, respond: (p, body) => {
+    seen.push({p, body});
+    if (p === '/human/hrd0220/0hr00001') return Promise.resolve({resultCode: 0, resultData: [{empCd: '016001', atNm: '연장근무', approState: '1', docdelYn: 'Y'}, {empCd: '016002', atNm: '연장근무', approState: '1'}]});
+    if (p === '/human/hrd0410/selectTab2') return Promise.reject(new Error('offline'));
+    return Promise.resolve({resultCode: 0, resultData: {}});
+  }});
+  const raw = await api.collect({modules: ['attendance']});
+  assert.equal(raw.data.attendance.overtime.apps.length, 1);
+  assert.equal(raw.data.attendance.overtime.apps[0].empCd, '016001');
+  assert.ok(raw.data.attendance.overtime.daysError);
+  assert.ok(seen.filter(x => x.p === '/human/hrd0410/selectTab2').every(x => x.body.empArr.length === 1 && x.body.empArr[0] === '016001'));
+  const failed = await loadCollector({userInfo, respond: p => p === '/human/hrd0220/0hr00001' ? Promise.reject(new Error('offline')) : Promise.resolve({resultCode: 0, resultData: p === '/human/hrd0410/selectTab2' ? [] : {}})});
+  const second = await failed.api.collect({modules: ['attendance']});
+  assert.ok(second.data.attendance.overtime.appsError);
+});
+
 test('collector only calls allow-listed read endpoints', async () => {
   const {api, calls} = await loadCollector({respond: () => Promise.resolve({resultCode: 0, resultData: {}})});
   await assert.rejects(api.call('/human/openapi/commute/register', {}), e => e.code === 'NOT_ALLOWED');
@@ -170,26 +189,36 @@ test('extractAllDeadlines finds every deadline in a document body', () => {
   assert.deepEqual(extractAllDeadlines('행사일 11. 30.(월) 개최', NOW), [], 'plain event dates are not deadlines');
 });
 
-test('attendanceAnomalies flags unexplained absences only', () => {
-  const rows = [
-    {date: '20261102', result: '결근', status: '대기', holiday: false, applied: false},
-    {date: '20261103', result: '조퇴', item: '외출', status: '승인', holiday: false, applied: true},
-    {date: '20261106', result: '미인정', item: '관내출장', status: '대기', holiday: false, applied: true},
-    {date: '20261107', result: '휴일', status: '승인', holiday: true},
-  ];
-  const a = attendanceAnomalies(rows);
-  assert.deepEqual(a.map(x => [x.date, x.priority]), [['20261102', 'high'], ['20261106', 'medium']]);
+test('attendance anomalies require approved personal overtime and verified missing departure', () => {
+  const app = {empCd: '1', atNm: '연장근무', startDt: '20261102', endDt: '20261102', startTm: '1800', endTm: '2100', approState: '1', docdelYn: 'Y', deleteReqYn: 'N'};
+  const row = {date: '20261102', result: '미인정', come: '', leave: ''};
+  const opts = {now: NOW, me: '1', apps: [app]};
+  assert.equal(attendanceAnomalies([row], opts).length, 1);
+  for (const change of [{empCd: '2'}, {approState: '0'}, {deleteReqYn: 'Y'}, {docdelYn: 'N'}, {atNm: '관내출장'}, {endTm: ''}]) assert.equal(attendanceAnomalies([row], {...opts, apps: [{...app, ...change}]}).length, 0);
+  assert.equal(attendanceAnomalies([{...row, leave: '2101'}], opts).length, 0);
+  assert.equal(attendanceAnomalies([{...row, fingerprintChecked: false}], opts).length, 0);
+  assert.equal(attendanceAnomalies([], opts).length, 0);
+  assert.equal(attendanceAnomalies([row], {...opts, daysError: 'FAIL'}).length, 0);
+  assert.equal(attendanceAnomalies([row], {...opts, appsError: 'FAIL'}).length, 0);
+  assert.equal(attendanceAnomalies([{...row, date: '20261109'}], {...opts, apps: [{...app, startDt: '20261109', endDt: '20261109'}]}).length, 0);
+  assert.equal(attendanceAnomalies([{date: '20261108', result: '결근', leave: ''}], {now: NOW}).length, 0);
+  const night = {...app, startDt: '20261108', endDt: '20261108', startTm: '2200', endTm: '0200'};
+  assert.equal(attendanceAnomalies([{...row, date: '20261108'}], {...opts, now: new Date('2026-11-09T01:00:00+09:00'), apps: [night]}).length, 0);
+  assert.equal(attendanceAnomalies([{...row, date: '20261108'}], {...opts, apps: [night]}).length, 1);
 });
 
-test('analyze turns attendance anomalies into actions with stable keys', () => {
+test('analyze turns overtime fingerprint anomalies into actions with stable keys', () => {
   const raw = fixture();
-  raw.data.attendance.days = [{date: '20261102', result: '결근', status: '대기', holiday: false, applied: false}];
+  raw.data.attendance.overtime = {me: '1', days: [{date: '20261102', leave: ''}], apps: [{empCd: '1', atNm: '연장근무', startDt: '20261102', endDt: '20261102', startTm: '1800', endTm: '2100', approState: '1'}]};
   const a = analyze(raw, null, NOW);
   const x = a.actions.find(y => y.type === 'attendance');
   assert.equal(x.key, 'att:20261102');
-  assert.equal(x.kind, '근태 확인 필요');
-  assert.ok(['high', 'medium'].includes(x.priority));
-  assert.ok(a.actions.every(y => typeof y.key === 'string' && y.key.length > 3), 'every action has a key');
+  assert.equal(x.kind, '퇴근 지문 확인 필요');
+  assert.ok(a.actions.every(y => typeof y.key === 'string' && y.key.length > 3));
+  raw.data.attendance.overtime.appsError = 'FAIL';
+  const failed = analyze(raw, null, NOW);
+  assert.equal(failed.unknown.attendance, true);
+  assert.equal(failed.actions.some(y => y.type === 'attendance'), false);
 });
 
 test('recommendRouting ranks departments and detects simultaneous distribution', () => {
@@ -291,9 +320,7 @@ test('v3.1 rules: Re: mails are not my deadline, one swap explains one absence, 
     {date: '20261104', result: '결근', status: '대기', holiday: false, applied: false},
   ];
   const an = attendanceAnomalies(days, {now: NOW});
-  assert.equal(an.find(x => x.date === '20261102').nearSwap, '20261101');
-  assert.equal(an.find(x => x.date === '20261104').nearSwap, '');
-  assert.equal(an.find(x => x.date === '20261104').priority, 'high');
+  assert.equal(an.length, 0, '결근이나 근무일대체만으로 경고하지 않음');
   assert.equal(toCsv([{a: -1500, b: '=1+1'}], [{label: 'A', key: 'a'}, {label: 'B', key: 'b'}]), '\uFEFFA,B\r\n-1500,\'=1+1');
 });
 
@@ -362,10 +389,7 @@ test('attendance items are checks without guesses in the headline; today workday
     {date: '20261106', result: '미인정', status: '대기', item: '관내출장', holiday: false, applied: true},
   ];
   const a = analyze(raw, null, NOW);
-  const d2 = a.actions.find(x => x.key === 'att:20261102'), d6 = a.actions.find(x => x.key === 'att:20261106');
-  assert.equal(d2.state, 'check'); assert.match(d2.headline, /출근 기록 없음/); assert.ok(!/수 있음/.test(d2.headline));
-  assert.ok(!d2.facts.some(f => /수 있음/.test(f)), 'no guesses in facts'); assert.match(d2.context, /11\/01에 휴일근무/); assert.match(d2.title, /^11\/02\(월\) 근태 확인/);
-  assert.equal(d6.headline, '근태신청 결재를 기다리는 중'); assert.equal(d6.state, 'wait'); assert.ok(!a.actions.filter(x => x.scope !== 'ref' && x.state !== 'wait').includes(d6));
+  assert.equal(a.actions.some(x => x.type === 'attendance'), false);
   assert.deepEqual(a.today, {date: '2026-11-09', isWorkday: true});
   assert.equal(analyze(raw, null, new Date('2026-11-08T03:00:00Z')).today.isWorkday, false);
 });
@@ -550,12 +574,12 @@ test('governance: audit hash chain detects tampering, policy normalization, rete
   assert.ok(!/a@b|1234-5678|202030/.test(maskSensitive('a@b.com 010-1234-5678 empSeq: 202030')));
 });
 
-test('team calendar: classify leave/trip/overtime and check leave-work fingerprint against requested end', () => {
+test('team calendar: classify leave/trip/overtime and check only for missing leave-work fingerprint', () => {
   const now = new Date('2026-11-09T09:00:00+09:00');
   const row = o => ({name: '가나', dept: '전략경영실', date: '20261105', item: '연장근무', appStart: '1800', appEnd: '2100', come: '', leave: '2102', ...o});
   assert.equal(classifyTeamRow(row(), now).state, 'ok');                       // 출근 지문 없어도 퇴근만 보면 정상
-  assert.equal(classifyTeamRow(row({leave: '2043'}), now).state, 'short');
-  assert.match(classifyTeamRow(row({leave: '2043'}), now).detail, /17분 일찍/);
+  assert.equal(classifyTeamRow(row({leave: '2043'}), now).state, 'ok');
+  assert.doesNotMatch(classifyTeamRow(row({leave: '2043'}), now).detail, /일찍/);
   assert.equal(classifyTeamRow(row({leave: ''}), now).state, 'miss');
   assert.equal(classifyTeamRow(row({date: '20261110'}), now).state, 'wait');
   assert.equal(classifyTeamRow(row({item: '관내출장'}), now).kind, 'trip');
@@ -565,13 +589,14 @@ test('team calendar: classify leave/trip/overtime and check leave-work fingerpri
   assert.equal(classifyTeamRow(row({item: '조기근무', appStart: '0700', appEnd: '0900', come: '', leave: '1805'}), now).state, 'ok'); // 출근 지문 없이도 퇴근만 본다
   assert.equal(classifyTeamRow(row({item: '조기근무', appStart: '0700', appEnd: '0900', come: '', leave: ''}), now).state, 'miss');
   const cal = buildTeamCalendar([row({leave: '2000', mine: true}), row({name: '다라', item: '연차', date: '20261105'}), row({name: '남', leave: '', mine: false})], now);
-  assert.equal(cal.problems.length, 1); assert.equal(cal.byDate['20261105'].length, 2); // 다른 직원의 시간외는 제외 assert.equal(cal.byDate['20261105'][0].mine, true);
+  assert.equal(cal.problems.length, 0); assert.equal(cal.byDate['20261105'].length, 2); // 다른 직원의 시간외는 제외
+  assert.equal(cal.byDate['20261105'][0].mine, true);
 });
 
 test('review fixes: midnight overtime, combined items, amount safety, docNo priority, spaced refs', () => {
   const now = new Date('2026-11-09T20:00:00+09:00');
   const row = o => ({date: '20261108', name: '가나', dept: 'X', item: '연장근무', appStart: '2200', appEnd: '0200', come: '', leave: '2300', ...o});
-  assert.equal(classifyTeamRow(row(), now).state, 'short');                               // 자정 넘김: 02:00 전에 퇴근
+  assert.equal(classifyTeamRow(row(), now).state, 'ok');                                  // 자정 넘김: 일찍 찍어도 정상
   assert.equal(classifyTeamRow(row({date: '20261109', leave: ''}), now).state, 'wait');    // 아직 끝나지 않음
   assert.equal(classifyTeamRow(row({appEnd: '2400', leave: '0010'}), now).state, 'ok');
   assert.notEqual(classifyTeamRow(row({appEnd: ''}), now).state, 'ok');                    // 종료 시각 없으면 정상으로 보지 않음
@@ -725,7 +750,7 @@ test('attendance detail: time/place/reason shown for past trip rows via applicat
   const idx = appInfoIndex(apps);
   assert.equal(appInfoLine(idx['016005|20261106'][0]), '14:00~16:00 · 부천시청 · 조직개편 관련 협의 등');
   assert.equal(idx['016005|20261106'][1].time, ''); // 시간이 0000~0000이면 시간 없음
-  assert.ok(appInfoLine(idx['016005|20261106'][1]).endsWith('(결재 중)'));
+  assert.ok(appInfoLine(idx['016005|20261106'][1]).endsWith('(신청 상태 확인 필요)'));
   assert.equal(idx['016005|20261106'][0].route, '재단 → 부천시청');
   const rows = [{emp: '016005', name: '이예재', dept: '전략경영실', date: '20261106', item: '관내출장'}, {emp: '016025', name: '서원하', dept: '전략경영실', date: '20261106', item: '연장근무', appStart: '1800', appEnd: '2000', leave: '2010', mine: true}];
   const cal = buildTeamCalendar(rows, new Date('2026-11-09T10:00:00+09:00'), idx);
