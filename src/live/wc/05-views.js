@@ -66,6 +66,7 @@
     const age = S.lastRefresh ? Math.floor((Date.now() - S.lastRefresh.getTime()) / 60000) : null;
     m.className = 'stat' + (age !== null && age >= 10 ? ' stale' : '');
     m.innerHTML = S.loading ? '<span class="spin"></span> 읽는 중' : S.lastRefresh ? `${ic('refresh')}${hhmm(S.lastRefresh)} 기준${age ? ` · ${age}분 전` : ''}` : `${ic('refresh')}새로고침`;
+    renderVersion();
     // 기관명: 관리자 정책 > 로그인한 사용자의 소속 기관 > 기본 문구
     try { const on = $('#orgName'), nm = POLICY.orgName || (S.raw && S.raw.principal && S.raw.principal.compName) || ''; if (on && nm) on.textContent = nm; } catch {}
     const unseen = S.activity.filter(x => x.at > S.seenActivity).length;
@@ -73,7 +74,30 @@
     const urgent = S.a ? mineVisible().filter(x => ['overdue', 'urgent'].includes(stateOf(x))).length : 0;
     const total = S.a ? mineVisible().length : 0;
     { const st = !S.a ? 'idle' : urgent ? 'urgent' : total ? 'todo' : 'ok'; const sum = !S.a ? '불러오는 중' : urgent ? `급한 일 ${urgent}건 · 전체 ${total}건` : total ? `처리할 일 ${total}건` : '오늘 처리할 일 없음'; fab.dataset.st = st;
-      fab.innerHTML = `<span class="lg">${brandImage}</span><span class="t">GW 비서</span><span class="sm">${sum}</span>${S.a ? `<span class="b">${urgent || total || '✓'}</span>` : ''}<kbd>Alt G</kbd>`; }
+      fab.innerHTML = `<span class="lg">${brandImage}</span><span class="t">GW 비서</span><span class="v" title="설치된 버전">v${esc(VERSION)}</span><span class="sm">${sum}</span>${S.a ? `<span class="b">${urgent || total || '✓'}</span>` : ''}<kbd>Alt G</kbd>`; }
+  }
+  // 설치된 버전과 갱신 상태를 항상 보이게 한다(머리줄 칩 · 왼쪽 메뉴 아래 · 접힌 런처 버튼).
+  function versionInfo() {
+    const up = store.get('updateInfo', null);
+    const known = !!(up && /^\d+\.\d+\.\d+$/.test(up.latest || ''));
+    const newer = known && R.compareVersions(up.latest, VERSION) > 0;
+    const state = !allowed('updateCheck') ? 'off' : newer ? 'new' : known ? 'ok' : 'unknown';
+    const label = {new: `새 버전 v${up && up.latest} 있음`, ok: '최신', unknown: '최신 여부 확인 전', off: ''}[state];
+    const at = S.settings.verAt && S.settings.verOf === VERSION ? new Date(S.settings.verAt) : null;
+    const pad = n => String(n).padStart(2, '0');
+    const applied = at ? `${at.getMonth() + 1}/${at.getDate()} ${pad(at.getHours())}:${pad(at.getMinutes())}` : '';
+    const checked = up && up.at ? hhmm(new Date(up.at)) : '';
+    const from = S.settings.verFrom && S.settings.verOf === VERSION ? S.settings.verFrom : '';
+    return {state, label, applied, checked, from, latest: known ? up.latest : ''};
+  }
+  function renderVersion() {
+    const c = $('#verChip');
+    if (!c) return;
+    const v = versionInfo();
+    c.className = 'verchip ' + v.state;
+    c.innerHTML = `<b>v${esc(VERSION)}</b>${v.label ? `<span>${esc(v.label)}</span>` : ''}`;
+    c.title = [`설치된 버전 v${VERSION}`, v.applied ? `이 브라우저에 ${v.applied} 적용${v.from ? ` (이전 v${v.from})` : ''}` : '', v.state === 'new' ? `GitHub 최신 릴리스 v${v.latest}` : v.state === 'ok' ? `최신 확인 ${v.checked}` : v.state === 'unknown' ? '최신 여부를 아직 확인하지 못했습니다' : '', '누르면 업데이트 내역'].filter(Boolean).join(' · ');
+    c.setAttribute('aria-label', `설치된 버전 v${VERSION}${v.label ? ' ' + v.label : ''}, 업데이트 내역 보기`);
   }
   function renderBand() {
     const b = $('#band');
@@ -102,7 +126,7 @@
     };
     const item = (v) => { const i = VIEWS.indexOf(v); const c = counts[v.id]; return `<a data-act="view" data-v="${v.id}" class="${navView() === v.id ? 'on' : ''}" role="link" tabindex="0" aria-current="${navView() === v.id ? 'page' : 'false'}" title="${esc(v.label)}${i < 9 ? ` (숫자키 ${i + 1})` : ''}">${ic(VIEW_ICON[v.id])}<span class="lb">${esc(v.label)}</span>${c && c.n !== '' && c.n !== 0 ? `<span class="n ${c.cls || ''}" title="${v.id === 'today' ? '내 처리할 일' : v.id === 'calendar' ? '7일 안에 기한이 있는 내 처리할 일' : '내 처리할 일 중 이 영역'}">${c.n}</span>` : ''}</a>`; };
     const primary = VIEWS.slice(0, 7), more = VIEWS.slice(7).filter(v => !VIEW_PARENT[v.id]), moreOpen = !!S.settings.navMore || more.some(v => v.id === S.view);
-    $('#nav').innerHTML = '<div class="nav-label">내 업무</div>' + primary.map(item).join('') + '<div class="sep"></div>' + `<a data-act="navMore" role="button" tabindex="0" aria-expanded="${moreOpen}" class="navmore">${ic('more')}<span class="lb">더 보기</span><span class="nav-chevron" aria-hidden="true">${moreOpen ? '▴' : '▾'}</span></a>` + (moreOpen ? more.map(item).join('') : '');
+    $('#nav').innerHTML = '<div class="nav-label">내 업무</div>' + primary.map(item).join('') + '<div class="sep"></div>' + `<a data-act="navMore" role="button" tabindex="0" aria-expanded="${moreOpen}" class="navmore">${ic('more')}<span class="lb">더 보기</span><span class="nav-chevron" aria-hidden="true">${moreOpen ? '▴' : '▾'}</span></a>` + (moreOpen ? more.map(item).join('') : '') + (() => { const v = versionInfo(); return `<div class="foot"><a data-act="openChangelog" role="button" tabindex="0" class="navver ${v.state}" title="설치된 버전과 업데이트 내역"><span class="lb"><span><b>v${esc(VERSION)}</b>${v.label ? ' · ' + esc(v.label) : ''}</span>${v.applied ? `<small>${esc(v.applied)} 적용</small>` : ''}</span></a></div>`; })();
   }
   function boardCount() { return (S.a ? S.a.actions.filter(x => onBoard(x) && !boardLinked(x) && bucketOfAction(x) !== 'done').length : 0) + S.todos.filter(t => bucketOfTodo(t) !== 'done').length; }
   function renderMain() {

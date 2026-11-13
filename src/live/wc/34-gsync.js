@@ -48,13 +48,12 @@
   HOME_ACTS.gsyncLayer = (el, v) => { gsyncState().layer = v; renderMain(); };
   function gsyncOpenForm(ev) {
     if (!ev || ev.state === 'hold') return;
-    const w = window.open(R.gsyncUrl(ev, ev.calId), '_blank', 'noopener');
-    if (!w) { toast('새 탭이 막혔습니다. 팝업을 허용한 뒤 다시 눌러 주세요.'); return; }
+    if (!openExternalTab(R.gsyncUrl(ev, ev.calId))) { toast('새 탭이 막혔습니다. 팝업을 허용한 뒤 다시 눌러 주세요.'); return; }
     toast(ev.calId ? '구글 일정 작성 화면을 열었습니다. 캘린더와 내용을 확인하고 [저장]을 눌러 주세요.' : '구글 일정 작성 화면을 열었습니다. 캘린더를 “' + ev.layer + '”로 고른 뒤 [저장]을 눌러 주세요.');
   }
   HOME_ACTS.gsyncUp = (el, v) => gsyncOpenForm(gsyncEv(v));
   HOME_ACTS.gsyncNext = () => { const p = gsyncGet(); const ev = p && p.items.find(i => i.state === 'ready'); if (!ev) { toast('구글에 없는 일정이 없습니다.'); return; } gsyncState().open = ev.key; gsyncOpenForm(ev); renderMain(); };
-  HOME_ACTS.gsyncFind = (el, v) => { const ev = gsyncEv(v); if (!ev) return; window.open('https://calendar.google.com/calendar/u/0/r/search?q=' + encodeURIComponent(ev.docNo || ev.title), '_blank', 'noopener'); };
+  HOME_ACTS.gsyncFind = (el, v) => { const ev = gsyncEv(v); if (!ev) return; if (!openExternalTab('https://calendar.google.com/calendar/u/0/r/search?q=' + encodeURIComponent(ev.docNo || ev.title))) toast('새 탭이 막혔습니다. 팝업을 허용한 뒤 다시 눌러 주세요.'); };
   HOME_ACTS.gsyncMark = (el, v) => {
     const ev = gsyncEv(v); if (!ev || ev.state === 'hold') return;
     const c = gsyncCfg(); c.synced = {...(c.synced || {})};

@@ -32,7 +32,9 @@
   async function checkUpdate(force) {
     if (!allowed('updateCheck')) return null;
     const cached = store.get('updateInfo', null);
-    if (!force && cached && /^0\./.test(cached.latest || '') && Date.now() - cached.at < 12 * 3600e3) return cached; // 옛 번호 체계(4.x 등)로 저장된 확인 결과는 버린다
+    if (!force && cached && /^\d+\.\d+\.\d+$/.test(cached.latest || '') && Date.now() - cached.at < 3600e3 && R.compareVersions(cached.latest, VERSION) >= 0) return cached; // 1시간. 방금 갱신돼 설치본이 더 새것이면 다시 확인한다
+    // 실패한 확인도 10분은 다시 요청하지 않는다(접속이 막힌 곳에서 열 때마다 기다리지 않게, 요청 한도도 아끼게).
+    if (!force && cached && !cached.latest && cached.err && Date.now() - cached.at < 10 * 60e3) return cached;
     try {
       const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 6000);
       const r = await fetch('https://api.github.com/repos/sysmetrix/groupware/releases/latest', {signal: ctl.signal, headers: {Accept: 'application/vnd.github+json'}});
@@ -40,7 +42,7 @@
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const j = await r.json();
       const tag = String(j.tag_name || '').replace(/^v/, '');
-      const info = {at: Date.now(), latest: /^0\.\d+\.\d+$/.test(tag) ? tag : '', url: /^https:\/\/github\.com\/sysmetrix\//.test(j.html_url || '') ? j.html_url : ''};
+      const info = {at: Date.now(), latest: /^\d+\.\d+\.\d+$/.test(tag) ? tag : '', err: /^\d+\.\d+\.\d+$/.test(tag) ? '' : `알 수 없는 릴리스 번호 ${tag.slice(0, 20) || '(없음)'}`, url: /^https:\/\/github\.com\/sysmetrix\//.test(j.html_url || '') ? j.html_url : ''};
       store.set('updateInfo', info);
       return info;
     } catch (e) { const info = {at: Date.now(), latest: '', url: '', err: String(e.message || e).slice(0, 80)}; store.set('updateInfo', info); return info; }
@@ -109,7 +111,7 @@
     add('조회 전용 연결', true, `${GW.readOnlyEndpoints().length}개 엔드포인트(쓰기 요청 없음)`);
     const up = store.get('updateInfo', null);
     if (up && up.latest) { const c = R.compareVersions(up.latest, VERSION); add('최신 버전', c <= 0, c > 0 ? `새 버전 ${up.latest} 이 있습니다` : '최신입니다'); }
-    else add('최신 버전', true, up && up.err ? `확인하지 못함(${up.err})` : '아직 확인 전');
+    else add('최신 버전', !(up && up.err) && allowed('updateCheck'), !allowed('updateCheck') ? '업데이트 확인이 관리자 설정으로 꺼져 있습니다' : up && up.err ? `확인하지 못함(${up.err})` : '아직 확인 전');
     const errs = store.get('errors', []);
     add('최근 오류', errs.length === 0, errs.length ? `${errs.length}건 (마지막: ${R.maskSensitive(errs[errs.length - 1].where)})` : '없음');
     return out;
@@ -118,10 +120,17 @@
     const errs = store.get('errors', []).slice(-10).map(e => `- ${new Date(e.at).toISOString()} ${e.where}: ${e.msg}`).join('\n');
     return R.maskSensitive(`GW 비서 진단 보고서\n생성: ${new Date().toISOString()}\n버전: ${VERSION}\n브라우저: ${navigator.userAgent}\n\n` + rows.map(r => `[${r.ok ? 'OK' : '확인필요'}] ${r.name}: ${r.detail}`).join('\n') + (errs ? `\n\n최근 오류\n${errs}` : ''));
   }
+  // 진단 창은 먼저 그리고, 업데이트 확인 결과는 도착하면 갱신한다(접속이 느릴 때 빈 화면으로 기다리지 않게).
   async function openDiag() {
     closeOverlay();
     S.paletteOpen = true;
+    drawDiag();
+    const before = JSON.stringify(store.get('updateInfo', null));
     await checkUpdate(false);
+    renderHead();
+    if (S.paletteOpen && $('#overlay [aria-label="진단"]') && JSON.stringify(store.get('updateInfo', null)) !== before) drawDiag();
+  }
+  function drawDiag() {
     const rows = diagChecks();
     $('#overlay').innerHTML = `<div class="modal" data-act="closeOverlay"><div class="dlg" data-stop="1" style="width:min(720px,95vw);padding:22px 24px;max-height:88vh;overflow:auto" role="dialog" aria-label="진단">
       <button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button>
@@ -130,9 +139,16 @@
       <div class="acts" style="margin-top:12px"><button class="btn sm primary" data-act="govCopyDiag">진단 보고서 복사</button><button class="btn sm" data-act="govUpdate">업데이트 다시 확인</button><button class="btn sm" data-act="openData">데이터 관리</button></div></div></div>`;
   }
   async function govUpdate() {
+    // 누른 화면(업데이트 내역 또는 진단)을 그대로 다시 그린다.
+    const fromLog = !!$('#overlay [aria-label="업데이트 내역"]');
     const i = await checkUpdate(true);
-    if (i && i.latest && R.compareVersions(i.latest, VERSION) > 0) toast(`새 버전 ${i.latest} 이 있습니다. 관리자에게 알려 주세요.`); else toast(i && i.err ? '업데이트를 확인하지 못했습니다.' : '최신 버전입니다.');
-    openDiag();
+    renderHead(); renderNav();
+    // 확인하지 못한 것을 "최신"이라고 말하지 않는다.
+    if (!i) toast('업데이트 확인이 관리자 설정으로 꺼져 있어 확인하지 않았습니다.');
+    else if (!i.latest) toast(`업데이트를 확인하지 못했습니다${i.err ? `(${i.err})` : ''}.`);
+    else if (R.compareVersions(i.latest, VERSION) > 0) toast(`새 버전 v${i.latest} 이 있습니다. 설치된 버전은 v${VERSION} 입니다.`);
+    else toast(`최신 버전입니다(v${VERSION}).`);
+    if (fromLog) openChangelog(); else { closeOverlay(); S.paletteOpen = true; drawDiag(); }
   }
 
   // ---------- 최초 사용 안내 ----------

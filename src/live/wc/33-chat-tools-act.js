@@ -6,6 +6,10 @@
   const chatDow = iso => new Date(iso + 'T00:00:00Z').getUTCDay();
   function chatBizDays(a, b) { let n = 0; for (let t = Date.parse(a + 'T00:00:00Z'), z = Date.parse(b + 'T00:00:00Z'); t <= z; t += 86400000) { const d = new Date(t).getUTCDay(); if (d !== 0 && d !== 6) n++; } return n; }
   const chatNeedDate = ex => ({ok: false, text: `어느 날짜인지 알려 주세요. 예) ${ex}`});
+  // 준비 창에서 취소했거나 근태신청 화면이 열리지 않았으면 "열었습니다"라고 말하지 않는다.
+  const chatAttResult = name => (S.pane.url === GW.links.route(GW.routes.attendanceRequest)
+    ? {ok: true, text: `${name}를 처리 창에 열었습니다. 채워진 내용을 확인하고 [신청완료]는 직접 눌러 주세요.`}
+    : {ok: false, text: `${name}를 열지 않았습니다(준비 창에서 취소했거나 근태신청 화면을 열지 못했습니다). 다시 하려면 같은 요청을 한 번 더 말씀해 주세요.`});
   function chatDateWarn(iso, end) {
     const w = [];
     if (iso < today()) w.push('이미 지난 날짜입니다.');
@@ -30,7 +34,7 @@
       if (lv && kind === '연차' && Number.isFinite(Number(lv.remaining))) { const need = chatBizDays(iso, end || iso); if (need > Number(lv.remaining)) warn.push(`남은 연차(${fmtDays(lv.remaining)})보다 많이 쓰는 신청입니다.`); }
       const reason = String(a.reason || '').slice(0, 100);
       return {ok: true, text: `${chatSpan(iso, end)} ${kind} 신청을 준비했습니다. 아직 아무것도 제출하지 않았습니다. 확인 카드의 [신청서 열고 채우기]를 누르면 신청서가 열리고, [신청완료]는 직접 눌러야 합니다.`, cards: [{type: 'confirm', title: '휴가 신청서 준비', risk: 'low', rows: [['종류', kind], ['기간', chatSpan(iso, end)], ['사유', reason || '신청서에서 입력']], warn: warn.join(' '), confirmLabel: '신청서 열고 채우기', cancelLabel: '취소',
-        onConfirm: async () => { await quickAttendanceApplication('leave', {date: iso, to: end, kind, reason}); return {ok: true, text: '신청서 준비 창을 열었습니다. 내용을 확인하고 [신청완료]는 직접 눌러 주세요.'}; }}]};
+        onConfirm: async () => { await quickAttendanceApplication('leave', {date: iso, to: end, kind, reason}); return chatAttResult('휴가 신청서'); }}]};
     },
   });
 
@@ -44,8 +48,11 @@
       if (!iso || (a.end_date && !end)) return {ok: false, text: '날짜를 알아보지 못했습니다. 예) 11/20, 내일'};
       if (end && end < iso) return {ok: false, text: '종료일이 시작일보다 빠릅니다. 날짜를 다시 알려 주세요.'};
       const scope = a.scope === '관외' ? '관외' : '관내', place = String(a.place || '').slice(0, 60), reason = String(a.reason || '').slice(0, 100);
-      return {ok: true, text: `${chatSpan(iso, end)} ${scope}출장 신청을 준비했습니다.${place && reason ? '' : ' 출장지와 목적은 신청서에서 입력하세요.'} 아직 제출하지 않았습니다. 확인 카드의 [신청서 열고 채우기]를 눌러 진행하세요.`, cards: [{type: 'confirm', title: '출장 신청서 준비', risk: 'low', rows: [['구분', scope + '출장'], ['기간', chatSpan(iso, end)], ['출장지', place || '신청서에서 입력'], ['목적', reason || '신청서에서 입력']], warn: chatDateWarn(iso, end).join(' '), confirmLabel: '신청서 열고 채우기', cancelLabel: '취소',
-        onConfirm: async () => { await quickAttendanceApplication('trip', {kind: scope, date: iso, to: end, visit: place, purpose: reason, content: reason}); return {ok: true, text: '출장 신청서 준비 창을 열었습니다. 내용을 확인하고 [신청완료]는 직접 눌러 주세요.'}; }}]};
+      const hm = /^([01]\d|2[0-3]):[0-5]\d$/, ts = hm.test(a.start || '') ? a.start : '', te = hm.test(a.end || '') ? a.end : '';
+      if (ts && te && ts >= te) return {ok: false, text: '시작 시각이 종료 시각보다 늦습니다. 시간을 다시 알려 주세요.'};
+      const tripTime = ts && te && !end ? `${ts}~${te}` : '';
+      return {ok: true, text: `${chatSpan(iso, end)} ${scope}출장 신청을 준비했습니다.${place && reason ? '' : ' 출장지와 목적은 신청서에서 입력하세요.'} 아직 제출하지 않았습니다. 확인 카드의 [신청서 열고 채우기]를 눌러 진행하세요.`, cards: [{type: 'confirm', title: '출장 신청서 준비', risk: 'low', rows: [['구분', scope + '출장'], ['기간', chatSpan(iso, end)], ['시간', tripTime || '09:00~18:00 (신청서에서 바꿀 수 있음)'], ['출장지', place || '신청서에서 입력'], ['목적', reason || '신청서에서 입력']], warn: chatDateWarn(iso, end).join(' '), confirmLabel: '신청서 열고 채우기', cancelLabel: '취소',
+        onConfirm: async () => { await quickAttendanceApplication('trip', {kind: scope, date: iso, to: end, visit: place, purpose: reason, content: reason, time: tripTime}); return chatAttResult('출장 신청서'); }}]};
     },
   });
 
@@ -61,7 +68,7 @@
       if (s && e && s >= e) return {ok: false, text: '시작 시각이 종료 시각보다 늦습니다. 시간을 다시 알려 주세요.'};
       const kind = chatDow(iso) === 0 || chatDow(iso) === 6 ? '휴일근무' : '연장근무', reason = String(a.reason || '').slice(0, 100);
       return {ok: true, text: `${iso} ${kind} 신청을 준비했습니다. 아직 제출하지 않았습니다. 확인 카드의 [신청서 열고 채우기]를 눌러 진행하세요.`, cards: [{type: 'confirm', title: '시간외·휴일근무 신청서 준비', risk: 'low', rows: [['근무 구분', kind], ['근무일', iso], ['시간', s && e ? `${s}~${e}` : '신청서에서 입력'], ['사유', reason || '신청서에서 입력']], warn: chatDateWarn(iso, '').filter(w => !/주말/.test(w)).join(' '), confirmLabel: '신청서 열고 채우기', cancelLabel: '취소',
-        onConfirm: async () => { await quickAttendanceApplication('overtime', {kind, date: iso, reason, time: s && e ? `${s}~${e}` : ''}); return {ok: true, text: '시간외 신청서 준비 창을 열었습니다. 내용을 확인하고 [신청완료]는 직접 눌러 주세요.'}; }}]};
+        onConfirm: async () => { await quickAttendanceApplication('overtime', {kind, date: iso, reason, time: s && e ? `${s}~${e}` : ''}); return chatAttResult('시간외 신청서'); }}]};
     },
   });
 
@@ -85,7 +92,12 @@
       }
       const points = String(a.points || '').slice(0, 300), tpl = /제출|자료|첨부/.test(points + (a.query || '')) ? 'submit' : 'confirm';
       return {ok: true, text: `“${String(x.title).slice(0, 40)}” 메일의 답장 작성창을 열 준비를 했습니다. 보내기는 하지 않습니다.`, cards: [{type: 'confirm', title: '메일 답장 작성창 열기', risk: 'low', rows: [['대상 메일', x.title || '(제목 없음)'], ['동작', `답장 창을 열고 ${tpl === 'submit' ? '자료 제출' : '확인'} 표준 문구를 넣습니다`], ['보내기', '직접 눌러야 합니다']], confirmLabel: '답장 창 열기', cancelLabel: '취소',
-        onConfirm: async () => { if (points) copyText(points); await cmdMailReplyTo(String(a.query || '채팅 요청'), tpl, x); return {ok: true, text: `답장 창을 열었습니다.${points ? ' 말씀하신 요점은 복사해 두었으니 붙여넣기(Ctrl+V)로 쓰세요.' : ''} 내용을 확인하고 [보내기]는 직접 눌러 주세요.`}; }}]};
+        onConfirm: async () => {
+          const r = await cmdMailReplyTo(String(a.query || '채팅 요청'), tpl, x);
+          if (r !== 'filled' && r !== 'opened') return {ok: false, text: '답장 창을 열지 않았습니다(작성 중인 화면을 그대로 두었거나 취소했습니다).'};
+          if (points) copyText(points);
+          return {ok: true, text: `${r === 'filled' ? '답장 창을 열고 표준 문구를 넣었습니다.' : '답장 창은 열었지만 표준 문구는 넣지 못했습니다. 답장 화면 위의 회신문 버튼을 눌러 주세요.'}${points ? ' 말씀하신 요점은 복사해 두었으니 붙여넣기(Ctrl+V)로 쓰세요.' : ''} 내용을 확인하고 [보내기]는 직접 눌러 주세요.`};
+        }}]};
     },
   });
 
@@ -97,7 +109,12 @@
       const map = {result: ['결과보고 기안', 'result', '내 계획서 중 결과보고가 없는 것을 골라 시작합니다'], plan: ['운영·참가계획 기안', 'plan', '과거 계획서 서식으로 시작합니다'], payment: ['지급·지출 문서', 'pay', '지급 문서 허브가 열립니다'], goods: ['물품매입 기안', 'goods', '계획서를 고른 뒤 시작합니다']};
       const m = map[a.kind];
       if (!m) return {ok: false, text: '기안 종류를 알 수 없습니다. 결과보고, 운영계획, 지급, 물품매입 중에서 말씀해 주세요.'};
-      return {ok: true, text: `${m[0]} 시작을 준비했습니다. 제출은 하지 않습니다.`, cards: [{type: 'confirm', title: `${m[0]} 시작`, risk: 'low', rows: [['진행', m[2]], ['제출', '초안 화면에서 직접 상신합니다']], confirmLabel: '시작하기', cancelLabel: '취소', onConfirm: async () => { await autoStartDraft(m[1]); return {ok: true, text: `${m[0]} 화면을 열었습니다.`}; }}]};
+      return {ok: true, text: `${m[0]} 시작을 준비했습니다. 제출은 하지 않습니다.`, cards: [{type: 'confirm', title: `${m[0]} 시작`, risk: 'low', rows: [['진행', m[2]], ['제출', '초안 화면에서 직접 상신합니다']], confirmLabel: '시작하기', cancelLabel: '취소', onConfirm: async () => {
+        const feat = {result: 'draftResult', plan: 'draftPlan', pay: 'draftPay', goods: 'draftGoods'}[m[1]];
+        if (feat && !allowed(feat)) return {ok: false, text: `${m[0]} 기능이 관리자 설정으로 꺼져 있어 열지 않았습니다.`};
+        await autoStartDraft(m[1]);
+        return {ok: true, text: `${m[0]} 시작 화면을 띄웠습니다. 대상을 고르면 초안 화면이 열립니다.`};
+      }}]};
     },
   });
 
@@ -115,8 +132,9 @@
       if (!v.ok) return {ok: false, text: '예약할 수 없는 조건입니다: ' + v.errors.join(' ')};
       try {
         const list = ((resState().list) || await GW.resourceList()).filter(r => r.useYn !== 'N');
-        const car = list.find(r => /차량|관용|니로/.test(r.name)) || list[0];
-        if (!car) return {ok: false, text: '예약할 수 있는 차량을 찾지 못했습니다.'};
+        // 차량이 아닌 자원(회의실 등)을 대신 예약하지 않는다.
+        const car = list.find(r => /차량|관용|니로|승용|승합|자동차|카니발|스타리아/.test(r.name));
+        if (!car) return {ok: false, text: `자원 목록에서 차량을 찾지 못했습니다${list.length ? ` (있는 자원: ${list.slice(0, 5).map(r => r.name).join(', ')})` : ''}. 자원 예약 화면에서 직접 골라 주세요.`, cards: [{type: 'nav', label: '자원 예약 화면 열기', view: 'resource'}]};
         const det = await GW.resourceDetail(car.resSeq);
         v = R.validateBooking({title, date: d8, start: a.start, end: a.end, limitMin: det.limitMin});
         if (!v.ok) return {ok: false, text: '예약할 수 없는 조건입니다: ' + v.errors.join(' ')};

@@ -103,7 +103,9 @@
     const today = R.kstNow(new Date()).date;
     const sel = selectedAction();
     const selDate = sel && sel.type === 'attendance' ? String(sel.when || '').slice(0, 10) : '';
-    const d0 = attYmd(preset.date) || selDate || today, d1 = attYmd(preset.to) || d0;
+    // 근태 달력에서 날짜를 고른 뒤 신청하면 그 날짜를 기본값으로 쓴다(오늘로 되돌아가지 않게).
+    const pickedDay = S.view === 'attendance' && S.att && /^\d{8}$/.test(S.att.day || '') ? `${S.att.day.slice(0, 4)}-${S.att.day.slice(4, 6)}-${S.att.day.slice(6)}` : '';
+    const d0 = attYmd(preset.date) || selDate || pickedDay || today, d1 = attYmd(preset.to) || d0;
     // 내 지난 근태 신청 제목에서 제목 형식을 배운다(목록을 못 읽으면 기본 형식)
     const ap = GW.teamPlanned ? await Promise.race([loadApps().catch(() => null), wait(4000).then(() => null)]) : null;
     const model = ap ? R.learnAttendanceTitles(ap.apps, ap.me) : null;

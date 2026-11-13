@@ -32,6 +32,7 @@
 #bwyfgw-wc-fab .lg{width:22px;height:22px;border-radius:7px;flex:0 0 auto;display:grid;place-items:center;background:transparent;box-shadow:none;position:relative}
 #bwyfgw-wc-fab .lg img{width:100%;height:100%;display:block;border-radius:6px}
 #bwyfgw-wc-fab .t{position:relative;white-space:nowrap}
+#bwyfgw-wc-fab .v{position:relative;white-space:nowrap;font-size:12px;font-weight:600;color:#aab2e8;font-variant-numeric:tabular-nums}
 #bwyfgw-wc-fab{overflow:visible}
 #bwyfgw-wc-fab .sm{position:absolute;bottom:calc(100% + 8px);right:0;white-space:nowrap;color:#fff;font-weight:500;font-size:12.5px;background:rgba(18,20,32,.96);padding:7px 11px;border-radius:10px;box-shadow:0 8px 24px -8px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.1) inset;opacity:0;transform:translateY(4px);pointer-events:none;transition:opacity .2s,transform .2s}
 #bwyfgw-wc-fab:hover .sm,#bwyfgw-wc-fab:focus-visible .sm{opacity:1;transform:none}
@@ -108,6 +109,7 @@
   const ic = (n, extra = '') => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true" ${extra}>${ICONS[n] || ''}</svg>`;
   root.innerHTML = `<style>${WC_CSS}</style><div class="wc nopane" id="wc" role="region" aria-label="GW 비서"><header role="banner">
 <button class="home" data-act="home" title="처음 화면(오늘 할 일)으로 · H" aria-label="GW 비서 처음 화면"><span class="logo">${brandImage}</span><span class="brand-name"><b>GW 비서</b><small id="orgName">부천여성청소년재단</small></span></button>
+<button class="verchip" id="verChip" data-act="openChangelog" title="설치된 버전과 업데이트 내역"></button>
 <label class="srch" title="통합검색 또는 명령 (Ctrl+K)">${ic('search')}<input id="gsearch" placeholder="메일·문서·사람 검색 또는 명령" autocomplete="off" aria-label="통합검색"><kbd>Ctrl K</kbd></label>
 <span class="sp"></span>${window.BWYFGW_DEMO ? '<span class="demo-pill" title="로그인 없이 살펴보는 화면입니다. 보이는 기관·사람·문서·금액은 모두 지어낸 것이며 그룹웨어에는 아무 요청도 보내지 않습니다.">둘러보기 · 지어낸 자료</span>' : ''}
 <button class="stat" id="meta" data-act="refresh" title="지금 다시 읽기 (R)"></button>

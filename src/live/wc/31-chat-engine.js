@@ -122,9 +122,14 @@
     if (!avail.length) throw Object.assign(new Error('quota'), {status: 429, kind: 'quota', cooled: true});
     let last = null;
     for (const model of avail.slice(0, 3)) {
-      const tm = setTimeout(() => ctl.abort(), 25000);
+      // 모델마다 새 중단 신호를 쓴다. 같은 신호를 다시 쓰면 한 모델이 시간 초과된 뒤 다음 모델 요청도 즉시 끊긴다.
+      const mc = new AbortController();
+      const onStop = () => mc.abort();
+      if (ctl.signal.aborted) mc.abort(); else ctl.signal.addEventListener('abort', onStop, {once: true});
+      let timedOut = false;
+      const tm = setTimeout(() => { timedOut = true; mc.abort(); }, 25000);
       try {
-        const r = await fetch(`${AI_HOST}/models/${model}:generateContent`, {method: 'POST', headers: {'x-goog-api-key': c.key, 'Content-Type': 'application/json'}, body: JSON.stringify(body), signal: ctl.signal});
+        const r = await fetch(`${AI_HOST}/models/${model}:generateContent`, {method: 'POST', headers: {'x-goog-api-key': c.key, 'Content-Type': 'application/json'}, body: JSON.stringify(body), signal: mc.signal});
         const j = await r.json().catch(() => ({}));
         if (r.ok) { chatState().model = model; return j; }
         const msg = (j.error && j.error.message) || 'HTTP ' + r.status;
@@ -135,9 +140,9 @@
         throw last;
       } catch (e) {
         if (e === last) throw e;
-        if (e.name === 'AbortError') { if (chatState().stopped) throw Object.assign(new Error('abort'), {status: 0, kind: 'net', aborted: true}); chatSetCool(model, 60000); last = Object.assign(new Error('timeout'), {status: 0, kind: 'net'}); continue; }
+        if (e.name === 'AbortError') { if (chatState().stopped || !timedOut) throw Object.assign(new Error('abort'), {status: 0, kind: 'net', aborted: true}); chatSetCool(model, 60000); last = Object.assign(new Error('timeout'), {status: 0, kind: 'net'}); continue; }
         throw Object.assign(new Error(String(e.message || e)), {status: 0, kind: 'net'});
-      } finally { clearTimeout(tm); }
+      } finally { clearTimeout(tm); ctl.signal.removeEventListener('abort', onStop); }
     }
     throw last || Object.assign(new Error('retry'), {status: 503, kind: 'server'});
   }
