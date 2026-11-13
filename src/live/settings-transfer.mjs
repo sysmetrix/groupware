@@ -26,14 +26,19 @@ const SETX_RULES = {
   urgentWords: v => Array.isArray(v) ? v.filter(x => typeof x === 'string' && x.trim()).map(x => x.trim().slice(0, 40)).slice(0, 50) : undefined,
   rel: v => {
     if (!setxPlain(v)) return undefined;
-    const lst = a => (Array.isArray(a) ? a : []).filter(setxPlain).slice(0, SETX_LIMITS.list).map(q => JSON.parse(JSON.stringify(q)));
-    return {mute: lst(v.mute), mine: lst(v.mine)};
+    const lst = a => {
+      if (a === undefined) return [];
+      if (!Array.isArray(a) || a.some(q => !setxPlain(q) || !['key', 'kind', 'sender'].includes(q.t) || typeof q.v !== 'string' || (q.label !== undefined && typeof q.label !== 'string') || (q.at !== undefined && (typeof q.at !== 'number' || !Number.isFinite(q.at))))) return undefined;
+      return a.slice(0, SETX_LIMITS.list).map(q => ({t: q.t, v: q.v, ...(q.label !== undefined ? {label: q.label} : {}), ...(q.at !== undefined ? {at: q.at} : {})}));
+    };
+    const mute = lst(v.mute), mine = lst(v.mine);
+    return mute && mine ? {mute, mine} : undefined;
   },
   refreshMin: v => [0, 3, 5, 10, 30].includes(Number(v)) ? Number(v) : undefined,
   notify: v => setxBool(v) ? v : undefined,
   fontSize: v => ['s', 'm', 'l', 'xl'].includes(v) ? v : undefined,
   theme: v => ['light', 'dark'].includes(v) ? v : undefined,
-  budget: v => Array.isArray(v) ? v.filter(b => setxPlain(b) && /^[A-Za-z0-9가-힣]+$/.test(b.project || '')).slice(0, 30).map(b => ({project: b.project, filter: setxStr(b.filter, 60), label: setxStr(b.label, 60)})) : undefined,
+  budget: v => Array.isArray(v) && v.every(b => setxPlain(b) && typeof b.project === 'string' && /^[A-Za-z0-9가-힣]+$/.test(b.project)) ? v.slice(0, 30).map(b => ({project: b.project, filter: setxStr(b.filter, 60), label: setxStr(b.label, 60)})) : undefined,
   mailCount: v => [50, 100, 200].includes(Number(v)) ? Number(v) : undefined,
   days: v => Number.isInteger(Number(v)) && Number(v) >= 1 && Number(v) <= 120 ? Number(v) : undefined,
   navMore: v => setxBool(v) ? v : undefined,
@@ -52,7 +57,6 @@ const SETX_RULES = {
     }
     out.cals = out.cals.slice(0, 12);
     if (['WEEK', 'MONTH', 'AGENDA'].includes(v.mode)) out.mode = v.mode;
-    if (setxPlain(v.synced)) out.synced = JSON.parse(JSON.stringify(v.synced));
     return out;
   },
 };

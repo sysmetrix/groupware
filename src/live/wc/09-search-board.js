@@ -3,10 +3,17 @@
   // ----- 통합검색 -----
   const cleanSnip = t => String(t || '').replace(/^[\s\S]{0,80}?수신자[\s\S]{0,160}?제목\s*/, '').replace(/\s+/g, ' ').trim();
   const periodFrom = p => { if (!p) return ''; const d = new Date(); d.setMonth(d.getMonth() - Number(p)); return R.kstNow(d).date.replace(/-/g, ''); };
+  let searchSeq = 0;
+  function searchFromInputs() {
+    const q = $('#sq'), p = $('#speriod');
+    if (q) S.search.kw = q.value.trim();
+    if (p) S.search.period = p.value;
+    return runSearch();
+  }
   function vSearch() {
     const s = S.search, res = s.res;
     const types = Object.entries(GW.searchLabels).filter(([k]) => k !== 'note');
-    const group = (type, render) => { const g = res && res.groups[type]; if (!g) return ''; return `<h2>${esc(g.label)} <span class="muted">${g.total}건</span>${g.total > g.items.length ? `<button class="btn sm ghost" data-act="searchMore" data-t="${type}">더 보기</button>` : ''}</h2>${g.error ? `<div class="box errb">${esc(g.message)}</div>` : g.items.length ? `<div class="list" role="list">${g.items.map(render).join('')}</div>` : '<div class="muted">결과 없음</div>'}`; };
+    const group = (type, render) => { const g = res && res.groups[type]; if (!g) return ''; return `<h2>${esc(g.label)} <span class="muted">${g.total}건</span>${g.total > g.items.length ? `<button class="btn sm ghost" data-act="searchMore" data-t="${type}" ${s.moreBusy?.[type] ? 'disabled' : ''}>${s.moreBusy?.[type] ? '불러오는 중…' : '더 보기'}</button>` : ''}</h2>${g.error ? `<div class="box errb">${esc(g.message)}</div>` : g.items.length ? `<div class="list" role="list">${g.items.map(render).join('')}</div>` : '<div class="muted">결과 없음</div>'}`; };
     const row = (t, id, pill, title, desc, when) => `<div class="row ${S.sel && S.sel.type === 'search' && S.sel.item && (S.sel.item.docId || S.sel.item.uid || S.sel.item.id || S.sel.item.fileId) === id ? 'sel' : ''}" role="listitem" tabindex="0" data-act="selSearch" data-t="${t}" data-id="${esc(id)}" style="grid-template-columns:90px 1fr auto"><span class="bdg tag">${esc(pill)}</span><div class="mn"><div class="t">${title}</div><div class="fx">${desc}</div></div><div class="w">${esc(when)}</div></div>`;
     const totals = res ? Object.values(res.groups).reduce((n, g) => n + (g.total || 0), 0) : 0;
     const busy = s.busy ? `<div class="list">${'<div class="sk row"></div>'.repeat(4)}</div><p class="muted"><span class="spin"></span> ${esc(s.types.map(t => GW.searchLabels[t]).join('·'))}에서 "${esc(s.kw)}"을(를) 찾는 중입니다…</p>` : '';
@@ -26,17 +33,44 @@ ${res && !s.busy ? [
     ].join('') || '<div class="list"><div class="empty"><b>찾은 결과가 없습니다</b>기간이나 찾을 곳을 넓혀 보세요.</div></div>' : ''}`;
   }
   async function runSearch(types) {
-    const s = S.search;
-    if (!s.kw || s.kw.length < 2) { toast('검색어를 두 글자 이상 입력하세요.'); return; }
-    s.busy = true; S.view = 'search'; render();
-    try { s.res = await GW.search(s.kw, {types: types || s.types, pageSize: 10, from: periodFrom(s.period)}); s.more = {}; S.searchRecent = [s.kw, ...(S.searchRecent || []).filter(k => k !== s.kw)].slice(0, 5); } catch (e) { toast('검색하지 못했습니다: ' + e.message); }
-    s.busy = false; render();
+    const s = S.search, kw = s.kw.trim();
+    if (kw.length < 2) { toast('검색어를 두 글자 이상 입력하세요.'); return; }
+    const seq = ++searchSeq, query = {kw, from: periodFrom(s.period), types: [...(types || s.types)]};
+    s.busy = true; s.moreBusy = {}; S.view = 'search'; render();
+    try {
+      const res = await GW.search(query.kw, {types: query.types, pageSize: 10, from: query.from});
+      if (seq !== searchSeq || S.search !== s) return;
+      s.res = res; s.searchQuery = query; s.more = {};
+      S.searchRecent = [kw, ...(S.searchRecent || []).filter(k => k !== kw)].slice(0, 5);
+    } catch (e) { if (seq === searchSeq && S.search === s) toast('검색하지 못했습니다: ' + e.message); }
+    finally { if (seq === searchSeq && S.search === s) { s.busy = false; render(); } }
+  }
+  async function searchMore(type) {
+    const s = S.search, res = s.res, query = s.searchQuery, g = res?.groups?.[type];
+    if (s.busy || !query || !g || g.total <= g.items.length) return;
+    const locks = s.moreBusy || (s.moreBusy = {});
+    if (locks[type]) return;
+    locks[type] = true;
+    const seq = searchSeq, page = (s.more[type] || 1) + 1;
+    renderMain();
+    try {
+      const r = await GW.search(query.kw, {types: [type], pageSize: 10, page, from: query.from});
+      if (seq !== searchSeq || S.search !== s || s.res !== res || s.searchQuery !== query) return;
+      const next = r.groups[type];
+      if (!next || next.error) throw new Error(next?.message || '결과를 불러오지 못했습니다.');
+      g.items = [...g.items, ...next.items]; s.more[type] = page;
+    } catch (err) { if (seq === searchSeq && S.search === s && s.res === res) toast(err.message); }
+    finally {
+      delete locks[type];
+      if (seq === searchSeq && S.search === s && s.res === res) renderMain();
+    }
   }
 
   // ----- 할 일 보드 (drag & drop) -----
-  const BUCKETS = [['late', '밀린 일'], ['today', '오늘'], ['tomorrow', '내일'], ['week', '이번 주'], ['later', '나중에'], ['done', '끝냄']];
+  const BUCKETS = [['late', '밀린 일'], ['today', '오늘'], ['tomorrow', '내일'], ['week', '이번 주'], ['later', '나중에'], ['wait', '결재 대기'], ['done', '끝냄·숨김']];
   const BUCKET_NAME = Object.fromEntries(BUCKETS);
   const onBoard = x => x.scope !== 'ref' || !!S.plan[x.key];
+  const boardLinked = x => S.todos.some(t => t.key === x.key && t.status !== 'done');
   const endOfWeek = () => { const d = new Date(); d.setDate(d.getDate() + ((5 - d.getDay() + 7) % 7)); return R.kstNow(d).date; };
   const plusDays = n => { const d = new Date(); d.setDate(d.getDate() + n); return R.kstNow(d).date; };
   function bucketOfTodo(t) {
@@ -47,10 +81,11 @@ ${res && !s.busy ? [
     return n < 0 ? 'late' : n === 0 ? 'today' : n === 1 ? 'tomorrow' : t.due <= endOfWeek() ? 'week' : 'later';
   }
   function bucketOfAction(x) {
-    if (S.plan[x.key]) return S.plan[x.key];
-    if (isHidden(x.key)) return 'done';
-    if (isSnoozed(x.key)) return 'tomorrow';
+    if (isHidden(x.key) && !resurfaced(x.key)) return 'done';
     const st = stateOf(x);
+    if (st === 'wait') return 'wait';
+    if (S.plan[x.key]) return S.plan[x.key];
+    if (isSnoozed(x.key)) return 'tomorrow';
     if (st === 'overdue') return 'late';
     if (st === 'urgent' || (x.deadline && x.deadline.dday <= 0)) return 'today';
     if (x.deadline && x.deadline.dday === 1) return 'tomorrow';
@@ -59,11 +94,11 @@ ${res && !s.busy ? [
   }
   function vBoard() {
     const cards = [];
-    for (const x of S.a.actions) if (onBoard(x)) cards.push({id: x.key, kind: 'act', b: bucketOfAction(x), title: x.title, sub: x.headline || x.kind, pri: x.priority});
+    for (const x of S.a.actions) if (onBoard(x) && !boardLinked(x)) cards.push({id: x.key, kind: 'act', b: bucketOfAction(x), title: x.title, sub: x.headline || x.kind, pri: x.priority});
     for (const t of S.todos) cards.push({id: `todo:${t.id}`, kind: 'todo', b: bucketOfTodo(t), title: t.title, sub: `${t.due ? `기한 ${t.due.slice(5).replace('-', '/')} (${ddayText(R.dday(t.due))})` : '기한 없음'}${t.source ? ' · ' + t.source : ''}`});
-    return `${pgh('할 일 보드', '카드를 끌어 다른 칸으로 옮기면 계획이 저장됩니다')}
+    return `${pgh('할 일 보드', '카드를 끌어 다른 칸으로 옮기면 계획이 저장됩니다. 보드 건수에는 결재 대기와 직접 추가한 일도 포함됩니다.')}
 <div class="bar"><input class="inp grow" id="tdTitle" placeholder="새 할 일을 쓰고 Enter" aria-label="새 할 일"><input class="inp" id="tdDue" placeholder="기한 (예: 11/12)" style="width:140px" aria-label="기한"><button class="btn primary" data-act="addTodo">${ic('plus')}추가</button></div>
-<div class="board">${BUCKETS.map(([b, n]) => { const cs = cards.filter(c => c.b === b); return `<div class="col" data-drop="${b}"><div class="col-h"><span>${n}</span><span class="muted">${cs.length}</span></div>${cs.map(c => `<div class="card ${c.kind} ${c.pri || ''}" draggable="true" data-drag="${esc(c.id)}" data-act="boardCard" data-k="${esc(c.id)}" tabindex="0" title="끌어서 옮기기 · 누르면 내용 보기"><div>${esc(c.title)}</div><div class="d">${esc(c.sub)}</div>${c.kind === 'todo' ? `<div class="acts" style="margin-top:6px"><button class="btn sm" data-act="todoEdit" data-id="${esc(c.id.slice(5))}">고치기</button><button class="btn sm danger" data-act="todoDel" data-id="${esc(c.id.slice(5))}">지우기</button></div>` : ''}</div>`).join('') || '<div class="hint">여기로 끌어다 놓으세요</div>'}</div>`; }).join('')}</div>
+<div class="board">${BUCKETS.map(([b, n]) => { const cs = cards.filter(c => c.b === b); return `<div class="col" ${b === 'wait' ? '' : `data-drop="${b}"`}><div class="col-h"><span>${n}</span><span class="muted">${cs.length}</span></div>${cs.map(c => `<div class="card ${c.kind} ${c.pri || ''}" draggable="${c.b !== 'wait'}" data-drag="${esc(c.id)}" data-act="boardCard" data-k="${esc(c.id)}" tabindex="0" title="끌어서 옮기기 · 누르면 내용 보기"><div>${esc(c.title)}</div><div class="d">${esc(c.sub)}</div>${c.kind === 'todo' ? `<div class="acts" style="margin-top:6px"><button class="btn sm" data-act="todoEdit" data-id="${esc(c.id.slice(5))}">고치기</button><button class="btn sm danger" data-act="todoDel" data-id="${esc(c.id.slice(5))}">지우기</button></div>` : ''}</div>`).join('') || `<div class="hint">${b === 'wait' ? '결재 대기 항목이 없습니다' : '여기로 끌어다 놓으세요'}</div>`}</div>`; }).join('')}</div>
 <p class="muted" style="margin-top:12px">파란 줄 카드는 그룹웨어 업무라 그룹웨어에서 처리해야 사라집니다. 노란 줄 카드는 내가 적은 할 일이며 이 PC에만 저장됩니다.</p>`;
   }
   function dropTo(id, bucket) {
@@ -80,5 +115,28 @@ ${res && !s.busy ? [
     saveLocal(); render();
     toastUndo(`"${BUCKET_NAME[bucket]}" 칸으로 옮겼습니다.`);
   }
-  const parseDue = v => { const s = String(v || '').trim(); if (!s) return ''; if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s; const m = s.match(/^(\d{1,2})[./-](\d{1,2})$/); if (!m) return ''; const y = R.kstNow(new Date()).y; return `${y}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`; };
+  // 빈 값은 기한 없음, null은 잘못된 입력을 뜻한다.
+  const parseDue = v => {
+    const s = String(v ?? '').trim();
+    if (!s) return '';
+    const full = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const short = s.match(/^(\d{1,2})[./-](\d{1,2})$/);
+    if (!full && !short) return null;
+    const y = full ? Number(full[1]) : Number(R.kstNow(new Date()).y);
+    const m = Number(full ? full[2] : short[1]);
+    const d = Number(full ? full[3] : short[2]);
+    const leap = y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0);
+    const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    if (y < 1 || m < 1 || m > 12 || d < 1 || d > days[m - 1]) return null;
+    return `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  };
+  const dueError = '올바른 날짜를 입력하세요. 예: 11/20 또는 2026-11-20';
+  // 클릭과 Enter가 모두 호출하는 기존 입력 함수를 대체한다.
+  addTodoFromInput = function () {
+    const title = ($('#tdTitle') || {}).value?.trim();
+    const input = $('#tdDue');
+    const due = parseDue(input?.value);
+    if (due === null) { toast(dueError); input?.focus(); return; }
+    addTodo(title, due, '직접 추가');
+  };
 

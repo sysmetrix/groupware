@@ -71,3 +71,22 @@
 .wc .df-x .i{width:12px;height:12px}
 .wc .df-help{margin:6px 0 0 18px;padding:0;line-height:1.9;font-size:14px}
 .wc .df-foot{margin-top:12px;font-size:12.5px}
+
+/* 홈: 넓은 화면에서는 작업 공간을 쓰고, 좁은 컨테이너에서는 자연스럽게 쌓는다. */
+.wc .hm{max-width:1800px;gap:20px}
+.wc .hm-head{padding:4px 0 2px}
+.wc .hm-hello{font-size:clamp(22px,1.6vw,28px)}
+#hmTop{display:grid;gap:12px}
+#hmTop .hm-tiles{gap:12px}
+#hmTop .hm-tile,#hmTop .hm-skel{min-height:96px;padding:16px 18px;border-radius:12px}
+#hmTop .hm-tile-s{display:block;line-height:1.4}
+#hmTop .hm-tile-v{font-size:28px}
+.wc .hm-next{padding:16px 20px}
+.wc .hm-next-t{white-space:normal;overflow-wrap:anywhere}
+.wc .hm-grid{grid-template-columns:minmax(0,1.6fr) minmax(320px,1fr);gap:20px;align-items:stretch}
+.wc .hm-chatcol,.wc #hmDash{min-width:0}
+.wc .hm-chatcol .ch{height:100%;box-sizing:border-box;padding:20px}
+.wc .hm-chatcol .ch-log{flex:1;min-height:260px}
+.wc .hm-today{height:100%;box-sizing:border-box;padding:20px}
+@container (max-width:1000px){.wc .hm-grid{grid-template-columns:1fr}.wc .hm-chatcol .ch-log{min-height:200px}}
+@container (max-width:760px){#hmTop .hm-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}#hmTop .hm-tile,#hmTop .hm-skel{min-height:84px;padding:12px 14px}.wc .hm-chatcol .ch{padding:14px}}

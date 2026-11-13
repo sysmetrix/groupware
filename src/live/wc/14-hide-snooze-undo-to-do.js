@@ -63,7 +63,7 @@
     const x = S.a.actions.find(a => a.key === k);
     const label = x && x.type === 'doc' ? '처리했음 → 확인하고 다음' : x && x.type === 'mail' ? '답장했음 → 보낸메일 확인하고 다음' : '직접 확인했음 → 다음';
     const gate = f.gate ? `<div class="box warn" style="margin:0 10px 6px">이 항목은 열면 그룹웨어에 읽음(열람)으로 기록됩니다. <button class="btn sm primary" data-act="focusOpenGate">열고 처리하기</button> <button class="btn sm" data-act="focusSkip">열지 않고 건너뛰기</button></div>` : '';
-    const summary = [cnt('done') ? `처리 확인 ${cnt('done')}` : '', cnt('manual') ? `직접 확인 ${cnt('manual')}` : '', cnt('remain') ? `아직 남음 ${cnt('remain')}` : '', cnt('hadReply') ? `이전 답장만 ${cnt('hadReply')}` : '', cnt('unsent') ? `답장 못 찾음 ${cnt('unsent')}` : ''].filter(Boolean).join(' · ');
+    const summary = [cnt('done') ? `처리 확인 ${cnt('done')}` : '', cnt('manual') ? `직접 확인 ${cnt('manual')}` : '', cnt('remain') ? `아직 남음 ${cnt('remain')}` : '', cnt('hadReply') ? `이전 답장만 ${cnt('hadReply')}` : '', cnt('unsent') ? `답장 못 찾음 ${cnt('unsent')}` : '', cnt('unknown') ? `확인 불가 ${cnt('unknown')}` : ''].filter(Boolean).join(' · ');
     return `${gate}<div class="fbar"><span class="prog">연속 처리 ${f.i + 1} / ${f.keys.length}${summary ? ' · ' + summary : ''}</span><button class="btn sm" data-act="focusPrev" ${f.i === 0 || f.busy ? 'disabled' : ''}>◀ 이전</button><button class="btn sm" data-act="focusSkip" ${f.busy ? 'disabled' : ''}>건너뛰기</button><button class="btn ok" data-act="focusNext" ${f.busy ? 'disabled' : ''}>${f.busy ? '<span class="spin"></span> 확인 중…' : label}</button><button class="btn sm" data-act="focusStop" ${f.busy ? 'disabled' : ''}>끝내기</button></div>`;
   }
   async function focusNext(verify = true) {
@@ -75,19 +75,38 @@
     f.busy = true; $('#fbar').innerHTML = focusBar();
     try {
       if (verify && x && x.type === 'doc' && ['distWaiting', 'deptWaiting', 'pending', 'sendWaiting'].includes(x.ref.kind)) {
-        // Re-read the whole list (up to 200) so that long lists are not misjudged.
-        const r = await GW.approvalPage(x.ref.kind, 1, {size: 200});
-        const still = r.docs.some(d => d.docId === x.ref.docId);
-        f.results[k] = still ? 'remain' : 'done';
-        toast(still ? '아직 그룹웨어 목록에 남아 있습니다. 처리가 저장되지 않았을 수 있습니다.' : '✓ 그룹웨어에서 처리된 것을 확인했습니다.');
+        // Absence proves completion only after every page in the original date
+        // range is accounted for with stable totals and unique document IDs.
+        const id = String(x.ref.docId || '');
+        const day = String(x.when || '').slice(0, 10).replace(/[^0-9]/g, '');
+        let result = 'unknown', total = null, from = '', to = '';
+        const ids = new Set();
+        if (id && day.length === 8) {
+          for (let page = 1; page <= 20; page++) {
+            const r = await GW.approvalPage(x.ref.kind, page, {size: 200});
+            if (!Array.isArray(r.docs)) break;
+            if (r.docs.some(d => d.docId && String(d.docId) === id)) { result = 'remain'; break; }
+            if (!Number.isSafeInteger(r.reliableTotal) || r.reliableTotal < 0 || !r.from || !r.to || day < r.from || day > r.to) break;
+            if (total === null) { total = r.reliableTotal; from = r.from; to = r.to; }
+            if (r.reliableTotal !== total || r.from !== from || r.to !== to || r.docs.length > 200) break;
+            let invalid = false;
+            for (const d of r.docs) {
+              const key = String(d.docId || '');
+              if (!key || ids.has(key)) { invalid = true; break; }
+              ids.add(key);
+            }
+            if (invalid || ids.size > total) break;
+            if (ids.size === total) { result = 'done'; break; }
+            if (r.docs.length !== 200) break;
+          }
+        }
+        f.results[k] = result;
+        toast(result === 'remain' ? '아직 그룹웨어 목록에 남아 있습니다. 처리가 저장되지 않았을 수 있습니다.' : result === 'done' ? '✓ 조회 범위의 전체 목록에서 처리를 확인했습니다.' : '전체 목록을 확인할 수 없어 처리 여부를 확인하지 못했습니다. 목록에 남겨 둡니다.');
       } else if (verify && x && x.type === 'mail') {
         const m = findMail(x.ref.box, x.ref.uid);
         const r = await GW.findReply({subject: m ? m.subject : x.title, since: m ? m.date : ''});
-        const k0 = R.kstNow(f.started || new Date());
-        const startText = `${k0.date} ${String(k0.hh).padStart(2, '0')}:${String(k0.mm).padStart(2, '0')}`;
-        if (r.found && r.date.slice(0, 16) >= startText) { pushUndo('연속 처리 확인'); f.results[k] = 'done'; S.hidden[k] = Date.now(); saveLocal(); toast(`✓ 방금 보낸 답장을 보낸메일함에서 찾았습니다 (${r.date.slice(5, 16)}).`); }
-        else if (r.found) { f.results[k] = 'hadReply'; toast(`이전에 보낸 답장(${r.date.slice(5, 16)})만 있습니다. 제출까지 끝났는지 확인하세요. 목록에 남겨 둡니다.`); }
-        else { f.results[k] = 'unsent'; toast('보낸메일함에서 이 메일의 답장을 찾지 못했습니다. 목록에 남겨 둡니다.'); }
+        f.results[k] = 'unknown';
+        toast(r && r.candidate ? '제목이 비슷한 보낸 메일은 있지만 답장 관계는 확인할 수 없습니다. 목록에 남겨 둡니다.' : '보낸 메일의 답장 관계를 확인할 수 없습니다. 목록에 남겨 둡니다.');
       } else if (verify && x) { pushUndo('연속 처리 확인'); f.results[k] = 'manual'; S.hidden[k] = Date.now(); saveLocal(); }
     } catch (e) { f.results[k] = 'unknown'; toast('확인하지 못했습니다: ' + e.message); }
     f.busy = false;
@@ -102,7 +121,7 @@
     S.focus = null; S.pane.url = ''; S.sel = null; S.pane.dirty = false;
     if (S.raw) reanalyze();
     render();
-    toast(`연속 처리 끝: 그룹웨어에서 처리 확인 ${cnt('done')}건${cnt('manual') ? ` · 직접 확인 ${cnt('manual')}건` : ''}${cnt('remain') ? ` · 아직 남음 ${cnt('remain')}건` : ''}${cnt('hadReply') ? ` · 이전 답장만 ${cnt('hadReply')}건` : ''}${cnt('unsent') ? ` · 답장 못 찾음 ${cnt('unsent')}건` : ''}${cnt('skip') ? ` · 건너뜀 ${cnt('skip')}건` : ''}.`);
+    toast(`연속 처리 끝: 그룹웨어에서 처리 확인 ${cnt('done')}건${cnt('manual') ? ` · 직접 확인 ${cnt('manual')}건` : ''}${cnt('remain') ? ` · 아직 남음 ${cnt('remain')}건` : ''}${cnt('hadReply') ? ` · 이전 답장만 ${cnt('hadReply')}건` : ''}${cnt('unsent') ? ` · 답장 못 찾음 ${cnt('unsent')}건` : ''}${cnt('unknown') ? ` · 확인 불가 ${cnt('unknown')}건` : ''}${cnt('skip') ? ` · 건너뜀 ${cnt('skip')}건` : ''}.`);
     refresh({silent: true});
   }
   function stopFocus() { if (!S.focus || S.focus.busy) return; if (!leavePane()) return; finishFocus(); }

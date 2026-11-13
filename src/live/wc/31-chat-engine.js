@@ -165,7 +165,7 @@
     st.abort = ctl;
     const name = (S.raw && S.raw.principal && S.raw.principal.name) || '';
     const contents = [];
-    for (const m of st.msgs.slice(-9, -2)) if (m.text && m.state === 'done' && (m.role === 'user' || m.role === 'ai')) contents.push({role: m.role === 'user' ? 'user' : 'model', parts: [{text: R.chatSanitizeText(m.text, 400)}]});
+    for (const m of st.msgs.slice(-9, -2)) if (m.text && m.state === 'done' && chatHistoryCurrent(m.at) && (m.role === 'user' || m.role === 'ai')) contents.push({role: m.role === 'user' ? 'user' : 'model', parts: [{text: R.chatSanitizeText(m.text, 400)}]});
     contents.push({role: 'user', parts: [{text: R.chatSanitizeText(text, 600)}]});
     const tools = R.chatToGeminiTools([...CHAT_TOOLS.values()]);
     const system = R.chatSystemPrompt(chatNowStr(), name);

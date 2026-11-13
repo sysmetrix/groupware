@@ -15,7 +15,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '0.49.0';
+  const VERSION = '0.50.0';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
@@ -649,8 +649,18 @@
     const now = new Date();
     const from = ymd(addDays(now, -days)), to = ymd(now);
     const body = {...approvalBase(ctx, from, to, size), page: String(page), nMenuID: def.menu, pageCode: def.page, periodPicker: def.period, sortField: def.period, topSort: def.period, ...(def.extra || {})};
-    const {list, total} = firstList(await call(def.api, body));
-    return {kind, page, total, docs: list.map(r => toDoc(r, kind))};
+    const raw = await call(def.api, body);
+    const {list, total} = firstList(raw);
+    // Only an explicit, valid totalCount and an actual list establish completeness.
+    // startCount is not proof of the total and must not support absence decisions.
+    let container = raw;
+    while (container && typeof container === 'object' && !Array.isArray(container.list)) {
+      container = ['map', 'list', 'result'].map(k => container[k]).find(v => v && typeof v === 'object' && !Array.isArray(v));
+    }
+    const value = container && container.totalCount;
+    const count = value !== null && value !== undefined && String(value).trim() !== '' ? Number(value) : NaN;
+    const reliableTotal = container && Array.isArray(container.list) && Number.isSafeInteger(count) && count >= 0 ? count : null;
+    return {kind, page, total, reliableTotal, from, to, docs: list.map(r => toDoc(r, kind))};
   }
 
   // Preview of an approval document from the search index: no popup is opened, so no 열람 record.
@@ -709,25 +719,20 @@
     return {project, code, year: y, months: res};
   }
 
-  // Did I send a reply to this mail? Looks for "Re:/RE:/회신:" + same subject in 보낸메일함 after `since`.
+  // A subject match is only a candidate, never evidence of a reply to this message.
   async function findReply({subject = '', since = ''} = {}) {
     const boxes = arr((await call('/mail/mail000A01')).mailboxList);
     const sent = boxes.find(b => b.name === 'SENT');
-    if (!sent) return {checked: false};
+    if (!sent) return {checked: false, found: false};
     const d = await call('/mail/mail003A01', {boxName: 'SENT', mainApiCode: 'mail003A01', mboxSeq: sent.mboxSeq, page: 1, pageSize: 50, sort: 'rfc822date', sortType: 'desc', listType: '', showType: '', seen: false});
     const norm = s => String(s || '').replace(/^\s*((re|fw|fwd|회신|답장|전달)\s*[:：]\s*)+/i, '').replace(/\s+/g, '').toLowerCase();
     const want = norm(subject);
-    const hit = arr(d && d.Records).find(r => norm(r.subject) === want && (!since || str(r.tooltipDate || r.rfc822date, 25) >= since));
-    return {
-      checked: true,
-      found: !!hit,
-      uid: hit ? hit.muid : null,
-      subject: hit ? mask(hit.subject, 200) : '',
-      date: hit ? str(hit.tooltipDate || hit.rfc822date, 25) : '',
-      to: hit ? str(hit.toAddrName, 60) : '',
-      hasAttach: hit ? !!hit.attach : false,
-      size: hit ? num(hit.size) : 0
-    };
+    const hit = want && arr(d && d.Records).find(r => norm(r.subject) === want && (!since || str(r.tooltipDate || r.rfc822date, 25) >= since));
+    // The API provides no verified message/thread relationship. Even a matching
+    // candidate or a truncated/no-result search cannot prove sent or unsent.
+    return {checked: false, found: false, candidate: hit ? {
+      uid: str(hit.muid, 40), subject: mask(hit.subject, 200), date: str(hit.tooltipDate || hit.rfc822date, 25), to: str(hit.toAddrName, 60)
+    } : null};
   }
 
   async function submittedRange({days = 7, size = 100, from: f0 = '', to: t0 = ''} = {}) {

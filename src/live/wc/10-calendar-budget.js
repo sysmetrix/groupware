@@ -200,9 +200,11 @@ ${ledger ? `<h3>결의 내역 · ${esc(ledger.name || ledger.bgtCd)} <span class
   }
   function budgetQuery() { const b = S.budget; if ((b.q || '').trim() && !b.all && !b.allBusy && GW.budgetAll) loadBudgetAll(); renderMain(); }
   async function loadBudget() {
-    const b = S.budget;
+    const b = S.budget, seq = ++b.seq;
+    b.busy = true;
     if (!b.catalog) {
       try { b.catalog = await GW.budgetCatalog(); } catch {}
+      if (seq !== b.seq) return;
     }
     if (!b.project) {
       const p = S.settings.budget && S.settings.budget[0];
@@ -218,11 +220,11 @@ ${ledger ? `<h3>결의 내역 · ${esc(ledger.name || ledger.bgtCd)} <span class
         b.project = 'A201'; b.filter = '';
       }
     }
-    const seq = ++b.seq;
-    b.busy = true; b.ledger = null; b.monthly = null; b.month = ''; b.monthlyBusy = false; b.mreq = (b.mreq || 0) + 1; if (S.view === 'budget') renderMain();
+    const requestedProject = b.project;
+    b.ledger = null; b.monthly = null; b.month = ''; b.monthlyBusy = false; b.mreq = (b.mreq || 0) + 1; if (S.view === 'budget') renderMain();
     let full = b.full && b.full.project === b.project ? b.full : null;
     if (!full) { try { full = await GW.budgetProject({project: b.project, filter: ''}); } catch (e) { full = {error: true, message: e.message}; } }
-    if (seq !== b.seq) return;
+    if (seq !== b.seq || b.project !== requestedProject) return;
     b.full = full;
     if (full.error) b.table = full;
     else {

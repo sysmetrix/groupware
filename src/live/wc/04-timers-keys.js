@@ -51,7 +51,7 @@
       if (t.id === 'aiQ') { e.preventDefault(); aiAsk(); return; }
       if (/^ask_\d+$/.test(t.id || '')) { e.preventDefault(); const nx = $('#ask_' + (Number(t.id.slice(4)) + 1)); if (nx) nx.focus(); else $('#askOk')?.click(); return; }
       if (t.id === 'aiKey') { e.preventDefault(); aiSaveKey(); return; }
-      else if (t.id === 'sq') { S.search.kw = t.value.trim(); runSearch(); }
+      else if (t.id === 'sq') { e.preventDefault(); searchFromInputs(); }
       else if (t.id === 'mailq') runMailSearch(t.value.trim());
       else if (t.id === 'dfq') dfRun(t.value);
       else if (t.id === 'tdTitle') addTodoFromInput();
