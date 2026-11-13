@@ -66,7 +66,6 @@
     const age = S.lastRefresh ? Math.floor((Date.now() - S.lastRefresh.getTime()) / 60000) : null;
     m.className = 'stat' + (age !== null && age >= 10 ? ' stale' : '');
     m.innerHTML = S.loading ? '<span class="spin"></span> 읽는 중' : S.lastRefresh ? `${ic('refresh')}${hhmm(S.lastRefresh)} 기준${age ? ` · ${age}분 전` : ''}` : `${ic('refresh')}새로고침`;
-    renderVersion();
     // 기관명: 관리자 정책 > 로그인한 사용자의 소속 기관 > 기본 문구
     try { const on = $('#orgName'), nm = POLICY.orgName || (S.raw && S.raw.principal && S.raw.principal.compName) || ''; if (on && nm) on.textContent = nm; } catch {}
     const unseen = S.activity.filter(x => x.at > S.seenActivity).length;
@@ -76,7 +75,7 @@
     { const st = !S.a ? 'idle' : urgent ? 'urgent' : total ? 'todo' : 'ok'; const sum = !S.a ? '불러오는 중' : urgent ? `급한 일 ${urgent}건 · 전체 ${total}건` : total ? `처리할 일 ${total}건` : '오늘 처리할 일 없음'; fab.dataset.st = st;
       fab.innerHTML = `<span class="lg">${brandImage}</span><span class="t">GW 비서</span><span class="v" title="설치된 버전">v${esc(VERSION)}</span><span class="sm">${sum}</span>${S.a ? `<span class="b">${urgent || total || '✓'}</span>` : ''}<kbd>Alt G</kbd>`; }
   }
-  // 설치된 버전과 갱신 상태를 항상 보이게 한다(머리줄 칩 · 왼쪽 메뉴 아래 · 접힌 런처 버튼).
+  // 설치된 버전과 갱신 상태(왼쪽 메뉴 아래 · 접힌 런처 버튼).
   function versionInfo() {
     const up = store.get('updateInfo', null);
     const known = !!(up && /^\d+\.\d+\.\d+$/.test(up.latest || ''));
@@ -89,15 +88,6 @@
     const checked = up && up.at ? hhmm(new Date(up.at)) : '';
     const from = S.settings.verFrom && S.settings.verOf === VERSION ? S.settings.verFrom : '';
     return {state, label, applied, checked, from, latest: known ? up.latest : ''};
-  }
-  function renderVersion() {
-    const c = $('#verChip');
-    if (!c) return;
-    const v = versionInfo();
-    c.className = 'verchip ' + v.state;
-    c.innerHTML = `<b>v${esc(VERSION)}</b>${v.label ? `<span>${esc(v.label)}</span>` : ''}`;
-    c.title = [`설치된 버전 v${VERSION}`, v.applied ? `이 브라우저에 ${v.applied} 적용${v.from ? ` (이전 v${v.from})` : ''}` : '', v.state === 'new' ? `GitHub 최신 릴리스 v${v.latest}` : v.state === 'ok' ? `최신 확인 ${v.checked}` : v.state === 'unknown' ? '최신 여부를 아직 확인하지 못했습니다' : '', '누르면 업데이트 내역'].filter(Boolean).join(' · ');
-    c.setAttribute('aria-label', `설치된 버전 v${VERSION}${v.label ? ' ' + v.label : ''}, 업데이트 내역 보기`);
   }
   function renderBand() {
     const b = $('#band');

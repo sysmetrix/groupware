@@ -121,7 +121,10 @@
           <div class="cmd-grid">${presetsHtml}</div>
 
           <div class="acts" style="margin-top:18px;justify-content:space-between;border-top:1px solid var(--line);padding-top:14px">
-            <button class="btn sm" data-act="openHistory">${ic('clock')}최근 자동화 작업 내역 (${getActionHistory().length}건)</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn sm" data-act="openHistory">${ic('clock')}최근 자동화 작업 내역 (${getActionHistory().length}건)</button>
+              <button class="btn sm" data-act="openChatHome">${ic('star')}홈 대화형 AI로 이동</button>
+            </div>
             <button class="btn sm ghost" data-act="closeHelp">닫기 (Esc)</button>
           </div>
         </div>
