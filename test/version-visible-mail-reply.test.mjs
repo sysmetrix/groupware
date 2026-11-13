@@ -23,31 +23,26 @@ const REPLY = 'https://gw.example/#popup?MicroModuleCode=mail&callComp=UDAP001&m
 const PLAIN = 'https://gw.example/#popup?MicroModuleCode=mail&callComp=UDAP001&mailKind=plain&popType=Y';
 
 // ---------- version is always on screen ----------
-test('header, side menu and launcher button all carry the installed version', () => {
-  assert.match(read('02-shell.js'), /<button class="verchip" id="verChip" data-act="openChangelog"/);
+test('side menu and launcher button carry the installed version, header keeps only the clean brand and AI action', () => {
+  // header keeps only clean title without cluttering version chip
+  assert.doesNotMatch(read('02-shell.js'), /id="verChip"/);
+  assert.match(read('02-shell.js'), /data-act="openCmd"[^>]*>.*AI 지시<\/button>/);
   const views = read('05-views.js');
   assert.match(views, /class="navver \$\{v\.state\}"/);
   assert.match(views, /<span class="v" title="설치된 버전">v\$\{esc\(VERSION\)\}<\/span>/);
-  const css = fs.readFileSync(new URL('../src/live/wc-premium.css', import.meta.url), 'utf8');
-  assert.match(css, /\.wc header \.verchip\{display:inline-flex/);
-  // the chip itself is never hidden by a narrow-screen rule (only its state word may be)
-  assert.doesNotMatch(css, /\.verchip\{[^}]*display:none/);
+  const events = read('16-events.js');
+  assert.match(events, /case 'openCmd': openCommandConsole\(\); break;/);
 });
 
 function versionEnv({VERSION = '0.52.0', up = null, updateCheck = true, settings = {}} = {}) {
-  const chip = {className: '', innerHTML: '', title: '', setAttribute: spy()};
-  const g = {VERSION, S: {settings}, store: {get: () => up}, allowed: f => f !== 'updateCheck' || updateCheck, R: {compareVersions: cmp}, esc, hhmm: () => '09:10', $: sel => (sel === '#verChip' ? chip : null)};
-  return {chip, api: run(g, [pick('05-views.js', 'function versionInfo('), pick('05-views.js', 'function renderVersion(')], '({versionInfo, renderVersion})')};
+  const g = {VERSION, S: {settings}, store: {get: () => up}, allowed: f => f !== 'updateCheck' || updateCheck, R: {compareVersions: cmp}, esc, hhmm: () => '09:10'};
+  return {api: run(g, [pick('05-views.js', 'function versionInfo(')], '({versionInfo})')};
 }
 
-test('version chip tells latest / newer release / not checked / check disabled apart', () => {
+test('version info tells latest / newer release / not checked / check disabled apart', () => {
   const at = new Date(2026, 10, 14, 9, 5).getTime();
   const ok = versionEnv({up: {latest: '0.52.0', at: 1}, settings: {verOf: '0.52.0', verAt: at, verFrom: '0.51.0'}});
   assert.deepEqual({...ok.api.versionInfo()}, {state: 'ok', label: '최신', applied: '11/14 09:05', checked: '09:10', from: '0.51.0', latest: '0.52.0'});
-  ok.api.renderVersion();
-  assert.equal(ok.chip.className, 'verchip ok');
-  assert.match(ok.chip.innerHTML, /<b>v0\.52\.0<\/b><span>최신<\/span>/);
-  assert.match(ok.chip.title, /설치된 버전 v0\.52\.0 · 이 브라우저에 11\/14 09:05 적용 \(이전 v0\.51\.0\)/);
 
   const newer = versionEnv({up: {latest: '0.53.0', at: 1}}).api.versionInfo();
   assert.equal(newer.state, 'new');

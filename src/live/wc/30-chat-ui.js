@@ -103,7 +103,7 @@
     if (fresh) { fresh.focus({preventScroll: true}); st.msgs.forEach(m => (m.cards || []).forEach(c => { if (c.fresh) c.fresh = false; })); }
     if (last && last.role !== 'user' && last.state === 'done' && st.announced !== last.id) { st.announced = last.id; const sr = $('#chStatus'); if (sr) sr.textContent = '답변이 도착했습니다.'; }
   }
-  const chatFocusInput = () => { const i = $('#chInput'); if (i) i.focus(); };
+  const chatFocusInput = () => { const i = $('#chInput'); if (i) { i.scrollIntoView({behavior: 'smooth', block: 'center'}); i.focus(); } };
 
   function chatSubmitFromInput() {
     const i = $('#chInput');
