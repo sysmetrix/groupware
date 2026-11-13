@@ -35,6 +35,8 @@
     try { if (typeof homeResEnsure === 'function') homeResEnsure(); } catch (e) { logError('home.res', e.message); }
     for (const b of (S.homeRes && S.homeRes.items) || []) { const s = String(b.start || ''), z = String(b.end || ''); if (s.slice(0, 8) === t8) out.timeline.push({from: s.slice(8, 10) + ':' + s.slice(10, 12), to: z.slice(8, 10) + ':' + z.slice(10, 12), label: b.label, kind: 'car'}); }
     out.events = out.timeline;
+    out.teamError = team && team.err ? team.err : '';
+    out.teamLoading = !team || !!team.busy;
     return out;
   }
 
@@ -51,7 +53,7 @@
   function homeTopHtml(d) {
     if (!d.loaded) return `<section class="hm-tiles" aria-label="핵심 현황">${'<div class="hm-tile hm-skel" aria-hidden="true"></div>'.repeat(5)}</section>`;
     const tiles = R.homeTiles({urgent: d.urgent, todo: d.todo, check: d.check, wait: d.wait, events: d.events.length, away: d.away.length, loaded: true});
-    const tileHtml = tiles.map(t => `<button class="hm-tile hm-tone-${t.tone}" data-act="homeTile" data-v="${t.id}" aria-label="${esc(t.label + ' ' + t.value + ' ' + t.sub)}"><span class="hm-tile-l">${esc(t.label)}</span><b class="hm-tile-v">${esc(t.value)}</b><span class="hm-tile-s">${esc(t.sub)}</span></button>`).join('');
+    const tileHtml = tiles.map(t => t.id === 'away' && (d.teamLoading || d.teamError) ? {...t, value: '–', sub: d.teamError ? '조회 실패' : '확인 중'} : t).map(t => `<button class="hm-tile hm-tone-${t.tone}" data-act="homeTile" data-v="${t.id}" aria-label="${esc(t.label + ' ' + t.value + ' ' + t.sub)}"><span class="hm-tile-l">${esc(t.label)}</span><b class="hm-tile-v">${esc(t.value)}</b><span class="hm-tile-s">${esc(t.sub)}</span></button>`).join('');
     const next = R.homeNextAction(d.mine.map(x => ({key: x.key, title: x.title, headline: x.headline, area: x.area, state: stateOf(x), deadline: x.deadline && x.deadline.date ? x.deadline.date.slice(5) + (x.deadline.time ? ' ' + x.deadline.time : '') : ''})));
     const nextHtml = next
       ? `<section class="hm-next" aria-label="지금 할 일 한 가지"><div class="hm-next-b"><div class="hm-next-k">지금 가장 먼저 할 일 <span class="hm-badge hm-tone-${next.state === 'overdue' || next.state === 'urgent' ? 'urgent' : 'todo'}">${esc(STATE_NAME[next.state] || '')}</span></div><div class="hm-next-t">${esc(next.title)}</div>${next.sub || next.deadline ? `<div class="hm-next-s">${esc([next.sub, next.deadline ? '기한 ' + next.deadline : ''].filter(Boolean).join(' · '))}</div>` : ''}</div><div class="hm-next-a"><button class="ch-btn ch-btn-primary" data-act="homeNext" data-v="${esc(next.key)}">열어서 처리</button><button class="ch-btn ch-btn-ghost" data-act="homeOpenToday">할 일 전체 ${d.urgent + d.todo + d.check}건 보기</button></div></section>`
@@ -63,7 +65,7 @@
     if (!d.loaded) return '';
     const tl = R.homeTimelineCompact(d.timeline, 5);
     const awayLine = R.homeAwayLine(d.away.map(x => ({name: x.name, label: x.label})), 3);
-    const tlHtml = `<section class="hm-today" aria-label="오늘 일정"><div class="hm-today-k">오늘 일정</div>${tl.rows.length ? `<ul class="hm-tl">${tl.rows.map(r => `<li class="hm-tl-${esc(r.kind)}"><span class="hm-tl-t">${r.allDay ? '종일' : esc(r.from) + (r.to ? '~' + esc(r.to) : '')}</span><span class="hm-tl-l">${esc(r.label)}</span></li>`).join('')}</ul>${tl.more ? `<div class="hm-more">외 ${tl.more}건 · <button class="hm-link" data-act="homeTile" data-v="schedule">일정 달력에서 보기</button></div>` : ''}` : '<div class="hm-empty">오늘 시간이 정해진 일정이 없습니다.</div>'}${awayLine ? `<div class="hm-away"><span class="hm-away-k">자리 비움</span> ${esc(awayLine)}</div>` : ''}</section>`;
+    const tlHtml = `<section class="hm-today" aria-label="오늘 일정"><div class="hm-today-k">오늘 일정</div>${tl.rows.length ? `<ul class="hm-tl">${tl.rows.map(r => `<li class="hm-tl-${esc(r.kind)}"><span class="hm-tl-t">${r.allDay ? '종일' : esc(r.from) + (r.to ? '~' + esc(r.to) : '')}</span><span class="hm-tl-l">${esc(r.label)}</span></li>`).join('')}</ul>${tl.more ? `<div class="hm-more">외 ${tl.more}건 · <button class="hm-link" data-act="homeTile" data-v="schedule">일정 달력에서 보기</button></div>` : ''}` : '<div class="hm-empty">오늘 시간이 정해진 일정이 없습니다.</div>'}${awayLine ? `<div class="hm-away"><span class="hm-away-k">자리 비움</span> ${esc(awayLine)}</div>` : ''}${d.teamError ? '<div class="hm-empty">직원 근태를 조회하지 못해 자리 비움 현황을 확인할 수 없습니다.</div>' : d.teamLoading ? '<div class="hm-empty">직원 근태를 확인하는 중입니다.</div>' : ''}</section>`;
     return tlHtml;
   }
 

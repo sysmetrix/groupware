@@ -86,43 +86,27 @@ export function extractAllDeadlines(text, now = new Date(), {strict = false} = {
 // The deadline to act on: the nearest one that has not passed, otherwise the latest.
 export function nextDeadline(list = []) { return list.find(x => x.dday >= 0) || list[list.length - 1] || null; }
 
-// Daily attendance rows -> days that need a check. Cross-checks leave records and 근무일대체 nearby.
-export function attendanceAnomalies(days = [], {now = new Date(), leaves = []} = {}) {
-  const k = kstNow(now);
-  const today = k.date.replace(/-/g, '');
-  const covered = new Set();
-  for (const u of leaves) {
-    if (!u || !u.approved || !u.start) continue;
-    if (u.days >= 0.75) for (let d = dayNumber(fmtYmd(u.start)); d <= dayNumber(fmtYmd(u.end || u.start)); d++) covered.add(new Date(d * 86400000).toISOString().slice(0, 10).replace(/-/g, ''));
+// Only a verified personal, approved overtime application with a queried missing departure fingerprint is actionable.
+export function attendanceAnomalies(days = [], {now = new Date(), apps = [], me = '', daysError = '', appsError = ''} = {}) {
+  if (daysError || appsError || !me) return [];
+  const today = kstNow(now).date.replace(/-/g, '');
+  const current = Math.floor(now.getTime() / 60000) + 540;
+  const out = new Map();
+  const minutes = s => { const m = String(s || '').match(/^(\d{2})(\d{2})$/); if (!m) return null; const h = +m[1], n = +m[2]; return n < 60 && (h < 24 || (h === 24 && n === 0)) ? h * 60 + n : null; };
+  for (const a of apps) {
+    if (!a || String(a.empCd || '') !== String(me) || String(a.approState) !== '1' || a.deleteReqYn === 'Y' || a.docdelYn === 'N' || !/연장근무|휴일근무|조기근무|시간외\s*근무/.test([a.atNm, a.atItemNm].join(' '))) continue;
+    const date = String(a.startDt || ''), start = minutes(a.startTm), end = minutes(a.endTm);
+    if (!/^\d{8}$/.test(date) || date >= today || start === null || end === null || (start === 0 && end === 0)) continue;
+    const endDate = String(a.endDt || date);
+    if (!/^\d{8}$/.test(endDate) || endDate < date) continue;
+    const endDay = dayNumber(fmtYmd(endDate));
+    const endAt = endDay * 1440 + end + (endDate === date && end < start ? 1440 : 0);
+    if (!Number.isFinite(endAt) || current < endAt) continue;
+    const matches = days.filter(r => r && r.date === date);
+    if (!matches.length || matches.some(r => r.leave) || matches.some(r => r.fingerprintChecked === false)) continue;
+    out.set(date, {date, result: '퇴근 지문 누락', item: a.atNm || a.atItemNm || '시간외근무', status: '승인', applied: false, priority: 'medium', advice: '승인된 시간외근무 종료 후 퇴근 지문 기록이 없습니다. 그룹웨어에서 확인하세요.'});
   }
-  const swaps = days.filter(r => /근무일대체|대체/.test(r.workType || '') || /근무일대체/.test(r.item || '')).map(r => r.date);
-  // One 근무일대체 can explain only one absence: pair each swap with the nearest unexplained absence.
-  const candidates = days.filter(r => r && !r.holiday && !/휴일/.test(r.result || '') && /결근|미출근/.test(r.result || '') && !r.applied && !covered.has(r.date)).map(r => r.date);
-  const swapFor = new Map();
-  for (const s of swaps) {
-    const best = candidates.filter(c => !swapFor.has(c) && Math.abs(dayNumber(fmtYmd(c)) - dayNumber(fmtYmd(s))) <= 7).sort((a, b) => Math.abs(dayNumber(fmtYmd(a)) - dayNumber(fmtYmd(s))) - Math.abs(dayNumber(fmtYmd(b)) - dayNumber(fmtYmd(s))))[0];
-    if (best) swapFor.set(best, s);
-  }
-  const out = [];
-  for (const r of days) {
-    if (!r || r.holiday || /휴일/.test(r.result || '')) continue;
-    if (r.date === today && k.hh < 18) continue; // the day is not over yet
-    // 출근 지문은 판정하지 않는다: 퇴근 지문이 있고 출근 지문 누락(이상근태/미출근/지각)만 문제인 날은 제외
-    if (/이상|미출근|지각/.test(r.result || '') && !/결근|조퇴|미인정|미퇴근/.test(r.result || '') && !r.come && r.leave) continue;
-    const bad = /결근|지각|조퇴|미인정|미출근|미퇴근|이상/.test(r.result || '');
-    if (!bad) continue;
-    if (r.applied && r.status === '승인') continue; // covered by an approved request (외출·반차 등)
-    if (covered.has(r.date)) continue; // approved full-day leave on that day
-    const absent = /결근|미출근/.test(r.result);
-    const nearSwap = swapFor.get(r.date) || '';
-    const hints = [];
-    if (nearSwap) hints.push(`${fmtYmd(nearSwap).slice(5).replace('-', '/')}에 휴일근무(근무일대체) 기록 있음`);
-    if (r.applied) hints.push(`근태신청 ${r.status || '진행 중'}`);
-    out.push({date: r.date, result: r.result, item: r.item, status: r.status, nearSwap: nearSwap || '', applied: !!r.applied || (/미인정/.test(r.result || '') && !!r.item),
-      priority: absent && !r.applied && !nearSwap ? 'high' : 'medium',
-      advice: [...hints, r.applied ? '근태신청 결재가 끝나면 그룹웨어 기록이 바뀝니다' : '쉰 날이면 근태신청을 해야 그룹웨어 기록이 바뀝니다'].join(' · ')});
-  }
-  return out;
+  return [...out.values()];
 }
 
 // Suggest where an incoming document should go, from past distribution/receipt history.
@@ -274,13 +258,10 @@ function judge(a, now) {
   } else if (a.type === 'attendance') {
     state = 'check';
     const x = a.att || {};
-    const absent = /결근|미출근/.test(x.result || '');
-    if (x.applied || (/미인정/.test(x.result || '') && x.item)) { headline = '근태신청 결재를 기다리는 중'; state = 'wait'; }
-    else if (absent) headline = '출근 기록 없음 · 쉰 날이면 근태신청 필요';
-    else headline = `근태 '${x.result}' 확인`;
+    headline = '시간외근무 후 퇴근 지문 확인';
     if (x.item) facts.push(x.item);
-    if (x.status) facts.push(`그룹웨어 표시: ${x.result}${x.status ? `(${x.status})` : ''}`);
-    a.context = x.nearSwap ? `${fmtYmd(x.nearSwap).slice(5).replace('-', '/')}에 휴일근무(근무일대체) 기록이 있습니다. 그 대체로 쉰 날이면 "정상입니다"를 누르세요.` : '';
+    facts.push('승인된 신청의 퇴근 지문 기록 없음');
+    a.context = x.advice || '';
   } else if (a.base === 'mailAnswered' || a.base === 'conflictAnswered') {
     state = 'confirm';
     headline = effDate ? `${dueTxt}${left < 0 ? '였음' : ''} · 답장함 → 제출 끝났는지 확인` : '답장함 → 제출 끝났는지 확인';
@@ -411,9 +392,10 @@ export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6, roles 
     push({key: `conflict:${dl.date}:${dl.key || dl.title.slice(0, 20)}`, type: 'conflict', base: answered ? 'conflictAnswered' : 'conflict', ref: {key: dl.key}, area: '기한', kind: '휴가일 마감', title: dl.title, detail: `${dl.date.slice(5)}${dl.time ? ' ' + dl.time : ''} 마감인데 그날 ${u.kind}${answered ? ' · 답장은 했음, 제출까지 끝났는지 확인' : ' · 전날까지 처리하세요'}`, when: dl.date, deadline: {date: dl.date, time: dl.time, dday: dl.dday}, url: dl.url, isNew: false});
   }
 
-  // Attendance (cross-checked with approved leave and 근무일대체)
-  const anomalies = attendanceAnomalies(d.attendance?.days || [], {now, leaves: d.leave?.history || upcoming});
-  for (const x of anomalies) push({key: `att:${x.date}`, type: 'attendance', base: x.priority === 'high' ? 'attHigh' : 'attMedium', att: x, ref: {date: x.date}, area: '근태', kind: '근태 확인 필요', title: `${fmtYmd(x.date).slice(5).replace('-', '/')}(${'일월화수목금토'[new Date(fmtYmd(x.date) + 'T00:00:00Z').getUTCDay()]}) 근태 확인${x.item ? ` · ${x.item}` : ''}`, detail: x.advice, when: fmtYmd(x.date), url: d.attendance?.requestUrl || d.attendance?.url, listUrl: d.attendance?.url, isNew: false});
+  // Use only separately verified past fingerprint rows and approved personal overtime applications.
+  const ot = d.attendance?.overtime || {};
+  const anomalies = attendanceAnomalies(ot.days || [], {now, apps: ot.apps || [], me: ot.me, daysError: ot.daysError, appsError: ot.appsError});
+  for (const x of anomalies) push({key: `att:${x.date}`, type: 'attendance', base: x.priority === 'high' ? 'attHigh' : 'attMedium', att: x, ref: {date: x.date}, area: '근태', kind: '퇴근 지문 확인 필요', title: `${fmtYmd(x.date).slice(5).replace('-', '/')}(${'일월화수목금토'[new Date(fmtYmd(x.date) + 'T00:00:00Z').getUTCDay()]}) 퇴근 지문 확인${x.item ? ` · ${x.item}` : ''}`, detail: x.advice, when: fmtYmd(x.date), url: d.attendance?.requestUrl || d.attendance?.url, listUrl: d.attendance?.url, isNew: false});
 
   // Score -> level. Only the top `maxHigh` can be 긴급 so that red stays meaningful.
   // Is this mine to do, or just something I can see? (참고 = 나와 직접 관련 적음)
@@ -461,11 +443,12 @@ export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6, roles 
   })}));
 
   const status = Object.entries(raw?.status || {}).map(([name, s]) => ({name, ...s}));
+  if (d.attendance?.overtime && (d.attendance.overtime.daysError || d.attendance.overtime.appsError)) status.push({name: '시간외 지문 확인', ok: false, error: d.attendance.overtime.daysError || d.attendance.overtime.appsError});
   const failedNames = new Set(status.filter(s => !s.ok).map(s => s.name));
   return {
     generatedAt: now.toISOString(), collectedAt: raw?.collectedAt, durationMs: raw?.durationMs, collector: raw?.collector,
     principal: raw?.principal || {}, sessionExpired: !!raw?.sessionExpired, status, failed: status.filter(s => !s.ok),
-    unknown: {approval: failedNames.has('approval'), mail: failedNames.has('mail'), notice: failedNames.has('notice'), attendance: failedNames.has('attendance'), leave: failedNames.has('leave'), budget: failedNames.has('budget'), schedule: failedNames.has('schedule')},
+    unknown: {approval: failedNames.has('approval'), mail: failedNames.has('mail'), notice: failedNames.has('notice'), attendance: failedNames.has('attendance') || failedNames.has('시간외 지문 확인'), leave: failedNames.has('leave'), budget: failedNames.has('budget'), schedule: failedNames.has('schedule')},
     summary: {
       approvalAction: (lists.pending?.docs.length || 0) + (lists.deptWaiting?.docs.length || 0) + (lists.distWaiting?.docs.length || 0),
       pending: counts['대기문서']?.count ?? null, deptWaiting: counts['부서대기문서']?.count ?? null, distWaiting: counts['배부대기문서']?.count ?? null,
@@ -532,7 +515,7 @@ export function renderMarkdown(a) {
     if (p.total) lines.push(`| **${p.project} 프로젝트 전체** | ${won(p.total.budget)} | ${won(p.total.executed)} | ${won(p.total.balance)} | ${p.total.rate}% |`);
   }
   if (a.leave) lines.push('', '## 연차', '', `- ${a.leave.year}년 부여 ${fmtDays(a.leave.granted)} · 사용 ${fmtDays(a.leave.used)} · 잔여 **${fmtDays(a.leave.remaining)}**`, ...(a.leave.upcoming || []).map(u => `- 예정: ${fmtYmd(u.start)} ${u.kind} ${u.days}일 (${u.approved ? '결재완료' : '진행 중'})`));
-  if (a.attendance) lines.push('', '## 근무시간', '', `- 이번 달 인정 ${hm(a.attendance.month.recognizedMin)} · 초과 ${hm(a.attendance.month.overtimeMin)} · 오늘 출근 ${a.attendance.today.come || '기록 없음'}`);
+  if (a.attendance) lines.push('', '## 근무시간', '', `- 이번 달 인정 ${hm(a.attendance.month.recognizedMin)} · 초과 ${hm(a.attendance.month.overtimeMin)}`);
   lines.push('', `---`, `생성 ${kstText(a.generatedAt)} KST · 메일·문서를 열지 않는 목록 조회만 사용해 읽음 상태는 바뀌지 않습니다.`);
   return lines.join('\n') + '\n';
 }
@@ -580,7 +563,7 @@ ${a.deadlines.length ? `<h2>제목에서 찾은 기한</h2><table><tr><th>날짜
 <h2>메일 ${link(a.mail.url, '받은메일함 열기')}</h2><p class="muted">${a.mail.boxes.filter(b => b.unseen).map(b => `${esc(b.name)} 안읽음 ${b.unseen}`).join(' · ') || '안 읽은 메일함 없음'} (스팸함 포함)</p><table><tr><th>제목 (최근 15통)</th><th>보낸 사람</th><th>받은 시각</th></tr>${mailRows}</table>
 <h2>공지사항 ${link(a.notice.url, '게시판 열기')}</h2><table><tr><th>제목 (최근 10건)</th><th>작성</th><th>등록</th></tr>${noticeRows}</table>
 <h2>예산 집행 ${link(a.budget.url, '예실대비현황 열기')}</h2>${budgetBlocks || '<p class="muted">설정된 예산 조회 대상이 없습니다.</p>'}
-<h2>일정·근태</h2><div class="grid2"><div><h3>${link(sc?.url, '그룹웨어 일정')} <span class="muted">향후 ${sc ? dday(fmtYmd(sc.end)) : '-'}일</span></h3>${events}${sc?.holidays?.length ? `<p class="muted">휴일: ${sc.holidays.map(h => esc(fmtYmd(h.date) + ' ' + h.title)).join(', ')}</p>` : ''}</div><div><h3>${link(lv?.url, '연차')}</h3>${lv ? `<p>${esc(lv.year)}년 부여 <b>${fmtDays(lv.granted)}</b> · 사용 <b>${fmtDays(lv.used)}</b> · 잔여 <b>${fmtDays(lv.remaining)}</b></p>${lv.upcoming.length ? `<ul>${lv.upcoming.map(u => `<li>${esc(fmtYmd(u.start))}${u.end !== u.start ? '~' + esc(fmtYmd(u.end)) : ''} ${esc(u.kind)} ${u.days}일 <span class="muted">${u.approved ? '결재완료' : '진행 중'}</span></li>`).join('')}</ul>` : '<p class="muted">예정된 휴가 없음</p>'}` : '<p class="muted">미조회</p>'}<h3>${link(at?.url, '근무시간')}</h3>${at ? `<p>이번 달 인정 ${hm(at.month.recognizedMin)} · 기본 ${hm(at.month.basicMin)} · 초과 ${hm(at.month.overtimeMin)}<br>오늘(${esc(fmtYmd(at.today.date))}) 출근 ${esc(at.today.come || '기록 없음')} · 퇴근 ${esc(at.today.leave || '기록 없음')}</p>` : '<p class="muted">미조회</p>'}</div></div>
+<h2>일정·근태</h2><div class="grid2"><div><h3>${link(sc?.url, '그룹웨어 일정')} <span class="muted">향후 ${sc ? dday(fmtYmd(sc.end)) : '-'}일</span></h3>${events}${sc?.holidays?.length ? `<p class="muted">휴일: ${sc.holidays.map(h => esc(fmtYmd(h.date) + ' ' + h.title)).join(', ')}</p>` : ''}</div><div><h3>${link(lv?.url, '연차')}</h3>${lv ? `<p>${esc(lv.year)}년 부여 <b>${fmtDays(lv.granted)}</b> · 사용 <b>${fmtDays(lv.used)}</b> · 잔여 <b>${fmtDays(lv.remaining)}</b></p>${lv.upcoming.length ? `<ul>${lv.upcoming.map(u => `<li>${esc(fmtYmd(u.start))}${u.end !== u.start ? '~' + esc(fmtYmd(u.end)) : ''} ${esc(u.kind)} ${u.days}일 <span class="muted">${u.approved ? '결재완료' : '진행 중'}</span></li>`).join('')}</ul>` : '<p class="muted">예정된 휴가 없음</p>'}` : '<p class="muted">미조회</p>'}<h3>${link(at?.url, '근무시간')}</h3>${at ? `<p>이번 달 인정 ${hm(at.month.recognizedMin)} · 기본 ${hm(at.month.basicMin)} · 초과 ${hm(at.month.overtimeMin)}</p>` : '<p class="muted">미조회</p>'}</div></div>
 <footer>자료 상태: ${status}<br>생성 ${esc(kstText(a.generatedAt))} KST. 메일·문서·게시글을 열지 않는 목록 조회 API만 사용하므로 읽음 상태와 조회수는 바뀌지 않습니다. 금액·건수는 수집 시점 관찰값입니다.</footer>
 </main></body></html>`;
 }
@@ -997,10 +980,10 @@ export function maskSensitive(s) {
 }
 
 // ---------------------------------------------------------------------------
-// 직원 근태 달력: 휴가·출장(교육 포함)·시간외 근무만 골라 표시하고, 시간외는 퇴근 지문을 신청 종료 시각과 대조한다.
-// 출근 지문은 판정하지 않는다(조기근무만 예외).
+// 직원 근태 달력: 휴가·출장(교육 포함)·시간외 근무만 골라 표시하고, 시간외 종료 후 퇴근 지문 누락만 확인한다.
+// 출근 지문과 퇴근 지문을 찍은 시각은 판정하지 않는다.
 // ---------------------------------------------------------------------------
-const hmMin = s => { const m = String(s || '').match(/^(\d{2})(\d{2})$/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
+const hmMin = s => { const m = String(s || '').match(/^(\d{2})(\d{2})$/); if (!m) return null; const h = Number(m[1]), min = Number(m[2]); return min < 60 && (h < 24 || (h === 24 && min === 0)) ? h * 60 + min : null; };
 const hmFmt = s => (String(s || '').length === 4 ? `${s.slice(0, 2)}:${s.slice(2)}` : '');
 // 신청 한 건의 시간·장소·사유(근태 달력과 근태 화면에 보여 주는 세부 내역)
 export function appInfo(a = {}) {
@@ -1008,7 +991,7 @@ export function appInfo(a = {}) {
   const time = s.length === 4 && e.length === 4 && !(s === '0000' && e === '0000') ? `${hmFmt(s)}~${hmFmt(e)}` : '';
   return {item: String(a.atNm || ''), time, place: String(a.place || ''), route: [a.depart, a.stop, a.arrive].filter(Boolean).join(' → '), reason: String(a.reason || ''), transport: String(a.transport || ''), title: String(a.title || ''), noDoc: String(a.noDoc || ''), pending: String(a.approState) !== '1'};
 }
-export const appInfoLine = i => (i ? [i.time, i.place, i.reason].filter(Boolean).join(' · ') + (i.pending ? ' (결재 중)' : '') : '');
+export const appInfoLine = i => (i ? [i.time, i.place, i.reason].filter(Boolean).join(' · ') + (i.pending ? ' (신청 상태 확인 필요)' : '') : '');
 // 신청 목록을 사번|날짜별로 색인한다(날짜별 하루씩 펼침, 과거 포함).
 export function appInfoIndex(apps = []) {
   const idx = {};
@@ -1039,17 +1022,16 @@ function classifyCore(r, now = new Date()) {
   if (kind !== 'ot') return {...base, state: 'info', detail: ''};
   const s = hmMin(r.appStart), e = hmMin(r.appEnd), leave = hmMin(r.leave);
   const span = `${hmFmt(r.appStart)}~${hmFmt(r.appEnd)}`;
-  if (s === null || e === null) return {...base, state: 'wait', detail: '신청 시각 확인 필요'};
+  if (s === null || s === 1440 || e === null) return {...base, state: 'wait', detail: '신청 시각 확인 필요'};
   // 날짜 경계: 신청 종료가 시작보다 이르거나 24:00이면 다음 날 새벽까지로 본다. 지문에는 날짜가 없어 24시간 넘는 근무는 판별하지 못한다.
   const midnight = dayNumber(fmtYmd(r.date)) * 1440;
-  const cross = e < s || e === 1440;
   const end = midnight + e + (e < s ? 1440 : 0);
   const current = Math.floor(now.getTime() / 60000) + 540;
   if (current < end) return {...base, state: 'wait', detail: `신청 ${span}${leave !== null ? ` · 현재 지문 ${hmFmt(r.leave)}` : ''}`};
+  if (r.fingerprintChecked === false) return {...base, state: 'wait', detail: `신청 ${span} · 퇴근 지문 미조회`};
+  if (r.leave && (leave === null || leave === 0 || leave === 1440)) return {...base, state: 'wait', detail: `신청 ${span} · 퇴근 지문 시각 확인 필요`};
   if (leave === null) return {...base, state: 'miss', detail: `신청 ${span} · 퇴근 지문 없음`};
-  const actual = midnight + leave + (cross && leave < s ? 1440 : 0);
-  const early = actual < end;
-  return {...base, state: early ? 'short' : 'ok', detail: `신청 ${span} · 퇴근 지문 ${hmFmt(r.leave)}${early ? ` (신청 종료보다 ${end - actual}분 일찍)` : ''}`};
+  return {...base, state: 'ok', detail: `신청 ${span} · 퇴근 지문 ${hmFmt(r.leave)}`};
 }
 export function buildTeamCalendar(rows = [], now = new Date(), idx = null) {
   const byDate = {}, problems = [];
@@ -1060,7 +1042,7 @@ export function buildTeamCalendar(rows = [], now = new Date(), idx = null) {
     if (!c) continue;
     if (c.kind === 'ot' && !c.mine) continue; // 다른 직원의 시간외·지문은 표시하지 않는다(내 것만)
     (byDate[c.date] = byDate[c.date] || []).push(c);
-    if (c.kind === 'ot' && (c.state === 'miss' || c.state === 'short')) problems.push(c);
+    if (c.kind === 'ot' && c.state === 'miss') problems.push(c);
   }
   const order = {ot: 0, leave: 1, trip: 2};
   for (const d of Object.keys(byDate)) byDate[d].sort((a, b) => (b.mine - a.mine) || (order[a.kind] - order[b.kind]) || String(a.name ?? '').localeCompare(String(b.name ?? ''), 'ko'));
@@ -1159,7 +1141,7 @@ export function expandPlanned(apps = [], {fromYmd, toYmd, todayYmd, meCd = '', i
     for (let d = lo; d <= hi; d++) {
       const ymd = ymdOf(d), dow = new Date(d * 86400000).getUTCDay();
       if (leaveLike && s !== e && (dow === 0 || dow === 6)) continue; // 여러 날 휴가는 주말을 쉬는 날로 세지 않는다(출장·휴일근무는 주말도 포함)
-      out.push({emp: String(a.empCd || ''), name: a.korNm || a.empNm || '', dept: a.deptNm || '', date: ymd, item: a.atNm || '', appStart: a.startTm || '', appEnd: a.endTm || '', come: '', leave: '', result: '', mine: !!meCd && String(a.empCd) === String(meCd), pending: String(a.approState) !== '1', info: appInfo(a)});
+      out.push({emp: String(a.empCd || ''), name: a.korNm || a.empNm || '', dept: a.deptNm || '', date: ymd, item: a.atNm || '', appStart: a.startTm || '', appEnd: a.endTm || '', come: '', leave: '', fingerprintChecked: false, result: '', mine: !!meCd && String(a.empCd) === String(meCd), pending: String(a.approState) !== '1', info: appInfo(a)});
     }
   }
   return out;
@@ -1249,6 +1231,7 @@ export function wrapUpModel({now = new Date(), ownOtToday = null, tomorrowItems 
 // 업데이트 내역: 새 버전을 낼 때 맨 위에 한 줄을 추가한다(하네스가 현재 버전과 맞는지 검사).
 // 4.2~4.6 사이 세부 항목은 릴리스 제목만 근거로 적어 간단하다.
 export const CHANGELOG = [
+  {v: "0.51.0", date: "2026-11-14", old: "", title: "근태 승인·시간외 지문 확인 정확도 개선", items: ["근태 집계 상태를 결재 대기로 오인하지 않도록 수정", "출근 지문은 판정하지 않고 승인된 시간외 신청의 퇴근 지문 누락만 확인", "조회 실패·미조회는 정상이나 누락으로 단정하지 않고 확인 불가로 표시"]},
   {v: "0.50.0", date: "2026-11-14", old: "", title: "사용성·검색·업무 확인 안전성 개선", items: ["홈 카드와 AI 버튼 연결 오류를 수정하고 화면 배치를 개선", "검색 조건 보존, 문서 검색 오류 표시, 예약 조회 상태 및 할 일 날짜 검증 개선", "결재·메일 처리 여부가 불확실하면 확인 불가로 표시하고 자동 숨김 방지", "설정·보고서 입력 보존, 보드 중복 및 예산 CSV 범위 수정"]},
   {"v":"0.49.0","date":"2026-11-11","old":"","title":"문서 찾기: 기안·접수·발송 문서를 한 번에 검색","items":["메뉴에 “문서 찾기” 추가(숫자키 7): 검색어 하나로 기안·접수·발송 문서를 한 번에 찾음(50건씩 더 불러오기)","색으로 구분(기안 파랑·접수 초록·발송 주황)하고 구분·내 부서/재단 전체/다른 부서·양식·결과 안 검색·정렬로 거름","한 건 한 줄, 달마다 구분 줄, 누르면 열람 기록 없는 본문 미리보기. 내 부서 문서 모두·최근 검색·검색어 저장(☆) 지원","구분은 양식과 본문 수신자 줄로 추정. 검색어 없이 훑어보는 목록은 아직 없음. 숫자키 8·9는 통합검색·예산 집행"]},
   {"v":"0.48.0","date":"2026-11-11","old":"","title":"간결한 화면: 볼 것만 한 줄로, 자세한 내용은 고른 것만","items":["할 일: 한 건을 한 줄(상태·제목·할 일 한마디·기한)로. 자세한 내용과 처리 버튼은 고른 줄의 오른쪽 창에만 표시","홈: 핵심 숫자와 지금 할 일 한 가지를 맨 위로, 추천 질문은 작은 칩으로","일정: 필터와 색 설명을 [보기 설정]으로 접음. 시간외 퇴근 지문은 확인이 필요할 때만 알림","메뉴: 할 일 보드는 할 일의 탭, 구글 일정·동기화는 일정의 탭으로 합침. 상단의 부가 기능은 [⋯ 더 보기]로 모음"]},
