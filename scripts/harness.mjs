@@ -14,8 +14,8 @@ import {testEnv, verdict} from './lib/test-results.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = new Set(process.argv.slice(2));
 const FAST = args.has('--fast'), AS_JSON = args.has('--json');
-// 안전성 검증과 회귀 방지 기능 추가분을 포함한 번들 바이트 상한.
-const BUDGET = {bundleKB: 930, wcFileLines: 600, minFontPx: 12};
+// v0.65.0: 대화 조회 도구와 자동화, 비서 중심 홈을 더해 약 1030KB. 여유를 조금 둔 상한이며 설치 북마클릿 1900KB 상한은 별도 유지한다.
+const BUDGET = {bundleKB: 1060, wcFileLines: 600, minFontPx: 12};
 const node = process.execPath;
 const sh = (cmd, a, opt = {}) => spawnSync(cmd, a, {cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, ...opt});
 

@@ -12,6 +12,7 @@ import path from 'node:path';
 import vm from 'node:vm';
 import {fileURLToPath} from 'node:url';
 import crypto from 'node:crypto';
+import {gzipSync} from 'node:zlib';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const DEFAULT_OUT_DIR = path.join(ROOT, 'build', 'live');
@@ -285,8 +286,9 @@ export async function build({outDir = DEFAULT_OUT_DIR, copyTo = null, root = ROO
   await fs.writeFile(path.join(extDir, 'gw-live.js'), bundle);
 
   const guard = `if(location.origin!=='https://gw.bwyf.or.kr'){alert('그룹웨어(gw.bwyf.or.kr)에 로그인한 화면에서 눌러 주세요.');return;}`;
-  // Install bookmark: carries the whole bundle once, stores it, then opens the work center.
-  const install = 'javascript:' + encodeURIComponent(`(function(){${guard}var s=${JSON.stringify(bundle)};try{(0,eval)(s);}catch(e){alert('GW 비서를 불러오지 못했습니다: '+e.message);return;}try{window.BWYFGW_WC.install(s);}catch(e){}window.BWYFGW_WC.open();})();`);
+  // Install bookmark: gzip으로 담아 주소 길이를 줄인다. Chrome/Edge 111+의 DecompressionStream으로 원문을 복원하고 해시를 확인한 뒤 설치한다.
+  const packed = gzipSync(Buffer.from(bundle, 'utf8'), {level: 9}).toString('base64');
+  const install = 'javascript:' + encodeURIComponent(`(async function(){${guard}try{if(typeof DecompressionStream!=='function')throw Error('이 브라우저는 압축 해제를 지원하지 않습니다. Chrome 또는 Edge를 업데이트해 주세요.');var b=Uint8Array.from(atob(${JSON.stringify(packed)}),function(c){return c.charCodeAt(0)});var s=await new Response(new Blob([b]).stream().pipeThrough(new DecompressionStream('gzip'))).text();var d=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));var h=Array.from(new Uint8Array(d)).map(function(x){return x.toString(16).padStart(2,'0')}).join('');if(h!==${JSON.stringify(hash)})throw Error('설치 파일의 무결성 검증에 실패했습니다.');(0,eval)(s);if(!window.BWYFGW_WC.install(s))throw Error('저장 공간이 부족해 설치하지 못했습니다.');window.BWYFGW_WC.open();}catch(e){alert('GW 비서를 설치하지 못했습니다: '+e.message)}})();`);
   // Launch bookmark: tiny; runs the copy stored by the install bookmark only if its SHA-256 matches this build
   // (protects against a changed or outdated copy in localStorage).
   const wcVersion = (workcenter.match(/const VERSION = '([^']+)'/) || [])[1] || '';
