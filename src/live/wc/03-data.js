@@ -125,13 +125,17 @@
     try { return await routingP; } finally { routingP = null; }
   }
   const previewCache = new Map();
+  const previewKey = doc => JSON.stringify([currentKey, doc.docId || '', doc.docNo || '', doc.title || '', doc.year || '']);
   async function loadPreview(doc) {
-    const k = doc.docNo || doc.title;
+    const k = previewKey(doc);
     if (previewCache.has(k)) return previewCache.get(k);
     if (previewCache.size >= 50) previewCache.delete(previewCache.keys().next().value);
-    const p = GW.docPreview({docNo: doc.docNo, title: doc.title}).catch(() => ({found: false}));
+    const p = Promise.resolve().then(() => GW.docPreview({docNo: doc.docNo, title: doc.title, year: doc.year || ''}))
+      .catch(() => ({found: false, reason: 'error'}));
     previewCache.set(k, p);
-    return p;
+    const result = await p;
+    if (!result?.found && previewCache.get(k) === p) previewCache.delete(k);
+    return result || {found: false, reason: 'error'};
   }
   const isUserBusy = () => {
     const ae = root.activeElement;

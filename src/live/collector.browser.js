@@ -15,7 +15,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '0.61.0';
+  const VERSION = '0.62.0';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
@@ -515,12 +515,14 @@
     return {keyword: kw, page, pageSize, groups, searchedAt: new Date().toISOString()};
   }
 
+  // Preserve line breaks present in the index; formatting and missing content cannot be recovered.
+  const indexText = (v, max = 6000) => (v == null ? '' : String(v)).replace(/\r\n?/g, '\n').replace(/[^\S\n]+/g, ' ').trim().slice(0, max).replace(SECRET, '$1[MASKED]');
   // Search results carry names as {kr, en, ...} objects.
   const ml = v => (v && typeof v === 'object') ? (v.kr || v.ko || Object.values(v).find(x => typeof x === 'string' && x) || '') : v;
   function normalizeSearch(type, x, kw) {
     if (type === 'doc') {
       const form = str(ml(x.formNm), 60);
-      const doc = {type, docId: str(x.docId || x.pkSeq, 30), docNo: str(x.docNo, 60), title: mask(x.docTitle, 300), form: form === 'temporary' ? '접수문서' : form, date: str(x.docDate, 20), drafter: str(ml(x.userNm), 40), dept: str(ml(x.deptNm), 60), files: arr(x.fileList).map(f => ({id: str(f.filePath || f.fileId, 60), name: str(f.orignlFileName || f.fileName, 160)})), snippet: snippetAround(x.docContents, kw), text: mask(x.docContents, 6000)};
+      const doc = {type, docId: str(x.docId || x.pkSeq, 30), docNo: str(x.docNo, 60), title: mask(x.docTitle, 300), form: form === 'temporary' ? '접수문서' : form, date: str(x.docDate, 20), drafter: str(ml(x.userNm), 40), dept: str(ml(x.deptNm), 60), files: arr(x.fileList).map(f => ({id: str(f.filePath || f.fileId, 60), name: str(f.orignlFileName || f.fileName, 160)})), snippet: snippetAround(x.docContents, kw), text: indexText(x.docContents, 6000)};
       doc.url = LINKS.doc(doc);
       return doc;
     }
@@ -623,10 +625,20 @@
     if (!READ_ONLY.has('/ecm/ecm001A07')) throw new GwError('NOT_ALLOWED', '허용되지 않은 API입니다.');
     const ctx = context();
     const client = findClient();
-    const res = await client.post('/ecm/ecm001A07', {fileSn: sn, authKeyMap: JSON.stringify({email: account, muid: String(uid), empSeq: String(ctx.empSeq)}), moduleGbn: 'MAIL'});
-    const r = typeof res === 'string' ? JSON.parse(res) : res;
-    if (!r || r.resultCode !== 0 || !r.resultData) throw new GwError('API_ERROR', (r && r.resultMsg) || '문서 변환 실패');
-    return String(r.resultData);
+    let timer;
+    try {
+      const res = await Promise.race([
+        client.post('/ecm/ecm001A07', {fileSn: sn, authKeyMap: JSON.stringify({email: account, muid: String(uid), empSeq: String(ctx.empSeq)}), moduleGbn: 'MAIL'}),
+        new Promise((_, reject) => { timer = setTimeout(() => reject(new GwError('TIMEOUT', '미리보기 변환 시간 초과')), 120000); }),
+      ]);
+      const r = typeof res === 'string' ? JSON.parse(res) : res;
+      if (!r || r.resultCode !== 0 || typeof r.resultData !== 'string' || !r.resultData.trim()) throw new GwError('API_ERROR', (r && r.resultMsg) || '문서 변환 실패');
+      let url;
+      try { url = new URL(r.resultData, ORIGIN); } catch { throw new GwError('BAD_URL', '허용되지 않은 미리보기 주소입니다.'); }
+      if (url.username || url.password || !(url.origin === ORIGIN || /^https:\/\/(?:[a-z0-9-]+\.)*amaranth10\.co\.kr$/i.test(url.origin) || (/^http:\/\/10\.\d+\.\d+\.\d+(?::\d+)?$/i.test(url.origin) && /SynapDocViewServer/i.test(url.pathname)))) throw new GwError('BAD_URL', '허용되지 않은 미리보기 주소입니다.');
+      return url.href;
+    } catch (e) { throw parseRejection(e); }
+    finally { clearTimeout(timer); }
   }
   async function mailAttachment({uid, sn, account = ''} = {}) {
     if (!uid || !sn) throw new GwError('BAD_ARG', '첨부 정보가 없습니다.');

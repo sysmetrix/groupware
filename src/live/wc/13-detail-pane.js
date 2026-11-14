@@ -15,7 +15,7 @@
     ph.className = 'ph' + (S.pane.url ? (isViewer ? ' viewer' : '') : ' min');
     const x = selectedAction();
     const st = x ? stateOf(x) : '';
-    ph.innerHTML = `<div class="top"><button class="btn sm ghost" data-act="closePane" title="상세 창 닫기 (Esc)">${ic('x')}<span class="pane-back-txt">닫기</span></button>${S.pane.previewBack ? `<button class="btn sm ghost" data-act="returnAttachmentPreview" title="첨부 미리보기 전의 메일 처리 화면으로 돌아가기">${ic('back')}이전 메일 처리 화면으로</button>` : ''}<span class="sp"></span>${isViewer ? '<span class="muted">문서 미리보기</span>' : ''}${S.pane.url ? `<button class="btn sm ghost" data-act="paneExpand" title="${S.pane.expanded ? '목록과 나란히 보기' : '원래 화면을 넓게 보기'}">${ic('expand')}${S.pane.expanded ? '나란히' : '넓게'}</button><a class="btn sm ghost" href="${esc(S.pane.url)}" target="_blank"${/^https:\/\/gw\.bwyf\.or\.kr\//i.test(S.pane.url) ? '' : ' rel="noopener"'} title="새 창으로 열기">${ic('ext')}새 창</a>` : ''}</div>
+    ph.innerHTML = `<div class="top" style="flex-wrap:wrap"><button class="btn sm ghost" data-act="closePane" title="상세 창 닫기 (Esc)">${ic('x')}<span class="pane-back-txt">닫기</span></button>${S.pane.url && !S.pane.previewBack ? `<button class="btn sm ghost" data-act="returnOriginalScreen" title="원본 화면을 닫고 이전 목록 또는 상세로 돌아가기">${ic('back')}이전으로</button>` : ''}${S.pane.previewBack ? `<button class="btn sm ghost" data-act="returnAttachmentPreview" title="첨부 미리보기 전의 메일 처리 화면으로 돌아가기">${ic('back')}이전 메일 처리 화면으로</button>` : ''}<span class="sp"></span>${isViewer ? '<span class="muted">문서 미리보기</span>' : ''}${S.pane.url ? `<button class="btn sm ghost" data-act="paneExpand" title="${S.pane.expanded ? '목록과 나란히 보기' : '원래 화면을 넓게 보기'}">${ic('expand')}${S.pane.expanded ? '나란히' : '넓게'}</button><a class="btn sm ghost" href="${esc(S.pane.url)}" target="_blank"${/^https:\/\/gw\.bwyf\.or\.kr\//i.test(S.pane.url) ? '' : ' rel="noopener"'} title="새 창으로 열기">${ic('ext')}새 창</a>` : ''}</div>
 <div class="in"><div class="box warn" id="dirtyNote" style="display:${S.pane.dirty ? 'block' : 'none'};margin:0 0 10px">${ic('alert')} 원래 화면에 입력 중입니다. 보내기·저장·상신 전에 다른 곳으로 옮기면 먼저 여쭤봅니다.</div>
 ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.headline ? `<b class="${['overdue', 'urgent'].includes(st) ? 'err' : ''}">${esc(x.headline)}</b>` : ''}</div>` : ''}<div class="t">${esc(info.title || '')}</div>${info.body || ''}</div>`;
     ph.scrollTop = keepScroll;
@@ -25,7 +25,7 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
       S.pane.dirty = false;
       if (S.pane.url) {
         const f = document.createElement('iframe'); f.src = S.pane.url; f.title = '그룹웨어 원래 화면'; if (S.pane.previewBack) f.dataset.panePreview = '1'; const u = S.pane.url;
-        f.addEventListener('error', () => { if (S.pane.url === u) frame.innerHTML = `<div class="fe"><div>${ic('alert', 'style="width:28px;height:28px"')}</div><div>그룹웨어 화면을 불러오지 못했습니다.</div><a class="btn primary" href="${esc(u)}" target="_blank" rel="noopener">${ic('ext')}새 창으로 열기</a></div>`; });
+        f.addEventListener('error', () => { if (S.pane.url !== u) return; if (f.dataset.panePreview === '1') { toast('미리보기를 불러오지 못했습니다. 이전 메일 화면으로 돌아가 다시 시도하세요.'); return; } frame.innerHTML = `<div class="fe"><div>${ic('alert', 'style="width:28px;height:28px"')}</div><div>그룹웨어 화면을 불러오지 못했습니다.</div><a class="btn primary" href="${esc(u)}" target="_blank" rel="noopener">${ic('ext')}새 창으로 열기</a></div>`; });
         f.addEventListener('load', () => { hookFrameWindow(f, u); scanFrame(f, u); watchDirty(f, u); }); frame.append(f);
       }
       S.pane.mounted = S.pane.url;
@@ -196,9 +196,11 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
       }
     }
     const waiting = ['distWaiting', 'deptWaiting'].includes(kind);
-    const pv = waiting ? {found: false} : S.pane.preview && S.pane.preview.key === (d.docNo || d.title) ? S.pane.preview.data : null;
-    const pvBox = `<div class="box" id="pvbox">${pv === null ? '<span class="muted"><span class="spin"></span> 열람 기록 없이 미리보기를 찾는 중…</span>' : pv.found ? `<b>미리보기</b> <span class="muted">통합검색 색인에서 읽음 · 열람 기록 없음</span>${(() => { const dl = R.extractAllDeadlines(pv.text || '').filter(x => x.dday >= -1); return dl.length ? `<div>${dl.map(x => `<span class="pill ${x.dday <= 1 ? 'solid' : 'medium'}" title="${esc(x.context)}">${esc(x.date.slice(5))} ${ddayText(x.dday)}</span>`).join('')}</div>` : ''; })()}<div class="pv">${esc((pv.text || '').slice(0, 2500))}</div>${pv.files && pv.files.length ? `<div class="muted">첨부: ${pv.files.map(f => esc(f.name)).join(', ')}</div>` : ''}` : `<span class="muted">미리보기 없음: ${['distWaiting', 'deptWaiting'].includes(kind) ? '접수·배부 전 문서는 통합검색 색인에 아직 없어 원문으로만 볼 수 있습니다.' : '통합검색 색인에서 이 문서를 찾지 못했습니다.'}</span>`}</div>`;
-    if (pv === null) { const owner = currentKey; loadPreview(d).then(p => { if (owner !== currentKey) return; S.pane.preview = {key: d.docNo || d.title, data: p}; const b = $('#pvbox'); if (b && S.sel) renderPane(); }); }
+    const key = previewKey(d);
+    const pv = waiting ? {found: false, reason: 'waiting'} : S.pane.preview && S.pane.preview.key === key ? S.pane.preview.data : null;
+    const retry = '<button class="btn sm" data-act="docPreviewRetry">다시 찾기</button>';
+    const pvBox = `<div class="box" id="pvbox">${pv === null ? '<span class="muted"><span class="spin"></span> 열람 기록 없이 색인 발췌를 찾는 중…</span>' : pv.found ? `<b>통합검색 색인 발췌</b> <span class="muted">평문 색인 · 열람 기록 없음. 원문 전체나 원래 서식과 다를 수 있습니다. 원본은 원래 화면에서 확인하세요.</span>${(() => { const dl = R.extractAllDeadlines(pv.text || '').filter(x => x.dday >= -1); return dl.length ? `<div>${dl.map(x => `<span class="pill ${x.dday <= 1 ? 'solid' : 'medium'}" title="${esc(x.context)}">${esc(x.date.slice(5))} ${ddayText(x.dday)}</span>`).join('')}</div>` : ''; })()}<div class="pv" style="white-space:pre-wrap;overflow-wrap:anywhere">${esc((pv.text || '').slice(0, 2500))}</div>${(pv.text || '').length > 2500 ? '<span class="muted">앞부분 2,500자만 표시</span>' : ''}${pv.files && pv.files.length ? `<div class="muted">색인상 첨부: ${pv.files.map(f => esc(f.name)).join(', ')}</div>` : ''}` : `<span class="muted">${pv.reason === 'waiting' ? '접수·배부 대기 문서의 색인 발췌는 조회하지 않습니다.' : pv.reason === 'error' ? '색인 검색 중 오류가 발생했습니다.' : pv.reason === 'ambiguous' ? '일치하는 문서를 확실히 구분할 수 없습니다.' : pv.reason === 'incomplete' ? '검색 결과가 불완전해 문서 일치를 확인할 수 없습니다.' : '통합검색 색인에서 일치하는 문서를 찾지 못했습니다.'}</span>${pv.reason !== 'waiting' ? ' ' + retry : ''}`}</div>`;
+    if (pv === null) { const owner = currentKey, selection = S.sel; loadPreview(d).then(p => { if (owner !== currentKey || selection !== S.sel) return; S.pane.preview = {key, data: p}; const b = $('#pvbox'); if (b && S.sel) renderPane(); }); }
     const warn = d.unread ? '<div class="box warn">아직 열람하지 않은 문서입니다. 처리 창에 열면 그룹웨어에 열람으로 기록됩니다.</div>' : '';
     const title = d.title || (action && action.title) || '';
     return {title, url, body: `${why || ''}<div class="kv"><b>구분</b><span>${esc((S.a.approval.lists[kind] || {}).label || kind)}</span><b>문서번호</b><span>${esc(d.docNo || '-')}</span><b>보낸 곳</b><span>${esc(d.sender || '-')}</span><b>기안·담당</b><span>${esc([d.drafterDept, d.drafter, d.toEmp].filter(Boolean).join(' ') || '-')}</span><b>상태</b><span>${esc(d.status || '-')}</span><b>일시</b><span>${esc(d.date || '-')}</span><b>첨부</b><span>${d.attachments || 0}개</span>${action && action.deadline ? `<b>기한</b><span>${esc(action.deadline.date)}${action.deadline.time ? ' ' + esc(action.deadline.time) : ''} (${ddayText(action.deadline.dday)})</span>` : ''}</div>${recBox}${warn}${actsFor(url, {key: action ? action.key : `doc:${kind}:${d.docId}`, q: relatedQ(title), title, unread: d.unread})}<div id="caseFlow"></div>${pvBox}<div class="box" id="extract">${extractHtml()}</div>`};
@@ -345,8 +347,9 @@ ${mailFilesBox(m)}
     }
     // 같은 화면이어도 입력 중이면 묻는다. 버리기로 했으면 새로 열어 자동 기입이 사용자의 입력 위에 쓰지 않게 한다.
     const discard = !!(S.pane.dirty && S.pane.url === url);
-    if (!leavePane()) return false;
     if (unread && !confirm(`아직 읽지 않은 ${what}입니다. 처리 창에 열면 그룹웨어에 읽음(열람)으로 기록될 수 있습니다. 열까요?`)) return false;
+    if (!leavePane()) return false;
+    if (!S.pane.url || !S.pane.originalBack) S.pane.originalBack = {sel: S.sel, view: S.view};
     if (discard) S.pane.mounted = '';
     if (!S.sel) S.sel = {type: 'frame', title: title || '그룹웨어 화면', url};
     S.pane.url = url; S.pane.extract = null;
@@ -358,6 +361,19 @@ ${mailFilesBox(m)}
       S.pane.expanded = false;
     }
     renderPane();
+    return true;
+  }
+  // Leave the original screen only after protecting unsaved input. Preview has its own non-detaching return.
+  function returnFromOriginalScreen() {
+    if (!S.pane.url) return false;
+    if (S.pane.previewBack) return returnFromAttachmentPreview();
+    if (!leavePane()) return false;
+    const back = S.pane.originalBack;
+    S.sel = back ? back.sel : (S.sel && S.sel.type === 'frame' ? null : S.sel);
+    if (back) S.view = back.view;
+    delete S.pane.originalBack;
+    S.pane.url = ''; S.pane.expanded = false; S.pane.extract = null;
+    render();
     return true;
   }
   // Keep the original mail iframe mounted while an attachment viewer is open: detaching it loses unsaved editor input.

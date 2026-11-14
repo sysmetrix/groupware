@@ -1,6 +1,7 @@
 // GW 비서 · events
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
   // ---------- events ----------
+  let attachmentPreviewRequest = 0;
   root.addEventListener('click', async e => {
     const path = e.composedPath();
     const hasStop = path.some(n => n && n.dataset && n.dataset.stop);
@@ -125,10 +126,12 @@
         if (m) openItem({ type: 'mail', ref: { box: m.box, uid: m.uid }, title: m.subject, url: S.a?.mail?.url });
         break;
       }
-      case 'pvFile': { const c = S.mailDet && S.mailDet[el.dataset.uid]; const f = c && c.files[Number(el.dataset.i)]; if (!f) break; const source = {sel: S.sel, url: S.pane.url}; el.disabled = true; try { const u = await GW.mailAttachmentPreview({uid: el.dataset.uid, sn: f.sn, account: c.account}); if (S.sel === source.sel && S.pane.url === source.url) enterAttachmentPreview(u); } catch (err) { toast('미리보기를 열지 못했습니다: ' + err.message); } el.disabled = false; break; }
+      case 'pvFile': { const c = S.mailDet && S.mailDet[el.dataset.uid]; const f = c && c.files[Number(el.dataset.i)]; if (!f || el.disabled) break; const source = {sel: S.sel, url: S.pane.url}; const request = ++attachmentPreviewRequest; const current = () => request === attachmentPreviewRequest && S.sel === source.sel && S.pane.url === source.url; el.disabled = true; try { const u = await GW.mailAttachmentPreview({uid: el.dataset.uid, sn: f.sn, account: c.account}); if (current()) enterAttachmentPreview(u); } catch (err) { if (current()) toast('미리보기를 열지 못했습니다: ' + err.message); } finally { el.disabled = false; } break; }
       case 'returnAttachmentPreview': returnFromAttachmentPreview(); break;
+      case 'returnOriginalScreen': returnFromOriginalScreen(); break;
       case 'dlFile': downloadMailFile(el.dataset.uid, Number(el.dataset.i), el); break;
       case 'dlAll': { const c = S.mailDet[el.dataset.uid]; el.disabled = true; let ok = 0; for (let i = 0; i < c.files.length; i++) { if (await downloadMailFile(el.dataset.uid, i, root.querySelector('[data-act="dlFile"][data-uid="' + CSS.escape(el.dataset.uid) + '"][data-i="' + i + '"]'))) ok++; } el.disabled = false; toast('첨부 ' + ok + '/' + c.files.length + '개를 받았습니다. 브라우저 다운로드 폴더를 확인하세요.'); break; }
+      case 'docPreviewRetry': { if (S.pane.preview) previewCache.delete(S.pane.preview.key); S.pane.preview = null; renderPane(); break; }
       case 'mailDetailRetry': { const m = findMail(el.dataset.box, el.dataset.uid); if (m) { delete S.mailDet[m.uid]; loadMailDetail(m); renderPane(); } break; }
       case 'rmSnooze': snooze([el.dataset.k]); closeOverlay(); break;
       case 'rmTodo': { const x = S.a.actions.find(a => a.key === el.dataset.k); closeOverlay(); if (x) addTodo(x.title, x.deadline && x.deadline.date || '', x.kind, x.url, x.key); break; }
