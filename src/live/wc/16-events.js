@@ -220,21 +220,29 @@
       case 'calItem': if (el.dataset.k && S.a.actions.some(x => x.key === el.dataset.k)) { if (go('today')) selectAction(el.dataset.k); } else if (el.dataset.url) openUrl(el.dataset.url, {title: el.textContent.trim()}); break;
       case 'goBudgetPick': S.budget.pickOpen = true; go('budget'); break;
       case 'bTogglePick': S.budget.pickOpen = !S.budget.pickOpen; renderMain(); break;
-      case 'bPick': e.stopPropagation(); S.budget.project = el.dataset.p; S.budget.filter = el.dataset.f || ''; loadBudget(); break;
+      case 'bPick': e.stopPropagation(); S.budget.pickOpen = false; S.budget.project = el.dataset.p; S.budget.filter = el.dataset.f || ''; loadBudget(); break;
       case 'bPin': { e.stopPropagation(); const p = el.dataset.p, f = el.dataset.f || '', l = el.dataset.l || f || p; const i = S.settings.budget.findIndex(x => x.project === p && (x.filter || '') === f); if (i >= 0) { S.settings.budget.splice(i, 1); toast('내 관심 사업에서 뺐습니다.'); } else { S.settings.budget.push({project: p, filter: f, label: l}); toast('내 관심 사업에 추가했습니다.'); } /* allow empty budget */ saveLocal(); renderMain(); break; }
       case 'bUnpin': { e.stopPropagation(); S.settings.budget.splice(Number(el.dataset.i), 1); /* allow empty budget */ saveLocal(); renderMain(); toast('내 관심 사업에서 뺐습니다.'); break; }
+      case 'budgetTab': if (['subjects', 'ledger'].includes(v)) { S.budget.budgetTab = v; renderMain(); } break;
       case 'ledger': loadLedger(el.dataset.code); break;
       case 'bSearchRetry': loadBudgetAll(true); break;
+      case 'bSearch': { const input = root.querySelector('#bq'); if (input) S.budget.q = input.value; S.budget.pickOpen = false; budgetQuery(); break; }
+      case 'bSearchClear': S.budget.q = ''; budgetQuery(); root.querySelector('#bq')?.focus(); break;
       case 'bHit': { const d = el.dataset; if (d.empty) { toast('이 과목은 올해 예산·집행이 없습니다(공통 과목표에만 있는 과목).'); break; } const b = S.budget; b.project = d.p; b.filter = d.h || ''; b.q = ''; b.pendingLedger = d.lv === '세' && Number(d.x) > 0 ? d.code : ''; loadBudget(); break; }
       case 'loadMonthly': loadMonthly(); break;
-      case 'budgetMonth': { const m = S.budget.month === v ? '' : v; if (!S.budget.ledger || S.budget.ledger.bgtCd !== '__ALL') { await loadLedgerAll(); } S.budget.month = m; renderMain(); break; }
+      case 'budgetMonth': { const b = S.budget, m = b.month === v ? '' : v; if (!b.ledger || b.ledger.bgtCd !== '__ALL') loadLedgerAll(); b.budgetTab = 'ledger'; b.month = m; b.ledgerPage = 1; renderMain(); break; }
       case 'ledgerAll': loadLedgerAll(); break;
       case 'budgetMonthClear': S.budget.month = ''; renderMain(); break;
+      case 'ledgerMonth': S.budget.month = v; S.budget.ledgerPage = 1; renderMain(); break;
+      case 'ledgerSort': if (['dateDesc', 'dateAsc', 'amountDesc', 'amountAsc'].includes(v)) { S.budget.ledgerSort = v; S.budget.ledgerPage = 1; renderMain(); } break;
+      case 'ledgerPage': S.budget.ledgerPage = Math.max(1, Number(v) || 1); renderMain(); break;
+      case 'ledgerSearch': S.budget.ledgerQuery = root.querySelector('#ledgerQuery')?.value || ''; S.budget.ledgerPage = 1; renderMain(); break;
+      case 'ledgerSearchClear': S.budget.ledgerQuery = ''; S.budget.ledgerPage = 1; renderMain(); root.querySelector('#ledgerQuery')?.focus(); break;
       case 'ledgerRow': { if (!leavePane()) break; const r = S.budget.ledger.rows[Number(el.dataset.i)]; S.sel = {type: 'ledger', row: r}; S.pane.url = ''; renderPane(); break; }
       case 'findDocNo': findAndOpenDocNo(el.dataset.no, el.dataset.t); break;
       case 'csvBudget': { const t = S.budget.table; download(`예산_${t.project}_${today()}.csv`, R.toCsv(t.rows, [{label: '구분', key: 'level'}, {label: '코드', key: 'code'}, {label: '과목', key: 'name'}, {label: '예산', key: 'budget'}, {label: '집행', key: 'executed'}, {label: '잔액', key: 'balance'}, {label: '집행률(%)', key: 'rate'}]), 'text/csv;charset=utf-8'); break; }
       case 'richBudget': { const t = S.budget.table; const html = `<table border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse;font-size:10pt"><tr><th>과목</th><th>예산</th><th>집행</th><th>잔액</th><th>집행률</th></tr>${t.rows.map(r => `<tr><td>${esc(r.level)} ${esc(r.name)}</td><td align="right">${won(r.budget)}</td><td align="right">${won(r.executed)}</td><td align="right">${won(r.balance)}</td><td align="right">${pct(r.rate)}</td></tr>`).join('')}</table>`; copyRich(html, t.rows.map(r => `${r.level} ${r.name}\t${won(r.budget)}\t${won(r.executed)}\t${won(r.balance)}\t${pct(r.rate)}`).join('\n')); break; }
-      case 'csvLedger': { const l = S.budget.ledger, month = S.budget.month, rows = l.rows.filter(r => !month || r.date.slice(4, 6) === month); download(`결의내역_${l.bgtCd}${month ? '_' + month + '월' : ''}_${today()}.csv`, R.toCsv(rows, [{label: '결의일', value: r => ymd8(r.date)}, {label: '적요', key: 'desc'}, {label: '금액', key: 'amount'}, {label: '문서번호', key: 'docNo'}, {label: '작성', key: 'writer'}, {label: '전표', key: 'slip'}]), 'text/csv;charset=utf-8'); break; }
+      case 'csvLedger': { const l = S.budget.ledger, month = S.budget.month, rows = ledgerView(S.budget).map(({row}) => row); download(`결의내역_${l.bgtCd}${month ? '_' + month + '월' : ''}_${today()}.csv`, R.toCsv(rows, [{label: '결의일', value: r => ymd8(r.date)}, ...(l.bgtCd === '__ALL' ? [{label: '세목', key: 'name'}] : []), {label: '적요', key: 'desc'}, {label: '금액', key: 'amount'}, {label: '문서번호', key: 'docNo'}, {label: '작성', key: 'writer'}, {label: '전표', key: 'slip'}]), 'text/csv;charset=utf-8'); break; }
       case 'attMonth': loadAttendance(v); break;
       case 'attDay': S.att.day = S.att.day === v ? '' : v; renderMain(); break;
       case 'csvAtt': download(`근태_${S.att.month}.csv`, R.toCsv(S.att.rows, [{label: '날짜', value: r => ymd8(r.date)}, {label: '근무유형', key: 'workType'}, {label: '출결', key: 'result'}, {label: '근태항목', key: 'item'}, {label: '상태', key: 'status'}, {label: '출근', value: r => hm4(r.come)}, {label: '퇴근', value: r => hm4(r.leave)}, {label: '인정(분)', key: 'recognizedMin'}]), 'text/csv;charset=utf-8'); break;
@@ -294,6 +302,7 @@
     if (t.id === 'qfilter') { S.filter.q = t.value; if (!e.isComposing) refreshQueue(); }
     else if (t.id === 'dfIn') { dfState().filter.q = t.value; if (!e.isComposing) dfRefreshList(); }
     else if (t.id === 'bq') { S.budget.q = t.value; }
+    else if (t.id === 'bPickFilter') { const q = t.value.trim().toLowerCase(); root.querySelectorAll('[data-budget-picker-row]').forEach(row => { row.hidden = !!q && !row.dataset.search.includes(q); }); }
     else if (t.id === 'sq') { S.search.kw = t.value; }
     else if (t.id === 'weekly') { const shown = t.dataset.prev ?? t.defaultValue; if (S.weekly && S.weekly !== shown) store.set('weeklyRecovery', {at: Date.now(), text: S.weekly}); /* 다른 탭에서 바뀐 초안을 덮기 전에 보관 */ S.weekly = t.value; t.dataset.prev = t.value; const saved = saveLocal(); const w = $('#wkSaved'); if (w) { w.classList.toggle('on', saved); w.textContent = saved ? '자동 저장됨' : '저장 실패 · 내용을 복사하세요'; } }
     else if (t.id === 'palq') palRender(t.value);

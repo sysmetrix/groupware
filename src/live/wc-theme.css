@@ -219,3 +219,25 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 /* v0.31: 결과 보고 창은 뒤 화면(채운 서식)을 가리지 않는다 */
 .wc .modal.peek{background:transparent!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important;pointer-events:none}
 .wc .modal.peek .dlg{pointer-events:auto;max-height:70vh;overflow:auto;box-shadow:var(--sh2)}
+
+/* 예산 차트 전용: 카드 높이는 내용에 맞추고 긴 목록은 카드 안에서 스크롤 */
+.wc .budget-cards{align-items:start;min-width:0}
+.wc .budget-chart{min-width:0;align-self:start}
+.wc .budget-chart .ct{gap:8px;flex-wrap:wrap}
+.wc .budget-chart-note{margin:6px 0 10px;color:var(--muted);font-size:12px;line-height:1.5}
+.wc .budget-bars>summary{cursor:pointer;color:var(--accent);font-weight:600;padding:6px 0}
+.wc .budget-bars-top{max-height:490px;overflow:auto}
+.wc .budget-bars-all{max-height:490px;overflow:auto}
+.wc .budget-bar-row{display:grid;grid-template-columns:minmax(0,1fr) 64px;gap:4px 8px;width:100%;padding:8px 4px;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--fg);text-align:left;font:inherit;cursor:pointer}
+.wc .budget-bar-row:hover,.wc .budget-month:hover{background:var(--soft)}
+.wc .budget-bar-label{grid-column:1/-1;overflow-wrap:anywhere}
+.wc .budget-bar-track{position:relative;align-self:center;height:10px;background:var(--soft);border:1px solid var(--line2);border-radius:6px}
+.wc .budget-bar-fill{display:block;height:100%;background:var(--accent);border-radius:6px}.wc .budget-bar-fill.over{background:var(--hi)}.wc .budget-bar-fill.low{background:var(--md)}
+.wc .budget-bar-marker{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--fg)}
+.wc .budget-bar-rate{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}.wc .budget-bar-amount{grid-column:1/-1;color:var(--muted);font-size:12px}
+.wc .budget-months{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:2px;min-width:0}
+.wc .budget-month{min-width:0;border:0;border-radius:5px;background:transparent;color:var(--fg);font:inherit;font-size:12px;text-align:center;padding:4px 0;cursor:pointer}
+.wc .budget-month[aria-pressed=true] .budget-month-bar{background:var(--hi)}.wc .budget-month.failed{cursor:default;color:var(--muted)}
+.wc .budget-month-plot{display:flex;align-items:end;justify-content:center;height:105px;border-bottom:1px solid var(--line2)}.wc .budget-month-bar{width:65%;min-width:4px;background:var(--accent);border-radius:3px 3px 0 0}.wc .budget-month-value{display:none}
+.wc .budget-chart :is(button,summary):focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media(max-width:700px){.wc .budget-cards{grid-template-columns:minmax(0,1fr)}.wc .budget-months{grid-template-columns:repeat(6,minmax(0,1fr));row-gap:12px}.wc .budget-month-plot{height:75px}}

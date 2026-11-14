@@ -17,6 +17,6 @@ test('explicit overlay close works while backdrop does not close through protect
 });
 test('budget export uses the displayed month filter', () => {
   const line = events.match(/case 'csvLedger':[^\n]+/)[0];
-  assert.match(line, /l\.rows\.filter\(r => !month \|\| r\.date\.slice\(4, 6\) === month\)/);
+  assert.match(line, /ledgerView\(S\.budget\)\.map\(\(\{row\}\) => row\)/);
   assert.match(line, /R\.toCsv\(rows,/);
 });
