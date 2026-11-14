@@ -123,16 +123,16 @@
 
   async function fillAttendanceForm(spec) {
     const url = GW.links.route(GW.routes.attendanceRequest);
-    if (!openUrl(url, {title: `근태신청: ${ATT_FORM[spec.type]}`})) return; // 이동을 취소함(같은 화면이어도): 아무 칸도 건드리지 않는다
+    if (!openUrl(url, {title: `근태신청: ${ATT_FORM[spec.type]}`})) return {status: 'cancelled'}; // 이동을 취소함(같은 화면이어도): 아무 칸도 건드리지 않는다
     S.pane.expanded = true; renderPane();
     toast(`${ATT_FORM[spec.type]}을 여는 중…`);
     const vis = e => { const q = e.getBoundingClientRect(); return q.width > 0 && q.height > 0; };
     const leaf = (d, t) => [...d.querySelectorAll('*')].find(e => e.children.length === 0 && (e.textContent || '').trim() === t && vis(e));
     let f = null, d = null, w = null;
     for (let i = 0; i < 40 && S.pane.url === url; i++) { await wait(500); f = $('#frame iframe'); try { d = f && f.contentDocument; w = f && f.contentWindow; } catch {} if (d && leaf(d, ATT_FORM[spec.type])) break; d = null; }
-    if (!d) { if (S.pane.url === url) toast('근태신청서 화면을 열지 못했습니다. 화면에서 직접 고르세요.'); return; }
+    if (!d) { if (S.pane.url === url) toast('근태신청서 화면을 열지 못했습니다. 화면에서 직접 고르세요.'); return {status: 'failed'}; }
     // 이미 열린 신청서(입력 중일 수 있음)에 덮어쓰지 않는다. 방금 새로 연 화면이면 이 창은 뜨지 않는다.
-    if (leaf(d, '신청정보') && !confirm('근태신청 화면에 이미 열려 있는 신청서가 있습니다. 자동 기입으로 덮어쓸까요?')) { toast('열려 있는 신청서를 그대로 두었습니다.'); return; }
+    if (leaf(d, '신청정보') && !confirm('근태신청 화면에 이미 열려 있는 신청서가 있습니다. 자동 기입으로 덮어쓸까요?')) { toast('열려 있는 신청서를 그대로 두었습니다.'); return {status: 'cancelled'}; }
     installGuard(w); AUTO.running = true; AUTO.blocked = []; AUTO.tok = {};
     const steps = [];
     const step = (name, ok, detail = '') => steps.push({name, ok: !!ok, detail});
@@ -245,4 +245,5 @@
       <div class="muted" style="margin-bottom:8px">${esc(ATT_FORM[spec.type])} · ${esc(spec.from)}${spec.to && spec.to !== spec.from ? ' ~ ' + esc(spec.to) : ''}${spec.time ? ' · ' + hm(spec.time.s) + '~' + hm(spec.time.e) : ''}</div>
       ${steps.map(s => `<div style="display:flex;gap:8px;padding:5px 0;border-top:1px solid var(--line)"><b style="color:${s.ok ? 'var(--ok)' : 'var(--hi)'};width:18px">${s.ok ? '✓' : '✗'}</b><div><b>${esc(s.name)}</b><div class="muted" style="font-size:12.5px">${esc(s.detail)}</div></div></div>`).join('')}
       <div class="acts" style="margin-top:12px;justify-content:flex-end"><button class="btn sm primary" data-act="closeHelp">확인하고 계속</button></div></div></div>`;
+    return {status: bad ? 'partial' : 'success', total: steps.length, failed: bad};
   }
