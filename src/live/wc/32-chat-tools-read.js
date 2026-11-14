@@ -214,7 +214,9 @@
       const hit = q ? projects.find(p => !p.error && (String(p.project || '').toLowerCase().includes(q) || String(p.label || '').replace(/\s+/g, '').toLowerCase().includes(q))) : projects.find(p => !p.error && p.rows && p.rows.length);
       if (hit && hit.rows && hit.rows.length) {
         const top = hit.rows[0], nm = (S.settings.budget.find(b => b.project === hit.project) || {}).label || hit.label || hit.project;
-        return {ok: true, text: `${nm}(${hit.project}) 예산 ${won(top.budget)}원 · 집행 ${won(top.executed)}원(${pct(top.rate)}) · 잔액 ${won(top.balance)}원입니다.${el !== undefined && el !== null ? ` (올해 경과율 ${el}%)` : ''}`, data: {project: hit.project, name: nm, budget: top.budget, executed: top.executed, balance: top.balance, rate: top.rate, elapsed_pct: el}, cards: [{type: 'nav', label: '예산 집행 화면 열기', view: 'budget'}]};
+        const subs = hit.rows.filter(r => r.level === '세').slice(0, 5);
+        const subTxt = subs.length ? '\n' + subs.map(r => `• ${r.name}: 집행 ${won(r.executed)}원 (${pct(r.rate)}) / 잔액 ${won(r.balance)}원`).join('\n') : '';
+        return {ok: true, text: `${nm}(${hit.project}) 예산 ${won(top.budget)}원 · 집행 ${won(top.executed)}원(${pct(top.rate)}) · 잔액 ${won(top.balance)}원입니다.${el !== undefined && el !== null ? ` (올해 경과율 ${el}%)` : ''}${subTxt}`, data: {project: hit.project, name: nm, budget: top.budget, executed: top.executed, balance: top.balance, rate: top.rate, elapsed_pct: el, details: subs.map(r => ({code: r.code, name: r.name, executed: r.executed, balance: r.balance, rate: r.rate}))}, cards: [{type: 'nav', label: '예산 집행 화면 열기', view: 'budget'}]};
       }
       const pinned = (S.settings.budget || []).map(b => b.label || b.project).filter(Boolean);
       return {ok: true, text: `${el !== undefined && el !== null ? `올해 경과율은 ${el}%입니다. ` : ''}${pinned.length ? `관심 사업: ${pinned.slice(0, 5).join(', ')}. ` : ''}사업별 집행액은 예산 집행 화면에서 확인하세요.`, data: {elapsed_pct: el, pinned}, cards: [{type: 'nav', label: '예산 집행 화면 열기', view: 'budget'}]};

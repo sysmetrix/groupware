@@ -21,7 +21,9 @@
     const team = (S.team || {})[mk];
     const sum = team && team.cal ? R.teamHomeSummary(team.cal, new Date()) : {leave: [], trip: [], problems: []};
     const pr = S.raw && S.raw.principal;
-    return R.buildAiContext({name: (pr && pr.name) || '', orgName: (pr && pr.compName) || '', deptName: (pr && pr.deptName) || '', mine, deadlines: S.a.deadlines || [], todayAway: [...sum.leave, ...sum.trip], ownProblems: sum.problems, leave: S.raw && S.raw.data && S.raw.data.leave});
+    const isExtPublic = !(typeof POLICY !== 'undefined' && POLICY.aiEndpoint);
+    const awayList = [...sum.leave, ...sum.trip].map((x, i) => isExtPublic ? {...x, name: `직원${i + 1}`} : x);
+    return R.buildAiContext({name: (pr && pr.name) || '', orgName: (pr && pr.compName) || '', deptName: (pr && pr.deptName) || '', mine, deadlines: S.a.deadlines || [], todayAway: awayList, ownProblems: sum.problems, leave: S.raw && S.raw.data && S.raw.data.leave});
   }
   const STATE_LABEL_OF = x => ({overdue: '기한 지남', urgent: '급함', todo: '할 일', check: '확인', confirm: '제출 확인', wait: '결재 대기', verify: '확인'}[stateOf(x)] || stateOf(x));
 
