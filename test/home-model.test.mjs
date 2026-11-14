@@ -4,7 +4,7 @@ import {homeGreeting, homeTiles, homeNextAction, homeTimelineCompact, homeAwayLi
 
 test('homeGreeting: time of day, urgent/total/loading/empty', () => {
   assert.equal(homeGreeting({hour: 9, name: '서원하', urgent: 2, total: 5}).title, '좋은 아침입니다, 서원하 님');
-  assert.equal(homeGreeting({hour: 14, urgent: 0, total: 3}).sub, '오늘 처리할 일은 3건입니다');
+  assert.equal(homeGreeting({hour: 14, urgent: 0, total: 3}).sub, '남은 처리·확인할 일은 3건입니다');
   assert.equal(homeGreeting({hour: 19, urgent: 1}).tone, 'urgent');
   assert.equal(homeGreeting({hour: 10}).sub, '지금 처리할 일이 없습니다');
   assert.equal(homeGreeting({loading: true}).tone, 'info');
