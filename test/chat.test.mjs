@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {chatRankModels, chatCooldownFor, chatComposePrompt, chatExtractPerson, chatParseDate, chatParseTime, chatParseRange, chatIntent, chatExtractName, chatToGeminiTools, chatParseResponse, chatSanitizeForLlm, chatSanitizeText, chatErrorMessage, chatBuildRequest, chatSystemPrompt} from '../src/live/chat.mjs';
+import {chatRankModels, chatCooldownFor, chatComposePrompt, chatExtractPerson, chatParseDate, chatParseTime, chatParseRange, chatIntent, chatFollowupIntent, chatExtractName, chatToGeminiTools, chatParseResponse, chatSanitizeForLlm, chatSanitizeText, chatErrorMessage, chatBuildRequest, chatSystemPrompt} from '../src/live/chat.mjs';
 
 // 2026-11-10 (화) 12:00 KST
 const NOW = new Date('2026-11-10T12:00:00+09:00');
@@ -55,6 +55,30 @@ test('chatIntent: Korean phrases route to the right tool', () => {
   for (const [q, tool] of cases) assert.equal(chatIntent(q, NOW).tool, tool, q);
   assert.equal(chatIntent('안녕', NOW).tool, '');
   assert.equal(chatIntent('', NOW).confidence, 0);
+});
+
+test('calendar questions are not mistaken for employee names or groupware events', () => {
+  for (const q of ['너 구글 일정은 못봐?', '구글 캘린더 일정도 볼 수 있어?', '내일 구글 일정 알려줘', 'Google 캘린더 보여줘']) {
+    assert.equal(chatIntent(q, NOW).tool, 'get_gcal_access', q);
+  }
+  assert.equal(chatIntent('구글 캘린더에 올릴 거 있어?', NOW).tool, 'get_gcal_sync');
+  assert.equal(chatIntent('내일 일정 알려줘', NOW).tool, 'get_schedule');
+  assert.equal(chatIntent('김지은 내일 일정', NOW).tool, 'get_staff_status');
+});
+
+test('approval queue navigation, deadlines and constrained follow-up routing', () => {
+  assert.deepEqual(chatIntent('배부 대기 화면 열어줘', NOW).args, {queue: 'distWaiting'});
+  assert.deepEqual(chatIntent('부서 접수 대기 화면 열어줘', NOW).args, {queue: 'deptWaiting'});
+  assert.equal(chatIntent('결재 대기 화면 열어줘', NOW).args.queue, 'pending');
+  assert.notEqual(chatIntent('결재 승인 처리해줘', NOW).tool, 'prepare_approval_queue');
+  assert.equal(chatIntent('앞으로 2주 마감 기한 알려줘', NOW).tool, 'list_deadlines');
+  assert.equal(chatIntent('앞으로 2주 마감 기한 알려줘', NOW).args.days, 14);
+  const prev = {tool: 'get_staff_status', args: {name: '김지은', date: '2026-11-10'}};
+  assert.deepEqual(chatFollowupIntent('내일은?', prev, NOW).args, {name: '김지은', date: '2026-11-11', days: 1});
+  assert.equal(chatFollowupIntent('그럼 내일은?', prev, NOW).args.date, '2026-11-11');
+  assert.equal(chatFollowupIntent('내일 연차 신청해줘', prev, NOW), null);
+  assert.equal(chatFollowupIntent('내일 구글 일정은?', prev, NOW), null);
+  assert.equal(chatFollowupIntent('내일은?', {tool: 'prepare_leave_request', args: {}}, NOW), null);
 });
 
 test('chatIntent: arguments are extracted', () => {
