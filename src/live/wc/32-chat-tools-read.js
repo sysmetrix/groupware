@@ -54,7 +54,7 @@
       if (a.area) list = list.filter(x => x.area === a.area);
       const label = {urgent: '급한 일', todo: '할 일', check: '확인이 필요한 일', wait: '결재 대기 중인 일', all: '처리할 일'}[st] || '처리할 일';
       if (!list.length) return {ok: true, text: a.area ? `${a.area}: 지금 ${st === 'all' ? '처리하거나 답할' : label} 것이 없습니다.` : `${label}이 없습니다.`, data: {count: 0, items: []}};
-      return {ok: true, text: `${a.area ? a.area + ' ' : ''}${label} ${list.length}건입니다.${list.length > lim ? ` 위에서 ${lim}건만 보여 드립니다.` : ''}`, data: {count: list.length, items: list.slice(0, lim).map(x => ({title: x.title, area: x.area, state: stateOf(x), deadline: x.deadline && x.deadline.date || ''}))},
+      return {ok: true, text: `${a.area ? a.area + ' ' : ''}${label} ${list.length}건입니다.${list.length > lim ? ` 위에서 ${lim}건만 보여 드립니다.` : ''}`, data: {count: list.length, items: list.slice(0, lim).map(x => ({itemId: x.key, title: x.title, area: x.area, state: stateOf(x), deadline: x.deadline && x.deadline.date || ''}))},
         cards: [{type: 'list', title: label, items: list.slice(0, lim).map(chatTaskItem), more: Math.max(0, list.length - lim)}]};
     },
   });
@@ -191,25 +191,32 @@
       if (q.length < 2) return {ok: false, text: '검색어를 두 글자 이상 알려 주세요. 예) 월간업무보고 검색'};
       const types = {approval: ['doc'], mail: ['mail'], notice: ['board']}[a.scope] || ['doc', 'mail', 'board'];
       let res; try { res = await GW.search(q, {types, pageSize: 5}); } catch (e) { return {ok: false, text: '검색하지 못했습니다: ' + String(e.message || e).slice(0, 80)}; }
-      const cards = [], data = {};
-      const add = (key, title, f) => { const g = res.groups[key]; if (!g || !g.items.length) return; data[key] = g.items.slice(0, 5).map(x => f(x).title); cards.push({type: 'list', title: `${title} ${g.total}건`, items: g.items.slice(0, 5).map(f), more: Math.max(0, g.total - 5)}); };
+      const cards = [], data = {}, listItems = [];
+      const add = (key, title, f) => { const g = res.groups[key]; if (!g || !g.items.length) return; data[key] = g.items.slice(0, 5).map(x => f(x).title); for (const x of g.items.slice(0, 5)) listItems.push({itemId: x.docId ? `doc:search:${x.docId}` : '', title: f(x).title, uid: x.uid || ''}); cards.push({type: 'list', title: `${title} ${g.total}건`, items: g.items.slice(0, 5).map(f), more: Math.max(0, g.total - 5)}); };
       add('doc', '결재문서', x => ({title: x.title || '(제목 없음)', sub: [x.docNo, ymd8(x.date)].filter(Boolean).join(' · ')}));
       add('mail', '메일', x => ({title: x.subject || '(제목 없음)', sub: x.from || ''}));
       add('board', '게시판', x => ({title: x.title || '(제목 없음)', sub: String(x.date || '').slice(0, 10)}));
       if (!cards.length) return {ok: true, text: `“${q}”에 해당하는 결과가 없습니다. 검색어나 범위를 바꿔 보세요.`, data: {count: 0}};
       cards.push({type: 'nav', label: '통합검색에서 더 보기', view: 'search', v: q});
       const total = Object.values(res.groups).reduce((s, g) => s + (g.total || 0), 0);
-      return {ok: true, text: `“${q}” 검색 결과는 모두 ${total}건입니다. 제목만 보여 드립니다.`, data: {total, titles: data}, cards};
+      return {ok: true, text: `“${q}” 검색 결과는 모두 ${total}건입니다. 제목만 보여 드립니다.`, data: {total, titles: data, items: listItems}, cards};
     },
   });
 
   chatRegisterTool({
     name: 'get_budget', label: '예산 확인', kind: 'read',
-    description: '예산 집행 현황 화면으로 안내하고 경과율과 관심 사업 목록을 알려준다.',
+    description: '예산 집행 현황(지정 사업 또는 관심 사업의 예산·집행·잔액·집행률)을 알려주고 예산 화면으로 안내한다.',
     params: {type: 'object', properties: {project: {type: 'string'}}},
-    run: async () => {
+    run: async a => {
       if (!S.a) return chatNotReady();
-      const el = S.a.budget && S.a.budget.elapsedPct, pinned = (S.settings.budget || []).map(b => b.label || b.project).filter(Boolean);
+      const el = S.a.budget && S.a.budget.elapsedPct, projects = S.a.budget && S.a.budget.projects || [];
+      const q = String(a.project || '').replace(/\s+/g, '').toLowerCase();
+      const hit = q ? projects.find(p => !p.error && (String(p.project || '').toLowerCase().includes(q) || String(p.label || '').replace(/\s+/g, '').toLowerCase().includes(q))) : projects.find(p => !p.error && p.rows && p.rows.length);
+      if (hit && hit.rows && hit.rows.length) {
+        const top = hit.rows[0], nm = (S.settings.budget.find(b => b.project === hit.project) || {}).label || hit.label || hit.project;
+        return {ok: true, text: `${nm}(${hit.project}) 예산 ${won(top.budget)}원 · 집행 ${won(top.executed)}원(${pct(top.rate)}) · 잔액 ${won(top.balance)}원입니다.${el !== undefined && el !== null ? ` (올해 경과율 ${el}%)` : ''}`, data: {project: hit.project, name: nm, budget: top.budget, executed: top.executed, balance: top.balance, rate: top.rate, elapsed_pct: el}, cards: [{type: 'nav', label: '예산 집행 화면 열기', view: 'budget'}]};
+      }
+      const pinned = (S.settings.budget || []).map(b => b.label || b.project).filter(Boolean);
       return {ok: true, text: `${el !== undefined && el !== null ? `올해 경과율은 ${el}%입니다. ` : ''}${pinned.length ? `관심 사업: ${pinned.slice(0, 5).join(', ')}. ` : ''}사업별 집행액은 예산 집행 화면에서 확인하세요.`, data: {elapsed_pct: el, pinned}, cards: [{type: 'nav', label: '예산 집행 화면 열기', view: 'budget'}]};
     },
   });
@@ -239,25 +246,63 @@
 
   chatRegisterTool({
     name: 'open_view', label: '화면 열기', kind: 'read',
-    description: 'GW 비서의 화면을 연다. view: home, today(할 일 목록), approval, mail, search, board, calendar, gcal, budget, attendance, resource, overview, report, settings.',
+    description: 'GW 비서의 화면을 연다. view: home, today(할 일 목록), approval, mail, docs(문서 찾기), search(통합검색), board, calendar, gcal, gsync(구글 동기화), budget, attendance, resource, overview, report, settings.',
     params: {type: 'object', properties: {view: {type: 'string'}}, required: ['view']},
     run: async a => {
       const v = VIEWS.find(x => x.id === a.view);
       if (!v) return {ok: false, text: '열 수 있는 화면 이름이 아닙니다.'};
-      go(v.id);
+      if (go(v.id) === false) return {ok: false, text: '작성 중인 화면이 있어 이동하지 않았습니다.'};
       return {ok: true, text: `“${v.label}” 화면을 열었습니다.`};
     },
   });
 
   chatRegisterTool({
     name: 'open_item', label: '항목 열기', kind: 'read',
-    description: '할 일 목록의 항목(key)을 열어 상세를 보여준다. list_tasks가 돌려준 항목만 열 수 있다.',
-    params: {type: 'object', properties: {key: {type: 'string'}}, required: ['key']},
+    description: '할 일 목록의 항목(itemId, key 또는 index)을 열어 상세를 보여준다.',
+    params: {type: 'object', properties: {itemId: {type: 'string'}, key: {type: 'string'}, index: {type: 'number'}}},
     run: async a => {
-      const x = S.a && S.a.actions.find(t => t.key === a.key);
-      if (!x) return {ok: false, text: '해당 항목을 찾지 못했습니다.'};
-      go('today'); selectAction(x.key);
+      const id = a.itemId || a.key || '';
+      const x = (id && S.a && S.a.actions.find(t => t.key === id)) || (a.index && S.a && mineVisible()[Number(a.index) - 1]);
+      if (!x) return {ok: false, text: '해당 항목을 찾지 못했습니다. 먼저 "할 일 보여줘"로 목록을 확인해 보세요.'};
+      if (go('today') === false) return {ok: false, text: '작성 중인 화면이 있어 이동하지 않았습니다.'};
+      selectAction(x.key);
       return {ok: true, text: `“${x.title}” 항목을 열었습니다.`};
+    },
+  });
+
+  chatRegisterTool({
+    name: 'check_sent_reply', label: '보낸메일 답장 확인', kind: 'read',
+    description: '받은 메일에 대해 보낸메일함에 같은 제목의 답장 후보가 있는지 확인한다.',
+    params: {type: 'object', properties: {query: {type: 'string'}, index: {type: 'number'}}},
+    run: async a => {
+      if (!S.a) return chatNotReady();
+      const mails = mailActions();
+      const q = String(a.query || '').trim();
+      const toks = cmdKeywords(q);
+      const x = (a.index && mails[Number(a.index) - 1]) || (toks.length ? mails.find(m => toks.every(k => String(m.title || '').replace(/\s+/g, '').includes(k))) || mails.find(m => toks.some(k => String(m.title || '').replace(/\s+/g, '').includes(k))) : null) || cmdSelectedMail() || mails[0];
+      if (!x) return {ok: false, text: '확인할 메일을 찾지 못했습니다.'};
+      const {subject, since} = mailRefOf(x);
+      try {
+        const r = await GW.findReply({subject, since});
+        const cand = r && r.candidate;
+        if (cand) return {ok: true, text: `보낸메일함에서 비슷한 제목의 메일을 찾았습니다: “${cand.subject}” (${cand.date || ''}${cand.to ? ' → ' + cand.to : ''}). 같은 스레드인지는 원문을 확인하세요.`, data: {found_candidate: true, subject: cand.subject, date: cand.date}};
+        return {ok: true, text: `보낸메일함 최근 50건에서 “${subject}”와 같은 제목의 답장 후보를 찾지 못했습니다.`, data: {found_candidate: false}};
+      } catch (e) { return {ok: false, text: '보낸메일함을 확인하지 못했습니다: ' + String(e.message || e).slice(0, 80)}; }
+    },
+  });
+
+  chatRegisterTool({
+    name: 'get_weekly_summary', label: '이번 주 실적 요약', kind: 'read',
+    description: '최근 7일간 내가 상신·접수한 결재문서 실적을 요약해 준다.',
+    params: {type: 'object', properties: {}},
+    run: async () => {
+      if (!S.raw) return chatNotReady();
+      try {
+        const sub = await GW.submittedRange({days: 7, size: 100});
+        const docs = sub.docs || [];
+        const txt = R.weeklyReport({submitted: docs, receipts: [], me: `${S.raw.principal?.deptName || ''} ${S.raw.principal?.name || ''}`.trim(), from: sub.from, to: sub.to});
+        return {ok: true, text: `최근 7일 상신 문서는 ${docs.length}건입니다.\n` + docs.slice(0, 6).map(d => `• ${d.title} (${d.status || ''})`).join('\n'), llm: txt.slice(0, 1200), data: {count: docs.length}, cards: [{type: 'nav', label: '보고서 화면에서 초안 편집', view: 'report'}]};
+      } catch (e) { return {ok: false, text: '주간 실적을 읽지 못했습니다: ' + String(e.message || e).slice(0, 80)}; }
     },
   });
 

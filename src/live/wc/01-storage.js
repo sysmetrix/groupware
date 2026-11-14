@@ -13,23 +13,147 @@
   const getPrefix = () => 'bwyfgw:wc:' + currentKey + ':';
   const LS = getPrefix();
 
+  const IDB_KEYS = new Set(['patterns', 'routing']);
+  const idbMem = new Map();
+  let idbDb = null, idbStarted = false;
+  function idbOpen() {
+    if (typeof indexedDB === 'undefined') return Promise.resolve(null);
+    if (idbDb) return Promise.resolve(idbDb);
+    return new Promise(res => {
+      try {
+        const req = indexedDB.open('bwyfgw_db', 1);
+        req.onupgradeneeded = () => { try { if (!req.result.objectStoreNames.contains('kv')) req.result.createObjectStore('kv'); } catch {} };
+        req.onsuccess = () => { idbDb = req.result; res(idbDb); };
+        req.onerror = () => res(null);
+      } catch { res(null); }
+    });
+  }
+  function idbPut(fk, val) {
+    idbMem.set(fk, val);
+    idbOpen().then(db => {
+      if (!db) return;
+      try { const tx = db.transaction('kv', 'readwrite'); tx.objectStore('kv').put(val, fk); } catch {}
+    });
+  }
+  function idbDel(fk) {
+    idbMem.delete(fk);
+    idbOpen().then(db => {
+      if (!db) return;
+      try { const tx = db.transaction('kv', 'readwrite'); tx.objectStore('kv').delete(fk); } catch {}
+    });
+  }
+  function idbInit() {
+    if (idbStarted || typeof indexedDB === 'undefined') return;
+    idbStarted = true;
+    idbOpen().then(db => {
+      if (!db) return;
+      try {
+        const p = getPrefix();
+        for (const k of IDB_KEYS) {
+          const fk = p + k;
+          const lsRaw = localStorage.getItem(fk);
+          const tx = db.transaction('kv', 'readonly');
+          const rq = tx.objectStore('kv').get(fk);
+          rq.onsuccess = () => {
+            if (rq.result !== undefined) {
+              idbMem.set(fk, rq.result);
+              if (k === 'routing' && !S.routing) S.routing = rq.result;
+              if (lsRaw !== null) try { localStorage.removeItem(fk); } catch {}
+            } else if (lsRaw !== null) {
+              try { const parsed = JSON.parse(lsRaw); idbPut(fk, parsed); localStorage.removeItem(fk); } catch {}
+            }
+          };
+        }
+      } catch {}
+    });
+  }
+  idbInit();
+
   const store = {
     get(k, d) {
       try {
         const p = getPrefix();
+        if (IDB_KEYS.has(k) && idbMem.has(p + k)) return idbMem.get(p + k);
         let v = localStorage.getItem(p + k);
         // Legacy migration: if per-user storage is empty, check legacy global key for 'default' or initial run
         if (v === null && currentKey !== 'default') {
           const old = localStorage.getItem('bwyfgw:wc:' + k);
           const owner = localStorage.getItem('bwyfgw:wc:migrated:' + k); // 이미 다른 사용자가 가져간 자료는 넘겨받지 않는다
-          if (old !== null && (!owner || owner === currentKey)) { v = old; localStorage.setItem(p + k, old); localStorage.setItem('bwyfgw:wc:migrated:' + k, currentKey); } // 한 번만 이관하고 원본은 지워 다른 사용자에게 넘어가지 않게 한다
+          if (old !== null && (!owner || owner === currentKey)) {
+            v = old;
+            localStorage.setItem(p + k, old);
+            localStorage.setItem('bwyfgw:wc:migrated:' + k, currentKey);
+            try { localStorage.removeItem('bwyfgw:wc:' + k); } catch {}
+          }
         }
-        return v === null ? d : JSON.parse(v);
+        if (v === null) return d;
+        const parsed = JSON.parse(v);
+        if (IDB_KEYS.has(k) && typeof indexedDB !== 'undefined') { idbPut(p + k, parsed); try { localStorage.removeItem(p + k); } catch {} }
+        return parsed;
       } catch { return d; }
     },
-    set(k, v) { if (currentKey === 'default' && /^(patterns|macros|actionHistory)$/.test(k)) return false; try { localStorage.setItem(getPrefix() + k, JSON.stringify(v)); return true; } catch { return false; } },
-    del(k) { try { localStorage.removeItem(getPrefix() + k); } catch {} },
+    set(k, v) {
+      if (currentKey === 'default' && /^(patterns|macros|actionHistory|settings|todos|hidden|snooze|plan|weekly|routing)$/.test(k)) return false;
+      if (IDB_KEYS.has(k) && typeof indexedDB !== 'undefined') {
+        idbPut(getPrefix() + k, v);
+        try { localStorage.removeItem(getPrefix() + k); } catch {}
+        return true;
+      }
+      const raw = JSON.stringify(v);
+      try { localStorage.setItem(getPrefix() + k, raw); return true; } catch {
+        if (pruneStorageForQuota(k)) {
+          try { localStorage.setItem(getPrefix() + k, raw); return true; } catch {}
+        }
+        return false;
+      }
+    },
+    del(k) {
+      if (IDB_KEYS.has(k)) idbDel(getPrefix() + k);
+      try { localStorage.removeItem(getPrefix() + k); } catch {}
+    },
   };
+  function pruneStorageForQuota(excludeKey) {
+    let freed = false;
+    const p = getPrefix();
+    for (const k of ['routing', 'forms', 'gsyncExisting', 'chatModels', 'chatCool', 'chatHist']) {
+      if (k === excludeKey) continue;
+      if (localStorage.getItem(p + k) !== null) { try { localStorage.removeItem(p + k); freed = true; } catch {} }
+    }
+    if (excludeKey !== 'patterns') {
+      try {
+        const pr = localStorage.getItem(p + 'patterns');
+        if (pr && pr.length > 40000) {
+          const pat = JSON.parse(pr);
+          if (pat && pat.docs) {
+            const entries = Object.entries(pat.docs).sort((a, b) => (b[1].learnedAt || b[1].at || 0) - (a[1].learnedAt || a[1].at || 0)).slice(0, 60);
+            for (const [, doc] of entries) if (doc.body && doc.body.length > 2000) doc.body = doc.body.slice(0, 2000);
+            localStorage.setItem(p + 'patterns', JSON.stringify({...pat, docs: Object.fromEntries(entries)}));
+            freed = true;
+          }
+        }
+      } catch {}
+    }
+    return freed;
+  }
+  function cleanupLegacyStorage() {
+    if (currentKey === 'default') return;
+    const p = getPrefix();
+    for (const k of ['settings', 'state', 'done', 'snooze', 'hidden', 'todos', 'weekly', 'plan', 'newKeys', 'activity', 'seenActivity', 'history', 'routing']) {
+      try {
+        const legacyKey = 'bwyfgw:wc:' + k;
+        const old = localStorage.getItem(legacyKey);
+        if (old === null) continue;
+        const owner = localStorage.getItem('bwyfgw:wc:migrated:' + k);
+        if (localStorage.getItem(p + k) === null && (!owner || owner === currentKey)) {
+          localStorage.setItem(p + k, old);
+          localStorage.setItem('bwyfgw:wc:migrated:' + k, currentKey);
+        }
+        if (localStorage.getItem(p + k) !== null || (owner && owner === currentKey)) localStorage.removeItem(legacyKey);
+      } catch {}
+    }
+    try { if (localStorage.getItem('bwyfgw:state') !== null) localStorage.removeItem('bwyfgw:state'); } catch {}
+  }
+  cleanupLegacyStorage();
   function switchUserStorage(newEmpKey) {
     if (!newEmpKey || newEmpKey === currentKey) return false;
     currentKey = newEmpKey;
@@ -38,7 +162,7 @@
     localBaseline = localValues();
     return true;
   }
-  const DEFAULT_SETTINGS = {refreshMin: 5, notify: false, budget: [], urgentWords: [], mailCount: 100, days: 14, fontSize: 'm', theme: 'light', paneWidth: 560, beginner: true, tourDone: false};
+  const DEFAULT_SETTINGS = {refreshMin: 5, notify: false, budget: [], urgentWords: [], mailCount: 100, days: 14, fontSize: 'm', theme: 'light', paneWidth: 560, beginner: true, tourDone: false, singleKeyShortcuts: true};
   const migrateTodos = list => (Array.isArray(list) ? list : []).map((t, i) => ({id: t.id || `t${t.at || 0}_${i}`, title: t.title, due: t.due || '', status: t.status || (t.done ? 'done' : 'todo'), source: t.source || '', key: t.key || '', url: t.url || '', at: t.at || Date.now()}));
   const S = {
     userKey: currentKey,
@@ -140,14 +264,26 @@
     }
     return failed.size === 0;
   }
-  const saveLocal = () => syncLocal(true);
+  const bc = typeof BroadcastChannel === 'function' ? new BroadcastChannel('bwyfgw-wc-sync') : null;
+  if (bc) bc.onmessage = ev => {
+    const msg = ev && ev.data;
+    if (!msg || msg.user !== currentKey) return;
+    if (msg.type === 'sync') onStorage({key: getPrefix() + 'state'});
+  };
+  const saveLocal = () => { const ok = syncLocal(true); if (ok && bc) try { bc.postMessage({type: 'sync', user: currentKey}); } catch {} return ok; };
+  let storageTimer = null;
   const onStorage = e => {
     if (e.key !== null && !e.key.startsWith(getPrefix())) return;
     if (getUserKey() !== currentKey) return;
     const before = JSON.stringify(localValues());
     syncLocal();
     if (JSON.stringify(localValues()) !== before) S.undo = []; // 되돌리기 기록은 다른 탭의 변경을 지울 수 있다
-    if (S.open && !isUserBusy()) { if (S.raw) reanalyze(); render(); } else S.pendingRefresh = true;
+    if (S.open && !isUserBusy()) {
+      if (typeof setTimeout === 'function') {
+        clearTimeout(storageTimer);
+        storageTimer = setTimeout(() => { if (S.raw) reanalyze(); render(); }, 200);
+      } else { if (S.raw) reanalyze(); render(); }
+    } else S.pendingRefresh = true;
   };
   window.addEventListener('storage', onStorage);
 

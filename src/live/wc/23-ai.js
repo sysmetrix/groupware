@@ -3,8 +3,12 @@
 // API 키는 이 PC의 이 브라우저에만 저장한다. 키 발급은 화면 안내를 따라 3분이면 된다(무료 사용량 있음).
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
 
-  const AI_HOST = 'https://generativelanguage.googleapis.com/v1beta';
-  const aiCfg = () => store.get('ai', {key: '', model: ''});
+  const AI_HOST = (typeof POLICY !== 'undefined' && POLICY.aiEndpoint) || 'https://generativelanguage.googleapis.com/v1beta';
+  const aiSessKey = () => getPrefix() + 'aiSession';
+  const aiCfg = () => {
+    try { const s = sessionStorage.getItem(aiSessKey()); if (s) { const j = JSON.parse(s); if (j && j.key) return j; } } catch {}
+    return store.get('ai', {key: '', model: ''});
+  };
   // 채팅 엔진이 쓰는 연결 상태: 키가 형식에 맞고 관리자 정책이 허용할 때만 AI 모드
   const aiReady = () => { const k = aiCfg().key; return !!k && R.isGeminiKey(k) && allowed('aiAssistant'); };
   const aiModelName = () => aiCfg().model || 'gemini-flash-latest';
@@ -16,7 +20,8 @@
     const p = R.kstNow(new Date()), mk = p.date.slice(0, 7).replace('-', '');
     const team = (S.team || {})[mk];
     const sum = team && team.cal ? R.teamHomeSummary(team.cal, new Date()) : {leave: [], trip: [], problems: []};
-    return R.buildAiContext({name: (S.raw && S.raw.principal && S.raw.principal.name) || '', mine, deadlines: S.a.deadlines || [], todayAway: [...sum.leave, ...sum.trip], ownProblems: sum.problems, leave: S.raw && S.raw.data && S.raw.data.leave});
+    const pr = S.raw && S.raw.principal;
+    return R.buildAiContext({name: (pr && pr.name) || '', orgName: (pr && pr.compName) || '', deptName: (pr && pr.deptName) || '', mine, deadlines: S.a.deadlines || [], todayAway: [...sum.leave, ...sum.trip], ownProblems: sum.problems, leave: S.raw && S.raw.data && S.raw.data.leave});
   }
   const STATE_LABEL_OF = x => ({overdue: '기한 지남', urgent: '급함', todo: '할 일', check: '확인', confirm: '제출 확인', wait: '결재 대기', verify: '확인'}[stateOf(x)] || stateOf(x));
 
@@ -43,7 +48,7 @@
     S.paletteOpen = true;
     $('#overlay').innerHTML = aiShell(`
       <h2 style="margin:0 0 4px;font-size:18px">AI 도우미 연결 (처음 한 번, 약 3분)</h2>
-      <div class="muted" style="margin-bottom:12px">Google의 Gemini를 사용합니다. 개인 구글 계정이면 무료 사용량으로 충분합니다. 카드 등록은 필요 없습니다.</div>
+      <div class="muted" style="margin-bottom:12px">Google의 Gemini를 사용합니다. 개인 구글 계정 무료 등급은 서비스 개선에 활용될 수 있으므로 민감한 내부 본문은 보내지 않도록 가림 처리됩니다.</div>
       <ol style="line-height:2;padding-left:20px;margin:0 0 10px">
         <li>아래 버튼을 눌러 구글 AI 스튜디오를 엽니다. 구글 로그인이 되어 있어야 합니다.<br><a class="btn primary" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">${ic('ext')}API 키 발급 페이지 열기</a></li>
         <li>화면의 <b>“API 키 만들기(Create API key)”</b> 버튼을 누릅니다. 프로젝트를 고르라고 하면 <b>“새 프로젝트에서 API 키 만들기”</b>를 선택합니다.</li>
@@ -51,8 +56,9 @@
         <li>여기에 붙여넣고 <b>연결 시험</b>을 누릅니다.</li>
       </ol>
       <div style="display:flex;gap:8px"><input id="aiKey" class="inp" style="flex:1;height:40px" type="password" placeholder="AIza 또는 AQ. 로 시작하는 키 붙여넣기" autocomplete="off" aria-label="Gemini API 키"><button class="btn primary" data-act="aiSaveKey">연결 시험</button></div>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;color:var(--fg)"><input type="checkbox" id="aiSessionOnly"> 공용 PC 보호: 브라우저를 닫으면 키 자동 삭제 (세션 전용)</label>
       ${msg ? `<div class="box warn" style="margin-top:10px">${esc(msg)}</div>` : ''}
-      <div class="muted" style="font-size:12px;margin-top:10px">키는 이 PC의 브라우저에만 저장되며 GW 비서 밖으로 보내지 않습니다(구글 호출에만 사용). 키가 새어 나갔다고 느끼면 같은 페이지에서 삭제하고 새로 만드세요.</div>`);
+      <div class="muted" style="font-size:12px;margin-top:10px">기본 설정은 이 PC의 브라우저에만 저장되며, 위 체크를 켜면 이번 세션에만 임시 보관됩니다. 키가 새어 나갔다고 느끼면 즉시 폐기하고 새로 만드세요.</div>`);
   }
 
   async function aiRequest(path, body, key) {
@@ -66,6 +72,7 @@
   }
   async function aiSaveKey() {
     const key = (($('#aiKey') || {}).value || '').trim();
+    const sessionOnly = !!($('#aiSessionOnly') && $('#aiSessionOnly').checked);
     if (!R.isGeminiKey(key)) { aiSetup('키 형식이 맞지 않습니다. AIza 또는 AQ. 로 시작하는 긴 글자를 그대로 붙여넣으세요(앞뒤 공백, 줄바꿈 없이).'); return; }
     $('#overlay').innerHTML = aiShell('<div class="muted"><span class="spin"></span> 연결을 시험하고 있습니다…</div>');
     try {
@@ -81,8 +88,9 @@
         catch (e) { lastErr = e; if (e.status === 400 && /API key|key not valid/i.test(e.message) || e.status === 403) throw e; }
       }
       if (!pick) throw lastErr || new Error('모델 연결에 실패했습니다');
-      store.set('ai', {key, model: pick});
-      toast(`AI 도우미가 연결되었습니다 (${pick})`);
+      if (sessionOnly) { store.del('ai'); try { sessionStorage.setItem(aiSessKey(), JSON.stringify({key, model: pick, sessionOnly: true})); } catch {} }
+      else { try { sessionStorage.removeItem(aiSessKey()); } catch {} store.set('ai', {key, model: pick}); }
+      toast(`AI 도우미가 연결되었습니다 (${pick}${sessionOnly ? ' · 세션 전용' : ''})`);
       closeOverlay();
       if (typeof chatRefresh === 'function') chatRefresh();
     } catch (e) {
@@ -97,7 +105,9 @@
     const out = $('#aiOut');
     if (out) out.innerHTML = '<span class="muted"><span class="spin"></span> 생각하는 중…</span>';
     try {
-      const j = await aiRequest(`models/${c.model || 'gemini-flash-latest'}:generateContent`, {systemInstruction: {parts: [{text: R.AI_SYSTEM}]}, contents: [...(S.aiHist || []).slice(-4).flatMap(h => [{role: 'user', parts: [{text: h.q}]}, {role: 'model', parts: [{text: h.a}]}]), {role: 'user', parts: [{text: `[내 업무 요약]\n${aiContext()}\n\n[질문]\n${q}`}]}], generationConfig: {temperature: 0.3, maxOutputTokens: 2048}}, c.key);
+      const ctxSafe = R.chatSanitizeText(aiContext(), 3500);
+      const qSafe = R.chatSanitizeText(q, 500);
+      const j = await aiRequest(`models/${c.model || 'gemini-flash-latest'}:generateContent`, {systemInstruction: {parts: [{text: R.AI_SYSTEM}]}, contents: [...(S.aiHist || []).slice(-4).flatMap(h => [{role: 'user', parts: [{text: R.chatSanitizeText(h.q, 400)}]}, {role: 'model', parts: [{text: R.chatSanitizeText(h.a, 1500)}]}]), {role: 'user', parts: [{text: `[내 업무 요약]\n${ctxSafe}\n\n[질문]\n${qSafe}`}]}], generationConfig: {temperature: 0.3, maxOutputTokens: 2048}}, c.key);
       const text = (j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts || []).map(p => p.text || '').join('').trim();
       if (!text) throw new Error('답변이 비어 있습니다(안전 필터 또는 사용량 제한일 수 있습니다)');
       S.aiHist = [...(S.aiHist || []), {q, a: text.slice(0, 1500)}].slice(-4); const qi = $('#aiQ'); if (qi) qi.value = '';
@@ -110,5 +120,5 @@
       if ($('#aiOut')) $('#aiOut').innerHTML = `<span style="color:var(--hi)">${esc(msg)}</span>`;
     }
   }
-  function aiForget() { if (confirm('저장된 API 키를 지울까요?')) { store.del('ai'); toast('키를 지웠습니다.'); aiSetup(); } }
+  function aiForget() { if (confirm('저장된 API 키를 지울까요?')) { store.del('ai'); try { sessionStorage.removeItem(aiSessKey()); } catch {} toast('키를 지웠습니다.'); aiSetup(); } }
   function aiClose() { closeOverlay(); }

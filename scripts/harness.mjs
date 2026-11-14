@@ -41,7 +41,8 @@ await stage('구문 검사', async () => {
   for (const f of files) { const r = sh(node, ['--check', f]); if (r.status) fails.push(`${path.relative(root, f)}: ${(r.stderr || '').split('\n').find(l => /Error/.test(l)) || '구문 오류'}`); }
   const live = await checkLiveSyntax(root);
   for (const e of live.errors) fails.push(`${e.file}${e.line ? ':' + e.line : ''}: ${e.message}`);
-  return {fails, info: `${files.length}개 파일, 조각 ${live.fragments}개, 조립 번들`};
+  if (FAST && live.bundleKB > BUDGET.bundleKB) fails.push(`번들 ${live.bundleKB}KB > 예산 ${BUDGET.bundleKB}KB`);
+  return {fails, info: `${files.length}개 파일, 조각 ${live.fragments}개, 조립 번들 (${live.bundleKB}KB)`};
 });
 
 await stage('코드 그래프', async () => {
@@ -181,7 +182,7 @@ const report = {at: new Date().toISOString(), mode: FAST ? 'fast' : 'full', ok: 
 await fs.mkdir(path.join(root, 'build', 'harness'), {recursive: true});
 await fs.writeFile(path.join(root, 'build', 'harness', 'report.json'), JSON.stringify(report, null, 2));
 const md = [`# 하네스 보고서 (${report.mode}) ${report.ok ? '통과' : '실패'}`, '', '| 단계 | 결과 | 시간 | 요약 |', '|---|---|---|---|', ...results.map(r => `| ${r.name} | ${r.ok ? '통과' : '실패'} | ${r.ms}ms | ${r.info} |`), '',
-  ...results.flatMap(r => [...r.fails.map(f => `- 실패 [${r.name}] ${f}`), ...r.warns.slice(0, 15).map(w => `- 주의 [${r.name}] ${w}`)])].join('\n');
+  ...results.flatMap(r => [...r.fails.map(f => `- 실패 [${r.name}] ${f}`), ...r.warns.slice(0, 15).map(w => `- 주의 [${r.name}] ${w}`), ...(r.warns.length > 15 ? [`- 주의 [${r.name}] 외 ${r.warns.length - 15}건 생략 (총 ${r.warns.length}건)`] : [])])].join('\n');
 await fs.writeFile(path.join(root, 'build', 'harness', 'report.md'), md);
 
 if (AS_JSON) console.log(JSON.stringify({ok: report.ok, failures: results.flatMap(r => r.fails.map(f => ({stage: r.name, message: f})))}));

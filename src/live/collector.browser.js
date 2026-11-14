@@ -15,7 +15,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '0.53.0';
+  const VERSION = '0.56.0';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
@@ -137,23 +137,32 @@
 
   // 쓰기는 이 목록의 주소만, 전용 함수(reserveResource)에서만 허용한다. 상신·결재·삭제·발송 계열은 여기에 절대 넣지 않는다.
   const WRITE_ALLOWED = new Set(['/schres/rs121A06']);
+  const INTERNAL_CALL = Symbol('internalCall');
   async function call(path, body = {}, opts = {}) {
     if (!READ_ONLY.has(path)) throw new GwError('NOT_ALLOWED', `읽기 전용 허용 목록에 없는 API입니다: ${path}`);
+    if (path === '/mail/mail002A01' && opts[INTERNAL_CALL] !== true) throw new GwError('USE_MAIL_DETAIL', '메일 상세는 읽음 보호 확인을 위해 mailDetail()로만 조회하세요.');
     return transport(path, body, opts);
   }
-  async function transport(path, body = {}, {timeoutMs = 15000} = {}) {
+  async function transport(path, body = {}, {timeoutMs = 15000, retries = 1} = {}) {
     const client = findClient();
-    let timer;
-    try {
-      const res = await Promise.race([
-        client.post(path, body, {contextType: 'application/json'}),
-        new Promise((_, reject) => { timer = setTimeout(() => reject(new GwError('TIMEOUT', `${path} 응답 시간 초과`)), timeoutMs); }),
-      ]);
-      const r = typeof res === 'string' ? JSON.parse(res) : res;
-      if (!r || (r.resultCode !== 0 && r.resultCode !== 200 && r.resultCode !== 'SUCCESS')) throw new GwError('API_ERROR', `${path}: ${r && r.resultCode} ${r && r.resultMsg || ''}`.trim());
-      return r.resultData;
-    } catch (e) { throw parseRejection(e); }
-    finally { clearTimeout(timer); }
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      let timer;
+      const ac = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      try {
+        const res = await Promise.race([
+          client.post(path, body, {contextType: 'application/json', ...(ac ? {signal: ac.signal} : {})}),
+          new Promise((_, reject) => { timer = setTimeout(() => { try { ac && ac.abort(); } catch {} reject(new GwError('TIMEOUT', `${path} 응답 시간 초과`)); }, timeoutMs); }),
+        ]);
+        const r = typeof res === 'string' ? JSON.parse(res) : res;
+        if (!r || (r.resultCode !== 0 && r.resultCode !== 200 && r.resultCode !== 'SUCCESS')) throw new GwError('API_ERROR', `${path}: ${r && r.resultCode} ${r && r.resultMsg || ''}`.trim());
+        return r.resultData;
+      } catch (e) {
+        const err = parseRejection(e);
+        const transient = (err.code === 'TIMEOUT' || /50[0234]|network|fetch/i.test(err.message)) && attempt < retries && !WRITE_ALLOWED.has(path);
+        if (transient) { await new Promise(r => setTimeout(r, 350 * (attempt + 1))); continue; }
+        throw err;
+      } finally { clearTimeout(timer); }
+    }
   }
 
   // ---------- helpers ----------
@@ -583,7 +592,7 @@
   async function mailDetail({uid, seen, allowMarkRead = false} = {}) {
     if (!uid) throw new GwError('BAD_ARG', 'uid가 필요합니다.');
     if (seen !== true && !allowMarkRead) throw new GwError('WOULD_MARK_READ', '안 읽은 메일은 상세를 열면 읽음으로 바뀝니다.');
-    const d = await call('/mail/mail002A01', {uid: String(uid)});
+    const d = await call('/mail/mail002A01', {uid: String(uid)}, {[INTERNAL_CALL]: true});
     const mime = d.mime || {}, dm = d.decodeMime || {};
     const html = String(mime.body?.html || '');
     const dec = s => s.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
@@ -712,16 +721,21 @@
     });
   }
 
-  // Executed amount per month for one budget code (and its children) — 12 parallel calls.
-  async function budgetMonthly({project, code, year} = {}) {
+  // Executed amount per month for one budget code (and its children) — batched in groups of 4.
+  async function budgetMonthly({project, code, year, gisu} = {}) {
     if (!project) throw new GwError('BAD_QUERY', '프로젝트 코드가 필요합니다.');
     const ctx = context();
     const y = Number(year || kstParts().y);
+    const g = String(gisu || (y - 2014));
     const months = Array.from({length: 12}, (_, i) => String(i + 1).padStart(2, '0'));
-    const res = await Promise.all(months.map(m => call('/nonprofit/NCC0610/0BN00002', {bgtFrYm: `${y}${m}`, bgtToYm: `${y}${m}`, bgtBeforeFrYm: '', bgtBeforeToYm: '', bgtStartFrYm: `${y}0101`, summaryYn: 'N', abgtFg: '1', divCds: `${ctx.erpCompSeq}|`, mgtCds: `${project}|`, bottomCds: '', mgtBottomList: [], bgtCnt: '1', abdocuFg: '1', acctdefFg: 'N001', abdocuDtFg: '1', grFg: '0', zeroFg: '2', divFg: '8', sumRtFg: '2', ctrCd05: '3', ctrCd10: '1', optionBN03: '1', optionBN10: '1', optionBN11: '0', optionBN14: '0', pOptionBn15: '0', coCd: ctx.erpCompSeq, gisu: String(y - 2014), empCd: ctx.erpEmpSeq, gisuFrDt: `${y}0101`, gisuToDt: `${y}1231`}, {timeoutMs: 30000})
-      .then(d => { const rows = arr(d && d.printList).map(budgetRow); const sel = code ? rows.filter(r => r.path.split('|').includes(code)) : rows; return {month: m, rows: sel}; })
-      .catch(e => ({month: m, error: e.code}))));
-    return {project, code, year: y, months: res};
+    const res = [];
+    for (let i = 0; i < months.length; i += 4) {
+      const part = await Promise.all(months.slice(i, i + 4).map(m => call('/nonprofit/NCC0610/0BN00002', {bgtFrYm: `${y}${m}`, bgtToYm: `${y}${m}`, bgtBeforeFrYm: '', bgtBeforeToYm: '', bgtStartFrYm: `${y}0101`, summaryYn: 'N', abgtFg: '1', divCds: `${ctx.erpCompSeq}|`, mgtCds: `${project}|`, bottomCds: '', mgtBottomList: [], bgtCnt: '1', abdocuFg: '1', acctdefFg: 'N001', abdocuDtFg: '1', grFg: '0', zeroFg: '2', divFg: '8', sumRtFg: '2', ctrCd05: '3', ctrCd10: '1', optionBN03: '1', optionBN10: '1', optionBN11: '0', optionBN14: '0', pOptionBn15: '0', coCd: ctx.erpCompSeq, gisu: g, empCd: ctx.erpEmpSeq, gisuFrDt: `${y}0101`, gisuToDt: `${y}1231`}, {timeoutMs: 30000})
+        .then(d => { const rows = arr(d && d.printList).map(budgetRow); const sel = code ? rows.filter(r => r.path.split('|').includes(code)) : rows; return {month: m, rows: sel}; })
+        .catch(e => ({month: m, error: e.code}))));
+      res.push(...part);
+    }
+    return {project, code, year: y, gisu: g, months: res};
   }
 
   // A subject match is only a candidate, never evidence of a reply to this message.

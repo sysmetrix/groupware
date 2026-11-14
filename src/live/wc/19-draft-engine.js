@@ -6,7 +6,7 @@
   const PAT_KEY = 'patterns';
   const wait = ms => new Promise(r => setTimeout(r, ms));
   const patLoad = () => { const p = store.get(PAT_KEY, null); return p && p.docs ? p : {v: 1, docs: {}}; };
-  const patSaveDoc = doc => { try { const p = patLoad(); p.docs[doc.id] = {...doc, learnedAt: Date.now()}; p.at = Date.now(); store.set(PAT_KEY, p); } catch (e) { logError('patSaveDoc', e.message); } };
+  const patSaveDoc = doc => { try { const p = patLoad(); const d = {...doc, body: doc.body ? String(doc.body).slice(0, 4000) : '', learnedAt: Date.now()}; p.docs[d.id] = d; p.at = Date.now(); if (!store.set(PAT_KEY, p)) S.storageError = true; } catch (e) { logError('patSaveDoc', e.message); } };
   const patModel = () => R.buildPatternModel(Object.values(patLoad().docs));
   const HR_FORMS = /^(36|40|43|1012|1021)$/;
   let learning = null;
@@ -27,6 +27,7 @@
         tab = [...d.querySelectorAll('*')].find(e => e.children.length <= 1 && (e.innerText || '').trim() === '기본항목');
         if (tab) break;
       }
+      try { if (fr.contentWindow) installGuard(fr.contentWindow); } catch {}
       if (!tab) throw new Error('기본항목 탭을 찾지 못했습니다');
       tab.click();
       let txt = '';
@@ -58,28 +59,30 @@
       try {
         const sub = await GW.submittedRange({days: 365, size: 400});
         const have = patLoad().docs;
-        const todo = sub.docs.filter(d => !HR_FORMS.test(d.tiKeyCode) && !have[d.docId]).slice(0, limit)
-          .map(d => ({id: d.docId, ti: d.tiKeyCode, title: d.title, form: d.form, docNo: d.docNo, date: d.date}));
-        if (!todo.length) return 0;
-        if (!quiet) toast(`내 기안 패턴을 학습하는 중입니다 (${todo.length}건)…`);
-        const t0 = Date.now();
-        const worker = async () => {
-          while (todo.length && Date.now() - t0 < budgetMs) {
-            const r = await readDocPattern(todo.shift());
-            if (!r.err) { patSaveDoc(r); done++; }
-          }
-        };
-        await Promise.all(Array.from({length: conc}, worker));
-      } catch (e) { logError('learnPatterns', e.message); }
-      return done;
-    })().finally(() => { learning = null; });
-    return learning;
+    const todo = sub.docs.filter(d => !HR_FORMS.test(d.tiKeyCode) && !have[d.docId]).slice(0, limit)
+      .map(d => ({id: d.docId, ti: d.tiKeyCode, title: d.title, form: d.form, docNo: d.docNo, date: d.date}));
+    if (!todo.length) return {done: 0, errors: 0};
+    if (!quiet) toast(`내 기안 패턴을 학습하는 중입니다 (${todo.length}건)…`);
+    const t0 = Date.now();
+    let errors = 0;
+    const worker = async () => {
+      while (todo.length && Date.now() - t0 < budgetMs) {
+        const r = await readDocPattern(todo.shift());
+        if (!r.err) { patSaveDoc(r); done++; } else errors++;
+      }
+    };
+    await Promise.all(Array.from({length: conc}, worker));
+    return {done, errors};
+  } catch (e) { logError('learnPatterns', e.message); return {done, errors: 1, errMsg: e.message}; }
+  })().finally(() => { learning = null; });
+  return learning;
   }
 
   // ---------- 결과보고 대상(미작성 계획서) 선별 ----------
   async function getPendingPlansList() {
-    await learnPatterns({limit: 12, budgetMs: 60000, quiet: true}).catch(() => {});
-    const docs = Object.values(patLoad().docs).filter(d => d.binder && !/^접수문서/.test(d.binder) && /^일반기안문/.test(d.form || ''));
+    const lr = await learnPatterns({limit: 12, budgetMs: 60000, quiet: true}).catch(e => ({done: 0, errors: 1, errMsg: e.message}));
+    const allDocs = Object.values(patLoad().docs);
+    const docs = allDocs.filter(d => d.binder && !/^접수문서/.test(d.binder) && /^일반기안문/.test(d.form || ''));
     const plans = docs.filter(d => /계획(\(안\)|\(변경\))?$/.test(String(d.title).trim()) && !/결과/.test(d.title));
     const reportedNos = new Set();
     const reportedCores = new Set();
@@ -89,10 +92,13 @@
       for (const r of d.refs || []) { const m = String(r).match(/^(\S+?)\(/); if (m) reportedNos.add(m[1]); }
       reportedCores.add(core(d.title));
     }
-    return plans
+    const pending = plans
       .filter(p => !/변경\s*(\(\d+차\))?\s*계획|계획\s*\(변경\)|계획\s*변경/.test(p.title))
       .filter(p => !reportedNos.has(p.docNo) && !reportedCores.has(core(p.title)))
       .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+    pending.learnedCount = allDocs.length;
+    pending.learnErrors = (lr && lr.errors) || 0;
+    return pending;
   }
 
   async function openResultPlanPicker() {
@@ -121,7 +127,7 @@
     const pending = await getPendingPlansList();
     const el = $('#planPickerList');
     if (!el) return;
-    if (!pending.length) { el.innerHTML = `<div class="empty"><div class="ill">${ic('check')}</div><b>결과보고가 필요한 계획서가 없습니다</b>모든 계획서에 결과보고가 이미 있습니다.</div>`; return; }
+    if (!pending.length) { el.innerHTML = `<div class="empty"><div class="ill">${ic('check')}</div><b>미작성 계획서를 찾지 못했습니다</b>현재 학습한 ${pending.learnedCount || 0}건 기준입니다.${pending.learnErrors ? ` (일부 문서 ${pending.learnErrors}건은 읽지 못했습니다)` : ''}</div>`; return; }
     el.innerHTML = pending.map(p => `
       <div class="cmd-preset" role="button" tabindex="0" data-act="selectPlanForResult" data-id="${esc(p.id)}" style="display:flex;align-items:flex-start;gap:12px">
         <div style="flex:1;min-width:0">
@@ -220,7 +226,7 @@
     // 결재란(본문 서식의 approver1~8 칸)에 실제로 들어간 직위를 다시 읽어 보여 준다
     const readSeq = () => { const out = []; try { const H = d.querySelector('iframe[src*="hwpBuild"], #formCtrl_1').contentWindow.HwpCtrl; for (let i = 1; i <= 8; i++) { const v = String(H.GetFieldText('approver' + i) || '').trim(); if (v) out.push(v); } } catch {} return out; };
     let seq = closed ? ((await waitFor(() => { const s = readSeq(); return s.length ? s : null; }, 2000)) || []) : [];
-    if (closed && !seq.length) return {ok: true, detail: '기본 결재선을 불러왔습니다(결재란을 다시 읽지 못했으니 화면에서 확인)'};
+    if (closed && !seq.length) return {ok: false, detail: '결재선을 불러왔으나 결재란을 다시 읽지 못했습니다(화면에서 직접 확인 필요)'};
     return {ok: closed, detail: closed ? `기본 결재선 반영: ${seq.join(' → ')} (결재란 다시 읽음)` : '결재라인 창을 닫지 못해 취소했습니다(직접 지정 필요)'};
   }
 
@@ -406,9 +412,25 @@
     toast(`“${plan.title.slice(0, 24)}…” 결과보고를 준비하는 중…`);
     let src = plan;
     if (!src.body || !src.runday) { const r = await readDocPattern({id: plan.id, ti: 'mg_20160303185413307', title: plan.title, form: plan.form, docNo: plan.docNo, date: plan.date}); if (!r.err) { patSaveDoc(r); src = r; } }
+    const facts = await askForm({
+      title: '결과보고 사전 실적 입력',
+      desc: `계획서(${plan.docNo || plan.title.slice(0, 25)})의 실제 실적을 먼저 확인하세요. 비워 둔 칸은 계획서 문구를 그대로 둡니다.`,
+      fields: [
+        {label: '실제 추진 일시', placeholder: '예: 2026. 11. 12.(목) 14:00'},
+        {label: '실제 장소', placeholder: '예: 재단 3층 대회의실'},
+        {label: '실제 참여 인원', placeholder: '예: 총 32명(청소년 28, 지도자 4)'},
+        {label: '실제 집행 금액', placeholder: '예: 450,000원'},
+        {label: '주요 성과·특이사항 (선택)', placeholder: '계획 대비 변동 사항 요약'},
+      ],
+      okLabel: '기안 화면 열고 채우기',
+    });
+    if (!facts) return;
     const title = R.planToResultTitle(plan.title);
     const meta = R.predictDraftMeta(patModel(), {title, sourceDocNo: plan.docNo, sourceTitle: plan.title});
     const body = R.buildResultBody(src.body || '', {runday: src.runday, docNo: plan.docNo, planTitle: plan.title});
+    const [fDate, fPlace, fPeople, fBudget, fPerf] = facts.map(x => String(x || '').trim());
+    const extra = [fDate ? `  - 실제 일시: ${fDate}` : '', fPlace ? `  - 실제 장소: ${fPlace}` : '', fPeople ? `  - 참여 인원: ${fPeople}` : '', fBudget ? `  - 집행 예산: ${fBudget}` : '', fPerf ? `  - 주요 성과: ${fPerf}` : ''].filter(Boolean);
+    if (extra.length) { const block = ['[실적 입력 요약]', ...extra]; body.lines = [...body.lines, ...block]; body.hang = [...body.hang, ...block.map(() => false)]; body.text = body.lines.join('\n'); }
     const f = await openDraftFrame('mg_20160303185413307', '일반기안문', `결과보고: ${plan.title}`);
     if (!f) { toast('기안 열기를 취소했거나 화면이 아직 준비되지 않았습니다. 기존 내용은 그대로 두었습니다.'); return; }
     const steps = await fillDraft(f, {title, meta, body, ref: {title: plan.title, docNo: plan.docNo}});
@@ -560,4 +582,3 @@
     closeOverlay();
     return goodsPickPlan();
   }
-  function autoFillDraft(type) { return autoStartDraft(type === 'oneClick' ? 'result' : type); }

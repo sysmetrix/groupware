@@ -191,7 +191,12 @@
       const r = el.getBoundingClientRect();
       if (step.type === 'click' || step.type === 'dblclick') recMouse(el, r.left + r.width / 2, r.top + r.height / 2, step.type === 'dblclick');
       else if (step.type === 'canvasClick') recMouse(el, r.left + r.width * (step.rx ?? .5), r.top + r.height * (step.ry ?? .5), !!step.dbl);
-      else if (step.type === 'type' || step.type === 'select') recSetValue(el, interp(step.value, vars));
+      else if (step.type === 'type' || step.type === 'select') {
+        const val = interp(step.value, vars);
+        recSetValue(el, val);
+        const actual = String(el.value ?? '');
+        if (step.type === 'type' && actual !== String(val ?? '')) throw new Error(`입력 확인 실패: 값이 화면에 유지되지 않았습니다`);
+      }
       else if (step.type === 'check') { if (!!el.checked !== !!step.checked) el.click(); }
       else if (step.type === 'key') { const w = el.ownerDocument.defaultView; el.dispatchEvent(new w.KeyboardEvent('keydown', {key: step.key, ctrlKey: !!step.ctrlKey, bubbles: true})); el.dispatchEvent(new w.KeyboardEvent('keyup', {key: step.key, ctrlKey: !!step.ctrlKey, bubbles: true})); }
       else if (step.type === 'assert') { const actual = rNorm(el.innerText || el.value || el.textContent), want = interp(step.expectText, vars); if (!actual.includes(want)) throw new Error(`검증 실패: “${want}” ≠ “${actual.slice(0, 40)}”`); }
@@ -344,13 +349,15 @@
     try { const fw = $('#frame iframe').contentWindow; installGuard(fw); r = await player.play(m, {vars}); }
     catch (e) { r = {ok: false, at: 0, results: [{ok: false, detail: `재생을 시작하지 못했습니다: ${e && e.message ? e.message : e}`}]}; }
     finally { AUTO.running = false; AUTO.allow = false; player = null; }
+    const hasAssert = m.steps.some(s => s.type === 'assert');
+    const verified = !!(r.ok && hasAssert);
     const tEl = $('#recplayTitle');
-    if (tEl) { tEl.textContent = `${r.ok ? '✓' : '✗'} ${m.name} ${r.ok ? '재생 완료' : `${r.at + 1}단계에서 중단`}`; tEl.style.color = r.ok ? 'var(--ok)' : 'var(--hi)'; }
+    if (tEl) { tEl.textContent = `${r.ok ? (verified ? '✓' : '·') : '✗'} ${m.name} ${r.ok ? (verified ? '실행 및 검증 완료' : '실행 완료 (결과 직접 확인)') : `${r.at + 1}단계에서 중단`}`; tEl.style.color = r.ok ? 'var(--ok)' : 'var(--hi)'; }
     if (!r.ok && r.results.length === 1 && !log.length) { const el = $('#recplay'); if (el) el.insertAdjacentHTML('afterbegin', `<div class="err" style="font-size:12px;margin-bottom:6px">${esc(r.results[0].detail)}</div>`); }
     $('#overlay').querySelector('[data-act="recAbort"]')?.remove();
     const closeButton = $('#overlay').querySelector('[data-act="closeHelp"]'); if (closeButton) closeButton.disabled = false;
     S.paletteOpen = true; // 끝난 뒤에는 Esc·바깥 클릭으로 닫히게
-    logActionRecord({command: `기록 재생: ${m.name}`, type: '기록기', target: m.name, summary: r.ok ? `${m.steps.length}단계를 모두 재생했습니다.` : `${r.at + 1}단계에서 중단했습니다: ${(r.results[r.at] || {}).detail || ''}`, steps: r.results.map((x, k) => `${x.ok ? '✓' : '✗'} ${k + 1}. ${x.detail}`), verified: r.ok});
-    toast(r.ok ? `“${m.name}” 재생을 마쳤습니다.` : `재생을 중단했습니다: ${(r.results[r.at] || {}).detail || ''}`);
+    logActionRecord({command: `기록 재생: ${m.name}`, type: '기록기', target: m.name, summary: r.ok ? (verified ? `${m.steps.length}단계를 모두 실행하고 검증했습니다.` : `${m.steps.length}단계를 실행했습니다(사후 검증 단계 없음 — 화면에서 결과를 확인하세요).`) : `${r.at + 1}단계에서 중단했습니다: ${(r.results[r.at] || {}).detail || ''}`, steps: r.results.map((x, k) => `${x.ok ? '✓' : '✗'} ${k + 1}. ${x.detail}`), status: r.ok ? (verified ? 'success' : 'executed') : 'error', verified});
+    toast(r.ok ? (verified ? `“${m.name}” 실행·검증을 마쳤습니다.` : `“${m.name}” 실행을 마쳤습니다. 화면 결과를 확인하세요.`) : `재생을 중단했습니다: ${(r.results[r.at] || {}).detail || ''}`);
   }
   function recAbort() { if (player) player.stop(); }

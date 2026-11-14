@@ -277,7 +277,7 @@ ${ledger ? `<h3>결의 내역 · ${esc(ledger.name || ledger.bgtCd)} <span class
     const req = (b.mreq = (b.mreq || 0) + 1), project = b.project;
     b.monthlyBusy = true; renderMain();
     let res = null;
-    try { res = await GW.budgetMonthly({project, code, year: b.table && b.table.year}); res.code = code; } catch (e) { if (req === b.mreq) toast('월별 집행을 읽지 못했습니다: ' + e.message); }
+    try { res = await GW.budgetMonthly({project, code, year: b.table && b.table.year, gisu: b.table && b.table.gisu}); res.code = code; } catch (e) { if (req === b.mreq) toast('월별 집행을 읽지 못했습니다: ' + e.message); }
     if (req !== b.mreq) return; // 더 새 요청이 있으면 그쪽이 화면을 맡는다
     if (project !== b.project) { b.monthlyBusy = false; if (S.view === 'budget') renderMain(); return; } // 조회 중 사업을 바꾸면 이전 결과는 버린다
     if (res) b.monthly = res;

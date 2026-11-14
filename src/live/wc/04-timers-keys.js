@@ -5,7 +5,12 @@
   function schedule() {
     clearInterval(timer);
     const m = Number(S.settings.refreshMin || 0);
-    if (m > 0) timer = setInterval(() => { if (document.visibilityState !== 'hidden' || S.settings.notify) refresh({silent: true}); }, m * 60_000); // 보이지 않는 탭은 알림을 켠 경우에만 조회
+    if (m > 0) timer = setInterval(() => {
+      if (document.visibilityState === 'hidden' && !S.settings.notify) return;
+      if (navigator.locks && typeof navigator.locks.request === 'function') {
+        navigator.locks.request('bwyfgw-wc-refresh', {ifAvailable: true}, lock => lock ? refresh({silent: true}) : undefined).catch(() => {});
+      } else refresh({silent: true});
+    }, m * 60_000); // 보이지 않는 탭은 알림을 켠 경우에만 조회 + 멀티탭 중복 수집 방지
   }
   const onDocKey = e => {
     if (e.altKey && e.code === 'KeyG') { e.preventDefault(); e.stopPropagation(); S.open ? close() : open(); return; }
@@ -20,7 +25,7 @@
     e.stopPropagation(); // keep groupware shortcuts from firing behind the work center
     if (e.isComposing || e.keyCode === 229) return;
     if (e.key === 'Tab') {
-      const dialog = $('#overlay .modal .dlg');
+      const dialog = $('#overlay .modal .dlg, #overlay .menu');
       if (dialog) {
         const els = [...dialog.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')].filter(x => x.getClientRects().length);
         if (els.length) { const i = els.indexOf(root.activeElement); if (i < 0 || (e.shiftKey && i === 0) || (!e.shiftKey && i === els.length - 1)) { e.preventDefault(); els[e.shiftKey ? els.length - 1 : 0].focus(); } }
@@ -59,10 +64,16 @@
       return;
     }
     if (S.paletteOpen || S.helpOpen) return; // 대화상자(AI·지급·기록기·명령 콘솔 등) 위에서는 전역 단축키를 쓰지 않는다
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
     const c = e.code;
+    if (e.altKey && !e.ctrlKey && !e.metaKey) {
+      if (c === 'KeyH') { e.preventDefault(); goHome(); return; }
+      if (/^Digit[1-9]$/.test(c)) { const v = VIEWS[Number(c.slice(5)) - 1]; if (v) { e.preventDefault(); go(v.id); } return; }
+      return;
+    }
+    if (e.ctrlKey || e.metaKey) return;
     if (c === 'KeyD' && e.shiftKey) { e.preventDefault(); toggleTheme(); toast(S.settings.theme === 'dark' ? '다크 모드' : '라이트 모드'); return; }
     if (c === 'Slash' && e.shiftKey) { toggleHelp(); return; }
+    if (S.settings.singleKeyShortcuts === false) return;
     if (c === 'Slash') { e.preventDefault(); const ci = S.view === 'home' && $('#chInput'); (ci || $('#gsearch')).focus(); return; }
     if (c === 'KeyH') { goHome(); return; }
     if (c === 'KeyR') { refresh(); return; }

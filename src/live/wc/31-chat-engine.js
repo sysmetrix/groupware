@@ -8,7 +8,7 @@
 
   const CHAT_TOOLS = new Map();
   function chatRegisterTool(def) { if (def && def.name && typeof def.run === 'function') CHAT_TOOLS.set(def.name, def); }
-  const CHAT_COMPOSE = new Set(['get_overview', 'list_tasks', 'get_schedule', 'get_staff_status', 'get_my_attendance', 'search_documents', 'get_resource_status', 'get_gcal_sync']); // lookup_person은 전화·이메일이 외부 AI로 나가지 않도록 정리 대상에서 뺀다(그대로 보여 준다)
+  const CHAT_COMPOSE = new Set(['get_overview', 'list_tasks', 'get_schedule', 'get_my_attendance', 'search_documents', 'get_resource_status', 'get_gcal_sync']); // 직원 실명(get_staff_status)과 연락처(lookup_person)는 외부 AI 정리로 보내지 않는다
   const CHAT_HIST_VER = 3; // 올리면 예전 대화 기록을 한 번 비운다(형식이 바뀌었을 때)
 
   function chatState() {
@@ -18,8 +18,9 @@
         if (store.get('chatHistV', 0) !== CHAT_HIST_VER) { store.del('chatHist'); store.set('chatHistV', CHAT_HIST_VER); }
         h = S.settings.chatSave === false ? [] : store.get('chatHist', []);
       } catch { h = []; }
-      S.chat = {msgs: (Array.isArray(h) ? h : []).slice(-30).filter(m => m && (m.text || (m.cards && m.cards.length))).map(m => ({id: m.id || 'm' + Math.random().toString(36).slice(2), role: m.role === 'user' ? 'user' : 'ai', text: String(m.text || '').slice(0, 2000), at: m.at || 0, state: 'done', cards: Array.isArray(m.cards) ? m.cards.slice(0, 4) : [], tools: []})), busy: false, pending: {}, draft: '', abort: null, stopped: false, seq: 0, announced: '', model: ''};
+      S.chat = {msgs: (Array.isArray(h) ? h : []).slice(-30).filter(m => m && (m.text || (m.cards && m.cards.length))).map(m => ({id: m.id || 'm' + Math.random().toString(36).slice(2), role: m.role === 'user' ? 'user' : 'ai', text: String(m.text || '').slice(0, 2000), at: m.at || 0, state: 'done', cards: Array.isArray(m.cards) ? m.cards.slice(0, 4) : [], tools: []})), busy: false, pending: {}, draft: '', abort: null, stopped: false, seq: 0, announced: '', model: '', ctx: {lastItems: []}};
     }
+    if (!S.chat.ctx) S.chat.ctx = {lastItems: []};
     return S.chat;
   }
   function chatSave() {
@@ -36,8 +37,8 @@
     if (st.msgs.length > 60) st.msgs.splice(0, st.msgs.length - 60);
     return m;
   }
-  function chatClear() { const st = chatState(); if (st.abort) st.abort.abort(); st.msgs = []; st.pending = {}; st.busy = false; st.draft = ''; try { store.del('chatHist'); } catch {} }
-  function chatStop() { const st = chatState(); st.stopped = true; if (st.abort) st.abort.abort(); }
+  function chatClear() { const st = chatState(); st.seq++; if (st.abort) st.abort.abort(); st.msgs = []; st.pending = {}; st.busy = false; st.draft = ''; st.ctx = {lastItems: []}; try { store.del('chatHist'); } catch {} }
+  function chatStop() { const st = chatState(); st.stopped = true; st.seq++; if (st.abort) st.abort.abort(); }
 
   // ---------- 모델 선택과 한도 ----------
   const chatCool = () => store.get('chatCool', {});
@@ -74,13 +75,25 @@
     if (!def) return {ok: false, text: '지원하지 않는 기능입니다.'};
     const chip = {name, label: def.label || name, state: 'run'};
     msg.tools.push(chip); chatRefresh();
+    const st = chatState();
+    const runArgs = args && typeof args === 'object' ? {...args} : {};
+    if (runArgs.index && !runArgs.itemId && !runArgs.key && st.ctx && Array.isArray(st.ctx.lastItems)) {
+      const hit = st.ctx.lastItems[Number(runArgs.index) - 1];
+      if (hit) {
+        if (hit.itemId) runArgs.itemId = hit.itemId;
+        if (hit.title && !runArgs.query) runArgs.query = hit.title;
+        if (hit.uid && !runArgs.mail_key) runArgs.mail_key = hit.itemId || '';
+      }
+    }
     let res;
     try {
-      res = await Promise.race([def.run(args && typeof args === 'object' ? args : {}, {S, now: new Date(), userText: ctx.userText || '', viaAi: !!ctx.viaAi}), new Promise((_, rej) => setTimeout(() => rej(new Error('시간이 너무 오래 걸립니다')), 25000))]);
+      res = await Promise.race([def.run(runArgs, {S, now: new Date(), userText: ctx.userText || '', viaAi: !!ctx.viaAi}), new Promise((_, rej) => setTimeout(() => rej(new Error('시간이 너무 오래 걸립니다')), 25000))]);
       if (!res || typeof res !== 'object') res = {ok: false, text: '결과를 받지 못했습니다.'};
     } catch (e) { logError('chatTool.' + name, e.message); res = {ok: false, text: '처리하지 못했습니다: ' + String(e.message || e).slice(0, 100)}; }
     chip.state = res.ok ? 'ok' : 'err';
-    const st = chatState();
+    if (res.ok && res.data && Array.isArray(res.data.items) && res.data.items.length) {
+      st.ctx.lastItems = res.data.items.map(it => ({itemId: it.itemId || '', title: it.title || '', uid: it.uid || ''}));
+    }
     for (const c of res.cards || []) {
       if (c && c.type === 'confirm') {
         const id = 'cf' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -104,12 +117,13 @@
     if (ev && ev.isTrusted === false) return;
     if (Date.now() - p.at > 10 * 60000) { delete st.pending[id]; p.card.state = 'cancel'; p.card.result = ''; chatRefresh(); toast('시간이 지나 취소되었습니다. 다시 요청해 주세요.'); return; }
     if (!(navigator.userActivation && navigator.userActivation.isActive)) { toast('화면의 버튼을 직접 눌러 주세요.'); return; }
-    delete st.pending[id]; p.card.state = 'done'; p.card.result = '진행 중…'; chatRefresh();
+    delete st.pending[id]; p.card.state = 'running'; p.card.result = '진행 중…'; chatRefresh();
     try {
       const r = await p.fn();
+      p.card.state = r && r.ok === false ? 'err' : 'done';
       p.card.result = (r && r.text) || '처리했습니다.';
       for (const c of (r && r.cards) || []) if (c && c.type !== 'confirm') p.msg.cards.push(c);
-    } catch (e) { logError('chatConfirm', e.message); p.card.result = '처리하지 못했습니다: ' + String(e.message || e).slice(0, 100); }
+    } catch (e) { logError('chatConfirm', e.message); p.card.state = 'err'; p.card.result = '처리하지 못했습니다: ' + String(e.message || e).slice(0, 100); }
     chatRefresh(true); chatSave();
   }
 
@@ -147,50 +161,95 @@
     throw last || Object.assign(new Error('retry'), {status: 503, kind: 'server'});
   }
 
-  // ② 조회 결과를 근거로 답을 다듬는다(실패해도 로컬 답이 남는다).
-  async function chatCompose(text, res, ai) {
+  // ② 조회 결과를 근거로 답을 다듬는다(가능하면 SSE 스트리밍, 실패해도 로컬 답이 남는다).
+  async function chatCompose(text, res, ai, runSeq) {
     const chip = {name: 'compose', label: 'AI 정리', state: 'run'};
     ai.tools.push(chip); chatRefresh();
     const st = chatState(), ctl = new AbortController();
     st.abort = ctl;
     try {
-      const body = R.chatBuildRequest({system: R.chatSystemPrompt(chatNowStr(), (S.raw && S.raw.principal && S.raw.principal.name) || ''), contents: [{role: 'user', parts: [{text: R.chatComposePrompt(text, res.llm !== undefined ? res.llm : res.text, JSON.stringify(R.chatSanitizeForLlm(res.data || {})))}]}], maxTokens: 500});
+      const org = (S.raw && S.raw.principal && S.raw.principal.compName) || '';
+      const qSafe = R.chatSanitizeText(text, 300);
+      const rSafe = R.chatSanitizeText(res.llm !== undefined ? res.llm : res.text, 1800);
+      const dSafe = JSON.stringify(R.chatSanitizeForLlm(res.data || {}));
+      const body = R.chatBuildRequest({system: R.chatSystemPrompt(chatNowStr(), (S.raw && S.raw.principal && S.raw.principal.name) || '', org), contents: [{role: 'user', parts: [{text: R.chatComposePrompt(qSafe, rSafe, dSafe)}]}], maxTokens: 500});
+      const c = aiCfg();
+      const avail = chatAvailable(await chatModelList());
+      let streamed = '';
+      if (avail.length) {
+        const model = avail[0];
+        const mc = new AbortController();
+        const onStop = () => mc.abort();
+        if (ctl.signal.aborted) mc.abort(); else ctl.signal.addEventListener('abort', onStop, {once: true});
+        const tm = setTimeout(() => mc.abort(), 20000);
+        try {
+          const resp = await fetch(`${AI_HOST}/models/${model}:streamGenerateContent?alt=sse`, {method: 'POST', headers: {'x-goog-api-key': c.key, 'Content-Type': 'application/json'}, body: JSON.stringify(body), signal: mc.signal});
+          if (resp.ok && resp.body && typeof resp.body.getReader === 'function') {
+            const reader = resp.body.getReader(), dec = new TextDecoder();
+            let buf = '';
+            while (true) {
+              const {done, value} = await reader.read();
+              if (done || st.stopped || st.seq !== runSeq) break;
+              buf += dec.decode(value, {stream: true});
+              const lines = buf.split('\n'); buf = lines.pop() || '';
+              for (const ln of lines) {
+                if (!ln.startsWith('data:')) continue;
+                try {
+                  const j = JSON.parse(ln.slice(5));
+                  const chunk = (j.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
+                  if (chunk) { streamed += chunk; ai.text = streamed; ai.composed = true; chatRefresh(); }
+                } catch {}
+              }
+            }
+            if (streamed.trim() && !st.stopped && st.seq === runSeq) { st.model = model; chip.state = 'ok'; return; }
+          }
+        } catch {} finally { clearTimeout(tm); ctl.signal.removeEventListener('abort', onStop); }
+      }
+      if (st.stopped || st.seq !== runSeq) return;
       const r = R.chatParseResponse(await chatGemini(body, ctl));
+      if (st.stopped || st.seq !== runSeq) return;
       if (r.text) { ai.text = r.text; ai.composed = true; chip.state = 'ok'; return; }
     } catch (e) {
-      if (!st.stopped) logError('chatCompose', e.message);
-      if (e.kind === 'key' && !ai.cards.some(c => c.type === 'setup')) ai.cards.push({type: 'setup', reason: '저장된 AI 키가 거절되었습니다. 다시 연결해 주세요.'});
+      if (!st.stopped && st.seq === runSeq) logError('chatCompose', e.message);
+      if (e.kind === 'key' && st.seq === runSeq && !ai.cards.some(c => c.type === 'setup')) ai.cards.push({type: 'setup', reason: '저장된 AI 키가 거절되었습니다. 다시 연결해 주세요.'});
     }
     ai.tools = ai.tools.filter(t => t !== chip);
   }
 
   // ③ 로컬이 못 알아들은 말: AI가 도구를 골라 부른다.
-  async function chatRunAi(text, ai) {
+  async function chatRunAi(text, ai, runSeq) {
     const st = chatState(), ctl = new AbortController();
     st.abort = ctl;
     const name = (S.raw && S.raw.principal && S.raw.principal.name) || '';
+    const org = (S.raw && S.raw.principal && S.raw.principal.compName) || '';
     const contents = [];
     for (const m of st.msgs.slice(-9, -2)) if (m.text && m.state === 'done' && chatHistoryCurrent(m.at) && (m.role === 'user' || m.role === 'ai')) contents.push({role: m.role === 'user' ? 'user' : 'model', parts: [{text: R.chatSanitizeText(m.text, 400)}]});
     contents.push({role: 'user', parts: [{text: R.chatSanitizeText(text, 600)}]});
     const tools = R.chatToGeminiTools([...CHAT_TOOLS.values()]);
-    const system = R.chatSystemPrompt(chatNowStr(), name);
+    const system = R.chatSystemPrompt(chatNowStr(), name, org);
     const texts = [];
     for (let round = 0; round < 3; round++) {
+      if (st.stopped || st.seq !== runSeq) return;
       const j = await chatGemini(R.chatBuildRequest({system, contents, tools, maxTokens: 1024}), ctl);
+      if (st.stopped || st.seq !== runSeq) return;
       const r = R.chatParseResponse(j);
       if (r.blocked) throw Object.assign(new Error('blocked'), {status: 200, kind: 'blocked'});
       if (r.error && !r.calls.length) throw Object.assign(new Error(r.error), {status: 200, kind: 'server'});
       if (!r.calls.length) { ai.text = r.text || texts.join('\n'); return; }
-      contents.push({role: 'model', parts: r.parts});
+      let fc = 0;
+      const keptParts = r.parts.filter(p => !p.functionCall || (++fc <= 4));
+      contents.push({role: 'model', parts: keptParts});
       const resp = [];
       for (const call of r.calls.slice(0, 4)) {
+        if (st.stopped || st.seq !== runSeq) return;
         const res = await chatExec(call.name, call.args, ai, {userText: text, viaAi: true});
+        if (st.stopped || st.seq !== runSeq) return;
         if (res.text) texts.push(res.text);
         resp.push({functionResponse: {name: call.name, response: {result: R.chatSanitizeForLlm({ok: res.ok, text: res.llm !== undefined ? res.llm : res.text, data: res.data})}}});
       }
       contents.push({role: 'user', parts: resp});
     }
-    ai.text = texts.join('\n') || '요청을 정리하지 못했습니다. 조금 더 구체적으로 말씀해 주세요.';
+    if (!st.stopped && st.seq === runSeq) ai.text = texts.join('\n') || '요청을 정리하지 못했습니다. 조금 더 구체적으로 말씀해 주세요.';
   }
 
   async function chatSend(text) {
@@ -198,6 +257,7 @@
     text = String(text || '').trim().slice(0, 1000);
     if (!text || st.busy) return;
     st.busy = true; st.stopped = false;
+    const runSeq = ++st.seq;
     chatPush('user', text);
     const ai = chatPush('ai', '', {state: 'pending'});
     chatRefresh();
@@ -207,14 +267,17 @@
       const known = it.tool && it.confidence >= (ready ? 0.9 : 0.6) && CHAT_TOOLS.has(it.tool); // AI가 있으면 확신이 낮은 추측은 AI에게 맡긴다
       if (known) {
         const res = await chatExec(it.tool, it.args, ai, {userText: text, viaAi: false});
-        ai.text = res.text || '';
-        ai.state = 'done'; chatRefresh();   // ① 로컬 답을 먼저 보여 준다
-        const def = CHAT_TOOLS.get(it.tool);
-        if (ready && res.ok && def.kind !== 'act' && CHAT_COMPOSE.has(it.tool) && !st.stopped && (res.cards || []).length + (res.text || '').length > 30 && chatAvailable(await chatModelList()).length) await chatCompose(text, res, ai);
+        if (st.stopped || st.seq !== runSeq) { ai.text = ai.text || '중지했습니다.'; }
+        else {
+          ai.text = res.text || '';
+          ai.state = 'done'; chatRefresh();   // ① 로컬 답을 먼저 보여 준다
+          const def = CHAT_TOOLS.get(it.tool);
+          if (ready && res.ok && def.kind !== 'act' && CHAT_COMPOSE.has(it.tool) && !st.stopped && (res.cards || []).length + (res.text || '').length > 30 && chatAvailable(await chatModelList()).length) await chatCompose(text, res, ai, runSeq);
+        }
       } else if (ready && chatAvailable(await chatModelList()).length) {
-        try { await chatRunAi(text, ai); }
+        try { await chatRunAi(text, ai, runSeq); }
         catch (e) {
-          if (st.stopped) ai.text = ai.text || '중지했습니다.';
+          if (st.stopped || st.seq !== runSeq) ai.text = ai.text || '중지했습니다.';
           else {
             logError('chatAi', e.message);
             if (!ai.text) { ai.text = CHAT_HELP; if (e.kind === 'key') ai.cards.push({type: 'setup', reason: '저장된 AI 키가 거절되었습니다. 다시 연결해 주세요.'}); else if (!e.cooled) ai.cards.push({type: 'note', tone: 'warn', text: R.chatErrorMessage(e.status || 0, e.message, e.kind || '')}); }
@@ -227,6 +290,6 @@
     } catch (e) { logError('chatSend', e.message); ai.text = '처리하지 못했습니다: ' + String(e.message || e).slice(0, 100); ai.state = 'error'; }
     if (ai.state === 'pending') ai.state = 'done';
     if (!ai.text && !ai.cards.length) ai.text = '결과가 없습니다.';
-    st.busy = false; st.abort = null;
+    if (st.seq === runSeq) { st.busy = false; st.abort = null; }
     chatSave(); chatRefresh(true); // 답이 끝나면 맨 아래(확인 카드 포함)가 보이게
   }

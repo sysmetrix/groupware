@@ -1,5 +1,19 @@
 // GW 비서 · 통합검색
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
+  async function loadCaseFlow(q) {
+    const box = $('#caseFlow');
+    if (!q || !box) { if (q) { S.search.kw = q; runSearch(['doc', 'mail']); } return; }
+    box.innerHTML = '<div class="box"><span class="spin"></span> 관련 사안(결재문서·메일) 흐름을 묶는 중…</div>';
+    try {
+      const r = await GW.search(q, {types: ['doc', 'mail'], pageSize: 6});
+      const items = [
+        ...(r.groups?.doc?.items || []).map(x => ({kind: '결재', title: x.title, sub: x.docNo || x.drafter || '', date: String(x.date || '').slice(0, 10), url: x.url || ''})),
+        ...(r.groups?.mail?.items || []).map(x => ({kind: '메일', title: x.subject, sub: x.from || '', date: String(x.date || '').slice(0, 10), url: ''})),
+      ].sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 8);
+      box.innerHTML = `<div class="box tip"><b>관련 사안 흐름</b> <span class="muted">“${esc(q)}” 기준 ${items.length}건</span>${items.length ? items.map(it => `<div class="trow"><span><span class="bdg tag">${esc(it.kind)}</span> ${esc(it.title)}${it.sub ? ` <span class="muted">(${esc(it.sub)})</span>` : ''}</span><span class="muted nowrap">${esc(it.date)}${it.url ? ` <button class="btn sm ghost" data-act="openUrl" data-url="${esc(it.url)}" data-title="${esc(it.title)}">열기</button>` : ''}</span></div>`).join('') : '<div class="muted" style="margin-top:4px">연결된 사안 문서를 찾지 못했습니다.</div>'}</div>`;
+    } catch (e) { box.innerHTML = `<div class="box warn">사안 흐름을 읽지 못했습니다: ${esc(e.message)}</div>`; }
+  }
+
   // ----- 통합검색 -----
   const cleanSnip = t => String(t || '').replace(/^[\s\S]{0,80}?수신자[\s\S]{0,160}?제목\s*/, '').replace(/\s+/g, ' ').trim();
   const periodFrom = p => { if (!p) return ''; const d = new Date(); d.setMonth(d.getMonth() - Number(p)); return R.kstNow(d).date.replace(/-/g, ''); };

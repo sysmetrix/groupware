@@ -7,7 +7,13 @@ const NOISE_WORDS = /광고|뉴스레터|newsletter|weekly|위클리|웨비나|w
 // 홍보·뉴스레터 메일: 제목 말고 보낸 주소(edu@·news@·marketing@ 등)와 그림 문자로 시작하는 제목도 본다(예: '🅰️ 2027년도 AI와 함께할 미래…' edu@ablearn.kr).
 const PROMO_SENDER = /^(edu|news|newsletter|marketing|event|events|mailer|noreply|no-reply|donotreply|promo|ad|ads|campaign)@/i;
 const TRUSTED_MAIL = /(^|[.@])(bwyf\.or\.kr|go\.kr|korea\.kr|or\.kr|ac\.kr|re\.kr|(hs|ms|es|sc)\.kr)$/i;
-export const isNoiseMail = m => { const s = String((m && m.subject) || ''), e = String((m && (m.fromEmail || m.email)) || ''); if (NOISE_WORDS.test(s)) return true; if (TRUSTED_MAIL.test(e)) return false; return PROMO_SENDER.test(e) || /^\s*[\u{1F000}-\u{1FAFF}]/u.test(s); };
+export const isNoiseMail = m => {
+  const s = String((m && m.subject) || ''), e = String((m && (m.fromEmail || m.email)) || '');
+  if (TRUSTED_MAIL.test(e) && ACTION_WORDS.test(s)) return false;
+  if (NOISE_WORDS.test(s)) return true;
+  if (TRUSTED_MAIL.test(e)) return PROMO_SENDER.test(e);
+  return PROMO_SENDER.test(e) || /^\s*[\u{1F000}-\u{1FAFF}]/u.test(s);
+};
 const PRIORITY_ORDER = {high: 0, medium: 1, low: 2};
 
 const pad = n => String(n).padStart(2, '0');
@@ -29,27 +35,37 @@ const hm = min => min === null || min === undefined ? '-' : `${Math.floor(min / 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 const ageDays = (dateText, now) => { const t = Date.parse(String(dateText).replace(' ', 'T') + '+09:00'); return Number.isFinite(t) ? (now.getTime() - t) / 86400000 : Infinity; };
 
-// "~11.20.", "11.20.까지", "11월 20일까지", "기한: 11/20", "(~11/9(월) 16:00)" -> {date, time}
+const validIsoDate = (y, m, d) => {
+  if (!Number.isInteger(y) || !Number.isInteger(m) || !Number.isInteger(d) || m < 1 || m > 12 || d < 1 || d > 31) return '';
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return '';
+  return `${y}-${pad(m)}-${pad(d)}`;
+};
+// "~11.20.", "2028.11.20.까지", "11월 20일까지", "기한: 11/20", "(~11/9(월) 16:00)" -> {date, time}
 export function extractDeadlineInfo(text, now = new Date()) {
   const s = String(text || '');
   const patterns = [
-    /~\s*(\d{1,2})\s*[./]\s*(\d{1,2})/,
-    /(\d{1,2})\s*[./]\s*(\d{1,2})\.?\s*(?:\([월화수목금토일]\))?\s*까지/,
-    /(\d{1,2})\s*월\s*(\d{1,2})\s*일\s*(?:\([월화수목금토일]\))?\s*까지/,
-    /(?:기한|마감|제출기한)\s*[:：]?\s*(\d{1,2})\s*[./월]\s*(\d{1,2})/,
+    /~\s*(?:(20\d{2})\s*[.\-/년]\s*)?(\d{1,2})\s*[./]\s*(\d{1,2})/,
+    /(?:(20\d{2})\s*[.\-/년]\s*)?(\d{1,2})\s*[./]\s*(\d{1,2})\.?\s*(?:\([월화수목금토일]\))?\s*까지/,
+    /(?:(20\d{2})\s*년\s*)?(\d{1,2})\s*월\s*(\d{1,2})\s*일\s*(?:\([월화수목금토일]\))?\s*까지/,
+    /(?:기한|마감|제출기한)\s*[:：]?\s*(?:(20\d{2})\s*[.\-/년]\s*)?(\d{1,2})\s*[./월]\s*(\d{1,2})/,
   ];
   for (const re of patterns) {
     const m = s.match(re);
     if (!m) continue;
-    const month = Number(m[1]), day = Number(m[2]);
-    if (month < 1 || month > 12 || day < 1 || day > 31) continue;
+    const expYear = m[1] ? Number(m[1]) : 0;
+    const month = Number(m[2]), day = Number(m[3]);
     const {y} = kstNow(now);
-    let iso = `${y}-${pad(month)}-${pad(day)}`;
-    if (dday(iso, now) < -60) iso = `${y + 1}-${pad(month)}-${pad(day)}`;
-    if (Number.isNaN(Date.parse(iso))) continue;
+    const year = expYear || y;
+    let iso = validIsoDate(year, month, day);
+    if (!iso) continue;
+    if (!expYear && dday(iso, now) < -60) iso = validIsoDate(year + 1, month, day);
+    if (!iso) continue;
     const after = s.slice(m.index + m[0].length, m.index + m[0].length + 18);
     const t = after.match(/(\d{1,2}):(\d{2})/);
-    return {date: iso, time: t ? `${pad(Number(t[1]))}:${t[2]}` : ''};
+    const hh = t ? Number(t[1]) : -1, mm = t ? Number(t[2]) : -1;
+    const time = (t && hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) ? `${pad(hh)}:${pad(mm)}` : '';
+    return {date: iso, time};
   }
   return {date: '', time: ''};
 }
@@ -71,17 +87,24 @@ export function extractAllDeadlines(text, now = new Date(), {strict = false} = {
     if (/^\s*[~\-–]\s*\d/.test(tail)) continue; // start of a range: the end date is the deadline
     const isDeadline = strict ? (/까지|마감/.test(m[0]) || /~\s*$|기한|마감/.test(lead)) : (/까지|마감|제출/.test(m[0]) || /~\s*$|기한|마감|제출|회신|신청|접수/.test(lead));
     if (!isDeadline) continue;
+    const expYear = m[1] ? Number(m[1]) : 0;
     const month = Number(m[2]), day = Number(m[3]);
-    if (month < 1 || month > 12 || day < 1 || day > 31) continue;
     const {y} = kstNow(now);
-    const year = m[1] ? Number(m[1]) : y;
-    let iso = `${year}-${pad(month)}-${pad(day)}`;
-    if (!m[1] && dday(iso, now) < -60) iso = `${year + 1}-${pad(month)}-${pad(day)}`;
-    if (Number.isNaN(Date.parse(iso))) continue;
+    const year = expYear || y;
+    let iso = validIsoDate(year, month, day);
+    if (!iso) continue;
+    if (!expYear && dday(iso, now) < -60) iso = validIsoDate(year + 1, month, day);
+    if (!iso) continue;
+    let tm = m[5] || '';
+    if (tm) {
+      const [hh, mm] = tm.split(':').map(Number);
+      if (hh < 0 || hh > 23 || mm < 0 || mm > 59) tm = '';
+      else tm = `${pad(hh)}:${pad(mm)}`;
+    }
     const context = s.slice(Math.max(0, m.index - 40), Math.min(s.length, m.index + m[0].length + 30)).trim();
-    if (!found.some(f => f.date === iso)) found.push({date: iso, time: m[5] || '', dday: dday(iso, now), context});
+    if (!found.some(f => f.date === iso && f.time === tm)) found.push({date: iso, time: tm, dday: dday(iso, now), context});
   }
-  return found.sort((a, b) => a.date.localeCompare(b.date));
+  return found.sort((a, b) => a.date.localeCompare(b.date) || (a.time || '').localeCompare(b.time || ''));
 }
 // The deadline to act on: the nearest one that has not passed, otherwise the latest.
 export function nextDeadline(list = []) { return list.find(x => x.dday >= 0) || list[list.length - 1] || null; }
@@ -216,12 +239,21 @@ const URGENT_WORDS = /긴급|필독|즉시|오늘까지|금일|시급|독촉|재
 const REQUEST_WORDS = /요청|제출|회신|협조|검토|확인|조사|취합|의견|신청|작성/;
 const PROMO_WORDS = /홍보|문화혜택|공연|모집|소식|초대|이벤트|할인|뉴스|웨비나|박람회|공모전 안내/;
 const BASE = {mailAnswered: 30, conflictAnswered: 30, mailReplyIn: 12, pending: 62, rejected: 70, deptWaiting: 50, distWaiting: 48, sendWaiting: 34, viewing: 12, mailUnreadAsk: 46, mailUnread: 26, mailOther: 10, mailDeadline: 44, mailReply: 22, notice: 10, leave: 8, attHigh: 58, attMedium: 42, conflict: 85};
-// Working days between a date text and now (weekends skipped).
-function bizDays(dateText, now) {
+// Working days between a date text and now (weekends and known holidays skipped).
+const isWorkdayIso = (iso, holSet) => {
+  const w = new Date(iso + 'T00:00:00Z').getUTCDay();
+  if (w === 0 || w === 6) return false;
+  if (holSet && holSet.has(iso.replace(/-/g, ''))) return false;
+  return true;
+};
+function bizDays(dateText, now, holSet = null) {
   const t = Date.parse(String(dateText || '').replace(' ', 'T') + '+09:00');
   if (!Number.isFinite(t)) return 0;
   let n = 0;
-  for (let d = new Date(t + 9 * 3600_000); d.getTime() + 86400000 <= now.getTime() + 9 * 3600_000; d = new Date(d.getTime() + 86400000)) { const w = d.getUTCDay(); if (w !== 0 && w !== 6) n++; }
+  for (let d = new Date(t + 9 * 3600_000); d.getTime() + 86400000 <= now.getTime() + 9 * 3600_000; d = new Date(d.getTime() + 86400000)) {
+    const iso = d.toISOString().slice(0, 10);
+    if (isWorkdayIso(iso, holSet)) n++;
+  }
   return n;
 }
 function scoreAction(a, now) {
@@ -291,6 +323,8 @@ function judge(a, now) {
 export const DEFAULT_ROLES = {deptReceiver: false, distributor: false, sender: false};
 export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6, roles = DEFAULT_ROLES} = {}) {
   const d = raw?.data || {};
+  const holSet = new Set((d.schedule?.holidays || []).map(h => String(h.date || '').replace(/-/g, '').slice(0, 8)).filter(Boolean));
+  for (const r of d.attendance?.days || []) if (r && r.date && (r.holiday || /휴일/.test(r.result || ''))) holSet.add(r.date.slice(0, 8));
   const me = raw?.principal?.name || '';
   const myLogin = String(raw?.principal?.loginId || '').toLowerCase();
   const role = {...DEFAULT_ROLES, ...(roles || {})};
@@ -320,7 +354,7 @@ export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6, roles 
     for (const doc of l.docs) {
       const k = `doc:${key}:${doc.docId}`;
       const deadline = addDeadline(doc.title, l.label, doc.url || docLink(raw, l), k);
-      push({key: k, type: 'doc', base: key, ref: {kind: key, docId: doc.docId}, drafter: doc.drafter || '', toEmp: doc.toEmp || '', sender: doc.sender || doc.sendOrg || doc.drafter || '', docNo: doc.docNo || '', attachN: doc.attachments || 0, area: '결재', kind: l.label, title: doc.title, detail: [verb, doc.sender || doc.drafter, doc.docNo, doc.attachments ? `첨부 ${doc.attachments}` : ''].filter(Boolean).join(' · '), when: doc.date, waitDays: ageDays(doc.date, now), bizWait: bizDays(doc.date, now), deadline, url: doc.url || docLink(raw, l), listUrl: l.url, isNew: hasPrev && !prevDocs.has(`${key}:${doc.docId}`)});
+      push({key: k, type: 'doc', base: key, ref: {kind: key, docId: doc.docId}, drafter: doc.drafter || '', toEmp: doc.toEmp || '', sender: doc.sender || doc.sendOrg || doc.drafter || '', docNo: doc.docNo || '', attachN: doc.attachments || 0, area: '결재', kind: l.label, title: doc.title, detail: [verb, doc.sender || doc.drafter, doc.docNo, doc.attachments ? `첨부 ${doc.attachments}` : ''].filter(Boolean).join(' · '), when: doc.date, waitDays: ageDays(doc.date, now), bizWait: bizDays(doc.date, now, holSet), deadline, url: doc.url || docLink(raw, l), listUrl: l.url, isNew: hasPrev && !prevDocs.has(`${key}:${doc.docId}`)});
     }
   };
   docAction('pending', '내 결재 차례');
@@ -389,9 +423,9 @@ export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6, roles 
     const owner = actions.find(a => a.key === dl.key);
     const answered = owner && owner.base === 'mailAnswered'; // keep the warning, but lower
     if (owner) { // fold the warning into the item itself instead of a second row
-      // Real deadline = the last working day before the leave (weekends and other leave days skipped).
+      // Real deadline = the last working day before the leave (weekends, holidays, and other leave days skipped).
       let n = dayNumber(dl.date) - 1;
-      while (n > dayNumber(dl.date) - 14) { const iso = new Date(n * 86400000).toISOString().slice(0, 10); const w = new Date(n * 86400000).getUTCDay(); if (w !== 0 && w !== 6 && !offDays.has(iso)) break; n--; }
+      while (n > dayNumber(dl.date) - 14) { const iso = new Date(n * 86400000).toISOString().slice(0, 10); if (isWorkdayIso(iso, holSet) && !offDays.has(iso)) break; n--; }
       const before = new Date(n * 86400000).toISOString().slice(0, 10);
       const passed = dday(before, now) < 0;
       const wd = '일월화수목금토'[new Date(n * 86400000).getUTCDay()];
@@ -437,11 +471,8 @@ export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6, roles 
   const mine = {total: doing.length, urgent: cnt(['overdue', 'urgent']), todo: cnt(['todo']), check: cnt(['check']), confirm: cnt(['confirm']), wait: cnt(['wait']),
     byArea: Object.fromEntries(['결재', '메일', '기한', '근태', '공지'].map(ar => [ar, doing.filter(a => a.area === ar).length]))};
   const todayInfo = (() => {
-    const k = kstNow(now), d8 = k.date.replace(/-/g, '');
-    const wd = new Date(k.date + 'T00:00:00Z').getUTCDay();
-    const row = (d.attendance?.days || []).find(r => r && r.date === d8);
-    const hol = (d.schedule?.holidays || []).some(h => String(h.date || '').replace(/-/g, '').slice(0, 8) === d8);
-    return {date: k.date, isWorkday: !(wd === 0 || wd === 6 || hol || (row && (row.holiday || /휴일/.test(row.result || ''))))};
+    const k = kstNow(now);
+    return {date: k.date, isWorkday: isWorkdayIso(k.date, holSet)};
   })();
   deadlines.sort((a, b) => a.date.localeCompare(b.date));
 
@@ -533,7 +564,8 @@ export function renderMarkdown(a) {
 export function renderHtml(a) {
   const s = a.summary;
   const card = (label, value, sub = '', tone = '') => `<div class="card ${tone}"><div class="label">${esc(label)}</div><div class="value">${esc(value ?? '-')}</div><div class="sub">${esc(sub)}</div></div>`;
-  const link = (url, text) => url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(text)}</a>` : esc(text);
+  const safeHref = u => /^https?:\/\//i.test(String(u || '')) ? String(u) : '';
+  const link = (url, text) => safeHref(url) ? `<a href="${esc(safeHref(url))}" target="_blank" rel="noopener">${esc(text)}</a>` : esc(text);
   const actionRows = a.actions.filter(x => x.scope !== 'ref').slice(0, 60).map(x => `<tr class="p-${x.priority}"><td><span class="pill ${x.priority}">${STATE_LABEL[x.state]}</span>${x.isNew ? '<span class="pill new">새</span>' : ''}</td><td>${esc(x.area)}<div class="muted">${esc(x.kind)}</div></td><td>${link(x.url, x.title)}<div><b>${esc(x.headline)}</b></div><div class="muted">${esc(x.facts.join(' · '))}</div></td><td class="nowrap">${esc(x.when)}</td></tr>`).join('');
   const refRows = a.actions.filter(x => x.scope === 'ref').slice(0, 40).map(x => `<tr><td>${link(x.url, x.title)}<div class="muted">${esc(x.headline)}</div></td><td class="nowrap">${esc(x.when)}</td></tr>`).join('');
   const deadlineRows = a.deadlines.map(x => `<tr><td class="nowrap"><b>${esc(x.date)}</b></td><td><span class="pill ${x.dday <= 3 ? 'high' : x.dday <= 7 ? 'medium' : 'low'}">${ddayText(x.dday)}</span></td><td>${link(x.url, x.title)}</td><td>${esc(x.source)}</td></tr>`).join('');
@@ -955,7 +987,7 @@ export function verifyAudit(list = []) {
   return {ok: true, checked: list.length, legacy: 0};
 }
 export const POLICY_FEATURES = ['briefing', 'teamAttendance', 'aiAssistant', 'resource', 'googleCalendar', 'draftResult', 'draftPlan', 'draftPay', 'draftGoods', 'recorder', 'aiConsole', 'updateCheck'];
-export const DEFAULT_POLICY = {orgName: '', enabled: true, message: '', features: Object.fromEntries(POLICY_FEATURES.map(f => [f, true])), retentionDays: 90, requireAckVersion: '', recorderPlayConfirm: true, license: ''};
+export const DEFAULT_POLICY = {orgName: '', enabled: true, message: '', features: Object.fromEntries(POLICY_FEATURES.map(f => [f, true])), retentionDays: 90, requireAckVersion: '', recorderPlayConfirm: true, license: '', aiEndpoint: ''};
 // 관리자가 배포 폴더의 policy.js로 지정한 값을 검증·보정한다(알 수 없는 값은 무시, 안전한 쪽으로 기본값).
 export function normalizePolicy(p) {
   const o = {...DEFAULT_POLICY, features: {...DEFAULT_POLICY.features}};
@@ -968,6 +1000,7 @@ export function normalizePolicy(p) {
   if (typeof p.requireAckVersion === 'string') o.requireAckVersion = p.requireAckVersion.slice(0, 20);
   if (p.recorderPlayConfirm === false) o.recorderPlayConfirm = true; // 재생 확인은 끌 수 없음
   if (typeof p.license === 'string') o.license = p.license.slice(0, 120);
+  if (typeof p.aiEndpoint === 'string' && /^(?:https:\/\/[^\s]+|http:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?(?:\/[^\s]*)?)$/i.test(p.aiEndpoint.trim())) o.aiEndpoint = p.aiEndpoint.trim().replace(/\/+$/, '').slice(0, 200);
   return o;
 }
 export function featureAllowed(policy, f) { const p = normalizePolicy(policy); return p.enabled && p.features[f] !== false; }
@@ -1115,11 +1148,12 @@ export const maskAccount = a => { const s = String(a || '').replace(/\D/g, ''); 
 // ---------------------------------------------------------------------------
 // 키 형식: 예전 AIza..., 새 형식 AQ.... 둘 다 허용(공백 없는 20자 이상)
 export const isGeminiKey = k => /^(AIza|AQ\.)[0-9A-Za-z._-]{16,300}$/.test(String(k || '').trim());
-export function buildAiContext({name = '', mine = [], deadlines = [], todayAway = [], ownProblems = [], leave = null, now = new Date()} = {}) {
+export function buildAiContext({name = '', orgName = '', deptName = '', mine = [], deadlines = [], todayAway = [], ownProblems = [], leave = null, now = new Date()} = {}) {
   mine = Array.isArray(mine) ? mine : []; deadlines = Array.isArray(deadlines) ? deadlines : []; todayAway = Array.isArray(todayAway) ? todayAway : []; ownProblems = Array.isArray(ownProblems) ? ownProblems : [];
   const k = kstNow(now);
   const clip = (s, n) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, n);
-  const lines = [`오늘: ${k.date} ${String(k.hh).padStart(2, '0')}:${String(k.mm).padStart(2, '0')} (KST)`, name ? `사용자: ${clip(name, 20)} (부천여성청소년재단 전략경영실)` : ''];
+  const aff = [clip(orgName, 20), clip(deptName, 20)].filter(Boolean).join(' ');
+  const lines = [`오늘: ${k.date} ${String(k.hh).padStart(2, '0')}:${String(k.mm).padStart(2, '0')} (KST)`, name ? `사용자: ${clip(name, 20)}${aff ? ` (${aff})` : ''}` : ''];
   lines.push(`내가 처리할 일 ${mine.length}건:`);
   (Array.isArray(mine) ? mine : []).slice(0, 40).forEach((x, i) => { const dl = x.deadline && typeof x.deadline === 'object' ? [x.deadline.date, x.deadline.time].filter(Boolean).join(' ') : x.deadline; lines.push(`${i + 1}. [${clip(x.state, 8)}] ${clip(x.title, 70)}${x.headline ? ' - ' + clip(x.headline, 60) : ''}${dl ? ' (마감 ' + clip(dl, 16) + ')' : ''}`); });
   if (deadlines.length) { lines.push('다가오는 기한:'); deadlines.slice(0, 15).forEach(d => lines.push(`- ${d.date}${d.time ? ' ' + d.time : ''} ${clip(d.title, 60)}`)); }
@@ -1128,7 +1162,7 @@ export function buildAiContext({name = '', mine = [], deadlines = [], todayAway 
   if (leave && leave.remaining !== undefined && leave.remaining !== null) lines.push(`남은 연차: ${leave.remaining}일`);
   return lines.filter(Boolean).join('\n');
 }
-export const AI_SYSTEM = '당신은 한국 공공기관(부천여성청소년재단 전략경영실) 차장의 업무 비서입니다. 아래 업무 요약만 근거로 답하고, 없는 사실은 지어내지 말고 "자료에 없음"이라고 말하세요. 한국어 존댓말, 이모지 금지, 짧고 구체적으로. 우선순위를 말할 때는 마감과 상태를 근거로 들고, 결재·상신·삭제 같은 실행은 제안만 하고 대신 하지 않습니다.';
+export const AI_SYSTEM = '당신은 그룹웨어 사용자의 업무 비서입니다. 아래 업무 요약만 근거로 답하고, 없는 사실은 지어내지 말고 "자료에 없음"이라고 말하세요. 한국어 존댓말, 이모지 금지, 짧고 구체적으로. 우선순위를 말할 때는 마감과 상태를 근거로 들고, 결재·상신·삭제 같은 실행은 제안만 하고 대신 하지 않습니다.';
 
 // ---------------------------------------------------------------------------
 // 도래하지 않은 날짜: 근태/출장 신청 현황(결재 중 포함)을 날짜별 행으로 펼친다. 지문은 아직 없으므로 신청만 보여 준다.
@@ -1241,6 +1275,9 @@ export function wrapUpModel({now = new Date(), ownOtToday = null, tomorrowItems 
 // 업데이트 내역: 새 버전을 낼 때 맨 위에 한 줄을 추가한다(하네스가 현재 버전과 맞는지 검사).
 // 4.2~4.6 사이 세부 항목은 릴리스 제목만 근거로 적어 간단하다.
 export const CHANGELOG = [
+  {v: "0.56.0", date: "2026-11-14", old: "", title: "Phase 3 기관형 기능: 양방향 구글 캘린더 Diff · 공용 PC 세션 키 · 기관 AI 엔드포인트", items: ["구글 캘린더 동기화에서 그룹웨어 취소·변경된 일정의 Diff(변경/취소/미일치)를 자동 감지해 표시", "AI 키 저장 시 공용 PC용 세션 전용(브라우저 닫으면 자동 삭제) 보관 옵션 및 관리자 aiEndpoint 정책 지원"]},
+  {v: "0.55.0", date: "2026-11-14", old: "", title: "Phase 2 구조 통합: IndexedDB 이관·CSS 단일화·정보구조 통합·실무 워크플로우 고도화", items: ["학습 패턴·배부 이력을 IndexedDB(bwyfgw_db)로 분리 이관하고 BroadcastChannel로 멀티탭 동기화", "CSS 6중 덮어쓰기를 Slate-Teal 단일 토큰으로 통합하고 공백 압축으로 번들 추가 경량화", "사이드바 '더 보기' 숨김 제거(9+1 상시 메뉴) 및 통합검색·문서찾기, 일정·예약, 보고·현황 탭 통합", "AI 작업 메모리(순번 참조), SSE 스트리밍 정리, 보낸메일 답장확인·주간실적 도구 추가", "결과보고 사전 실적 입력 작업대, 상세창 사안별 통합 흐름, iframe 세션만료 감지, 지출 전체요약 복사 추가"]},
+  {v: "0.54.0", date: "2026-11-14", old: "", title: "종합 점검 기반 안정성·보안·접근성·도메인 일괄 고도화", items: ["저장소 옛 키(182K) 자동 정리, 할당량 초과 시 캐시 자동 비우기, 문서 미리보기 캐시 정리 기능", "AI 외부 전송 가림 처리 일원화, 도구 항목 ID 연결·중지 세대 차단, 기록기·결재란 사후 검증 분리", "구글 캘린더 일치 판정 강화, 실존 날짜·복수 기한·웨비나 업무메일·공휴일·월별예산 기수 오류 수정", "다크모드 차트 시맨틱 색상 복구, 단일 키 단축키 끄기, 메뉴 포커스 트랩·복원, 스플릿 키보드/터치 지원", "SVG 아이콘 교체 및 빌드 공백 압축으로 번들 크기 대폭 절감, 미사용 처리기 16건 정리"]},
   {v: "0.53.0", date: "2026-11-14", old: "", title: "메일 핵심 내용과 첨부 미리보기 개선", items: ["메일 본문 대신 원문에서 핵심 문장을 기기 내 자동 발췌하고 원문 확인 경로 제공", "첨부 미리보기에서 이전 메일 화면으로 돌아가는 버튼 제공", "메일 목록의 날짜 정렬과 조회 범위를 명확하게 표시"]},
   {v: "0.52.1", date: "2026-11-14", old: "", title: "버전 상시 표시, 메일 회신문·답장 창 수리, 고장 기능 정비", items: ["설치된 버전을 왼쪽 메뉴 아래(적용 시각 포함)와 접힌 GW 비서 버튼에 상시 표시(헤더는 불필요한 버전 표기 없이 깔끔하게 유지). 헤더의 [AI 지시] 버튼을 누르면 AI 업무 지시 콘솔 대화상자가 즉시 열려 자연어 지시 및 빠른 실행 지원", "버전이 바뀌면 “v이전 → v새것으로 갱신” 알림 표시. 업데이트 확인을 1시간마다 다시 하고 확인 실패 시 최신으로 오표기 방지. 업데이트 내역 화면 유지 및 진단 창 개선", "메일 원문(읽기) 화면에서 회신문 버튼을 누르면 “메일 편집기를 찾지 못했습니다”만 나오던 문제 수정: 고른 메일의 답장 화면을 처리 창에 열고, 편집기와 원문 인용이 준비될 때까지 기다린 뒤 문구를 넣고 들어갔는지 확인", "원문 화면의 [답장]·[전체답장]·[전달]이 새 창으로 떠서 GW 비서가 이어받지 못하던 문제 수정: 새 창 대신 처리 창 안에 열어 회신문 버튼을 그대로 사용", "그룹웨어 화면이 스스로 닫히려 할 때(보내기·취소 뒤) 처리 창을 닫고 목록을 새로 읽음", "검색 결과에서 연 답장에 회신문을 넣으면 제목이 빈 따옴표로 들어가던 문제 수정, 새 메일 쓰기에는 회신문 막대를 띄우지 않음", "AI 채팅 확인 카드가 취소·실패에도 “열었습니다”라고 하던 문제 수정(신청서·답장·기안), 채팅·명령 답장도 안 읽은 메일은 먼저 물음", "채팅 출장 신청이 말한 시간을 버리던 문제 수정, 차량 예약이 차량이 아닌 자원으로 대체되던 문제 수정", "AI가 시간 초과되면 다음 모델로 넘어가지 못하던 문제 수정", "구글 일정·캘린더 대조 버튼이 탭이 열렸는데도 “새 탭이 막혔습니다”라고 하던 문제 수정", "근태 달력에서 고른 날짜가 근태신청 준비 창에 오늘로 들어가던 문제 수정", "지출 값 복사 막대에 어느 문서 값인지 표시하고 지우기 버튼 추가, 메일 원문 화면을 열지 못하면 이유를 알림, 기록 중 새 창이 열리면 기록되지 않는다고 알림"]},
   {v: "0.51.0", date: "2026-11-14", old: "", title: "근태 승인·시간외 지문 확인 정확도 개선", items: ["근태 집계 상태를 결재 대기로 오인하지 않도록 수정", "출근 지문은 판정하지 않고 승인된 시간외 신청의 퇴근 지문 누락만 확인", "조회 실패·미조회는 정상이나 누락으로 단정하지 않고 확인 불가로 표시"]},

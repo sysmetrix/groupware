@@ -26,8 +26,9 @@
     a.click(); await wait(a.textContent.includes('달력') ? 4500 : 700);
     const main = root.querySelector('main');
     const text = main ? main.innerText : '';
+    const fullText = wc ? wc.innerText : text;
     check(`화면: ${label}`, text.trim().length > 20, `글자 ${text.length}`);
-    const m = text.match(BAD);
+    const m = fullText.match(BAD);
     check(`값 이상 없음: ${label}`, !m, m ? `"${m[0]}" 발견` : '');
     const small = main ? [...main.querySelectorAll('*')].filter(e => e.children.length === 0 && e.textContent.trim() && parseFloat(getComputedStyle(e).fontSize) < 12).length : 0;
     check(`글자 12px 이상: ${label}`, small === 0, small ? `${small}곳` : '');

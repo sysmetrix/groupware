@@ -68,13 +68,13 @@
     $('#overlay').innerHTML = `<div class="modal" data-act="closeOverlay"><div class="dlg" data-stop="1" style="width:min(760px,95vw);padding:22px 24px;max-height:88vh;overflow:auto" role="dialog" aria-label="데이터 관리">
       <button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button>
       <h2 style="margin:0 0 4px;font-size:18px">데이터 관리</h2>
-      <div class="muted" style="margin-bottom:10px">모든 자료는 이 브라우저(사용자별)에만 저장되며 외부 서버로 보내지 않습니다. 학습한 결재문서는 ${POLICY.retentionDays}일이 지나면 자동으로 지워집니다.</div>
+      <div class="muted" style="margin-bottom:10px">업무 자료는 이 브라우저(사용자별)에 저장되며, 사용자가 연결·실행한 경우에만 Gemini AI(가림 처리 적용)·구글 캘린더·GitHub 업데이트 확인과 통신합니다. 학습한 결재문서는 ${POLICY.retentionDays}일이 지나면 자동으로 지워집니다.</div>
       <div class="box ${au.ok ? 'tip' : 'warn'}" style="margin-bottom:10px">감사 기록 무결성: <b>${au.ok ? '이상 없음' : '변조 또는 누락 의심 (' + esc(au.reason || '') + ')'}</b>${au.legacy ? ` · 이전 버전 기록 ${au.legacy}건은 검증 대상 아님` : ''}</div>
       <table style="width:100%;border-collapse:collapse;font-size:13px"><tbody>
       ${inv.map(r => `<tr style="border-top:1px solid var(--line)"><td style="padding:6px 4px"><b>${esc(r.label)}</b>${r.note ? `<div class="muted" style="font-size:12px">${esc(r.note)}</div>` : ''}</td><td style="text-align:right;white-space:nowrap">${r.kb}KB</td><td style="text-align:right">${['patterns', 'macros', 'errors', 'routing', 'forms', 'weekly'].includes(r.key) ? `<button class="btn sm danger ghost" data-act="govDel" data-k="${esc(r.key)}">지우기</button>` : ''}</td></tr>`).join('')}
       </tbody></table>
-      <div class="muted" style="margin-top:6px">합계 약 ${Math.round(total)}KB</div>
-      <div class="acts" style="margin-top:12px"><button class="btn sm" data-act="govExportAudit">감사 기록 내보내기(JSON)</button><button class="btn sm" data-act="openDiag">진단 열기</button><button class="btn sm danger" data-act="resetAll">내 GW 비서 자료 모두 지우기</button></div>
+      <div class="muted" style="margin-top:6px">내 자료 합계 약 ${Math.round(total)}KB (브라우저 전체 localStorage 점유 ${(() => { let c = 0; try { for (let i = 0; i < localStorage.length; i++) c += (localStorage.getItem(localStorage.key(i)) || '').length; } catch {} return `${Math.round(c / 1024)}K자 / ~5,120K자 (${Math.min(100, Math.round(c / 52428.8))}%)`; })()})</div>
+      <div class="acts" style="margin-top:12px"><button class="btn sm" data-act="cleanSynap">문서 미리보기 캐시 정리</button><button class="btn sm" data-act="govExportAudit">감사 기록 내보내기(JSON)</button><button class="btn sm" data-act="openDiag">진단 열기</button><button class="btn sm danger" data-act="resetAll">내 GW 비서 자료 모두 지우기</button></div>
       <div class="muted" style="font-size:12px;margin-top:8px">공용 PC에서는 사용 후 위 버튼으로 모두 지워 주세요. 로그인 정보와 비밀번호는 저장하지 않습니다.</div></div></div>`;
   }
   function govDel(k) {
@@ -102,13 +102,13 @@
     let ui = null; try { ui = JSON.parse(sessionStorage.getItem('userInfo') || 'null'); } catch {}
     add('로그인 세션', !!ui, ui ? '사용자 정보 확인됨' : '그룹웨어 로그인 정보를 읽지 못했습니다');
     add('사용자별 저장소', currentKey !== 'default', currentKey !== 'default' ? '사용자별로 분리되어 저장됩니다' : '사용자를 식별하지 못해 공용 저장소를 쓰는 중입니다');
-    let w = false; try { localStorage.setItem('bwyfgw:diag', '1'); localStorage.removeItem('bwyfgw:diag'); w = true; } catch {}
-    add('브라우저 저장소', w, w ? `쓰기 가능 · 사용 ${Math.round(inventory().reduce((a, r) => a + r.kb, 0))}KB` : '저장할 수 없습니다(저장 공간 부족 또는 차단)');
+    let w = false, totalChars = 0; try { localStorage.setItem('bwyfgw:diag', '1'); localStorage.removeItem('bwyfgw:diag'); w = true; for (let i = 0; i < localStorage.length; i++) totalChars += (localStorage.getItem(localStorage.key(i)) || '').length; } catch {}
+    add('브라우저 저장소', w && !S.storageError && totalChars < 4700000, w ? `쓰기 ${S.storageError ? '부분 실패' : '가능'} · 내 자료 ${Math.round(inventory().reduce((a, r) => a + r.kb, 0))}KB · 브라우저 전체 ${Math.round(totalChars / 1024)}K자 (${Math.min(100, Math.round(totalChars / 52428.8))}%)` : '저장할 수 없습니다(저장 공간 부족 또는 차단)');
     const pat = store.get('patterns', null), n = pat && pat.docs ? Object.keys(pat.docs).length : 0;
     add('기안 패턴 학습', n > 0, n ? `${n}건 학습됨` : '아직 학습 전입니다(새로 만들기 → 결과보고를 열면 자동 학습)');
     const au = auditState();
     add('감사 기록 무결성', au.ok, au.ok ? `${au.checked}건 검증` : `이상 감지: ${au.reason}`);
-    add('조회 전용 연결', true, `${GW.readOnlyEndpoints().length}개 엔드포인트(쓰기 요청 없음)`);
+    add('그룹웨어 연결', true, `읽기 전용 ${GW.readOnlyEndpoints().length}개 + 사용자 직접 확인 시 자원예약(/schres/rs121A06)`);
     const up = store.get('updateInfo', null);
     if (up && up.latest) { const c = R.compareVersions(up.latest, VERSION); add('최신 버전', c <= 0, c > 0 ? `새 버전 ${up.latest} 이 있습니다` : '최신입니다'); }
     else add('최신 버전', !(up && up.err) && allowed('updateCheck'), !allowed('updateCheck') ? '업데이트 확인이 관리자 설정으로 꺼져 있습니다' : up && up.err ? `확인하지 못함(${up.err})` : '아직 확인 전');
@@ -160,7 +160,7 @@
       <ul style="line-height:1.8;padding-left:18px;margin:0 0 10px">
         <li>이 도구는 <b>내 화면에서 조회</b>하고, 기안 화면에 <b>값을 채워 주는 보조 도구</b>입니다.</li>
         <li><b>상신·결재·임시저장·발송·삭제는 하지 않습니다.</b> 모든 자동 입력은 결재 직전에서 멈추며, 내용 확인과 상신은 본인이 합니다.</li>
-        <li>내 결재문서를 읽어 기안 서식을 학습합니다. 학습 자료는 <b>이 브라우저에만</b> 저장되고 ${POLICY.retentionDays}일 뒤 자동 삭제됩니다. 외부 서버로 보내지 않습니다.</li>
+        <li>내 결재문서를 읽어 기안 서식을 학습합니다. 학습 자료는 <b>이 브라우저에만</b> 저장되고 ${POLICY.retentionDays}일 뒤 자동 삭제됩니다. (AI 도우미 연결 시 가림 처리된 업무 요약만 Gemini로 전송되며, 자원 예약은 확인 버튼 클릭 시에만 등록됩니다.)</li>
         <li>비밀번호는 기록·저장하지 않습니다. 공용 PC에서는 사용 후 설정의 “데이터 관리”에서 지워 주세요.</li>
         <li>자동 입력 결과는 단계별로 ✓/✗로 보고합니다. ✗ 항목과 금액·결재라인·기록물철은 반드시 직접 확인하세요.</li>
         ${POLICY.orgName ? `<li>배포 기관: ${esc(POLICY.orgName)}${POLICY.message ? ' · ' + esc(POLICY.message) : ''}</li>` : ''}

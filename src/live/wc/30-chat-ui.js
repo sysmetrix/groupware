@@ -120,7 +120,6 @@
   HOME_ACTS.chatStop = () => chatStop();
   HOME_ACTS.chatClear = () => { chatClear(); chatRefresh(); };
   HOME_ACTS.chatConfirm = (el, v, e) => chatConfirm(v, e);
-  HOME_ACTS.navMore = () => { S.settings.navMore = !S.settings.navMore; saveLocal(); renderNav(); };
   HOME_ACTS.chatCancel = (el, v) => chatCancel(v);
   HOME_ACTS.chatSetupAi = () => { if (typeof openAi === 'function') openAi(); };
   HOME_ACTS.chatFocus = () => chatFocusInput();

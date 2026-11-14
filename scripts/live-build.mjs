@@ -49,9 +49,11 @@ window.BWYFGW_POLICY = {
   enabled: true,          // false: 업무센터 전체 중지(긴급 차단)
   message: '',            // 기능이 꺼졌을 때 사용자에게 보여 줄 문구(예: 문의 부서)
   retentionDays: 90,      // 학습한 결재문서 보관일(7~365)
+  aiEndpoint: '',         // 기관 전용 AI 게이트웨이/로컬 프록시 URL (비우면 기본 Gemini)
   features: {             // false로 바꾸면 해당 기능 차단
-    briefing: true, draftResult: true, draftPlan: true, draftPay: true, draftGoods: true,
-    recorder: true, aiConsole: true, updateCheck: true, googleCalendar: true
+    briefing: true, teamAttendance: true, aiAssistant: true, resource: true, googleCalendar: true,
+    draftResult: true, draftPlan: true, draftPay: true, draftGoods: true,
+    recorder: true, aiConsole: true, updateCheck: true
   }
 };
 `;
@@ -115,13 +117,26 @@ export function stripCommentLines(src) {
   return inTpl ? src : out.join('\n');
 }
 
+/** 줄 번호를 유지한 채 템플릿 문자열 밖의 줄 앞 들여쓰기 공백만 줄여 번들을 경량화한다. */
+export function trimIndentLines(src) {
+  let inTpl = false;
+  const out = src.split('\n').map(line => {
+    const next = inTpl ? line : line.trimStart();
+    if (((line.replace(/\\./g, '').match(/`/g) || []).length) % 2) inTpl = !inTpl;
+    return next;
+  });
+  return inTpl ? src : out.join('\n');
+}
+
 /** Assembles the bundle text from sources. Pure: same input, same output. Returns a line map for error reporting. */
 export function assemble({collector, css, parts, template, briefing: briefingSrc}) {
   if (parts.length < 10) throw new Error('work center parts missing');
-  collector = stripCommentLines(collector); briefingSrc = stripCommentLines(briefingSrc); parts = parts.map(p => ({...p, src: stripCommentLines(p.src)}));
+  collector = trimIndentLines(stripCommentLines(collector));
+  briefingSrc = trimIndentLines(stripCommentLines(briefingSrc));
+  parts = parts.map(p => ({...p, src: trimIndentLines(stripCommentLines(p.src))}));
   const halves = template.split(PARTS_MARK);
   if (halves.length !== 2) throw new Error('work center parts were not assembled (workcenter.browser.js needs exactly one /*@WC_PARTS@*/ marker)');
-  const wcCss = css.replace(/\n+/g, '\n');
+  const wcCss = css.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\n+/g, '\n').replace(/^[ \t]+/gm, '').replace(/;\s+/g, ';').replace(/\{\s+/g, '{').replace(/\s+\}/g, '}');
   // The CSS marker is replaced once, in source order (template head, parts, template tail). JSON keeps it on one line.
   const wcSegs = [{label: 'workcenter.browser.js', text: halves[0]}, ...parts.map((p, i) => ({label: `wc/${p.file}`, text: p.src + (i < parts.length - 1 ? '\n' : '')})), {label: 'workcenter.browser.js', text: halves[1]}];
   const cssAt = wcSegs.findIndex(s => s.text.includes(CSS_MARK));
@@ -174,7 +189,7 @@ export async function checkLiveSyntax(root = ROOT) {
   let bundleKB = 0;
   try {
     const {bundle, lineMap} = assemble(src);
-    bundleKB = Math.round(bundle.length / 1024);
+    bundleKB = Math.round(Buffer.byteLength(bundle, 'utf8') / 1024);
     const e = syntaxError(bundle, 'gw-live.js (assembled)');
     if (e) {
       const seg = lineMap.find(s => e.line >= s.start && e.line <= s.end);
@@ -275,7 +290,7 @@ export async function build({outDir = DEFAULT_OUT_DIR, copyTo = null, root = ROO
   // Launch bookmark: tiny; runs the copy stored by the install bookmark only if its SHA-256 matches this build
   // (protects against a changed or outdated copy in localStorage).
   const wcVersion = (workcenter.match(/const VERSION = '([^']+)'/) || [])[1] || '';
-  const mini = 'javascript:' + encodeURIComponent(`(function(){${guard}if(window.BWYFGW_WC&&window.BWYFGW_WC.version===${JSON.stringify(wcVersion)}){window.BWYFGW_WC.open();return;}var s=localStorage.getItem('bwyfgw:wc:src');if(!s){alert('먼저 "GW 비서 설치" 북마크를 한 번 눌러 주세요.');return;}crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)).then(function(b){var h=Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,'0');}).join('');if(h!==${JSON.stringify(hash)}){alert('저장된 GW 비서가 이 북마크와 버전이 다르거나 바뀌었습니다. 설치 페이지에서 두 북마크를 다시 끌어다 놓고 "설치"를 한 번 누르세요.');return;}(0,eval)(s);window.BWYFGW_WC.open();});})();`);
+  const mini = 'javascript:' + encodeURIComponent(`(function(){${guard}var s=localStorage.getItem('bwyfgw:wc:src');if(!s){if(window.BWYFGW_WC&&window.BWYFGW_WC.version===${JSON.stringify(wcVersion)}){window.BWYFGW_WC.open();return;}alert('먼저 "GW 비서 설치" 북마크를 한 번 눌러 주세요.');return;}crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)).then(function(b){var h=Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,'0');}).join('');if(h!==${JSON.stringify(hash)}){alert('저장된 GW 비서가 이 북마크와 버전이 다르거나 바뀌었습니다. 설치 페이지에서 두 북마크를 다시 끌어다 놓고 "설치"를 한 번 누르세요.');return;}if(window.BWYFGW_WC&&window.BWYFGW_WC.version===${JSON.stringify(wcVersion)}){window.BWYFGW_WC.open();return;}(0,eval)(s);window.BWYFGW_WC.open();});})();`);
   await fs.writeFile(path.join(outDir, 'bookmarklet.txt'), install);
   await fs.writeFile(path.join(outDir, 'bookmarklet-mini.txt'), mini);
   await fs.writeFile(path.join(outDir, 'install.html'), installPage({install, mini, version: wcVersion, hash}));

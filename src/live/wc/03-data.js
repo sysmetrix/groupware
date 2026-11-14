@@ -42,7 +42,7 @@
     applyUrgentWords(a);
     const fresh = a.actions.filter(x => x.isNew);
     for (const x of fresh) { S.newKeys.add(x.key); S.activity.push({at: Date.now(), key: x.key, title: x.title, kind: x.kind, area: x.area, priority: x.priority}); }
-    if (!raw.sessionExpired) store.set('state', R.nextState(raw, usablePrev));
+    if (!raw.sessionExpired) { if (!store.set('state', R.nextState(raw, usablePrev))) S.storageError = true; }
     // Clean local marks only for areas that were read successfully this time.
     const okAreas = new Set(a.status.filter(s => s.ok).map(s => s.name));
     const areaOf = k => k.startsWith('doc:') ? 'approval' : k.startsWith('mail:') ? 'mail' : k.startsWith('notice:') ? 'notice' : k.startsWith('att:') ? 'attendance' : k.startsWith('leave:') ? 'leave' : '';
@@ -112,7 +112,14 @@
     if (!force && routingFailedRecently()) return S.routing;
     const owner = currentKey;
     routingP = (async () => {
-      try { const rows = await GW.routingHistory({days: 180, size: 500}); if (owner !== currentKey) return null; S.routing = rows; store.set('routing', S.routing); routingFailAt = 0; } catch (e) { if (owner !== currentKey) return null; routingFailAt = Date.now(); toast('배부·접수 이력을 읽지 못했습니다: ' + e.message); }
+      try {
+        const rows = await GW.routingHistory({days: 180, size: 500});
+        if (owner !== currentKey) return null;
+        const slim = r => ({title: String(r.title || '').slice(0, 100), sendOrg: r.sendOrg || '', sendDept: r.sendDept || '', sendDeptCode: r.sendDeptCode || '', toDept: r.toDept || '', toEmp: r.toEmp || '', date: String(r.date || '').slice(0, 16)});
+        S.routing = {from: rows.from, to: rows.to, fetchedAt: rows.fetchedAt, dist: (rows.dist || []).map(slim), dept: (rows.dept || []).map(slim)};
+        store.set('routing', S.routing);
+        routingFailAt = 0;
+      } catch (e) { if (owner !== currentKey) return null; routingFailAt = Date.now(); toast('배부·접수 이력을 읽지 못했습니다: ' + e.message); }
       return S.routing;
     })();
     try { return await routingP; } finally { routingP = null; }

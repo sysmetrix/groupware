@@ -61,7 +61,6 @@
     case 'gcalOpen': gcalOpenTab('https://calendar.google.com/calendar/u/0/r/' + ({MONTH: 'month', AGENDA: 'agenda'}[gcalCfg().mode] || 'week')); break;
     case 'resSel': resSel(el.dataset.v); break;
     case 'resDay': resDay(el.dataset.v); break;
-    case 'resGo': resGo(); break;
     case 'resFree': resFree(el.dataset.s, el.dataset.e); break;
     case 'resCheck': resCheck(); break;
     case 'resBook': resBook(e); break;
@@ -70,7 +69,7 @@
     case 'openAi': openAi(); break;
     case 'aiSetup': aiSetup(); break;
     case 'aiSaveKey': aiSaveKey(); break;
-    case 'aiAsk': aiAsk(el.dataset.q); break;
+    case 'aiAsk': aiAsk(el.dataset.q || ''); break;
     case 'aiForget': aiForget(); break;
     case 'aiClose': aiClose(); break;
     case 'expOpen': expOpen(el.dataset.id); break;
@@ -108,7 +107,6 @@
     case 'selectPlanForResult': { startResultFromPlan(el.dataset.id); break; }
       case 'quickAtt': quickAttendanceApplication(el.dataset.t); break;
       case 'autoFillMail': autoFillMail(v); break;
-      case 'autoFillDraft': autoFillDraft(v); break;
       case 'autoFillAtt': autoFillAtt(); break;
       case 'paneOpenMain': {
         const x = selectedAction();
@@ -131,7 +129,6 @@
       case 'returnAttachmentPreview': returnFromAttachmentPreview(); break;
       case 'dlFile': downloadMailFile(el.dataset.uid, Number(el.dataset.i), el); break;
       case 'dlAll': { const c = S.mailDet[el.dataset.uid]; el.disabled = true; let ok = 0; for (let i = 0; i < c.files.length; i++) { if (await downloadMailFile(el.dataset.uid, i, root.querySelector('[data-act="dlFile"][data-uid="' + CSS.escape(el.dataset.uid) + '"][data-i="' + i + '"]'))) ok++; } el.disabled = false; toast('첨부 ' + ok + '/' + c.files.length + '개를 받았습니다. 브라우저 다운로드 폴더를 확인하세요.'); break; }
-      case 'bodyToggle': S.bodyOpen = !S.bodyOpen; renderPane(); break;
       case 'mailDetailRetry': { const m = findMail(el.dataset.box, el.dataset.uid); if (m) { delete S.mailDet[m.uid]; loadMailDetail(m); renderPane(); } break; }
       case 'rmSnooze': snooze([el.dataset.k]); closeOverlay(); break;
       case 'rmTodo': { const x = S.a.actions.find(a => a.key === el.dataset.k); closeOverlay(); if (x) addTodo(x.title, x.deadline && x.deadline.date || '', x.kind, x.url, x.key); break; }
@@ -159,16 +156,11 @@
       case 'theme': toggleTheme(); toast(S.settings.theme === 'dark' ? '다크 모드' : '라이트 모드'); if (S.menuOpen === 'view') { S.menuOpen = ''; openMenu('view'); } break;
       case 'openPalette': closeOverlay(); openPalette(''); break;
       case 'palRun': palExec(palItems[Number(el.dataset.i)]); break;
-      case 'tileLevel': S.filter.level = S.filter.level === v ? 'all' : v; S.filter.area = 'all'; renderMain(); break;
-      case 'tileArea': S.filter.area = S.filter.area === v ? 'all' : v; S.filter.level = 'all'; renderMain(); break;
       case 'goApproval': if (go('approval') && v) { S.apTab = v; S.apTabPinned = true; renderMain(); } break;
-      case 'goCalendar': go('calendar'); break;
       case 'goBudgetCode': { const b = S.budget, pj = el.dataset.p || ''; if (S.view !== 'budget' && !S.focus && !leavePane()) break; if (pj && pj !== b.project) { b.seq++; b.busy = false; b.project = pj; b.filter = ''; b.table = null; b.full = null; } if (v && !(b.table && !b.table.error && !b.busy && (!pj || b.table.project === pj))) b.pendingLedger = v; if (!go('budget')) break; if (v && b.table && !b.table.error && !b.busy && (!pj || b.table.project === pj)) { b.pendingLedger = ''; loadLedger(v); } else renderMain(); break; }
       case 'goAttendanceDay': if (!go('attendance')) break; S.att.day = v; if (S.att.month !== v.slice(0, 6)) { S.att.rows = null; S.att.month = v.slice(0, 6); loadAttendance(v.slice(0, 6)); } else renderMain(); break;
-      case 'selDeadline': if (el.dataset.k && S.a.actions.some(x => x.key === el.dataset.k)) { if (go('today')) selectAction(el.dataset.k); } else { S.search.kw = relatedQ(el.dataset.title); runSearch(); } break;
+      case 'selDeadline': if (el.dataset.k && S.a.actions.some(x => x.key === el.dataset.k)) { if (go('today')) selectAction(el.dataset.k); } else { S.search.kw = relatedQ(el.dataset.title); runSearch(['doc', 'mail', 'board', 'file']); } break;
       case 'area': S.filter.area = v; renderMain(); break;
-      case 'level': S.filter.level = v; renderMain(); break;
-      case 'onlyNew': S.filter.onlyNew = !S.filter.onlyNew; renderMain(); break;
       case 'showHidden': S.filter.showHidden = !S.filter.showHidden; renderMain(); break;
       case 'multi': {
         e.stopPropagation();
@@ -178,10 +170,6 @@
         S.lastClickKey = k; refreshQueue(); return;
       }
       case 'selAction': if (path.some(n => n && n.tagName === 'INPUT')) return; selectAction(el.dataset.k); break;
-      case 'quickOpen': e.stopPropagation(); { const x = S.a.actions.find(a => a.key === el.dataset.k); if (x) { selectAction(x.key); openItem(x); } } break;
-      case 'quickHide': e.stopPropagation(); hide([el.dataset.k]); break;
-      case 'quickSnooze': e.stopPropagation(); snooze([el.dataset.k]); break;
-      case 'quickTodo': e.stopPropagation(); { const x = S.a.actions.find(a => a.key === el.dataset.k); if (x) addTodo(x.title, x.deadline && x.deadline.date || '', x.kind, x.url, x.key); } break;
       case 'batchHide': hide([...S.multi]); break;
       case 'batchSnooze': snooze([...S.multi]); break;
       case 'batchTodo': { const keys = [...S.multi]; pushUndo(`${keys.length}건 할 일로`); for (const k of keys) { const x = S.a.actions.find(a => a.key === k); if (x) { if (!S.todos.some(t => t.key === k && t.status !== 'done')) S.todos.unshift({id: uid(), title: x.title, due: x.deadline && x.deadline.date || '', status: 'todo', source: x.kind, url: x.url, key: k, at: Date.now()}); S.plan[k] = S.plan[k] || 'today'; } } S.multi.clear(); saveLocal(); refreshQueue(); toastUndo(`${keys.length}건을 할 일에 넣었습니다.`); break; }
@@ -201,7 +189,6 @@
       case 'selDoc': if (!leavePane()) break; S.sel = {type: 'doc', kind: el.dataset.kind, docId: el.dataset.id}; S.pane.url = ''; S.pane.extract = null; S.pane.preview = null; renderMain(); renderPane(); break;
       case 'reloadRouting': toast('배부·접수 이력을 읽는 중…'); await loadRouting(true); render(); break;
       case 'mailFilter': S.mailFilter = v; renderMain(); break;
-      case 'mailGroup': S.mailGroup = !S.mailGroup; renderMain(); break;
       case 'selMail': if (!leavePane()) break; S.sel = {type: 'mail', box: el.dataset.box, uid: el.dataset.uid}; S.pane.url = ''; renderMain(); renderPane(); break;
       case 'selMailSearch': { if (!leavePane()) break; const it = (S.mailSearch.res && S.mailSearch.res.groups.mail.items || []).find(x => x.uid === el.dataset.uid); if (it) { S.sel = {type: 'search', item: it}; S.pane.url = ''; renderPane(); } break; }
       case 'clearMailSearch': S.mailSearch = {kw: '', res: null}; renderMain(); break;
@@ -210,7 +197,8 @@
       case 'searchMore': searchMore(el.dataset.t); break;
       case 'selSearch': { if (!leavePane()) break; const g = S.search.res && S.search.res.groups[el.dataset.t]; const it = g && g.items.find(x => (x.docId || x.uid || x.id || x.fileId) === el.dataset.id); if (it) { S.sel = {type: 'search', item: it}; S.pane.url = ''; S.pane.extract = null; renderMain(); renderPane(); } break; }
       case 'related': S.search.kw = el.dataset.q; runSearch(['doc', 'board', 'mail', 'file']); break;
-      case 'openUrl': closeOverlay(); openUrl(el.dataset.url, {title: el.dataset.title || el.textContent.trim(), unread: el.dataset.unread === '1', what: el.dataset.what || '문서'}); break;
+      case 'paneCaseFlow': loadCaseFlow(el.dataset.q || ''); break;
+      case 'openUrl': closeOverlay(); openUrl(el.dataset.url, {title: el.dataset.title || el.textContent.trim(), unread: (el.dataset.unread ?? '') === '1', what: el.dataset.what || '문서'}); break;
       case 'copy': copyText(v); break;
       case 'paneExpand': S.pane.expanded = !S.pane.expanded; renderPane(); break;
       case 'closePane': if (S.focus) { stopFocus(); break; } if (!leavePane()) break; S.pane.dirty = false; S.sel = null; S.pane.url = ''; S.pane.expanded = false; render(); break;
@@ -235,7 +223,6 @@
       case 'bPick': e.stopPropagation(); S.budget.project = el.dataset.p; S.budget.filter = el.dataset.f || ''; loadBudget(); break;
       case 'bPin': { e.stopPropagation(); const p = el.dataset.p, f = el.dataset.f || '', l = el.dataset.l || f || p; const i = S.settings.budget.findIndex(x => x.project === p && (x.filter || '') === f); if (i >= 0) { S.settings.budget.splice(i, 1); toast('내 관심 사업에서 뺐습니다.'); } else { S.settings.budget.push({project: p, filter: f, label: l}); toast('내 관심 사업에 추가했습니다.'); } /* allow empty budget */ saveLocal(); renderMain(); break; }
       case 'bUnpin': { e.stopPropagation(); S.settings.budget.splice(Number(el.dataset.i), 1); /* allow empty budget */ saveLocal(); renderMain(); toast('내 관심 사업에서 뺐습니다.'); break; }
-      case 'loadBudget': S.budget.project = $('#bcode').value.trim(); S.budget.filter = $('#bfilter').value.trim(); if (!S.budget.project) { toast('프로젝트 코드를 입력하세요.'); break; } loadBudget(); break;
       case 'ledger': loadLedger(el.dataset.code); break;
       case 'bSearchRetry': loadBudgetAll(true); break;
       case 'bHit': { const d = el.dataset; if (d.empty) { toast('이 과목은 올해 예산·집행이 없습니다(공통 과목표에만 있는 과목).'); break; } const b = S.budget; b.project = d.p; b.filter = d.h || ''; b.q = ''; b.pendingLedger = d.lv === '세' && Number(d.x) > 0 ? d.code : ''; loadBudget(); break; }
@@ -260,21 +247,14 @@
       case 'dlWeekly': download(`주간업무실적_${today()}.txt`, S.weekly); break;
       case 'budgetRowAdd': S.settings.budget.push({project: '', filter: '', label: ''}); renderMain(); break;
       case 'budgetRowDel': S.settings.budget.splice(Number(el.dataset.i), 1); S.budget.table = null; saveLocal(); renderMain(); break;
-      case 'saveSettings': {
-        const notify = $('#setNotify').checked;
-        if (notify && 'Notification' in window && Notification.permission === 'default') { try { await Notification.requestPermission(); } catch {} }
-        const st = S.settings; // 대기 중 다른 탭의 변경이 반영됐을 수 있어 대기 뒤 현재 설정을 쓴다
-        st.refreshMin = Number($('#setRefresh').value);
-        st.notify = notify;
-        st.fontSize = $('#setFs').value; st.theme = $('#setTheme').value; st.beginner = $('#setBeginner').checked;
-        const rows = {};
-        root.querySelectorAll('#budgetRows input').forEach(i => { (rows[i.dataset.i] = rows[i.dataset.i] || {})[i.dataset.b] = i.value.trim(); });
-        st.budget = Object.values(rows).filter(b => /^[A-Za-z0-9가-힣]+$/.test(b.project || '')).map(b => ({project: b.project, filter: b.filter || '', label: b.label || ''}));
-        if (!st.budget.length) st.budget = DEFAULT_SETTINGS.budget;
-        st.urgentWords = $('#setWords').value.split(',').map(w => w.trim()).filter(Boolean);
-        st.mailCount = Number($('#setMail').value);
-        st.roles = {deptReceiver: $('#roleDept').checked, distributor: $('#roleDist').checked, sender: $('#roleSend').checked};
-        saveLocal(); schedule(); applyLook(); toast('설정을 저장했습니다.'); S.budget.table = null; refresh(); break;
+      case 'cleanSynap': {
+        const keys = Object.keys(localStorage).filter(k => k.startsWith('synap_'));
+        if (!keys.length) { toast('정리할 그룹웨어 미리보기 캐시가 없습니다.'); break; }
+        if (!confirm(`그룹웨어 문서 미리보기 캐시 ${keys.length}건을 이 브라우저에서 지울까요? (그룹웨어 원본 문서는 바뀌지 않으며, 다시 미리보기할 때 재로드됩니다)`)) break;
+        for (const k of keys) try { localStorage.removeItem(k); } catch {}
+        toast(`문서 미리보기 캐시 ${keys.length}건을 정리했습니다.`);
+        if ($('#overlay [aria-label="데이터 관리"]')) openDataCenter(); else if (S.view === 'settings') renderMain();
+        break;
       }
       case 'resetDone': pushUndo('표시 초기화'); S.hidden = {}; S.snooze = {}; S.plan = {}; saveLocal(); render(); toastUndo('숨기기·미루기·보드 계획을 지웠습니다.'); break;
       case 'resetRouting': S.routing = null; store.del('routing'); toast('추천 이력을 지웠습니다.'); break;
@@ -295,7 +275,6 @@
       case 'chatFocus':
       case 'chatOpenItem':
       case 'chatNav':
-      case 'navMore':
       case 'gsyncOpen':
       case 'gsyncStatus':
       case 'gsyncLayer':
@@ -350,14 +329,25 @@
     if (z.dataset.drop) dropTo(id, z.dataset.drop);
     else if (z.dataset.dropDate && id.startsWith('todo:')) { const t = S.todos.find(x => `todo:${x.id}` === id); if (t) { pushUndo('기한 변경'); t.due = z.dataset.dropDate; delete S.plan[id]; saveLocal(); renderMain(); toastUndo(`기한을 ${t.due.slice(5)}로 바꿨습니다.`); } }
   });
-  // Resizable pane.
+  // Resizable pane (pointer + keyboard).
   const split = $('#split');
-  split.addEventListener('mousedown', e => {
+  split.addEventListener('pointerdown', e => {
     e.preventDefault(); split.classList.add('drag');
+    try { split.setPointerCapture(e.pointerId); } catch {}
     const shield = document.createElement('div'); shield.style.cssText = 'position:fixed;inset:0;z-index:2147483647;cursor:col-resize'; document.body.append(shield);
     const move = ev => { S.settings.paneWidth = Math.max(360, Math.min(window.innerWidth * 0.75, window.innerWidth - ev.clientX)); applyLook(); };
-    const up = () => { split.classList.remove('drag'); shield.remove(); document.removeEventListener('mousemove', move, true); document.removeEventListener('mouseup', up, true); saveLocal(); };
-    document.addEventListener('mousemove', move, true); document.addEventListener('mouseup', up, true);
+    const up = () => { split.classList.remove('drag'); shield.remove(); document.removeEventListener('pointermove', move, true); document.removeEventListener('pointerup', up, true); document.removeEventListener('pointercancel', up, true); saveLocal(); };
+    document.addEventListener('pointermove', move, true); document.addEventListener('pointerup', up, true); document.addEventListener('pointercancel', up, true);
+  });
+  split.addEventListener('keydown', e => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+    e.preventDefault();
+    const cur = S.settings.paneWidth || 560, max = Math.max(360, Math.round(window.innerWidth * 0.75));
+    if (e.key === 'ArrowLeft') S.settings.paneWidth = Math.min(max, cur + 24);
+    else if (e.key === 'ArrowRight') S.settings.paneWidth = Math.max(360, cur - 24);
+    else if (e.key === 'Home') S.settings.paneWidth = 360;
+    else if (e.key === 'End') S.settings.paneWidth = max;
+    applyLook(); saveLocal();
   });
 
   let toastTimer = null;

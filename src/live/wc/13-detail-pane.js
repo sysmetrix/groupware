@@ -15,7 +15,7 @@
     ph.className = 'ph' + (S.pane.url ? (isViewer ? ' viewer' : '') : ' min');
     const x = selectedAction();
     const st = x ? stateOf(x) : '';
-    ph.innerHTML = `<div class="top"><button class="btn sm ghost" data-act="closePane" title="상세 창 닫기 (Esc)">${ic('x')}닫기</button>${S.pane.previewBack ? `<button class="btn sm ghost" data-act="returnAttachmentPreview" title="첨부 미리보기 전의 메일 처리 화면으로 돌아가기">${ic('back')}이전 메일 처리 화면으로</button>` : ''}<span class="sp"></span>${isViewer ? '<span class="muted">문서 미리보기</span>' : ''}${S.pane.url ? `<button class="btn sm ghost" data-act="paneExpand" title="${S.pane.expanded ? '목록과 나란히 보기' : '원래 화면을 넓게 보기'}">${ic('expand')}${S.pane.expanded ? '나란히' : '넓게'}</button><a class="btn sm ghost" href="${esc(S.pane.url)}" target="_blank" rel="noopener" title="새 창으로 열기">${ic('ext')}새 창</a>` : ''}</div>
+    ph.innerHTML = `<div class="top"><button class="btn sm ghost" data-act="closePane" title="상세 창 닫기 (Esc)">${ic('x')}<span class="pane-back-txt">닫기</span></button>${S.pane.previewBack ? `<button class="btn sm ghost" data-act="returnAttachmentPreview" title="첨부 미리보기 전의 메일 처리 화면으로 돌아가기">${ic('back')}이전 메일 처리 화면으로</button>` : ''}<span class="sp"></span>${isViewer ? '<span class="muted">문서 미리보기</span>' : ''}${S.pane.url ? `<button class="btn sm ghost" data-act="paneExpand" title="${S.pane.expanded ? '목록과 나란히 보기' : '원래 화면을 넓게 보기'}">${ic('expand')}${S.pane.expanded ? '나란히' : '넓게'}</button><a class="btn sm ghost" href="${esc(S.pane.url)}" target="_blank" rel="noopener" title="새 창으로 열기">${ic('ext')}새 창</a>` : ''}</div>
 <div class="in"><div class="box warn" id="dirtyNote" style="display:${S.pane.dirty ? 'block' : 'none'};margin:0 0 10px">${ic('alert')} 원래 화면에 입력 중입니다. 보내기·저장·상신 전에 다른 곳으로 옮기면 먼저 여쭤봅니다.</div>
 ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.headline ? `<b class="${['overdue', 'urgent'].includes(st) ? 'err' : ''}">${esc(x.headline)}</b>` : ''}</div>` : ''}<div class="t">${esc(info.title || '')}</div>${info.body || ''}</div>`;
     ph.scrollTop = keepScroll;
@@ -23,7 +23,11 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
     if (S.pane.url !== S.pane.mounted) {
       if (!S.pane.previewBack || !S.pane.previewBack.frame) frame.innerHTML = '';
       S.pane.dirty = false;
-      if (S.pane.url) { const f = document.createElement('iframe'); f.src = S.pane.url; f.title = '그룹웨어 원래 화면'; if (S.pane.previewBack) f.dataset.panePreview = '1'; const u = S.pane.url; f.addEventListener('load', () => { hookFrameWindow(f, u); scanFrame(f, u); watchDirty(f, u); }); frame.append(f); }
+      if (S.pane.url) {
+        const f = document.createElement('iframe'); f.src = S.pane.url; f.title = '그룹웨어 원래 화면'; if (S.pane.previewBack) f.dataset.panePreview = '1'; const u = S.pane.url;
+        f.addEventListener('error', () => { if (S.pane.url === u) frame.innerHTML = `<div class="fe"><div>${ic('alert', 'style="width:28px;height:28px"')}</div><div>그룹웨어 화면을 불러오지 못했습니다.</div><a class="btn primary" href="${esc(u)}" target="_blank" rel="noopener">${ic('ext')}새 창으로 열기</a></div>`; });
+        f.addEventListener('load', () => { hookFrameWindow(f, u); scanFrame(f, u); watchDirty(f, u); }); frame.append(f);
+      }
       S.pane.mounted = S.pane.url;
     }
     frame.classList.toggle('idle', !S.pane.url);
@@ -107,8 +111,14 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
     if (!f.isConnected || url !== S.pane.url) return;
     let text = '';
     try {
+      const fd = f.contentDocument;
+      if (fd && (fd.querySelector('input[type="password"]') || /#\/?login/i.test(fd.location?.hash || ''))) {
+        const b = $('#dirtyNote');
+        if (b) { b.style.display = 'block'; b.innerHTML = `${ic('alert')} 그룹웨어 세션이 만료되었습니다. <button class="btn sm primary" data-act="relogin">다시 로그인</button>`; }
+        return;
+      }
       const collect = doc => { if (!doc || !doc.body) return; text += '\n' + doc.body.innerText; for (const ta of doc.querySelectorAll('textarea,input[type=text],input:not([type])')) text += '\n' + (ta.value || ''); for (const inner of doc.querySelectorAll('iframe')) { try { collect(inner.contentDocument); } catch {} } };
-      collect(f.contentDocument);
+      collect(fd);
     } catch { return; }
     // Detect interlocked document error (연동본문 데이터 조회 실패)
     if (text.includes('연동본문 데이터 조회 실패') || (text.includes('연동본문') && text.includes('실패'))) {
@@ -182,10 +192,10 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
     if (pv === null) { const owner = currentKey; loadPreview(d).then(p => { if (owner !== currentKey) return; S.pane.preview = {key: d.docNo || d.title, data: p}; const b = $('#pvbox'); if (b && S.sel) renderPane(); }); }
     const warn = d.unread ? '<div class="box warn">아직 열람하지 않은 문서입니다. 처리 창에 열면 그룹웨어에 열람으로 기록됩니다.</div>' : '';
     const title = d.title || (action && action.title) || '';
-    return {title, url, body: `${why || ''}<div class="kv"><b>구분</b><span>${esc((S.a.approval.lists[kind] || {}).label || kind)}</span><b>문서번호</b><span>${esc(d.docNo || '-')}</span><b>보낸 곳</b><span>${esc(d.sender || '-')}</span><b>기안·담당</b><span>${esc([d.drafterDept, d.drafter, d.toEmp].filter(Boolean).join(' ') || '-')}</span><b>상태</b><span>${esc(d.status || '-')}</span><b>일시</b><span>${esc(d.date || '-')}</span><b>첨부</b><span>${d.attachments || 0}개</span>${action && action.deadline ? `<b>기한</b><span>${esc(action.deadline.date)}${action.deadline.time ? ' ' + esc(action.deadline.time) : ''} (${ddayText(action.deadline.dday)})</span>` : ''}</div>${recBox}${warn}${actsFor(url, {key: action ? action.key : `doc:${kind}:${d.docId}`, q: relatedQ(title), title, unread: d.unread})}${pvBox}<div class="box" id="extract">${extractHtml()}</div>`};
+    return {title, url, body: `${why || ''}<div class="kv"><b>구분</b><span>${esc((S.a.approval.lists[kind] || {}).label || kind)}</span><b>문서번호</b><span>${esc(d.docNo || '-')}</span><b>보낸 곳</b><span>${esc(d.sender || '-')}</span><b>기안·담당</b><span>${esc([d.drafterDept, d.drafter, d.toEmp].filter(Boolean).join(' ') || '-')}</span><b>상태</b><span>${esc(d.status || '-')}</span><b>일시</b><span>${esc(d.date || '-')}</span><b>첨부</b><span>${d.attachments || 0}개</span>${action && action.deadline ? `<b>기한</b><span>${esc(action.deadline.date)}${action.deadline.time ? ' ' + esc(action.deadline.time) : ''} (${ddayText(action.deadline.dday)})</span>` : ''}</div>${recBox}${warn}${actsFor(url, {key: action ? action.key : `doc:${kind}:${d.docId}`, q: relatedQ(title), title, unread: d.unread})}<div id="caseFlow"></div>${pvBox}<div class="box" id="extract">${extractHtml()}</div>`};
   }
   function actsFor(url, {key, q, title, unread, what, extra, primaryLabel} = {}) {
-    return `<div class="acts">${url ? `<button class="btn primary" data-act="openUrl" data-url="${esc(url)}" data-title="${esc(title || '')}" ${unread ? `data-unread="1" data-what="${esc(what || '문서')}"` : ''}>${ic('ext')}${esc(primaryLabel || '원래 화면 열기')}</button>` : ''}${extra || ''}<button class="btn" data-act="todoFromSel">${ic('plus')}할 일에 추가</button>${q ? `<button class="btn" data-act="related" data-q="${esc(q)}">${ic('search')}관련 문서</button>` : ''}${key ? `<button class="btn icon" data-act="rowMenu" data-k="${esc(key)}" aria-label="더 보기" title="내일 다시 보기 · 숨기기 · 상관없음">${ic('more')}</button>` : ''}</div>`;
+    return `<div class="acts">${url ? `<button class="btn primary" data-act="openUrl" data-url="${esc(url)}" data-title="${esc(title || '')}" ${unread ? `data-unread="1" data-what="${esc(what || '문서')}"` : ''}>${ic('ext')}${esc(primaryLabel || '원래 화면 열기')}</button>` : ''}${extra || ''}<button class="btn" data-act="todoFromSel">${ic('plus')}할 일에 추가</button>${q ? `<button class="btn" data-act="paneCaseFlow" data-q="${esc(q)}">${ic('doc')}사안 흐름</button><button class="btn" data-act="related" data-q="${esc(q)}">${ic('search')}관련 문서</button>` : ''}${key ? `<button class="btn icon" data-act="rowMenu" data-k="${esc(key)}" aria-label="더 보기" title="내일 다시 보기 · 숨기기 · 상관없음">${ic('more')}</button>` : ''}</div>`;
   }
   const kb = n => n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
   const extOf = name => (String(name).match(/\.([A-Za-z0-9]{1,5})$/) || [])[1]?.toLowerCase() || '';
@@ -313,6 +323,16 @@ ${mailFilesBox(m)}
   // 실제로 열었으면 true. 호출하는 쪽은 false면 화면에 아무것도 쓰지 말고 멈춘다.
   function openUrl(url, {title = '', unread = false, what = '문서'} = {}) {
     if (!url) return false;
+    const raw = String(url).trim();
+    if (/^(?:javascript|data|vbscript):/i.test(raw)) { if (typeof toast === 'function') toast('허용되지 않은 주소는 열지 않습니다.'); return false; }
+    if (typeof URL === 'function' && typeof location !== 'undefined' && location.origin) {
+      try {
+        const p = new URL(raw, location.origin);
+        const ok = /^https?:$/.test(p.protocol) && (p.origin === location.origin || /^https:\/\/(?:[a-z0-9-]+\.)*amaranth10\.co\.kr$/i.test(p.origin) || (/^http:\/\/10\.\d+\.\d+\.\d+(?::\d+)?$/i.test(p.origin) && /SynapDocViewServer/i.test(p.pathname)));
+        if (!ok) { if (typeof toast === 'function') toast('허용되지 않은 주소는 열지 않습니다.'); return false; }
+        url = p.href;
+      } catch { if (typeof toast === 'function') toast('허용되지 않은 주소는 열지 않습니다.'); return false; }
+    }
     // 같은 화면이어도 입력 중이면 묻는다. 버리기로 했으면 새로 열어 자동 기입이 사용자의 입력 위에 쓰지 않게 한다.
     const discard = !!(S.pane.dirty && S.pane.url === url);
     if (!leavePane()) return false;
@@ -371,49 +391,29 @@ ${mailFilesBox(m)}
         openUrl(c.readUrl, {title: `메일: ${m.subject}`, unread: marksRead(x), what});
         return;
       }
-      if (!m.seen) {
-        if (!confirm('아직 읽지 않은 메일입니다. 메일을 열면 그룹웨어에 읽음으로 표시됩니다. 열까요?')) return;
-      }
+      if (!m.seen && !confirm('아직 읽지 않은 메일입니다. 메일을 열면 그룹웨어에 읽음으로 표시됩니다. 열까요?')) return;
       try {
         await loadMailDetail(m, true);
         const det = S.mailDet && S.mailDet[m.uid];
-        if (det && det.readUrl) {
-          openUrl(det.readUrl, {title: `메일: ${m.subject}`, unread: false, what});
-          return;
-        }
-        // loadMailDetail은 실패를 던지지 않고 {error}로 돌려준다. 조용히 메일함 목록으로 바꾸지 않고 이유를 알린다.
+        if (det && det.readUrl) { openUrl(det.readUrl, {title: `메일: ${m.subject}`, unread: false, what}); return; }
         toast(`이 메일의 원문 화면을 열지 못했습니다${det && det.error ? `(${det.error})` : ''}. 받은메일함을 대신 엽니다.`);
-      } catch (err) {
-        toast(`메일 원문을 불러오지 못했습니다: ${err.message}`);
-      }
+      } catch (err) { toast(`메일 원문을 불러오지 못했습니다: ${err.message}`); }
       openUrl(x.url || S.a.mail.url, {title: x.title, what});
       return;
     }
     openUrl(x.url, {title: x.title, unread: marksRead(x), what});
   }
   function openWindow(url, x) {
+    let cleanUrl = '';
+    try { const p = new URL(String(url || ''), location.origin); if (/^https?:$/.test(p.protocol) && (p.origin === location.origin || /^https:\/\/(?:[a-z0-9-]+\.)*amaranth10\.co\.kr$/i.test(p.origin))) cleanUrl = p.href; } catch {}
+    if (!cleanUrl) { toast('허용되지 않은 주소는 열지 않습니다.'); return; }
     const d = x && x.type === 'doc' ? findDoc(x.ref?.kind, x.ref?.docId) : null;
     if (d && d.unread && !confirm('아직 열람하지 않은 문서입니다. 새 창으로 열면 열람으로 기록됩니다. 열까요?')) return;
     const m = x && x.type === 'mail' ? findMail(x.ref?.box, x.ref?.uid) : null;
     if (m && !m.seen && !confirm('아직 읽지 않은 메일입니다. 새 창으로 열면 그룹웨어에 읽음으로 표시됩니다. 열까요?')) return;
-    window.open(url, '_blank');
+    window.open(cleanUrl, '_blank', 'noopener');
   }
-
-
-
-  
   // ---------- Smart Auto-Submission & Auto-Fill Service Engine ----------
-  // 프레임 안 문서가 준비될 때까지 기다린다(고정 대기 대신). 화면이 바뀌면 중단.
-  async function waitFrameDoc(url, test, ms = 15000) {
-    const t0 = Date.now();
-    while (Date.now() - t0 < ms) {
-      if (S.pane.url !== url) return null;
-      const f = $('#frame iframe');
-      try { const d = f && f.contentDocument; if (d && d.readyState !== 'loading' && test(d)) return d; } catch {}
-      await new Promise(r => setTimeout(r, 300));
-    }
-    return null;
-  }
   // 메일로 기안: 결과보고·계획서와 같은 기안 엔진(제목·기본항목·기록물철·결재선·한글 본문)을 쓴다.
   // 본문 편집기는 한글(HWP) 웹 편집기라 contentEditable로는 들어가지 않으므로 putBody(HwpCtrl)로 넣는다.
   async function mailToDraft(uid) {

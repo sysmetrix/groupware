@@ -2,19 +2,20 @@
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
   // ---------- views ----------
   const VIEWS = [
-    {id: 'home', label: '홈'}, {id: 'today', label: '할 일'}, {id: 'approval', label: '결재·문서유통'}, {id: 'mail', label: '메일'}, {id: 'calendar', label: '일정'}, {id: 'attendance', label: '근태·연차'}, {id: 'docs', label: '문서 찾기'},
-    {id: 'search', label: '통합검색'}, {id: 'budget', label: '예산 집행'}, {id: 'resource', label: '자원 예약'},
-    {id: 'overview', label: '현황 차트'}, {id: 'report', label: '보고서'}, {id: 'settings', label: '설정'},
-    {id: 'board', label: '할 일 보드'}, {id: 'gcal', label: '구글 일정'}, {id: 'gsync', label: '구글 동기화'},
+    {id: 'home', label: '홈'}, {id: 'today', label: '할 일'}, {id: 'approval', label: '결재·문서유통'}, {id: 'mail', label: '메일'}, {id: 'calendar', label: '일정·예약'}, {id: 'attendance', label: '근태·연차'}, {id: 'search', label: '검색·문서'},
+    {id: 'budget', label: '예산 집행'}, {id: 'report', label: '보고·현황'}, {id: 'settings', label: '설정'},
+    {id: 'board', label: '할 일 보드'}, {id: 'resource', label: '자원 예약'}, {id: 'gcal', label: '구글 일정'}, {id: 'gsync', label: '구글 동기화'}, {id: 'docs', label: '문서 찾기'}, {id: 'overview', label: '현황 차트'},
   ];
   // 메뉴에 따로 두지 않고 상위 화면 안의 탭으로 들어가는 화면(기능은 그대로, 메뉴만 합침).
-  const VIEW_PARENT = {board: 'today', gcal: 'calendar', gsync: 'calendar'};
+  const VIEW_PARENT = {board: 'today', resource: 'calendar', gcal: 'calendar', gsync: 'calendar', docs: 'search', overview: 'report'};
   const navView = () => VIEW_PARENT[S.view] || S.view;
   function viewTabs() {
     const tab = (id, label, n) => `<button role="tab" aria-selected="${S.view === id}" class="${S.view === id ? 'on' : ''}" data-act="view" data-v="${id}">${label}${n ? `<span class="c">${n}</span>` : ''}</button>`;
     const p = navView();
     if (p === 'today') return `<div class="vtabs"><div class="seg" role="tablist" aria-label="할 일 보기 방식">${tab('today', '목록')}${tab('board', '보드', boardCount())}</div></div>`;
-    if (p === 'calendar' && allowed('googleCalendar')) return `<div class="vtabs"><div class="seg" role="tablist" aria-label="일정 종류">${tab('calendar', '그룹웨어')}${tab('gcal', '구글 일정')}${tab('gsync', '구글 동기화')}</div></div>`;
+    if (p === 'calendar') return `<div class="vtabs"><div class="seg" role="tablist" aria-label="일정 및 예약">${tab('calendar', '그룹웨어 일정')}${allowed('resource') ? tab('resource', '자원 예약') : ''}${allowed('googleCalendar') ? tab('gcal', '구글 일정') + tab('gsync', '구글 동기화') : ''}</div></div>`;
+    if (p === 'search') return `<div class="vtabs"><div class="seg" role="tablist" aria-label="검색 방식">${tab('search', '통합검색')}${tab('docs', '문서 찾기 (기안·접수·발송)')}</div></div>`;
+    if (p === 'report') return `<div class="vtabs"><div class="seg" role="tablist" aria-label="보고 및 현황">${tab('report', '보고서')}${tab('overview', '현황 차트')}</div></div>`;
     return '';
   }
   // Charts: shown on big screens, folded on laptops unless the user chose otherwise.
@@ -108,15 +109,16 @@
     const urgent = mine.filter(x => ['overdue', 'urgent'].includes(stateOf(x))).length;
     const byArea = a => mine.filter(x => x.area === a).length;
     const counts = {
-      today: S.a ? {n: mine.length, cls: urgent ? 'hot' : mine.length ? 'mine' : ''} : null,
-      approval: S.a ? (u.approval ? {n: '?'} : {n: byArea('결재'), cls: byArea('결재') ? 'mine' : ''}) : null,
-      mail: S.a ? (u.mail ? {n: '?'} : {n: byArea('메일'), cls: byArea('메일') ? 'mine' : ''}) : null,
-      attendance: S.a ? {n: byArea('근태'), cls: byArea('근태') ? 'mine' : ''} : null,
-      calendar: S.a ? (() => { const n = mine.filter(x => x.deadline && x.deadline.dday >= 0 && x.deadline.dday <= 7).length; return {n, cls: n ? 'mine' : ''}; })() : null,
+      today: S.a ? {n: mine.length, cls: urgent ? 'hot' : mine.length ? 'mine' : '', tip: '내 전체 처리할 일'} : null,
+      approval: S.a ? (u.approval ? {n: '?'} : (() => { const n = S.a.approval?.lists?.pending?.total ?? byArea('결재'); return {n, cls: n ? 'mine' : '', tip: '결재·문서 대기'}; })()) : null,
+      mail: S.a ? (u.mail ? {n: '?'} : (() => { const ur = S.a.mail?.unread; const n = Array.isArray(ur) ? ur.length : Number.isFinite(ur) ? ur : byArea('메일'); return {n, cls: n ? 'mine' : '', tip: '안 읽은 메일'}; })()) : null,
+      attendance: S.a ? {n: byArea('근태'), cls: byArea('근태') ? 'mine' : '', tip: '퇴근 지문 확인'} : null,
+      calendar: S.a ? (() => { const n = mine.filter(x => x.deadline && x.deadline.dday >= 0 && x.deadline.dday <= 7).length; return {n, cls: n ? 'mine' : '', tip: '7일 내 기한'}; })() : null,
     };
-    const item = (v) => { const i = VIEWS.indexOf(v); const c = counts[v.id]; return `<a data-act="view" data-v="${v.id}" class="${navView() === v.id ? 'on' : ''}" role="link" tabindex="0" aria-current="${navView() === v.id ? 'page' : 'false'}" title="${esc(v.label)}${i < 9 ? ` (숫자키 ${i + 1})` : ''}">${ic(VIEW_ICON[v.id])}<span class="lb">${esc(v.label)}</span>${c && c.n !== '' && c.n !== 0 ? `<span class="n ${c.cls || ''}" title="${v.id === 'today' ? '내 처리할 일' : v.id === 'calendar' ? '7일 안에 기한이 있는 내 처리할 일' : '내 처리할 일 중 이 영역'}">${c.n}</span>` : ''}</a>`; };
-    const primary = VIEWS.slice(0, 7), more = VIEWS.slice(7).filter(v => !VIEW_PARENT[v.id]), moreOpen = !!S.settings.navMore || more.some(v => v.id === S.view);
-    $('#nav').innerHTML = '<div class="nav-label">내 업무</div>' + primary.map(item).join('') + '<div class="sep"></div>' + `<a data-act="navMore" role="button" tabindex="0" aria-expanded="${moreOpen}" class="navmore">${ic('more')}<span class="lb">더 보기</span><span class="nav-chevron" aria-hidden="true">${moreOpen ? '▴' : '▾'}</span></a>` + (moreOpen ? more.map(item).join('') : '') + (() => { const v = versionInfo(); return `<div class="foot"><a data-act="openChangelog" role="button" tabindex="0" class="navver ${v.state}" title="설치된 버전과 업데이트 내역"><span class="lb"><span><b>v${esc(VERSION)}</b>${v.label ? ' · ' + esc(v.label) : ''}</span>${v.applied ? `<small>${esc(v.applied)} 적용</small>` : ''}</span></a></div>`; })();
+    const item = (v) => { const i = VIEWS.indexOf(v); const c = counts[v.id]; return `<a data-act="view" data-v="${v.id}" class="${navView() === v.id ? 'on' : ''}" role="link" tabindex="0" aria-current="${navView() === v.id ? 'page' : 'false'}" title="${esc(v.label)}${i < 9 ? ` (Alt+${i + 1})` : ''}">${ic(VIEW_ICON[v.id])}<span class="lb">${esc(v.label)}</span>${c && c.n !== '' && c.n !== 0 ? `<span class="n ${c.cls || ''}" title="${esc(c.tip || v.label)}">${c.n}</span>` : ''}</a>`; };
+    const topViews = VIEWS.filter(v => !VIEW_PARENT[v.id] && v.id !== 'settings');
+    const settingsView = VIEWS.find(v => v.id === 'settings');
+    $('#nav').innerHTML = '<div class="nav-label">업무 메뉴</div>' + topViews.map(item).join('') + '<div class="sep"></div>' + (settingsView ? item(settingsView) : '') + (() => { const v = versionInfo(); return `<div class="foot"><a data-act="openChangelog" role="button" tabindex="0" class="navver ${v.state}" title="설치된 버전과 업데이트 내역"><span class="lb"><span><b>v${esc(VERSION)}</b>${v.label ? ' · ' + esc(v.label) : ''}</span>${v.applied ? `<small>${esc(v.applied)} 적용</small>` : ''}</span></a></div>`; })();
   }
   function boardCount() { return (S.a ? S.a.actions.filter(x => onBoard(x) && !boardLinked(x) && bucketOfAction(x) !== 'done').length : 0) + S.todos.filter(t => bucketOfTodo(t) !== 'done').length; }
   function renderMain() {

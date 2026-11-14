@@ -70,11 +70,13 @@
     // 결의서입력 화면 위에 복사 막대로 남긴다(창을 닫아도 값이 사라지지 않게)
     S.expBar = {title: p.expenseTitle, items: [['제목', p.expenseTitle], ['참조문서', p.ref || p.docNo], ['금액', String(res.total)], ['금액(한글)', R.moneyKo(res.total)], ...cardLines.map((l, i) => [`카드${cardLines.length > 1 ? i + 1 : ''}`, l]), ...transLines.map((l, i) => [`이체${transLines.length > 1 ? i + 1 : ''}`, l])].filter(x => x[1])};
     const cp = (label, v) => v ? `<button class="btn sm" data-act="copy" data-v="${esc(v)}">${esc(label)} 복사</button>` : '';
+    const allSummary = [`제목: ${p.expenseTitle}`, `참조문서: ${p.ref || p.docNo}`, `기록물철: ${p.binder}`, `금액: ${expWon(res.total)} (${R.moneyKo(res.total)})`, ...cardLines.map(l => `카드: ${l}`), ...transLines.map(l => `이체: ${l}`)].join('\n');
     $('#overlay').innerHTML = expShell(`<h2 style="margin:0 0 4px;font-size:18px">지출결의서 준비 완료</h2>
       <div class="box tip"><b>${esc(p.expenseTitle)}</b><div class="muted" style="margin-top:4px">양식: ${esc(p.expenseForm)} · 참조문서: ${esc(p.ref || p.docNo)} · 기록물철: ${esc(p.binder)}</div>
       <div style="margin-top:6px">합계 <b>${expWon(res.total)}</b> (${esc(R.moneyKo(res.total))}) ${res.planned ? `· 건의·품의 ${expWon(res.planned)}${res.diff < 0 ? ` · 잔액 ${expWon(-res.diff)}` : ' · 일치'}` : ''}</div></div>
+      <div class="box" style="margin-top:10px;font-size:12.5px"><b>결의서입력 체크리스트</b>: ① 결의서입력 화면에서 사업·세목·채주 선택 → ② 아래 복사 막대/버튼으로 제목·적요·금액 붙여넣기 → ③ 증빙 첨부 후 직접 상신</div>
       <h3>복사해서 지출결의서에 붙여넣기</h3>
-      <div class="acts" style="margin-top:0">${cp('제목', p.expenseTitle)}${cp('참조문서', p.ref || p.docNo)}${cp('금액(한글)', R.moneyKo(res.total))}${cp('카드 내역 전체', cardLines.join('\n'))}${cp('이체 내역 전체', transLines.join('\n'))}</div>
+      <div class="acts" style="margin-top:0">${cp('전체 요약', allSummary)}${cp('제목', p.expenseTitle)}${cp('참조문서', p.ref || p.docNo)}${cp('금액(한글)', R.moneyKo(res.total))}${cp('카드 내역 전체', cardLines.join('\n'))}${cp('이체 내역 전체', transLines.join('\n'))}</div>
       ${cardLines.length ? `<h3>카드</h3>${cardLines.map(l => `<div class="trow"><span>${esc(l)}</span><button class="btn sm ghost" data-act="copy" data-v="${esc(l)}">복사</button></div>`).join('')}` : ''}
       ${transLines.length ? `<h3>계좌이체</h3>${transLines.map((l, ti) => `<div class="trow"><span>${esc(res.trans[ti].payee + ' ' + res.trans[ti].bank + ' ' + R.maskAccount(res.trans[ti].account) + ' ' + expWon(R.parseWon(res.trans[ti].amount)) + (res.trans[ti].date ? ' ' + res.trans[ti].date : '') + (res.trans[ti].memo ? ' ' + res.trans[ti].memo : ''))}</span><button class="btn sm ghost" data-act="copy" data-v="${esc(l)}">복사</button></div>`).join('')}` : ''}
       <div class="acts" style="margin-top:14px"><button class="btn primary" data-act="openUrl" data-url="${esc(GW.links.route(GW.routes.expenseEntry))}" data-title="결의서입력 (예산집행)">${ic('ext')}결의서입력 화면 열기 (복사 막대 유지)</button><button class="btn" data-act="openRec">${ic('play')}기록기로 입력 기록·재생</button><button class="btn ghost" data-act="expClose">닫기</button></div>

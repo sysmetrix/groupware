@@ -1,9 +1,10 @@
 // GW 비서 · overlays: palette, help, menus
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
   // ---------- overlays: palette, help, menus ----------
-  let palItems = [], palIndex = 0;
+  let palItems = [], palIndex = 0, lastOverlayFocus = null;
   const dispTitle = x => R.cleanTitle((x && x.title) || '');
   function openPalette(q = '') {
+    lastOverlayFocus = root.activeElement;
     S.paletteOpen = true; S.menuOpen = ''; S.helpOpen = false;
     $('#overlay').innerHTML = `<div class="modal" data-act="closeOverlay"><div class="dlg pal" data-stop="1"><input id="palq" placeholder="무엇을 할까요? 예) 결재, 사업 예산, 지난달 근태, 새 메일, 문서번호, 회의록" value="${esc(q)}" autocomplete="off"><div id="pallist" style="margin-top:8px"></div><div class="muted" style="margin-top:6px">↑↓ 이동 · Enter 실행 · Esc 닫기</div></div></div>`;
     const inp = $('#palq');
@@ -90,7 +91,8 @@
   async function askText(title, label, value = '', placeholder = '') { const v = await askForm({title, fields: [{label, value, placeholder}]}); return v ? v[0] : null; }
   function toggleHelp(force) {
     S.helpOpen = force === undefined ? !S.helpOpen : force; S.paletteOpen = false; S.menuOpen = '';
-    if (!S.helpOpen) { $('#overlay').innerHTML = ''; return; }
+    if (!S.helpOpen) { closeOverlay(); return; }
+    lastOverlayFocus = root.activeElement;
     $('#overlay').innerHTML = `<div class="modal" data-act="closeOverlay"><div class="dlg" data-stop="1" role="dialog" aria-label="사용법"><button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button><h2 style="margin-top:0">GW 비서 사용법</h2>
 <p><b>1. 오늘 할 일</b>에는 <b>내가 처리해야 할 일</b>만 급한 순서로 나옵니다. 위 숫자(급한 일·할 일·확인 필요·끝났는지 확인)를 누르면 그것만 봅니다. 나와 직접 관련이 적은 항목은 맨 아래 <b>참고</b>에 접혀 있습니다.</p>
 <p><b>2. 줄을 누르면</b> 오른쪽에 내용이 나옵니다. <b>열기</b> 또는 <b>원래 화면 열기</b>를 누르면 그룹웨어 원래 화면이 옆에 열리고, 그 화면의 버튼으로 결재·접수·배부·발송·답장을 합니다.</p>
@@ -106,6 +108,7 @@
   }
   async function openMenu(which, anchor) {
     if (S.menuOpen === which) { closeOverlay(); return; }
+    lastOverlayFocus = anchor || root.activeElement;
     S.menuOpen = which; S.paletteOpen = false; S.helpOpen = false; S.coach = null;
     if (which === 'new') {
       const action = (type, label, desc, icon, extra = '') => `<button type="button" class="new-action" data-act="${type}" ${extra}><span class="new-icon">${ic(icon)}</span><span class="new-copy"><b>${label}</b><small>${desc}</small></span></button>`;
@@ -170,7 +173,11 @@
     const top = below ? r.bottom - hr.top + 12 : Math.max(12, r.top - hr.top - 190);
     $('#overlay').innerHTML = `<div class="coach-hole" style="left:${r.left - hr.left - 6}px;top:${r.top - hr.top - 6}px;width:${r.width + 12}px;height:${r.height + 12}px"></div><div class="coach" role="dialog" aria-label="${esc(step.title)}" style="left:${left}px;top:${top}px"><div class="st">${S.coach.i + 1} / ${COACH.length}</div><b>${esc(step.title)}</b><div>${esc(step.text)}</div><div class="acts"><button class="btn primary" data-act="coachNext">${S.coach.i === COACH.length - 1 ? '시작하기' : '다음'}</button><button class="btn ghost" style="color:#fff" data-act="coachEnd">건너뛰기</button></div></div>`;
   }
-  function closeOverlay() { S.paletteOpen = false; S.helpOpen = false; S.menuOpen = ''; S.coach = null; $('#overlay').innerHTML = ''; }
+  function closeOverlay() {
+    S.paletteOpen = false; S.helpOpen = false; S.menuOpen = ''; S.coach = null; $('#overlay').innerHTML = '';
+    if (lastOverlayFocus && lastOverlayFocus.isConnected && typeof lastOverlayFocus.focus === 'function') { try { lastOverlayFocus.focus(); } catch {} }
+    lastOverlayFocus = null;
+  }
   const fontStep = n => { const order = ['s', 'm', 'l', 'xl']; const i = Math.max(0, Math.min(3, order.indexOf(S.settings.fontSize) + n)); S.settings.fontSize = order[i]; saveLocal(); applyLook(); };
   const toggleTheme = () => { S.settings.theme = S.settings.theme === 'dark' ? 'light' : 'dark'; saveLocal(); applyLook(); };
 

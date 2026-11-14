@@ -214,9 +214,6 @@
     box.innerHTML = html;
     return box;
   }
-  async function cmdCopy(text) {
-    try { await navigator.clipboard.writeText(text); return true; } catch { return false; }
-  }
   const mailActions = () => { const acts = ((S.a && S.a.actions) || []).filter(x => x.type === 'mail'); const have = new Set(acts.map(a => a.ref && a.ref.uid)); const inbox = ((S.raw && S.raw.data && S.raw.data.mail && S.raw.data.mail.inbox && S.raw.data.mail.inbox.records) || []).filter(m => !have.has(m.uid) && !R.isNoiseMail(m)).slice(0, 8).map(m => ({type: 'mail', title: m.subject, ref: {box: m.box || 'INBOX', uid: m.uid}, fromInbox: true})); return [...acts, ...inbox]; };
   const cmdSelectedMail = () => { const x = S.sel && S.sel.type === 'action' ? selectedAction() : null; return x && x.type === 'mail' ? x : null; };
   // 지시문에서 메일 제목과 맞춰 볼 낱말만 남긴다
@@ -231,23 +228,6 @@
     let m = null;
     try { m = findMail(x.ref.box, x.ref.uid); } catch {}
     return {subject: (m && m.subject) || x.title || '', since: (m && m.date) || ''};
-  }
-  // 편집 가능한 메일 에디터(iframe body)가 처리 창에 생길 때까지 기다린다 (최대 ms)
-  async function waitMailEditor(ms = 15000) {
-    const has = doc => {
-      if (!doc) return false;
-      for (const ifr of doc.querySelectorAll('iframe')) {
-        try { const idoc = ifr.contentDocument; if (idoc && idoc.body && (idoc.body.isContentEditable || idoc.designMode === 'on')) return true; if (has(idoc)) return true; } catch {}
-      }
-      return false;
-    };
-    const t0 = Date.now();
-    while (Date.now() - t0 < ms) {
-      let d = null; try { d = $('#frame iframe')?.contentDocument; } catch {}
-      if (has(d)) return true;
-      await new Promise(r => setTimeout(r, 400));
-    }
-    return false;
   }
 
   // ---------- A. 휴일근무 ----------
@@ -340,7 +320,11 @@
 
   // ---------- D. 메일 회신 ----------
   async function cmdMailReply(q, template) {
-    const x0 = cmdSelectedMail() || (typeof mineVisible === 'function' ? mineVisible() : []).find(a => a.type === 'mail');
+    const sel = cmdSelectedMail();
+    if (sel) return cmdMailReplyTo(q, template, sel);
+    const toks = cmdKeywords(q).filter(t => !/^(회신문|회신|작성|문구|제출용|제출|자료|기한|연장|요청|넣어|써|확인|표준)$/.test(t));
+    if (toks.length) return cmdPickMail(q, x => cmdMailReplyTo(q, template, x), {reply: true});
+    const x0 = (typeof mineVisible === 'function' ? mineVisible() : []).find(a => a.type === 'mail');
     if (!x0) return cmdPickMail(q, x => cmdMailReplyTo(q, template, x), {reply: true});
     return cmdMailReplyTo(q, template, x0);
   }

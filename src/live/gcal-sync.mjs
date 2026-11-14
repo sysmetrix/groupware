@@ -148,7 +148,19 @@ export function gsyncMatch(item, existing) {
   const bare = String(item.layer).replace(/^\d+\s*/, '').replace(/^BWYF\s*/, '');
   const inLayer = r => r.cal && (r.cal.includes(item.layer) || r.cal.includes(bare));
   const [is, ie] = String(item.time || '').split('~').map(gsMin);
-  const timeOk = r => { if (is === null || !r.from) return true; const rs = gsMin(r.from), re = gsMin(r.to); return rs === is || (re !== null && ie !== null && rs < ie && re > is); };
+  const timeExact = r => {
+    if (item.allDay) return !r.from;
+    if (is === null || !r.from) return false;
+    const rs = gsMin(r.from), re = gsMin(r.to);
+    if (rs !== is) return false;
+    if (ie !== null && re !== null) return re === ie;
+    return true;
+  };
+  const timeOverlap = r => {
+    if (is === null || !r.from) return true;
+    const rs = gsMin(r.from), re = gsMin(r.to);
+    return rs === is || (re !== null && ie !== null && rs < ie && re > is);
+  };
   const timeSame = r => is !== null && gsMin(r.from) === is && (ie === null || !r.to || gsMin(r.to) === ie);
   if (item.source === 'deadline') {
     const core = String(item.title).replace(/^\[마감\]\s*/, '').replace(/\s+/g, '').slice(0, 10);
@@ -156,9 +168,11 @@ export function gsyncMatch(item, existing) {
     const e = recs.find(r => inLayer(r) && has(r)); if (e) return {level: 'exact', title: e.title, cal: e.cal};
     const s = recs.find(has); return s ? {level: 'similar', title: s.title, cal: s.cal} : {level: 'none'};
   }
-  const ex = recs.find(r => inLayer(r) && gsyncKindOfTitle(r.title) === item.kind && timeOk(r));
+  const ex = days.every(d => recs.some(r => r.date === d && inLayer(r) && gsyncKindOfTitle(r.title) === item.kind && timeExact(r)))
+    ? recs.find(r => inLayer(r) && gsyncKindOfTitle(r.title) === item.kind && timeExact(r))
+    : null;
   if (ex) return {level: 'exact', title: ex.title, cal: ex.cal};
-  const sim = recs.find(r => (gsyncKindOfTitle(r.title) === item.kind && timeOk(r) && gsyncKindOfTitle(r.title)) || (inLayer(r) && timeSame(r)));
+  const sim = recs.find(r => (inLayer(r) && gsyncKindOfTitle(r.title) === item.kind && timeOverlap(r)) || (gsyncKindOfTitle(r.title) === item.kind && timeOverlap(r) && gsyncKindOfTitle(r.title)) || (inLayer(r) && timeSame(r)));
   return sim ? {level: 'similar', title: sim.title, cal: sim.cal} : {level: 'none'};
 }
 
@@ -206,5 +220,26 @@ export function gsyncPlan({apps = [], me = '', deadlines = [], cals = [], synced
   items.sort((x, y) => x.startYmd.localeCompare(y.startYmd) || x.title.localeCompare(y.title, 'ko'));
   const counts = {ready: 0, hold: 0, synced: 0, similar: 0, unverified: 0};
   for (const i of items) counts[i.state]++;
-  return {items, counts, today, compared: !!(existing && existing.dates && existing.dates.length), comparedAt: existing ? existing.at || 0 : 0};
+  const diffs = [];
+  if (existing && Array.isArray(existing.dates) && existing.dates.length) {
+    for (const ev of items) {
+      if (ev.state === 'similar' && ev.match) {
+        const gTm = [ev.match.from || '', ev.match.to || ''].filter(Boolean).join('~') || '종일';
+        diffs.push({action: 'update', date: ev.startYmd, title: ev.title, googleTitle: ev.match.title || '', detail: `구글(${ev.match.cal || ''} ${gTm}) ↔ 그룹웨어(${ev.time || '종일'})`, docNo: ev.docNo || ''});
+      }
+    }
+    const cancelled = (Array.isArray(apps) ? apps : []).filter(a => a && String(a.empCd) === String(me) && (a.deleteReqYn === 'Y' || a.docdelYn === 'N') && gsyncKind(a.atNm));
+    const activeAttend = items.filter(i => i.source === 'attend');
+    for (const r of existing.records || []) {
+      const bare = GSYNC_LAYERS.attend.replace(/^\d+\s*/, '').replace(/^BWYF\s*/, '');
+      if (!r.cal || (!r.cal.includes(GSYNC_LAYERS.attend) && !r.cal.includes(bare))) continue;
+      const rk = gsyncKindOfTitle(r.title);
+      if (!rk) continue;
+      const matchedActive = activeAttend.some(ev => ev.startYmd <= r.date && ev.endYmd >= r.date && ev.kind === rk);
+      if (matchedActive) continue;
+      const canc = cancelled.find(a => String(a.startDt || '') <= r.date && String(a.endDt || a.startDt || '') >= r.date && gsyncKind(a.atNm) === rk);
+      diffs.push({action: canc ? 'cancel' : 'orphan', date: r.date, title: r.title, googleTitle: r.title, detail: canc ? `그룹웨어에서 취소·삭제된 근태(${canc.atNm})가 구글에 남아 있습니다` : '해당 날짜의 그룹웨어 결재완료·진행 근태와 짝이 맞지 않습니다', docNo: (canc && canc.noDoc) || ''});
+    }
+  }
+  return {items, counts, diffs, today, compared: !!(existing && existing.dates && existing.dates.length), comparedAt: existing ? existing.at || 0 : 0};
 }
