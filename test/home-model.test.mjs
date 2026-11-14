@@ -16,6 +16,8 @@ test('homeTiles: always 5 stable tiles, dashes while loading, safe on garbage', 
   assert.deepEqual(t.map(x => x.id), ['urgent', 'todo', 'wait', 'schedule', 'away']);
   assert.equal(t[0].value, 2); assert.equal(t[0].tone, 'urgent'); assert.equal(t[1].value, 6); assert.match(t[1].sub, /확인 필요 1건/);
   const z = homeTiles({}); assert.equal(z[0].value, 0); assert.equal(z[0].tone, 'ok'); assert.equal(z[1].tone, 'ok');
+  assert.match(z.find(x => x.id === 'schedule').label, /그룹웨어/);
+  assert.match(z.find(x => x.id === 'schedule').sub, /구글 일정 별도/);
   assert.equal(homeTiles({loaded: false})[0].value, '–');
   assert.equal(homeTiles({urgent: -3, todo: 'abc'})[0].value, 0);
 });
