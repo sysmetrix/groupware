@@ -269,7 +269,7 @@
       }
       case 'resetDone': pushUndo('표시 초기화'); S.hidden = {}; S.snooze = {}; S.plan = {}; saveLocal(); render(); toastUndo('숨기기·미루기·보드 계획을 지웠습니다.'); break;
       case 'resetRouting': S.routing = null; store.del('routing'); toast('추천 이력을 지웠습니다.'); break;
-      case 'resetAll': if (confirm('이 브라우저에 저장된 내 GW 비서 설정·할 일·표시를 모두 지울까요? (그룹웨어 자료는 바뀌지 않습니다)')) { const p = getPrefix(); for (const k of Object.keys(localStorage)) if (k.startsWith(p)) localStorage.removeItem(k); for (const k of Object.keys(localStorage)) if (k.startsWith('bwyfgw:wc:migrated:') && localStorage.getItem(k) === currentKey) localStorage.removeItem('bwyfgw:wc:' + k.slice('bwyfgw:wc:migrated:'.length)); reloadUserState(); clearUserViews(); localBaseline = localValues(); schedule(); applyLook(); refresh(); } break;
+      case 'resetAll': if (confirm('이 브라우저에 저장된 내 GW 비서 설정·할 일·표시를 모두 지울까요? (그룹웨어 자료는 바뀌지 않습니다)')) { const p = getPrefix(); for (const k of IDB_KEYS) store.del(k); try { sessionStorage.removeItem(aiSessKey()); } catch {} for (const k of Object.keys(localStorage)) if (k.startsWith(p)) localStorage.removeItem(k); for (const k of Object.keys(localStorage)) if (k.startsWith('bwyfgw:wc:migrated:') && localStorage.getItem(k) === currentKey) localStorage.removeItem('bwyfgw:wc:' + k.slice('bwyfgw:wc:migrated:'.length)); reloadUserState(); clearUserViews(); localBaseline = localValues(); schedule(); applyLook(); refresh(); } break;
       case 'toastUndo': undo(); root.querySelector('.toast')?.remove(); break;
       case 'dfSearch': case 'dfChip': case 'dfMore': case 'dfKind': case 'dfDept': case 'dfReset': case 'dfSave': case 'dfUnsave': case 'dfSel':
         dfAct(act, actEl, v); break; // 문서 찾기(35번 조각)
@@ -286,6 +286,12 @@
       case 'chatFocus':
       case 'chatOpenItem':
       case 'chatNav':
+      case 'chatOpenUrl':
+      case 'autoPreset':
+      case 'autoToggle':
+      case 'autoRun':
+      case 'autoDel':
+      case 'autoNew':
       case 'gsyncOpen':
       case 'gsyncStatus':
       case 'gsyncLayer':

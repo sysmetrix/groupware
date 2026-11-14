@@ -21,34 +21,6 @@
 @container (max-width:640px){.wc .row.lean .what{display:none}.wc .row.lean .w{display:none}}
 @media (prefers-reduced-motion:reduce){.wc .row.lean .qa{transition:none}}
 
-/* 홈: 핵심 숫자 한 줄 + 지금 할 일 한 가지가 맨 위 */
-.wc .hm{gap:14px}
-.wc .hm-hello{font-size:21px}
-.wc .hm-sub{font-size:14px;margin-top:2px}
-#hmTop{display:flex;flex-direction:column;gap:12px;min-width:0}
-#hmTop:empty{display:none}
-#hmTop .hm-tiles{grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
-#hmTop .hm-tile,#hmTop .hm-skel{min-height:68px;padding:10px 14px}
-#hmTop .hm-tile-v{font-size:24px}
-#hmTop .hm-tile-s{display:none}
-.wc .hm-next{display:flex;align-items:center;gap:8px 18px;flex-wrap:wrap;padding:12px 16px}
-.wc .hm-next-b{flex:1;min-width:220px}
-.wc .hm-next-k{margin-bottom:2px}
-.wc .hm-next-t{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.wc .hm-next-s{margin-top:0;font-size:13px}
-.wc .hm-next-a{margin-top:0}
-#hmDash:empty{display:none}
-@container (max-width:760px){#hmTop .hm-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}.wc .hm-next-t{white-space:normal}}
-
-/* 홈 채팅: 처음엔 안내 한 줄, 추천 질문은 입력창 아래 작은 칩 */
-.wc .ch-log:has(.ch-empty){min-height:0;padding:14px 20px 2px}
-.wc .ch-empty{padding:0;text-align:left}
-.wc .ch-empty p{font-size:13px}
-.wc .ch-chips{order:1}
-.wc .ch-foot{order:2}
-.wc .ch-sr{order:3}
-.wc .ch-chip{min-height:30px;padding:0 11px;font-size:12.5px}
-
 /* 문서 찾기: 기안=파랑(--accent), 접수=초록(--ok), 발송=주황(--md). 줄 왼쪽 띠와 배지 색으로 구분한다. */
 .wc .df-b{min-width:38px;justify-content:center;font-weight:700}
 .wc .df-b.df-draft{background:var(--accent-soft);color:var(--accent)}
@@ -71,22 +43,3 @@
 .wc .df-x .i{width:12px;height:12px}
 .wc .df-help{margin:6px 0 0 18px;padding:0;line-height:1.9;font-size:14px}
 .wc .df-foot{margin-top:12px;font-size:12.5px}
-
-/* 홈: 넓은 화면에서는 작업 공간을 쓰고, 좁은 컨테이너에서는 자연스럽게 쌓는다. */
-.wc .hm{max-width:1800px;gap:20px}
-.wc .hm-head{padding:4px 0 2px}
-.wc .hm-hello{font-size:clamp(22px,1.6vw,28px)}
-#hmTop{display:grid;gap:12px}
-#hmTop .hm-tiles{gap:12px}
-#hmTop .hm-tile,#hmTop .hm-skel{min-height:96px;padding:16px 18px;border-radius:12px}
-#hmTop .hm-tile-s{display:block;line-height:1.4}
-#hmTop .hm-tile-v{font-size:28px}
-.wc .hm-next{padding:16px 20px}
-.wc .hm-next-t{white-space:normal;overflow-wrap:anywhere}
-.wc .hm-grid{grid-template-columns:minmax(0,1.6fr) minmax(320px,1fr);gap:20px;align-items:stretch}
-.wc .hm-chatcol,.wc #hmDash{min-width:0}
-.wc .hm-chatcol .ch{height:100%;box-sizing:border-box;padding:20px}
-.wc .hm-chatcol .ch-log{flex:1;min-height:260px}
-.wc .hm-today{height:100%;box-sizing:border-box;padding:20px}
-@container (max-width:1000px){.wc .hm-grid{grid-template-columns:1fr}.wc .hm-chatcol .ch-log{min-height:200px}}
-@container (max-width:760px){#hmTop .hm-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}#hmTop .hm-tile,#hmTop .hm-skel{min-height:84px;padding:12px 14px}.wc .hm-chatcol .ch{padding:14px}}

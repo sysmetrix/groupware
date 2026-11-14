@@ -7,6 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
 import crypto from 'node:crypto';
+import {gunzipSync} from 'node:zlib';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {checkLiveSyntax, assemble, evaluatePolicy, parseArgs, DEFAULT_POLICY, MOUNT_JS, DEFAULT_OUT_DIR} from '../scripts/live-build.mjs';
@@ -37,6 +38,11 @@ test('two builds of identical sources are byte-identical (no build timestamp in 
       assert.equal(sha(await fs.readFile(path.join(dir, 'a', f))), sha(await fs.readFile(path.join(dir, 'b', f))), f);
     }
     const bundle = await fs.readFile(path.join(dir, 'a', 'gw-live.js'), 'utf8');
+    const bookmark = decodeURIComponent((await fs.readFile(path.join(dir, 'a', 'bookmarklet.txt'), 'utf8')).slice('javascript:'.length));
+    const packed = bookmark.match(/atob\("([A-Za-z0-9+/=]+)"\)/);
+    assert.ok(packed, 'compressed bookmark contains payload');
+    assert.equal(gunzipSync(Buffer.from(packed[1], 'base64')).toString('utf8'), bundle, 'compressed bookmark restores identical bundle');
+    assert.match(bookmark, /crypto\.subtle\.digest\('SHA-256'/, 'bookmark verifies integrity');
     assert.equal((await fs.readFile(path.join(dir, 'a', 'gw-live.sha256'), 'utf8')).trim(), sha(bundle), 'sha256 file matches bundle');
     const header = bundle.split('\n')[0];
     assert.doesNotMatch(header, /\d{4}-\d{2}-\d{2}/, 'no date in bundle header');

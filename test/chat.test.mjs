@@ -46,7 +46,7 @@ test('chatIntent: Korean phrases route to the right tool', () => {
     ['11/20 관내출장 신청해줘', 'prepare_trip_request'], ['내일 시간외 근무 신청해줘', 'prepare_overtime_request'], ['모레 야근 신청 18시부터 21시까지', 'prepare_overtime_request'],
     ['급한 일 알려줘', 'list_tasks'], ['오늘 해야 할 일', 'list_tasks'], ['결재 대기 중인 거', 'list_tasks'], ['받은 메일 처리할 거 있어?', 'list_tasks'],
     ['오늘 요약해줘', 'get_overview'], ['업무 브리핑', 'get_overview'],
-    ['남은 연차 몇 일이야', 'get_my_attendance'], ['내 근태 확인', 'get_my_attendance'],
+    ['남은 연차 몇 일이야', 'get_leave_status'], ['내 근태 확인', 'get_my_attendance'],
     ['월간업무보고 검색', 'search_documents'], ['노동이사제 찾아줘', 'search_documents'],
     ['예산 집행 현황', 'get_budget'], ['차량 예약 가능한 시간', 'get_resource_status'], ['내일 관용차 비어 있어?', 'get_resource_status'],
     ['내일 14시부터 16시까지 차량 예약해줘', 'reserve_vehicle'], ['결과보고 작성해줘', 'prepare_draft'], ['운영계획서 기안 시작', 'prepare_draft'],

@@ -16,11 +16,12 @@
   // ---------- 보존기간 (학습한 문서는 기간이 지나면 지운다) ----------
   function govPurge() {
     try {
-      const key = 'bwyfgw:wc:' + currentKey + ':patterns';
-      const raw = localStorage.getItem(key);
+      // patterns는 IndexedDB로 옮겨졌으므로 store를 통해 읽고 쓴다.
+      // 초기 비동기 로딩이 끝나면 idbInit에서도 다시 호출한다.
+      const raw = store.get('patterns', null);
       if (!raw) return 0;
-      const r = R.purgeExpired(JSON.parse(raw), Date.now(), POLICY.retentionDays);
-      if (r.removed) localStorage.setItem(key, JSON.stringify(r.patterns));
+      const r = R.purgeExpired(raw, Date.now(), POLICY.retentionDays);
+      if (r.removed && store.set('patterns', r.patterns) === false) throw new Error('보존기간 만료 자료를 저장소에서 정리하지 못했습니다');
       return r.removed;
     } catch (e) { logError('govPurge', e.message); return 0; }
   }
@@ -58,6 +59,12 @@
       const name = k.slice(p.length), v = localStorage.getItem(k) || '';
       rows.push({key: name, kb: Math.round(v.length * 2 / 102.4) / 10, label: (DATA_LABEL[name] || [name, ''])[0], note: (DATA_LABEL[name] || ['', ''])[1]});
     }
+    // IndexedDB로 이동한 자료도 목록·삭제 대상에 포함한다.
+    for (const name of IDB_KEYS) {
+      if (rows.some(r => r.key === name)) continue;
+      const v = idbMem.get(p + name);
+      if (v !== undefined) { const raw = JSON.stringify(v); rows.push({key: name, kb: Math.round(raw.length * 2 / 102.4) / 10, label: (DATA_LABEL[name] || [name, ''])[0], note: (DATA_LABEL[name] || ['', ''])[1] + ' · IndexedDB'}); }
+    }
     return rows.sort((a, b) => b.kb - a.kb);
   }
   function openDataCenter() {
@@ -75,7 +82,7 @@
       </tbody></table>
       <div class="muted" style="margin-top:6px">내 자료 합계 약 ${Math.round(total)}KB (브라우저 전체 localStorage 점유 ${(() => { let c = 0; try { for (let i = 0; i < localStorage.length; i++) c += (localStorage.getItem(localStorage.key(i)) || '').length; } catch {} return `${Math.round(c / 1024)}K자 / ~5,120K자 (${Math.min(100, Math.round(c / 52428.8))}%)`; })()})</div>
       <div class="acts" style="margin-top:12px"><button class="btn sm" data-act="cleanSynap">문서 미리보기 캐시 정리</button><button class="btn sm" data-act="govExportAudit">감사 기록 내보내기(JSON)</button><button class="btn sm" data-act="openDiag">진단 열기</button><button class="btn sm danger" data-act="resetAll">내 GW 비서 자료 모두 지우기</button></div>
-      <div class="muted" style="font-size:12px;margin-top:8px">공용 PC에서는 사용 후 위 버튼으로 모두 지워 주세요. 로그인 정보와 비밀번호는 저장하지 않습니다.</div></div></div>`;
+      <div class="muted" style="font-size:12px;margin-top:8px">공용 PC에서는 사용 후 위 버튼으로 모두 지워 주세요. 그룹웨어 비밀번호는 저장하지 않지만, 설정에 따라 Gemini API 키가 이 브라우저에 저장될 수 있습니다.</div></div></div>`;
   }
   function govDel(k) {
     const lab = (DATA_LABEL[k] || [k])[0];
@@ -101,7 +108,7 @@
     add('관리자 정책', POLICY.enabled, POLICY.enabled ? `${POLICY.orgName || '기본 정책'} · 꺼진 기능 ${Object.entries(POLICY.features).filter(([, v]) => !v).map(([k]) => FEATURE_NAME[k]).join(', ') || '없음'}` : '관리자가 GW 비서를 끈 상태입니다');
     let ui = null; try { ui = JSON.parse(sessionStorage.getItem('userInfo') || 'null'); } catch {}
     add('로그인 세션', !!ui, ui ? '사용자 정보 확인됨' : '그룹웨어 로그인 정보를 읽지 못했습니다');
-    add('사용자별 저장소', currentKey !== 'default', currentKey !== 'default' ? '사용자별로 분리되어 저장됩니다' : '사용자를 식별하지 못해 공용 저장소를 쓰는 중입니다');
+    add('사용자별 저장소', currentKey !== 'default', currentKey !== 'default' ? '사용자별로 분리되어 저장됩니다' : '사용자를 식별하지 못해 저장이 차단됩니다');
     let w = false, totalChars = 0; try { localStorage.setItem('bwyfgw:diag', '1'); localStorage.removeItem('bwyfgw:diag'); w = true; for (let i = 0; i < localStorage.length; i++) totalChars += (localStorage.getItem(localStorage.key(i)) || '').length; } catch {}
     add('브라우저 저장소', w && !S.storageError && totalChars < 4700000, w ? `쓰기 ${S.storageError ? '부분 실패' : '가능'} · 내 자료 ${Math.round(inventory().reduce((a, r) => a + r.kb, 0))}KB · 브라우저 전체 ${Math.round(totalChars / 1024)}K자 (${Math.min(100, Math.round(totalChars / 52428.8))}%)` : '저장할 수 없습니다(저장 공간 부족 또는 차단)');
     const pat = store.get('patterns', null), n = pat && pat.docs ? Object.keys(pat.docs).length : 0;

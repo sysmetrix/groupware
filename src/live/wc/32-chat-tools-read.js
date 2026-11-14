@@ -26,23 +26,36 @@
   }
 
   chatRegisterTool({
+    name: 'get_weekday', label: '요일 확인', kind: 'read',
+    description: '지정 날짜의 요일을 한국 시간 기준으로 확인한다.',
+    params: {type: 'object', properties: {date: {type: 'string'}}},
+    run: async a => {
+      const iso = chatDateArg(a.date);
+      return iso ? {ok: true, text: `${iso}은 ${R.chatDowName(iso)}요일입니다.`, data: {date: iso, weekday: R.chatDowName(iso)}, cards: []} : {ok: false, text: '날짜를 알아보지 못했습니다.'};
+    },
+  });
+
+  chatRegisterTool({
     name: 'get_overview', label: '오늘 요약 확인', kind: 'read',
-    description: '오늘의 전체 요약(급한 일, 할 일, 결재 대기, 오늘 일정 수, 오늘 자리 비운 직원 수)을 돌려준다.',
+    description: '오늘의 전체 요약(급한 일, 할 일, 기다리는 중인 일, 오늘 일정 수, 오늘 자리 비운 직원 수)을 돌려준다.',
     params: {type: 'object', properties: {}},
     run: async () => {
       const d = homeData();
       if (!d.loaded) return chatNotReady();
       const total = d.urgent + d.todo + d.check;
       const top = d.mine.slice(0, 3);
-      const text = total ? `급한 일 ${d.urgent}건을 포함해 처리할 일은 ${total}건입니다. 결재 대기 중 ${d.wait}건, 오늘 일정 ${d.events.length}건, 자리 비운 직원 ${d.away.length}명입니다.` : `지금 처리할 일이 없습니다. 결재 대기 중 ${d.wait}건, 오늘 일정 ${d.events.length}건입니다.`;
-      return {ok: true, text, data: {urgent: d.urgent, todo: d.todo, check: d.check, waiting_approval: d.wait, events_today: d.events.length, away_today: d.away.length, top_tasks: top.map(x => ({title: x.title, state: stateOf(x)}))},
-        cards: [{type: 'kpi', items: [{label: '급한 일', value: d.urgent, tone: d.urgent ? 'urgent' : 'ok'}, {label: '할 일', value: d.todo + d.check, tone: 'todo'}, {label: '결재 대기 중', value: d.wait, tone: 'info'}, {label: '오늘 일정', value: d.events.length, tone: 'info'}]}, ...(top.length ? [{type: 'list', title: '먼저 볼 일', items: top.map(chatTaskItem)}] : [])]};
+      const teamGap = !!(d.teamLoading || d.teamError || d.teamUnknown), scheduleGap = !!(d.scheduleUnknown || teamGap);
+      const gaps = [d.taskGaps ? '할 일 일부 자료' : '', scheduleGap ? '일정·근태 자료' : ''].filter(Boolean);
+      const extra = [d.unread != null ? `안 읽은 메일 조회분 ${d.unread}건` : '', d.leave ? `남은 연차 ${d.leave}` : '', d.refN ? `부서 참고 ${d.refN}건` : ''].filter(Boolean);
+      const text = `확인된 처리·확인할 일 ${total}건(급한 일 ${d.urgent}건), 기다리는 중 ${d.wait}건, 확인된 오늘 일정 ${d.events.length}건${teamGap ? ', 자리 비움 확인 불가' : `, 확인된 자리 비움 ${d.away.length}건`}입니다.${extra.length ? `\n${extra.join(', ')}입니다.` : ''}${gaps.length ? `\n확인 제한: ${gaps.join(' 및 ')}를 모두 확인하지 못했습니다.` : ''}`;
+      return {ok: true, text, data: {urgent: d.urgent, todo: d.todo, check: d.check, waiting: d.wait, events_today: d.events.length, away_today: teamGap ? null : d.away.length, task_complete: !d.taskGaps, schedule_complete: !scheduleGap, unread_mail: d.unread ?? null, remaining_leave: d.leave || '', reference_docs: d.refN, top_tasks: top.map(x => ({title: x.title, state: stateOf(x)}))},
+        cards: [{type: 'kpi', items: [{label: d.taskGaps ? '급한 일(확인분)' : '급한 일', value: d.urgent, tone: d.urgent ? 'urgent' : 'ok'}, {label: d.taskGaps ? '할 일(확인분)' : '할 일', value: total, tone: 'todo'}, {label: '기다리는 중', value: d.wait, tone: 'info'}, {label: scheduleGap ? '일정(확인분)' : '오늘 일정', value: d.events.length, tone: 'info'}]}, ...(top.length ? [{type: 'list', title: '먼저 볼 일', items: top.map(chatTaskItem)}] : [])]};
     },
   });
 
   chatRegisterTool({
     name: 'list_tasks', label: '할 일 확인', kind: 'read',
-    description: '내가 처리할 일 목록. state: urgent(급함·기한 지남) | todo | check(확인 필요) | wait(결재 대기 중) | all. area로 결재/메일/근태/공지를 좁힐 수 있다.',
+    description: '내가 처리할 일 목록. state: urgent(급함·기한 지남) | todo | check(확인 필요) | wait(기다리는 중) | all. area로 결재/메일/근태/공지를 좁힐 수 있다.',
     params: {type: 'object', properties: {state: {type: 'string', enum: ['urgent', 'todo', 'check', 'wait', 'all']}, area: {type: 'string', enum: ['결재', '메일', '근태', '공지']}, limit: {type: 'number'}}},
     run: async a => {
       if (!S.a) return chatNotReady();
@@ -52,9 +65,10 @@
       else if (st === 'todo') list = list.filter(x => stateOf(x) === 'todo');
       else if (st === 'check') list = list.filter(x => ['check', 'confirm'].includes(stateOf(x)));
       if (a.area) list = list.filter(x => x.area === a.area);
-      const label = {urgent: '급한 일', todo: '할 일', check: '확인이 필요한 일', wait: '결재 대기 중인 일', all: '처리할 일'}[st] || '처리할 일';
-      if (!list.length) return {ok: true, text: a.area ? `${a.area}: 지금 ${st === 'all' ? '처리하거나 답할' : label} 것이 없습니다.` : `${label}이 없습니다.`, data: {count: 0, items: []}};
-      return {ok: true, text: `${a.area ? a.area + ' ' : ''}${label} ${list.length}건입니다.${list.length > lim ? ` 위에서 ${lim}건만 보여 드립니다.` : ''}`, data: {count: list.length, items: list.slice(0, lim).map(x => ({itemId: x.key, title: x.title, area: x.area, state: stateOf(x), deadline: x.deadline && x.deadline.date || ''}))},
+      const label = {urgent: '급한 일', todo: '할 일', check: '확인이 필요한 일', wait: '기다리는 중인 일', all: '처리할 일'}[st] || '처리할 일';
+      const dateNote = a.requested_date && a.requested_date !== today() ? `\n${a.requested_date}의 업무를 예측한 결과가 아니라 현재 수집된 목록의 우선순위입니다. 그날 다시 확인해 주세요.` : '';
+      if (!list.length) return {ok: true, text: (a.area ? `${a.area}: 지금 ${st === 'all' ? '처리하거나 답할' : label} 것이 없습니다.` : `${label}이 없습니다.`) + dateNote, data: {count: 0, items: []}};
+      return {ok: true, text: `${a.area ? a.area + ' ' : ''}${label} ${list.length}건입니다.${list.length > lim ? ` 위에서 ${lim}건만 보여 드립니다.` : ''}${dateNote}`, data: {count: list.length, items: list.slice(0, lim).map(x => ({itemId: x.key, title: x.title, area: x.area, state: stateOf(x), deadline: x.deadline && x.deadline.date || ''}))},
         cards: [{type: 'list', title: label, items: list.slice(0, lim).map(chatTaskItem), more: Math.max(0, list.length - lim)}]};
     },
   });
@@ -106,7 +120,6 @@
         const tm = S.team && S.team[d8.slice(0, 6)];
         for (const x of (tm && tm.cal && tm.cal.byDate[d8]) || []) if (x.mine) rows.push({from: x.time ? x.time.slice(0, 5) : '', to: x.time ? x.time.slice(6) : '', label: x.kind === 'ot' ? '시간외 근무 신청' : x.label + (x.place ? ' · ' + x.place : '')});
         for (const dl of S.a.deadlines || []) if (dl.date === iso) rows.push({from: dl.time || '', to: '', label: '기한: ' + dl.title});
-        if (iso === today()) for (const b of (S.homeRes && S.homeRes.items) || []) if (String(b.start).slice(0, 8) === d8) rows.push({from: String(b.start).slice(8, 10) + ':' + String(b.start).slice(10, 12), to: String(b.end).slice(8, 10) + ':' + String(b.end).slice(10, 12), label: b.label});
         rows.sort((x, y) => (x.from || '').localeCompare(y.from || ''));
         return {iso, rows};
       });
@@ -116,7 +129,7 @@
       if (!scheduleOk) gaps.push('그룹웨어 일정을 불러오지 못했습니다');
       else if (!inRange) gaps.push('요청 날짜가 그룹웨어 일정 수집 범위 밖이거나 범위가 확인되지 않습니다');
       if (!teamOk) gaps.push('근태 자료를 불러오지 못해 휴가·출장이 빠졌을 수 있습니다');
-      const source = '출처: 그룹웨어 일정·내 근태·기한. 구글 캘린더 일정은 포함되지 않습니다.';
+      const source = '출처: 그룹웨어 일정·내 근태·기한. 구글 캘린더와 자원 예약은 포함되지 않습니다.';
       const warn = gaps.length ? `\n확인 제한: ${gaps.join('; ')}.` : '';
       if (!total) return {ok: !gaps.length, text: `${lead}${gaps.length ? '은 확인된 항목이 없지만 전체 여부는 알 수 없습니다' : '은 없습니다'}.\n${source}${warn}`, data: {days: [], complete: !gaps.length}, cards: []};
       const text = `${lead}에서 확인된 항목 ${total}건입니다.\n${source}${warn}`;
@@ -234,9 +247,26 @@
       add('mail', '메일', x => ({title: x.subject || '(제목 없음)', sub: x.from || ''}));
       add('board', '게시판', x => ({title: x.title || '(제목 없음)', sub: String(x.date || '').slice(0, 10)}));
       if (!cards.length) return {ok: true, text: `“${q}”에 해당하는 결과가 없습니다. 검색어나 범위를 바꿔 보세요.`, data: {count: 0}};
+      // 본문은 일반 답변이나 AI 도구 응답이 아닌 확인 후 카드에만 표시한다.
+      const docRows = (res.groups.doc && res.groups.doc.items || []).slice(0, 3);
+      for (const x of docRows) {
+        const docNo = String(x.docNo || '').trim(), title = String(x.title || '').trim();
+        if (!docNo && !title) continue;
+        cards.push({type: 'confirm', title: '문서 색인 본문 확인', risk: 'low', rows: [['제목', title || '(제목 없음)'], ['문서번호', docNo || '확인 불가']],
+          warn: '검색 색인의 일부만 표시하며 열람 처리하지 않습니다. 본문은 외부 AI에 보내지 않습니다.', confirmLabel: '이 문서 본문 확인', cancelLabel: '취소',
+          onConfirm: async () => {
+            try {
+              const r = await GW.docPreview({docNo, title});
+              if (!r || !r.found) return {ok: false, text: r && r.reason === 'ambiguous' ? '동일한 문서를 하나로 특정할 수 없습니다. 문서번호로 다시 검색해 주세요.' : r && r.reason === 'incomplete' ? '검색 범위를 완전히 확인하지 못해 본문을 표시하지 않았습니다.' : '검색 색인에서 문서 본문을 찾지 못했습니다. 권한이나 색인 범위를 확인해 주세요.'};
+              const body = String(r.text || '').trim();
+              if (!body) return {ok: false, text: '검색 색인에 표시할 본문이 없습니다. 원문 전체가 없다는 뜻은 아닙니다.'};
+              return {ok: true, text: '검색 색인의 일부를 아래에 표시합니다.', cards: [{type: 'note', tone: 'info', sensitive: true, text: '문서 색인 본문(일부, 최대 6,000자)\n' + body}]};
+            } catch { return {ok: false, text: '문서 색인을 조회하지 못했습니다. 권한과 연결 상태를 확인해 주세요.'}; }
+          }});
+      }
       cards.push({type: 'nav', label: '통합검색에서 더 보기', view: 'search', v: q});
       const total = Object.values(res.groups).reduce((s, g) => s + (g.total || 0), 0);
-      return {ok: true, text: `“${q}” 검색 결과는 모두 ${total}건입니다. 제목만 보여 드립니다.`, data: {total, titles: data, items: listItems}, cards};
+      return {ok: true, text: `“${q}” 검색 결과는 모두 ${total}건입니다. 제목과 문서별 본문 확인 카드를 보여 드립니다.`, data: {total, titles: data, items: listItems}, cards};
     },
   });
 
@@ -255,6 +285,9 @@
         const subTxt = subs.length ? '\n' + subs.map(r => `• ${r.name}: 집행 ${won(r.executed)}원 (${pct(r.rate)}) / 잔액 ${won(r.balance)}원`).join('\n') : '';
         return {ok: true, text: `${nm}(${hit.project}) 예산 ${won(top.budget)}원 · 집행 ${won(top.executed)}원(${pct(top.rate)}) · 잔액 ${won(top.balance)}원입니다.${el !== undefined && el !== null ? ` (올해 경과율 ${el}%)` : ''}${subTxt}`, data: {project: hit.project, name: nm, budget: top.budget, executed: top.executed, balance: top.balance, rate: top.rate, elapsed_pct: el, details: subs.map(r => ({code: r.code, name: r.name, executed: r.executed, balance: r.balance, rate: r.rate}))}, cards: [{type: 'nav', label: '예산 집행 화면 열기', view: 'budget'}]};
       }
+      // 관심 사업에서 못 찾은 이름은 재단 전체 사업의 예산 과목에서 찾는다.
+      const qq = String(a.project || '').replace(/(예산|집행률?|잔액|현황|얼마나?|남았어?|남은|어때|알려\s*줘|보여\s*줘|확인|해\s*줘|좀|[?？])/g, ' ').replace(/\s+/g, ' ').trim();
+      if (qq.length >= 2 && CHAT_TOOLS.has('search_budget')) return CHAT_TOOLS.get('search_budget').run({query: qq});
       const pinned = (S.settings.budget || []).map(b => b.label || b.project).filter(Boolean);
       return {ok: true, text: `${el !== undefined && el !== null ? `올해 경과율은 ${el}%입니다. ` : ''}${pinned.length ? `관심 사업: ${pinned.slice(0, 5).join(', ')}. ` : ''}사업별 집행액은 예산 집행 화면에서 확인하세요.`, data: {elapsed_pct: el, pinned}, cards: [{type: 'nav', label: '예산 집행 화면 열기', view: 'budget'}]};
     },
@@ -271,8 +304,9 @@
       const d8 = iso.replace(/-/g, '');
       try {
         const list = ((resState().list) || await GW.resourceList()).filter(r => r.useYn !== 'N');
-        const car = list.find(r => /차량|관용|니로/.test(r.name)) || list[0];
-        if (!car) return {ok: true, text: '예약할 수 있는 자원이 없습니다.'};
+        // 차량이 없을 때 회의실 등 첫 번째 자원을 차량으로 오인하지 않는다.
+        const car = list.find(r => /차량|관용|니로|승용|승합|자동차|카니발|스타리아/.test(r.name));
+        if (!car) return {ok: false, text: '자원 목록에서 차량을 찾지 못했습니다. 자원 예약 화면에서 직접 확인해 주세요.', cards: [{type: 'nav', label: '자원 예약 화면 열기', view: 'resource'}]};
         const all = await GW.resourceBookings({from: d8, to: d8, resSeqs: [car.resSeq]});
         const day = all.filter(b => R.bookingSpanOnDay(b, d8)).sort((x, y) => x.start.localeCompare(y.start));
         const free = R.freeSlots(day, d8);
@@ -301,18 +335,22 @@
     params: {type: 'object', properties: {itemId: {type: 'string'}, key: {type: 'string'}, index: {type: 'number'}}},
     run: async a => {
       const id = a.itemId || a.key || '';
-      const x = (id && S.a && S.a.actions.find(t => t.key === id)) || (a.index && S.a && mineVisible()[Number(a.index) - 1]);
+      // 번호는 직전에 보여 준 목록(검색·공지·메일 등)을 먼저 가리킨다. 목록이 없을 때만 할 일 순서로 본다.
+      const last = (chatState().ctx && chatState().ctx.lastItems) || [];
+      const byIndex = a.index ? last[Number(a.index) - 1] : null;
+      const x = (id && S.a && S.a.actions.find(t => t.key === id)) || (!byIndex && a.index && S.a && mineVisible()[Number(a.index) - 1]);
       if (x) {
         if (go('today') === false) return {ok: false, text: '작성 중인 화면이 있어 이동하지 않았습니다.'};
         selectAction(x.key);
         return {ok: true, text: `“${x.title}” 항목을 열었습니다.`};
       }
-      const last = (chatState().ctx && chatState().ctx.lastItems) || [];
-      const sHit = (id && last.find(t => t.itemId === id)) || (a.index && last[Number(a.index) - 1]);
+      const sHit = (id && last.find(t => t.itemId === id)) || byIndex;
       if (sHit && sHit.url) {
-        openUrl(sHit.url, {title: sHit.title});
+        if (!String(sHit.url).startsWith(location.origin + '/')) return {ok: false, text: '안전하지 않은 원문 주소라 열지 않았습니다.'};
+        if (openUrl(sHit.url, {title: sHit.title}) === false) return {ok: false, text: '작성 중인 화면이 있어 열지 않았습니다.'};
         return {ok: true, text: `“${sHit.title}” 화면을 열었습니다.`};
       }
+      if (sHit) { const view = sHit.type === 'mail' ? 'mail' : sHit.type === 'doc' ? 'approval' : ''; return {ok: false, text: `“${sHit.title}”은(는) 대화에서 바로 열 수 없는 항목입니다. 해당 화면에서 확인해 주세요.`, cards: view ? [{type: 'nav', label: view === 'mail' ? '메일 화면 열기' : '결재·문서유통 화면 열기', view}] : []}; }
       return {ok: false, text: '해당 항목을 찾지 못했습니다. 먼저 "할 일 보여줘"로 목록을 확인해 보세요.'};
     },
   });

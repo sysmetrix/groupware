@@ -57,7 +57,7 @@
   }
   const STATE_ORDER = ['overdue', 'urgent', 'todo', 'check', 'confirm', 'wait', 'info'];
   const STATE_NAME = {overdue: '기한 지남', urgent: '급함', todo: '할 일', check: '확인 필요', confirm: '끝났는지 확인', wait: '기다리는 중', info: '참고'};
-  const STATE_GROUP = {overdue: '급한 일', urgent: '급한 일', todo: '할 일', check: '확인이 필요한 일', confirm: '끝났는지만 확인', wait: '결재를 기다리는 중 (할 일 없음)', info: '참고'};
+  const STATE_GROUP = {overdue: '급한 일', urgent: '급한 일', todo: '할 일', check: '확인이 필요한 일', confirm: '끝났는지만 확인', wait: '기다리는 중', info: '참고'};
   const stateOf = x => x.state || (x.scope === 'ref' ? 'info' : x.priority === 'high' ? 'urgent' : 'todo');
   const isMine = x => x.scope !== 'ref';
   const mineVisible = () => visibleActions().filter(x => isMine(x) && stateOf(x) !== 'wait');

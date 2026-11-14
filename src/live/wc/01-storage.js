@@ -55,12 +55,14 @@
           const tx = db.transaction('kv', 'readonly');
           const rq = tx.objectStore('kv').get(fk);
           rq.onsuccess = () => {
+            if (p !== getPrefix()) return; // 계정이 바뀐 뒤 돌아온 응답은 적용하지 않는다.
             if (rq.result !== undefined) {
               idbMem.set(fk, rq.result);
+              if (k === 'patterns' && typeof govPurge === 'function') govPurge();
               if (k === 'routing' && !S.routing) S.routing = rq.result;
               if (lsRaw !== null) try { localStorage.removeItem(fk); } catch {}
             } else if (lsRaw !== null) {
-              try { const parsed = JSON.parse(lsRaw); idbPut(fk, parsed); localStorage.removeItem(fk); } catch {}
+              try { const parsed = JSON.parse(lsRaw); idbPut(fk, parsed); localStorage.removeItem(fk); if (k === 'patterns' && typeof govPurge === 'function') govPurge(); } catch {}
             }
           };
         }
@@ -156,7 +158,9 @@
   cleanupLegacyStorage();
   function switchUserStorage(newEmpKey) {
     if (!newEmpKey || newEmpKey === currentKey) return false;
+    if (S.chat) { S.chat.stopped = true; S.chat.seq++; if (S.chat.abort) S.chat.abort.abort(); }
     currentKey = newEmpKey;
+    idbStarted = false; idbInit();
     reloadUserState();
     clearUserViews();
     localBaseline = localValues();
