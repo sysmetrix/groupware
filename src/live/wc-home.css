@@ -1,50 +1,135 @@
-/* GW 비서 · 홈 전용 스타일. 접두 hm- (홈). 색은 wc-style/wc-theme의 변수(--bg --fg --muted --line --card --accent --hi --md --ok 및 *-soft)만 쓴다.
+/* GW 비서 · 홈 전용 스타일(v0.65에서 한 파일로 모음). 접두 hm- (홈). 색은 wc-style/wc-theme의 변수(--bg --fg --muted --line --line2 --card --soft --accent --hi --md --ok 및 *-soft)만 쓴다.
    라이트·다크는 .wc.dark 변수 교체로 따라간다. 글자 크기는 12px 이상, 모션은 prefers-reduced-motion에서 끈다.
-   대비 점검(WCAG AA 4.5:1): 본문 --fg/--card, 보조 --muted/--card, 경고 --hi/--hi-soft, 완료 --ok/--ok-soft는 wc-theme의 값 기준으로 확인했다. */
-.hm{max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
-.hm-head{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;padding:4px 2px 0}
-.hm-hello{margin:0;font-size:26px;line-height:1.3;font-weight:800;letter-spacing:-.4px}
-.hm-sub{margin:4px 0 0;font-size:15px;color:var(--muted)}
-.hm-sub.hm-tone-urgent{color:var(--hi);font-weight:700}.hm-sub.hm-tone-todo{color:var(--fg)}.hm-sub.hm-tone-ok{color:var(--ok)}
+   배치: 넓은 화면은 [왼쪽 비서(인사+대화) | 오른쪽 오늘 현황]을 화면 높이에 맞추고 각자 스크롤한다. 좁은 화면(컨테이너 1000px 이하)은 인사 → 대화 → 현황 → 참고 순으로 쌓는다.
+   홈·대화 규칙은 이 파일과 wc-chat.css에만 둔다(wc-premium.css·wc-lean.css에 다시 덮어쓰지 않는다). */
+.wc main:has(.hm){padding-bottom:30px}
+.wc .hm{--hm-grad:linear-gradient(135deg,#1f5a6f 0%,#2f8f86 100%);--hm-sh:0 1px 2px rgba(18,38,50,.05),0 14px 30px -20px rgba(18,38,50,.2);max-width:1640px;height:100%;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr) clamp(340px,31%,460px);grid-template-rows:minmax(0,1fr);gap:24px;align-items:stretch}
+.wc.dark .hm{--hm-grad:linear-gradient(135deg,#3b7f8e 0%,#57b3a3 100%);--hm-sh:none}
+.wc .hm-main{min-width:0;min-height:0;max-height:100%;display:flex;flex-direction:column;gap:18px}
+.wc .hm-chatcol{min-width:0;min-height:0;flex:1 1 0;display:flex;flex-direction:column}
+.wc .hm-rail{min-width:0;max-height:100%;overflow-y:auto;display:flex;flex-direction:column;gap:14px;padding:0 3px 3px;scrollbar-width:thin}
+.wc #hmHead{flex:none;min-width:0}
+.wc #hmTop,.wc #hmDash{display:flex;flex-direction:column;gap:14px;min-width:0}
+.wc #hmTop:empty,.wc #hmDash:empty{display:none}
 
-#hmDash{display:flex;flex-direction:column;gap:14px}
-/* 핵심 타일 */
-.hm-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
-.hm-tile{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-height:96px;padding:14px 16px;border:1px solid var(--line);border-radius:14px;background:var(--card);box-shadow:var(--sh);text-align:left;cursor:pointer;transition:transform .15s ease,border-color .15s ease,box-shadow .15s ease}
-.hm-tile:hover{transform:translateY(-1px);border-color:var(--accent)}
-.hm-tile:active{transform:none}
-.hm-tile-l{font-size:13px;color:var(--muted);font-weight:600}
-.hm-tile-v{font-size:30px;line-height:1.15;font-weight:800;letter-spacing:-.5px}
-.hm-tile-s{font-size:12px;color:var(--muted)}
-.hm-tile.hm-tone-urgent{background:var(--hi-soft);border-color:transparent}.hm-tile.hm-tone-urgent .hm-tile-v,.hm-tile.hm-tone-urgent .hm-tile-l{color:var(--hi)}
-.hm-tile.hm-tone-todo .hm-tile-v{color:var(--accent)}
-.hm-tile.hm-tone-ok .hm-tile-v{color:var(--ok)}
-.hm-skel{min-height:96px;border-radius:14px;border:1px solid var(--line);background:linear-gradient(90deg,var(--soft),var(--line),var(--soft));background-size:200% 100%;animation:hmsk 1.4s linear infinite}
+/* 인사 */
+.wc .hm-head{padding:2px 2px 0}
+.wc .hm-eyebrow{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px;font-size:13px;font-weight:600;color:var(--muted)}
+.wc .hm-pill{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:700}
+.wc .hm-hello{margin:0;font-size:clamp(22px,1.55vw,28px);line-height:1.3;font-weight:750;letter-spacing:-.035em}
+.wc .hm-sub{margin:6px 0 0;font-size:14.5px;line-height:1.55;color:var(--muted)}
+.wc .hm-sub.hm-tone-urgent{color:var(--hi);font-weight:700}
+.wc .hm-sub.hm-tone-ok{color:var(--ok)}
+
+/* 카드 공통 */
+.wc .hm-card{min-width:0;padding:18px 20px;border:1px solid var(--line);border-radius:14px;background:var(--card);box-shadow:var(--hm-sh)}
+.wc .hm-card-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.wc .hm-card-k{margin:0;font-size:13px;line-height:1.4;font-weight:700;color:var(--muted)}
+.wc .hm-link{border:0;background:none;padding:2px 0;color:var(--accent);font-size:12.5px;font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.wc .hm-more,.wc .hm-empty{margin:6px 0 0;font-size:13px;line-height:1.55;color:var(--muted)}
+.wc .hm-card-h+.hm-empty{margin-top:0}
+.wc .hm-note{margin:10px 0 0;font-size:12px;line-height:1.5;color:var(--muted)}
+.wc .hm-badge{flex:none;display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:6px;background:var(--soft);color:var(--muted);font-size:12px;font-weight:700;white-space:nowrap}
+.wc .hm-badge:empty{display:none}
+.wc .hm-badge.hm-tone-urgent{background:var(--hi-soft);color:var(--hi)}
+.wc .hm-badge.hm-tone-todo{background:var(--accent-soft);color:var(--accent)}
+
+/* 핵심 숫자: 위 두 칸(급한 일, 처리·확인할 일)은 크게, 아래 세 칸은 작게 */
+.wc .hm-stats{padding:6px}
+.wc .hm-tiles{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:2px}
+.wc .hm-tile{grid-column:span 2;display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-height:88px;padding:12px 14px;border:0;border-radius:10px;background:transparent;color:var(--fg);text-align:left;cursor:pointer;transition:background .15s ease}
+.wc .hm-tile-urgent,.wc .hm-tile-todo{grid-column:span 3;min-height:100px}
+.wc .hm-tile:hover{background:var(--soft)}
+.wc .hm-tile-l{font-size:12.5px;line-height:1.4;font-weight:600;color:var(--muted)}
+.wc .hm-tile-v{font-size:24px;line-height:1.2;font-weight:750;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.wc .hm-tile-urgent .hm-tile-v,.wc .hm-tile-todo .hm-tile-v{font-size:32px}
+.wc .hm-tile-s{font-size:12px;line-height:1.4;color:var(--muted)}
+.wc .hm-tile.hm-tone-urgent{background:var(--hi-soft)}
+.wc .hm-tile.hm-tone-urgent .hm-tile-v,.wc .hm-tile.hm-tone-urgent .hm-tile-l{color:var(--hi)}
+.wc .hm-tile.hm-tone-todo .hm-tile-v{color:var(--accent)}
+.wc .hm-tile.hm-tone-ok .hm-tile-v{color:var(--ok)}
+.wc .hm-skel{cursor:default;background:linear-gradient(90deg,var(--soft),var(--line),var(--soft));background-size:200% 100%;animation:hmsk 1.4s linear infinite}
 @keyframes hmsk{to{background-position:-200% 0}}
 
-/* 지금 할 일 + 오늘 일정 */
-.hm-next,.hm-today{padding:16px 18px;border:1px solid var(--line);border-radius:14px;background:var(--card);box-shadow:var(--sh)}
-.hm-next-k,.hm-today-k{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--muted);margin-bottom:6px}
-.hm-next-t{font-size:17px;line-height:1.45;font-weight:700;overflow-wrap:anywhere}
-.hm-next-s{margin-top:4px;font-size:14px;color:var(--muted)}
-.hm-next-a{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
-.hm-next-ok .hm-next-k{color:var(--ok)}
-.hm-badge{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:6px;font-size:12px;font-weight:700}
-.hm-badge.hm-tone-urgent{background:var(--hi-soft);color:var(--hi)}.hm-badge.hm-tone-todo{background:var(--accent-soft);color:var(--accent)}
-.hm-tl{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
-.hm-tl li{display:flex;gap:10px;align-items:baseline;padding:7px 0;border-bottom:1px dashed var(--line);font-size:14px}
-.hm-tl li:last-child{border-bottom:0}
-.hm-tl-t{flex:0 0 92px;font-size:13px;font-variant-numeric:tabular-nums;color:var(--muted)}
-.hm-tl-l{flex:1;min-width:0;overflow-wrap:anywhere}
-.hm-tl-away .hm-tl-t{color:var(--md)}.hm-tl-car .hm-tl-t{color:var(--ok)}
-.hm-more,.hm-empty{margin-top:6px;font-size:13px;color:var(--muted)}
-.hm-link{border:0;background:none;color:var(--accent);font-size:13px;cursor:pointer;padding:0;text-decoration:underline}
-.hm-away{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);font-size:13px;color:var(--fg)}
-.hm-away-k{display:inline-block;margin-right:6px;padding:1px 8px;border-radius:6px;background:var(--md-soft);color:var(--md);font-weight:700;font-size:12px}
+/* 지금 할 일 */
+.wc .hm-next-t{font-size:16px;line-height:1.5;font-weight:700;overflow-wrap:anywhere}
+.wc .hm-next-s{margin-top:4px;font-size:13px;line-height:1.55;color:var(--muted);overflow-wrap:anywhere}
+.wc .hm-next-a{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.wc .hm-next-ok .hm-card-k{color:var(--ok);font-size:14px}
+.wc .hm-queue-k{margin:16px 0 4px;padding-top:14px;border-top:1px solid var(--line);font-size:12px;font-weight:700;color:var(--muted)}
+.wc .hm-queue{list-style:none;margin:0 -8px;padding:0}
+.wc .hm-q{display:flex;align-items:center;gap:10px;width:100%;min-height:40px;padding:6px 8px;border:0;border-radius:8px;background:none;color:var(--fg);font-size:13.5px;text-align:left;cursor:pointer}
+.wc .hm-q:hover{background:var(--soft)}
+.wc .hm-q-t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
-@container (max-width:900px){.hm-hello{font-size:23px}}
-@container (max-width:560px){.hm-tiles{grid-template-columns:repeat(2,1fr)}.hm-tile-v{font-size:26px}}
-@media (prefers-reduced-motion:reduce){.hm-tile,.hm-skel{animation:none;transition:none}.hm-tile:hover{transform:none}}
+/* 오늘 일정, 자원 예약 */
+.wc .hm-tl{list-style:none;margin:0;padding:0}
+.wc .hm-tl li{display:flex;gap:12px;align-items:baseline;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px;line-height:1.5}
+.wc .hm-tl li:last-child{border-bottom:0}
+.wc .hm-tl-t{flex:0 0 90px;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--muted)}
+.wc .hm-tl-l{flex:1;min-width:0;overflow-wrap:anywhere}
+.wc .hm-tl-away .hm-tl-t{color:var(--md)}
+.wc .hm-tl-car .hm-tl-t{color:var(--ok)}
+.wc .hm-away{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);font-size:13px;line-height:1.6}
+.wc .hm-away-k{display:inline-block;margin-right:6px;padding:1px 8px;border-radius:5px;background:var(--md-soft);color:var(--md);font-weight:700;font-size:12px}
+
+/* 챙겨 둘 것 */
+.wc .hm-sig-l{display:flex;flex-direction:column;margin:-4px -8px}
+.wc .hm-sig{display:flex;align-items:center;gap:10px;min-height:42px;padding:6px 8px;border:0;border-radius:8px;background:none;color:var(--fg);font-size:14px;text-align:left;cursor:pointer}
+.wc .hm-sig:hover{background:var(--soft)}
+.wc .hm-sig .i{flex:none;width:16px;height:16px;color:var(--muted)}
+.wc .hm-sig-k{flex:1;min-width:0}
+.wc .hm-sig-v{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.wc .hm-sig::after{content:'›';margin-left:2px;color:var(--line2);font-size:16px;line-height:1}
+
+/* 자동화 */
+.wc .hm-auto-l{list-style:none;margin:0 0 10px;padding:0;display:flex;flex-direction:column;gap:2px}
+.wc .hm-auto{display:flex;align-items:center;gap:10px;min-height:46px}
+.wc .hm-auto.off .hm-auto-b{opacity:.6}
+.wc .hm-auto-b{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.wc .hm-auto-b b{font-size:14px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wc .hm-auto-b span{font-size:12px;line-height:1.45;color:var(--muted);overflow-wrap:anywhere}
+.wc .hm-sw{flex:none;position:relative;width:36px;height:22px;padding:0;border:0;border-radius:999px;background:var(--line2);cursor:pointer;transition:background .15s ease}
+.wc .hm-sw::before{content:'';position:absolute;inset:-9px -4px}
+.wc .hm-sw i{position:absolute;left:2px;top:2px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .15s ease}
+.wc .hm-sw[aria-checked="true"]{background:var(--accent)}
+.wc .hm-sw[aria-checked="true"] i{transform:translateX(14px)}
+.wc.dark .hm-sw[aria-checked="true"] i{background:#10202a}
+.wc .hm-ico{flex:none;display:inline-grid;place-items:center;width:32px;height:32px;border:0;border-radius:8px;background:none;color:var(--muted);cursor:pointer}
+.wc .hm-ico:hover{background:var(--soft);color:var(--fg)}
+.wc .hm-ico .i{width:14px;height:14px}
+.wc .hm-auto-p{display:flex;flex-wrap:wrap;gap:6px}
+.wc .hm-chip{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 11px;border:1px dashed var(--line2);border-radius:999px;background:none;color:var(--fg);font-size:12.5px;font-weight:600;cursor:pointer}
+.wc .hm-chip:hover{border-style:solid;border-color:var(--accent);background:var(--accent-soft)}
+.wc .hm-chip .i{width:12px;height:12px;color:var(--accent)}
+.wc .hm-chip small{font-size:12px;font-weight:500;color:var(--muted)}
+
+.wc .hm button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wc .hm-tile:focus-visible,.wc .hm-q:focus-visible,.wc .hm-sig:focus-visible{outline-offset:-2px}
+
+/* 좁은 화면: 한 줄로 쌓고 페이지 전체를 스크롤한다 */
+@container (max-width:1000px){
+.wc .hm{display:flex;flex-direction:column;height:auto;gap:16px}
+.wc .hm-main,.wc .hm-rail{display:contents}
+.wc #hmHead{order:1}.wc .hm-chatcol{order:2}.wc #hmTop{order:3}.wc #hmDash{order:4}
+.wc .hm-tiles{grid-template-columns:repeat(5,minmax(0,1fr))}
+.wc .hm-tile,.wc .hm-tile-urgent,.wc .hm-tile-todo{grid-column:span 1;min-height:88px}
+.wc .hm-tile-urgent .hm-tile-v,.wc .hm-tile-todo .hm-tile-v{font-size:26px}
+}
+@container (max-width:640px){
+.wc .hm-tiles{grid-template-columns:repeat(6,minmax(0,1fr))}
+.wc .hm-tile{grid-column:span 2;padding:10px 10px}
+.wc .hm-tile-urgent,.wc .hm-tile-todo{grid-column:span 3}
+.wc .hm-card{padding:16px}
+.wc .hm-tl-t{flex-basis:76px}
+}
+/* 낮은 화면: 높이에 맞추지 않고 자연스럽게 흐르게 한다 */
+@media (max-height:620px){
+.wc .hm{height:auto}
+.wc .hm-main,.wc .hm-rail{max-height:none}
+.wc .hm-rail{overflow:visible}
+}
+@media (prefers-reduced-motion:reduce){.wc .hm-tile,.wc .hm-skel,.wc .hm-sw,.wc .hm-sw i{animation:none;transition:none}}
 
 /* 내비게이션 '더보기' */
 #nav .navmore{cursor:pointer;color:var(--muted);font-size:13px}
@@ -68,13 +153,3 @@
 .gs-memo{margin:4px 0 8px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);font:inherit;font-size:14px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere}
 @container (max-width:700px){.gs-l{grid-template-columns:1fr}.gs-sub{grid-column:1}.gs-main{align-items:flex-start;flex-direction:column}}
 .gs-found{margin:6px 0;padding:8px 10px;border-radius:8px;background:var(--ok-soft);color:var(--fg);font-size:14px}
-
-/* 홈 2단 배치: 왼쪽 채팅, 오른쪽 핵심 요약 (한 화면에 둘 다 보인다) */
-.hm-grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(300px,1fr);gap:18px;align-items:start}
-.hm-chatcol{min-width:0}
-#hmDash{min-width:0}
-#hmDash .hm-tiles{grid-template-columns:repeat(2,1fr)}
-#hmDash .hm-tile:first-child{grid-column:1/-1;min-height:84px}
-#hmDash .hm-tile{min-height:88px;padding:12px 14px}
-#hmDash .hm-tile-v{font-size:26px}
-@container (max-width:1000px){.hm-grid{grid-template-columns:1fr}#hmDash .hm-tiles{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}#hmDash .hm-tile:first-child{grid-column:auto}}
