@@ -74,7 +74,8 @@
     const urgent = S.a ? mineVisible().filter(x => ['overdue', 'urgent'].includes(stateOf(x))).length : 0;
     const total = S.a ? mineVisible().length : 0;
     { const st = !S.a ? 'idle' : urgent ? 'urgent' : total ? 'todo' : 'ok'; const sum = !S.a ? '불러오는 중' : urgent ? `급한 일 ${urgent}건 · 전체 ${total}건` : total ? `처리할 일 ${total}건` : '오늘 처리할 일 없음'; fab.dataset.st = st;
-      fab.innerHTML = `<span class="lg">${brandImage}</span><span class="t">GW 비서</span><span class="v" title="설치된 버전">v${esc(VERSION)}</span><span class="sm">${sum}</span>${S.a ? `<span class="b">${urgent || total || '✓'}</span>` : ''}<kbd>Alt G</kbd>`; }
+      const sig = `${VERSION}|${st}|${sum}|${urgent || total || 'ok'}`;
+      if (fab.dataset.sig !== sig) { fab.dataset.sig = sig; fab.innerHTML = `<span class="lg">${brandImage}</span><span class="t">GW 비서</span><span class="v" title="설치된 버전">v${esc(VERSION)}</span><span class="sm">${sum}</span>${S.a ? `<span class="b">${urgent || total || '✓'}</span>` : ''}<kbd>Alt G</kbd>`; } }
   }
   // 설치된 버전과 갱신 상태(왼쪽 메뉴 아래 · 접힌 런처 버튼).
   function versionInfo() {

@@ -3,7 +3,7 @@
   // ----- 보고서 -----
   function vReport() {
     return `${pgh('보고서', '한글(HWP)·워드에 붙여넣으면 굵게·표가 유지됩니다')}
-<div class="cards"><div class="card2"><div class="ct">주간 업무 실적 초안</div><div class="muted">최근 7일 상신문서와 내가 접수한 문서로 만듭니다.</div><div class="acts"><button class="btn primary" data-act="mkWeekly">${ic('report')}${S.weekly ? '다시 만들기' : '초안 만들기'}</button>${S.weekly ? `<button class="btn" data-act="richWeekly">한글용 복사</button><button class="btn" data-act="dlWeekly">${ic('down')}TXT 저장</button>` : ''}</div></div>
+<div class="cards"><div class="card2"><div class="ct">주간 업무 실적 초안</div><div class="muted">선택한 기간(이번 주·지난주 등)의 상신문서와 내가 접수한 문서로 만듭니다.</div><div class="acts"><button class="btn primary" data-act="mkWeekly">${ic('report')}${S.weekly ? '다시 만들기' : '초안 만들기'}</button>${S.weekly ? `<button class="btn" data-act="richWeekly">한글용 복사</button><button class="btn" data-act="dlWeekly">${ic('down')}TXT 저장</button>` : ''}</div></div>
 <div class="card2"><div class="ct">오늘 브리핑</div><div class="muted">처리할 일과 참고 항목을 한 장으로 정리합니다.</div><div class="acts"><button class="btn primary" data-act="richBrief">한글용 복사</button><button class="btn" data-act="printBrief">인쇄·PDF</button><button class="btn" data-act="dlBrief">${ic('down')}HTML 저장</button><button class="btn" data-act="csvQueue">${ic('down')}엑셀(CSV)</button></div></div></div>
 ${store.get('weeklyRecovery', null) ? `<div class="box warn">다른 탭에서 작성한 주간 보고 초안이 보관되어 있습니다. <button class="btn sm" data-act="recoverWeekly">보관 초안 복구</button></div>` : ''}
 <h2>주간 업무 실적 초안 <span class="saved on" id="wkSaved">${ic('check')}자동 저장됨</span></h2><textarea id="weekly" aria-label="주간 업무 실적 초안" rows="${Math.min(30, Math.max(10, S.weekly.split('\n').length + 2))}">${esc(S.weekly)}</textarea>
@@ -19,11 +19,11 @@ ${store.get('weeklyRecovery', null) ? `<div class="box warn">다른 탭에서 �
   // ----- 설정 (바꾸는 즉시 자동 저장) -----
   function vSettings() {
     const st = S.settings;
-    const hasMini = !!localStorage.getItem('bwyfgw:wc:src') || !!localStorage.getItem(LS + 'src') || !!window.BWYFGW_POLICY || !!document.documentElement.dataset.bwyfgwExt;
+    const hasMini = !!localStorage.getItem('bwyfgw:wc:src') || !!window.BWYFGW_POLICY || !!document.documentElement.dataset.bwyfgwExt;
     const perm = 'Notification' in window ? ({granted: '허용됨', denied: '브라우저에서 막혀 있음', default: '아직 묻지 않음'}[Notification.permission] || '') : '이 브라우저는 지원하지 않음';
     const r = rel();
     const ruleChips = (l, name) => r[l].length ? `<div style="margin-top:8px"><span class="muted">${name}</span> ${r[l].map((q, i) => `<span class="chip">${esc(q.label || q.v)}<button class="btn sm ghost icon" style="height:22px;width:22px" data-act="delRule" data-l="${l}" data-i="${i}" aria-label="지우기">${ic('x')}</button></span>`).join(' ')}</div>` : '';
-    const usedKB = (() => { let n = 0; try { const p = getPrefix(); for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k.startsWith(p)) n += (localStorage.getItem(k) || '').length; } } catch {} return Math.round(n / 1024); })();
+    const usedKB = (() => { let n = 0; try { const p = getPrefix(); for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k.startsWith(p)) n += (localStorage.getItem(k) || '').length * 2; } } catch {} return Math.round(n / 1024); })();
     const originStat = (() => {
       let all = 0, synap = 0, synapCnt = 0;
       try {

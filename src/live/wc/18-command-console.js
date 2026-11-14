@@ -69,7 +69,7 @@
     };
     const chained = R.chainAudit(list, entry);
     list.unshift(chained);
-    store.set('actionHistory', list.slice(0, 50));
+    if (!store.set('actionHistory', list.slice(0, 50))) S.storageError = true;
     return chained;
   }
 

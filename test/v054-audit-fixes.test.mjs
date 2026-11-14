@@ -116,3 +116,31 @@ test('v0.56 Phase 3: bidirectional gcal diffs, policy aiEndpoint & session-only 
   assert.match(aiSrc, /aiSessionOnly/);
   assert.match(aiSrc, /POLICY\.aiEndpoint/);
 });
+
+test('v0.57 gap closure: year-scoped budget delta, FW action mail, toolMode, guard submit & default write block', async () => {
+  const {nextState, analyze} = await import('../src/live/briefing.mjs');
+  const {chatBuildRequest} = await import('../src/live/chat.mjs');
+  const raw2026 = {
+    collectedAt: '2026-12-31T10:00:00+09:00',
+    status: {budget: {ok: true}, mail: {ok: true}},
+    data: {budget: {projects: [{project: 'A201', year: 2026, rows: [{code: '노121', executed: 5000000}]}]}},
+  };
+  const st2026 = nextState(raw2026);
+  const raw2027 = {
+    collectedAt: '2027-01-05T10:00:00+09:00',
+    status: {budget: {ok: true}, mail: {ok: true}},
+    data: {
+      budget: {projects: [{project: 'A201', year: 2027, rows: [{code: '노121', executed: 100000}]}]},
+      mail: {inbox: {records: [{uid: 'fw1', box: 'INBOX', subject: '전달: 1/10까지 자료 제출 요청', from: '팀장', fromEmail: 'a@bwyf.or.kr', date: '2027-01-05 09:00:00', seen: false}]}, otherUnseen: []},
+    },
+  };
+  const a2027 = analyze(raw2027, st2026, new Date('2027-01-05T10:00:00+09:00'));
+  assert.equal(a2027.budget.projects[0].rows[0].executedDelta, null);
+  assert.ok(a2027.actions.some(x => x.key === 'mail:INBOX:fw1' && x.base !== 'mailReplyIn'));
+  assert.equal(chatBuildRequest({tools: [{fn: 1}], toolMode: 'ANY'}).toolConfig.functionCallingConfig.mode, 'ANY');
+
+  const guardSrc = await fs.readFile(path.join(root, 'src/live/wc/19-draft-engine.js'), 'utf8');
+  assert.match(guardSrc, /addEventListener\('submit'/);
+  const storageSrc = await fs.readFile(path.join(root, 'src/live/wc/01-storage.js'), 'utf8');
+  assert.match(storageSrc, /if \(currentKey === 'default'\) return false;/);
+});

@@ -23,7 +23,7 @@
     if (S.forms && S.forms.list && Date.now() - (S.forms.at || 0) < 864e5) return;
     if (typeof GW.frequentForms !== 'function') return;
     const owner = currentKey;
-    GW.frequentForms().then(l => { if (owner !== currentKey) return; const list = Array.isArray(l) ? l : (l && l.list) || []; S.forms = {list, at: Date.now()}; store.set('forms', S.forms); }).catch(() => {});
+    GW.frequentForms().then(l => { if (owner !== currentKey) return; const list = Array.isArray(l) ? l : (l && l.list) || []; S.forms = {list, at: Date.now()}; if (!store.set('forms', S.forms)) S.storageError = true; }).catch(() => {});
   }
   function logError(where, msg) { S.errors = [...(S.errors || []), {at: Date.now(), where, msg: String(msg).slice(0, 300)}].slice(-30); store.set('errors', S.errors); }
   function ingest(raw) {
@@ -117,7 +117,7 @@
         if (owner !== currentKey) return null;
         const slim = r => ({title: String(r.title || '').slice(0, 100), sendOrg: r.sendOrg || '', sendDept: r.sendDept || '', sendDeptCode: r.sendDeptCode || '', toDept: r.toDept || '', toEmp: r.toEmp || '', date: String(r.date || '').slice(0, 16)});
         S.routing = {from: rows.from, to: rows.to, fetchedAt: rows.fetchedAt, dist: (rows.dist || []).map(slim), dept: (rows.dept || []).map(slim)};
-        store.set('routing', S.routing);
+        if (!store.set('routing', S.routing)) S.storageError = true;
         routingFailAt = 0;
       } catch (e) { if (owner !== currentKey) return null; routingFailAt = Date.now(); toast('배부·접수 이력을 읽지 못했습니다: ' + e.message); }
       return S.routing;
@@ -128,6 +128,7 @@
   async function loadPreview(doc) {
     const k = doc.docNo || doc.title;
     if (previewCache.has(k)) return previewCache.get(k);
+    if (previewCache.size >= 50) previewCache.delete(previewCache.keys().next().value);
     const p = GW.docPreview({docNo: doc.docNo, title: doc.title}).catch(() => ({found: false}));
     previewCache.set(k, p);
     return p;

@@ -61,7 +61,7 @@ tr.click:hover td{background:var(--soft)}
 .wc.dark .seg button.on{background:rgba(255,255,255,.10);color:#fff}
 .chip{border-radius:999px;border:1px solid var(--line2);background:var(--card)}.chip:hover{border-color:var(--accent);color:var(--accent)}
 .inp,input.f,select.f,textarea{background:var(--card);border:1px solid var(--line2);border-radius:11px;color:var(--fg);transition:border-color .15s,box-shadow .15s}
-.inp:focus,input.f:focus,select.f:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-soft);outline:none}
+.inp:focus,input.f:focus,select.f:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft);outline:2px solid var(--accent);outline-offset:1px}
 .bdg{border-radius:999px;font-weight:600;padding:0 9px}
 .bdg.todo{background:var(--accent-soft);color:var(--accent)}.bdg.check{background:var(--md-soft);color:var(--md)}.bdg.confirm{background:var(--ok-soft);color:var(--ok)}.bdg.info,.bdg.tag{background:var(--soft);color:var(--muted);border:0}
 .bdg.urgent{background:var(--hi);color:#fff}

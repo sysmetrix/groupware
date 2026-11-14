@@ -15,7 +15,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '0.56.1';
+  const VERSION = '0.57.0';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
@@ -604,13 +604,20 @@
     const bigUntil = (html.replace(/<[^>]+>/g, ' ').match(/다운로드 기간\s*:\s*[\d-]+\s*~\s*([\d-]+)/) || [])[1] || '';
     const files = arr(mime.fileList).map(f => ({name: str(f.originalFileName, 200) + (f.fileExtsn && !String(f.originalFileName || '').toLowerCase().endsWith('.' + String(f.fileExtsn).toLowerCase()) ? '.' + f.fileExtsn : ''), size: num(f.fileSize), ext: str(f.fileExtsn, 10), sn: String(f.fileSn || '')}));
     const plain = dec(String(mime.body?.plain || '').replace(/&nbsp;/g, ' ')).replace(/<\/?[a-z][a-z0-9]*(?:\s[^<>@]{0,200})?\/?>/gi, ' ').replace(/\s+/g, ' ').trim();
+    const rawReadUrl = str(dm.url, 500);
+    const safeReadUrl = (() => {
+      if (!rawReadUrl) return '';
+      if (/^#\//.test(rawReadUrl)) return rawReadUrl;
+      try { const p = new URL(rawReadUrl, ORIGIN); return (p.origin === ORIGIN || /^https:\/\/(?:[a-z0-9-]+\.)*amaranth10\.co\.kr$/i.test(p.origin)) ? p.href : ''; } catch { return ''; }
+    })();
     return {uid: String(uid), subject: str(dm.subject, 300), from: dec(str(dm.from, 200)), to: dec(str(dm.to, 2000)), cc: dec(str(dm.cc, 2000)), date: str(dm.date, 20),
-      readUrl: str(dm.url, 500), account: str(dm.email, 120), files, bigFiles, bigUntil, text: mask(plain, 4000), wasUnread: seen !== true};
+      readUrl: safeReadUrl, account: str(dm.email, 120), files, bigFiles, bigUntil, text: mask(plain, 4000), wasUnread: seen !== true};
   }
   // Download one normal mail attachment (the same request the groupware read view makes; no state change).
   // Convert one mail attachment into a Synap document-viewer URL (HWP, PDF, xlsx …; read-only).
   async function mailAttachmentPreview({uid, sn, account = ''} = {}) {
     if (!uid || !sn || !account) throw new GwError('BAD_ARG', '미리보기 정보가 없습니다.');
+    if (!READ_ONLY.has('/ecm/ecm001A07')) throw new GwError('NOT_ALLOWED', '허용되지 않은 API입니다.');
     const ctx = context();
     const client = findClient();
     const res = await client.post('/ecm/ecm001A07', {fileSn: sn, authKeyMap: JSON.stringify({email: account, muid: String(uid), empSeq: String(ctx.empSeq)}), moduleGbn: 'MAIL'});
@@ -620,6 +627,7 @@
   }
   async function mailAttachment({uid, sn, account = ''} = {}) {
     if (!uid || !sn) throw new GwError('BAD_ARG', '첨부 정보가 없습니다.');
+    if (!READ_ONLY.has('/mail/mail002A37')) throw new GwError('NOT_ALLOWED', '허용되지 않은 API입니다.');
     const ctx = context();
     if (!account) throw new GwError('BAD_ARG', '메일 계정 정보가 없습니다. 메일 상세를 먼저 불러오세요.');
     const client = findClient();

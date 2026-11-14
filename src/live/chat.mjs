@@ -156,10 +156,10 @@ export function chatToGeminiTools(defs = []) {
   });
   return fns.length ? [{functionDeclarations: fns}] : [];
 }
-export function chatBuildRequest({system, contents, tools, maxTokens = 1024} = {}) {
+export function chatBuildRequest({system, contents, tools, maxTokens = 1024, toolMode = 'AUTO'} = {}) {
   const body = {contents: contents || [], generationConfig: {temperature: 0.2, maxOutputTokens: maxTokens}};
   if (system) body.systemInstruction = {parts: [{text: system}]};
-  if (tools && tools.length) { body.tools = tools; body.toolConfig = {functionCallingConfig: {mode: 'AUTO'}}; }
+  if (tools && tools.length) { body.tools = tools; body.toolConfig = {functionCallingConfig: {mode: toolMode}}; }
   return body;
 }
 export function chatParseResponse(j) {
@@ -204,7 +204,7 @@ export function chatSanitizeForLlm(v, depth = 0) {
 export function chatErrorMessage(status, message = '', kind = '') {
   const m = String(message || '');
   if (kind === 'blocked') return '안전 필터 때문에 답을 만들지 못했습니다. 질문을 바꿔 보세요.';
-  if (status === 429 || kind === 'quota') return '무료 사용량을 잠시 다 썼습니다. 1분쯤 뒤 다시 시도하세요. 그동안은 기본 모드로 답합니다.';
+  if (status === 429 || kind === 'quota') return '무료 사용량을 잠시 다 썼습니다. 잠시 뒤 다시 시도하세요. 그동안은 기본 모드로 답합니다.';
   if (status === 401 || status === 403 || (status === 400 && /API key|key not valid/i.test(m)) || kind === 'key') return '구글 AI 키가 거절되었습니다. 설정에서 키를 다시 연결해 주세요.';
   if (status === 404 || kind === 'model') return '사용하던 AI 모델을 찾지 못했습니다. 다음 질문에서 새 모델로 다시 시도합니다.';
   if (status >= 500 || kind === 'server') return '구글 AI 서버가 잠시 불안정합니다. 기본 모드로 답합니다.';

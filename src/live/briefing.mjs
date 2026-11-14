@@ -379,9 +379,10 @@ export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6, roles 
   for (const m of uniqueMails) {
     const k = `mail:${m.box}:${m.uid}`;
     if (fromMe(m)) continue; // mails I sent to myself are notes, not tasks
-    // "Re:/FW:" mails are replies to a request (often my own): not my deadline.
-    const isReplyMail = /^\s*(re|fw|fwd|회신|답장|전달)\s*[:：]/i.test(m.subject || '');
-    if (isReplyMail) {
+    // "Re:" mails are replies to a request (often my own): not my deadline. Forwarded ("FW:/전달:") mails keep action/deadline if explicitly present.
+    const isReplyMail = /^\s*(re|회신|답장)\s*[:：]/i.test(m.subject || '');
+    const isFwd = /^\s*(fw|fwd|전달)\s*[:：]/i.test(m.subject || '');
+    if (isReplyMail || (isFwd && !ACTION_WORDS.test(m.subject) && !extractDeadlineInfo(m.subject, now).date)) {
       if (!m.seen && !isNoiseMail(m)) push({key: k, type: 'mail', base: 'mailReplyIn', from: m.from, ref: {box: m.box, uid: m.uid}, area: '메일', kind: '내 요청에 온 회신', title: m.subject, detail: `${m.from} · 안 읽음`, when: m.date, url: d.mail.url, isNew: hasPrev && !prevMail.has(`${m.box}:${m.uid}`)});
       continue;
     }
@@ -476,10 +477,12 @@ export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6, roles 
   })();
   deadlines.sort((a, b) => a.date.localeCompare(b.date));
 
-  // Budget with change since previous run
-  const elapsedPct = (() => { const k = kstNow(now); const start = Date.UTC(k.y, 0, 1), end = Date.UTC(k.y + 1, 0, 1); return Math.round((Date.UTC(k.y, k.m - 1, k.d) - start) / (end - start) * 1000) / 10; })();
+  // Budget with change since previous run (scoped by fiscal year so year rollover never diffs cross-year totals)
+  const kNow = kstNow(now);
+  const elapsedPct = (() => { const start = Date.UTC(kNow.y, 0, 1), end = Date.UTC(kNow.y + 1, 0, 1); return Math.round((Date.UTC(kNow.y, kNow.m - 1, kNow.d) - start) / (end - start) * 1000) / 10; })();
   const budget = (d.budget?.projects || []).map(p => ({...p, rows: (p.rows || []).map(r => {
-    const before = prev?.budget?.[p.project]?.[r.code];
+    const bKey = `${p.year || kNow.y}:${p.project}`;
+    const before = prev?.budget?.[bKey]?.[r.code] ?? prev?.budget?.[p.project]?.[r.code];
     return {...r, executedDelta: before === undefined ? null : r.executed - before};
   })}));
 
@@ -516,7 +519,8 @@ export function nextState(raw, prev = null) {
   const mailUids = keep('mail', [...(d.mail?.inbox?.records || []), ...(d.mail?.otherUnseen || [])].map(m => `${m.box}:${m.uid}`)) ?? prev?.mailUids ?? [];
   const docIds = keep('approval', Object.fromEntries(Object.entries(d.approval?.lists || {}).map(([k, l]) => [k, (l.docs || []).map(x => `${k}:${x.docId}`)]))) ?? prev?.docIds ?? {};
   const noticeIds = keep('notice', (d.notice?.articles || []).map(a => a.id)) ?? prev?.noticeIds ?? [];
-  const budget = keep('budget', Object.fromEntries((d.budget?.projects || []).filter(p => !p.error).map(p => [p.project, Object.fromEntries(p.rows.map(r => [r.code, r.executed]))]))) ?? prev?.budget ?? {};
+  const curY = kstNow(raw?.collectedAt ? new Date(raw.collectedAt) : new Date()).y;
+  const budget = keep('budget', Object.fromEntries((d.budget?.projects || []).filter(p => !p.error).map(p => [`${p.year || curY}:${p.project}`, Object.fromEntries(p.rows.map(r => [r.code, r.executed]))]))) ?? prev?.budget ?? {};
   return {at: raw?.collectedAt, mailUids, docIds, noticeIds, budget};
 }
 
@@ -1275,6 +1279,7 @@ export function wrapUpModel({now = new Date(), ownOtToday = null, tomorrowItems 
 // 업데이트 내역: 새 버전을 낼 때 맨 위에 한 줄을 추가한다(하네스가 현재 버전과 맞는지 검사).
 // 4.2~4.6 사이 세부 항목은 릴리스 제목만 근거로 적어 간단하다.
 export const CHANGELOG = [
+  {v: "0.57.0", date: "2026-11-14", old: "", title: "재검토 기반 완결 보강: 로컬 다중 턴 슬롯·직원 가명화·환각 방지·보안/예산 경계 강화", items: ["로컬 모드 다중 턴 날짜/시간 슬롯 채우기 및 Gemini 사실 질문 도구 호출 강제(환각 방지)", "AI 함수호출 경로 직원명 가명화, default 저장소 쓰기 차단, Enter/submit 가드, 첨부 API 허용목록 검증", "예산 증감 연도별 키 분리, 전달(FW) 요청 메일 보존, 북마클릿 크기 하네스 검사, 저장 단위(UTF-16 KB) 통일"]},
   {v: "0.56.1", date: "2026-11-14", old: "", title: "메일·검색 상세창 사안 흐름 연결 및 AI 부재자 가명화·세목 예산 요약 보강", items: ["메일 상세 및 검색 상세 창에도 '사안 흐름' 버튼과 통합 타임라인 패널 연결", "공용 Gemini 사용 시 AI 도우미 부재 직원명 가명화 및 get_budget 세목별 집행 요약 추가"]},
   {v: "0.56.0", date: "2026-11-14", old: "", title: "Phase 3 기관형 기능: 양방향 구글 캘린더 Diff · 공용 PC 세션 키 · 기관 AI 엔드포인트", items: ["구글 캘린더 동기화에서 그룹웨어 취소·변경된 일정의 Diff(변경/취소/미일치)를 자동 감지해 표시", "AI 키 저장 시 공용 PC용 세션 전용(브라우저 닫으면 자동 삭제) 보관 옵션 및 관리자 aiEndpoint 정책 지원"]},
   {v: "0.55.0", date: "2026-11-14", old: "", title: "Phase 2 구조 통합: IndexedDB 이관·CSS 단일화·정보구조 통합·실무 워크플로우 고도화", items: ["학습 패턴·배부 이력을 IndexedDB(bwyfgw_db)로 분리 이관하고 BroadcastChannel로 멀티탭 동기화", "CSS 6중 덮어쓰기를 Slate-Teal 단일 토큰으로 통합하고 공백 압축으로 번들 추가 경량화", "사이드바 '더 보기' 숨김 제거(9+1 상시 메뉴) 및 통합검색·문서찾기, 일정·예약, 보고·현황 탭 통합", "AI 작업 메모리(순번 참조), SSE 스트리밍 정리, 보낸메일 답장확인·주간실적 도구 추가", "결과보고 사전 실적 입력 작업대, 상세창 사안별 통합 흐름, iframe 세션만료 감지, 지출 전체요약 복사 추가"]},

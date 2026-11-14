@@ -93,7 +93,7 @@
       } catch { return d; }
     },
     set(k, v) {
-      if (currentKey === 'default' && /^(patterns|macros|actionHistory|settings|todos|hidden|snooze|plan|weekly|routing)$/.test(k)) return false;
+      if (currentKey === 'default') return false;
       if (IDB_KEYS.has(k) && typeof indexedDB !== 'undefined') {
         idbPut(getPrefix() + k, v);
         try { localStorage.removeItem(getPrefix() + k); } catch {}

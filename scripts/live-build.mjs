@@ -273,7 +273,7 @@ export async function build({outDir = DEFAULT_OUT_DIR, copyTo = null, root = ROO
   const verNum = (workcenter.match(/const VERSION = '([\d.]+)'/) || [])[1] || '4.0.0';
   await fs.writeFile(path.join(extDir, 'manifest.json'), JSON.stringify({
     manifest_version: 3, name: 'GW 비서', version: verNum, minimum_chrome_version: '111',
-    description: '부천여성청소년재단 그룹웨어 위에서 내 처리할 일을 한 화면에 모아 보여 줍니다(그룹웨어 화면을 읽고 기안 화면에 값을 채워 줍니다. 상신·결재·저장·삭제는 하지 않습니다).',
+    description: '부천여성청소년재단 그룹웨어 위에서 내 처리할 일을 한 화면에 모아 보여 줍니다(기본 읽기 전용 · 사용자 직접 확인 시 자원 예약 등록 및 AI 연결 지원).',
     icons: {16: 'icon16.png', 48: 'icon48.png', 128: 'icon128.png'},
     // MAIN world: runs in the page itself (needs the page's own groupware client); no string injection.
     content_scripts: [{matches: ['https://gw.bwyf.or.kr/*'], js: ['policy.js', 'gw-live.js', 'mount.js'], run_at: 'document_idle', world: 'MAIN', all_frames: false}],

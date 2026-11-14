@@ -111,6 +111,9 @@ if (!FAST) {
       if (digest !== createHash('sha256').update(await fs.readFile(path.join(outB, 'gw-live.js'))).digest('hex')) fails.push('같은 소스로 두 번 빌드한 번들의 해시가 다름(빌드 결과가 재현되지 않음)');
       const kb = Math.round(bundle.length / 1024);
       if (kb > BUDGET.bundleKB) fails.push(`번들 ${kb}KB > 예산 ${BUDGET.bundleKB}KB`);
+      const bm = await fs.readFile(path.join(outA, 'bookmarklet.txt'));
+      const bmKB = Math.round(bm.length / 1024);
+      if (bmKB > 1900) fails.push(`설치 북마클릿 ${bmKB}KB > 한도 1900KB`);
       for (const f of (await fs.readdir(path.join(root, 'src', 'live', 'wc'))).filter(n => n.endsWith('.js'))) {
         const lines = (await fs.readFile(path.join(root, 'src', 'live', 'wc', f), 'utf8')).split('\n').length;
         if (lines > BUDGET.wcFileLines) warns.push(`${f} ${lines}줄 (분리 권장, 기준 ${BUDGET.wcFileLines})`);

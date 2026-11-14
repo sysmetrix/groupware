@@ -169,6 +169,8 @@
       if (b && t) { e.stopImmediatePropagation(); e.preventDefault(); AUTO.blocked.push(t); }
     };
     ['click', 'mousedown', 'mouseup', 'pointerdown', 'pointerup', 'dblclick'].forEach(n => win.addEventListener(n, block, true));
+    win.addEventListener('keydown', e => { if (!e.isTrusted && AUTO.running && !AUTO.allow && e.key === 'Enter') block(e); }, true);
+    win.addEventListener('submit', e => { if (!e.isTrusted && AUTO.running && !AUTO.allow) { e.stopImmediatePropagation(); e.preventDefault(); AUTO.blocked.push('submit'); } }, true);
     const oc = win.HTMLElement.prototype.click;
     win.HTMLElement.prototype.click = function () { if (AUTO.running && !AUTO.allow && DENY_BTN.test((this.innerText || '').replace(/\s+/g, ''))) { AUTO.blocked.push((this.innerText || '').trim()); return; } return oc.call(this); };
   }

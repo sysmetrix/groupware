@@ -81,6 +81,7 @@
     if (/^Digit[1-9]$/.test(c)) { const v = VIEWS[Number(c.slice(5)) - 1]; if (v) go(v.id); return; }
     if (S.focus) { if (c === 'KeyN') focusNext(true); else if (c === 'KeyB') focusPrev(); return; }
     if (S.view === 'today' && ['KeyJ', 'KeyK', 'ArrowDown', 'ArrowUp'].includes(c)) { e.preventDefault(); moveSel(c === 'KeyJ' || c === 'ArrowDown' ? 1 : -1); return; }
+    if (S.view !== 'today') return;
     const x = selectedAction();
     if (!x) return;
     if (c === 'Enter') openItem(x);

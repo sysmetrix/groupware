@@ -321,7 +321,8 @@
   function recImport() {
     const txt = prompt('내보낸 기록(JSON)을 붙여 넣으세요.');
     if (!txt) return;
-    try { const m = JSON.parse(txt); if (!m || !Array.isArray(m.steps)) throw new Error('steps가 없습니다');
+    if (txt.length > 200_000) { toast('기록 파일이 너무 큽니다(최대 200KB).'); return; }
+    try { const m = JSON.parse(txt); if (!m || !Array.isArray(m.steps) || m.steps.length > 100) throw new Error('단계 형식이 올바르지 않거나 100단계를 초과합니다');
       if (!m.steps.every(s => s && REC_TYPES.has(s.type) && (!s.nextAction || REC_TYPES.has(s.nextAction.type)))) throw new Error('허용되지 않은 단계 종류가 있습니다');
       m.name = String(m.name || '가져온 기록').slice(0, 60); m.imported = true; m.id = 'm' + Date.now().toString(36); m.createdAt = Date.now(); const ms = macroLoad(); ms.unshift(m); macroSave(ms);
       if (!macroLoad().some(x => x.id === m.id)) throw new Error(currentKey === 'default' ? '로그인 사용자 정보를 읽지 못해 저장이 막혀 있습니다' : '브라우저에 저장하지 못했습니다');

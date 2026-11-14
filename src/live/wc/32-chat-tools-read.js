@@ -96,8 +96,9 @@
     name: 'get_staff_status', label: '직원 근태 확인', kind: 'read',
     description: '직원의 휴가·출장·교육 일정(시간, 장소, 사유 포함). name을 주면 그 직원의 앞으로 일정을, 안 주면 같은 부서의 해당 날짜 부재 현황을 돌려준다. 시간외 근무·지문은 다루지 않는다.',
     params: {type: 'object', properties: {name: {type: 'string'}, date: {type: 'string'}, days: {type: 'number'}}},
-    run: async a => {
+    run: async (a, ctx) => {
       if (!S.a || !S.raw) return chatNotReady();
+      const maskExtNames = !!(ctx && ctx.viaAi && !(typeof POLICY !== 'undefined' && POLICY.aiEndpoint));
       const d0 = chatDateArg(a.date);
       if (!d0) return {ok: false, text: '날짜를 알아보지 못했습니다. 예) 내일, 11/20, 다음 주'};
       const name = String(a.name || '').trim().replace(/\s+/g, '');
@@ -125,7 +126,8 @@
         const first = hits[0];
         const head = hits.length === 1 ? `${name} 님은 ${chatMd(first.iso)} ${first.label}${first.time ? ' ' + first.time : ''}${first.place ? ', ' + short(first.place, 30) : ''} 일정이 있습니다.` : `${name} 님의 일정은 ${hits.length}건이고, 가장 가까운 것은 ${chatMd(first.iso)} ${first.label}${first.time ? ' ' + first.time : ''}입니다.`;
         const items = hits.slice(0, 20).map(h => ({title: `${chatMd(h.iso)} ${h.label}${h.time ? ' ' + h.time : ''}`, sub: [h.place, short(h.reason, 40)].filter(Boolean).join(' · '), badge: h.pending ? '결재 중' : '', tone: 'info'}));
-        return {ok: true, text: head, llm: `${head} ${hits.slice(0, 12).map(h => `${chatMd(h.iso)} ${h.label}${h.time ? ' ' + h.time : ''}`).join('; ')}`, data: {count: hits.length},
+        const llmHead = maskExtNames ? head.replaceAll(name, '대상 직원') : head;
+        return {ok: true, text: head, llm: `${llmHead} ${hits.slice(0, 12).map(h => `${chatMd(h.iso)} ${h.label}${h.time ? ' ' + h.time : ''}`).join('; ')}`, data: {count: hits.length},
           cards: [{type: 'list', title: `${name} 님 일정`, items, more: Math.max(0, hits.length - 20)}, {type: 'nav', label: '일정 달력에서 크게 보기', view: 'calendar'}]};
       }
       // 이름이 없으면 같은 일정(날짜·종류·시간·장소·사유)을 한 줄로 묶는다
@@ -134,7 +136,9 @@
       const gl = [...groups.values()], multiDay = nn > 1;
       const head = `${span} ${dept || '우리 부서'} 자리 비움은 ${new Set(hits.map(h => h.name)).size}명, ${gl.length}개 일정입니다.`;
       const line = g => `${g.names.join('·')} — ${multiDay ? chatMd(g.iso) + ' ' : ''}${g.label}${g.time ? ' ' + g.time : ''}${g.place ? ' · ' + short(g.place, 24) : ''}`;
-      return {ok: true, text: head + '\n' + gl.slice(0, 8).map(g => '• ' + line(g)).join('\n') + (gl.length > 8 ? `\n외 ${gl.length - 8}개 일정` : ''), llm: `${head} ${gl.slice(0, 10).map(g => `${g.names.join('·')} ${multiDay ? chatMd(g.iso) + ' ' : ''}${g.label}${g.time ? ' ' + g.time : ''}`).join('; ')}`, data: {people: new Set(hits.map(h => h.name)).size, events: gl.length},
+      const pMap = new Map();
+      const alias = nm => { if (!maskExtNames) return nm; if (!pMap.has(nm)) pMap.set(nm, `직원${pMap.size + 1}`); return pMap.get(nm); };
+      return {ok: true, text: head + '\n' + gl.slice(0, 8).map(g => '• ' + line(g)).join('\n') + (gl.length > 8 ? `\n외 ${gl.length - 8}개 일정` : ''), llm: `${head} ${gl.slice(0, 10).map(g => `${g.names.map(alias).join('·')} ${multiDay ? chatMd(g.iso) + ' ' : ''}${g.label}${g.time ? ' ' + g.time : ''}`).join('; ')}`, data: {people: new Set(hits.map(h => h.name)).size, events: gl.length},
         cards: [{type: 'list', title: '자세한 내용', items: gl.slice(0, 20).map(g => ({title: `${g.names.join('·')} ${g.label}`, sub: [multiDay ? chatMd(g.iso) : '', g.time, short(g.place, 30), short(g.reason, 36)].filter(Boolean).join(' · '), badge: g.pending ? '결재 중' : '', tone: 'info'})), more: Math.max(0, gl.length - 20)}, {type: 'nav', label: '일정 달력에서 크게 보기', view: 'calendar'}]};
     },
   });
@@ -192,7 +196,7 @@
       const types = {approval: ['doc'], mail: ['mail'], notice: ['board']}[a.scope] || ['doc', 'mail', 'board'];
       let res; try { res = await GW.search(q, {types, pageSize: 5}); } catch (e) { return {ok: false, text: '검색하지 못했습니다: ' + String(e.message || e).slice(0, 80)}; }
       const cards = [], data = {}, listItems = [];
-      const add = (key, title, f) => { const g = res.groups[key]; if (!g || !g.items.length) return; data[key] = g.items.slice(0, 5).map(x => f(x).title); for (const x of g.items.slice(0, 5)) listItems.push({itemId: x.docId ? `doc:search:${x.docId}` : '', title: f(x).title, uid: x.uid || ''}); cards.push({type: 'list', title: `${title} ${g.total}건`, items: g.items.slice(0, 5).map(f), more: Math.max(0, g.total - 5)}); };
+      const add = (key, title, f) => { const g = res.groups[key]; if (!g || !g.items.length) return; data[key] = g.items.slice(0, 5).map(x => f(x).title); for (const x of g.items.slice(0, 5)) listItems.push({itemId: x.docId ? `doc:search:${x.docId}` : x.uid ? `mail:search:${x.uid}` : '', title: f(x).title, uid: x.uid || '', url: x.url || '', type: key}); cards.push({type: 'list', title: `${title} ${g.total}건`, items: g.items.slice(0, 5).map(f), more: Math.max(0, g.total - 5)}); };
       add('doc', '결재문서', x => ({title: x.title || '(제목 없음)', sub: [x.docNo, ymd8(x.date)].filter(Boolean).join(' · ')}));
       add('mail', '메일', x => ({title: x.subject || '(제목 없음)', sub: x.from || ''}));
       add('board', '게시판', x => ({title: x.title || '(제목 없음)', sub: String(x.date || '').slice(0, 10)}));
@@ -260,15 +264,23 @@
 
   chatRegisterTool({
     name: 'open_item', label: '항목 열기', kind: 'read',
-    description: '할 일 목록의 항목(itemId, key 또는 index)을 열어 상세를 보여준다.',
+    description: '할 일 목록 또는 직전 검색 결과 항목(itemId, key 또는 index)을 열어 상세를 보여준다.',
     params: {type: 'object', properties: {itemId: {type: 'string'}, key: {type: 'string'}, index: {type: 'number'}}},
     run: async a => {
       const id = a.itemId || a.key || '';
       const x = (id && S.a && S.a.actions.find(t => t.key === id)) || (a.index && S.a && mineVisible()[Number(a.index) - 1]);
-      if (!x) return {ok: false, text: '해당 항목을 찾지 못했습니다. 먼저 "할 일 보여줘"로 목록을 확인해 보세요.'};
-      if (go('today') === false) return {ok: false, text: '작성 중인 화면이 있어 이동하지 않았습니다.'};
-      selectAction(x.key);
-      return {ok: true, text: `“${x.title}” 항목을 열었습니다.`};
+      if (x) {
+        if (go('today') === false) return {ok: false, text: '작성 중인 화면이 있어 이동하지 않았습니다.'};
+        selectAction(x.key);
+        return {ok: true, text: `“${x.title}” 항목을 열었습니다.`};
+      }
+      const last = (chatState().ctx && chatState().ctx.lastItems) || [];
+      const sHit = (id && last.find(t => t.itemId === id)) || (a.index && last[Number(a.index) - 1]);
+      if (sHit && sHit.url) {
+        openUrl(sHit.url, {title: sHit.title});
+        return {ok: true, text: `“${sHit.title}” 화면을 열었습니다.`};
+      }
+      return {ok: false, text: '해당 항목을 찾지 못했습니다. 먼저 "할 일 보여줘"로 목록을 확인해 보세요.'};
     },
   });
 

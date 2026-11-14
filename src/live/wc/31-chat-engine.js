@@ -18,9 +18,9 @@
         if (store.get('chatHistV', 0) !== CHAT_HIST_VER) { store.del('chatHist'); store.set('chatHistV', CHAT_HIST_VER); }
         h = S.settings.chatSave === false ? [] : store.get('chatHist', []);
       } catch { h = []; }
-      S.chat = {msgs: (Array.isArray(h) ? h : []).slice(-30).filter(m => m && (m.text || (m.cards && m.cards.length))).map(m => ({id: m.id || 'm' + Math.random().toString(36).slice(2), role: m.role === 'user' ? 'user' : 'ai', text: String(m.text || '').slice(0, 2000), at: m.at || 0, state: 'done', cards: Array.isArray(m.cards) ? m.cards.slice(0, 4) : [], tools: []})), busy: false, pending: {}, draft: '', abort: null, stopped: false, seq: 0, announced: '', model: '', ctx: {lastItems: []}};
+      S.chat = {msgs: (Array.isArray(h) ? h : []).slice(-30).filter(m => m && (m.text || (m.cards && m.cards.length))).map(m => ({id: m.id || 'm' + Math.random().toString(36).slice(2), role: m.role === 'user' ? 'user' : 'ai', text: String(m.text || '').slice(0, 2000), at: m.at || 0, state: 'done', cards: Array.isArray(m.cards) ? m.cards.slice(0, 4) : [], tools: []})), busy: false, pending: {}, draft: '', abort: null, stopped: false, seq: 0, announced: '', model: '', ctx: {lastItems: [], pendingSlot: null}};
     }
-    if (!S.chat.ctx) S.chat.ctx = {lastItems: []};
+    if (!S.chat.ctx) S.chat.ctx = {lastItems: [], pendingSlot: null};
     return S.chat;
   }
   function chatSave() {
@@ -37,7 +37,7 @@
     if (st.msgs.length > 60) st.msgs.splice(0, st.msgs.length - 60);
     return m;
   }
-  function chatClear() { const st = chatState(); st.seq++; if (st.abort) st.abort.abort(); st.msgs = []; st.pending = {}; st.busy = false; st.draft = ''; st.ctx = {lastItems: []}; try { store.del('chatHist'); } catch {} }
+  function chatClear() { const st = chatState(); st.seq++; if (st.abort) st.abort.abort(); st.msgs = []; st.pending = {}; st.busy = false; st.draft = ''; st.ctx = {lastItems: [], pendingSlot: null}; try { store.del('chatHist'); } catch {} }
   function chatStop() { const st = chatState(); st.stopped = true; st.seq++; if (st.abort) st.abort.abort(); }
 
   // ---------- 모델 선택과 한도 ----------
@@ -92,7 +92,12 @@
     } catch (e) { logError('chatTool.' + name, e.message); res = {ok: false, text: '처리하지 못했습니다: ' + String(e.message || e).slice(0, 100)}; }
     chip.state = res.ok ? 'ok' : 'err';
     if (res.ok && res.data && Array.isArray(res.data.items) && res.data.items.length) {
-      st.ctx.lastItems = res.data.items.map(it => ({itemId: it.itemId || '', title: it.title || '', uid: it.uid || ''}));
+      st.ctx.lastItems = res.data.items.map(it => ({itemId: it.itemId || '', title: it.title || '', uid: it.uid || '', url: it.url || '', type: it.type || ''}));
+      st.ctx.pendingSlot = null;
+    } else if (!res.ok && /^prepare_|^reserve_/.test(name) && /날짜|시간/.test(res.text || '')) {
+      st.ctx.pendingSlot = {tool: name, args: runArgs};
+    } else if (res.ok) {
+      st.ctx.pendingSlot = null;
     }
     for (const c of res.cards || []) {
       if (c && c.type === 'confirm') {
@@ -228,14 +233,19 @@
     const tools = R.chatToGeminiTools([...CHAT_TOOLS.values()]);
     const system = R.chatSystemPrompt(chatNowStr(), name, org);
     const texts = [];
+    const needTool = /일정|할\s*일|연차|근태|출장|휴가|예산|결재|메일|차량|예약|지문|실적/.test(text);
     for (let round = 0; round < 3; round++) {
       if (st.stopped || st.seq !== runSeq) return;
-      const j = await chatGemini(R.chatBuildRequest({system, contents, tools, maxTokens: 1024}), ctl);
+      const mode = round === 0 && needTool ? 'ANY' : 'AUTO';
+      const j = await chatGemini(R.chatBuildRequest({system, contents, tools, maxTokens: 1024, toolMode: mode}), ctl);
       if (st.stopped || st.seq !== runSeq) return;
       const r = R.chatParseResponse(j);
       if (r.blocked) throw Object.assign(new Error('blocked'), {status: 200, kind: 'blocked'});
       if (r.error && !r.calls.length) throw Object.assign(new Error(r.error), {status: 200, kind: 'server'});
-      if (!r.calls.length) { ai.text = r.text || texts.join('\n'); return; }
+      if (!r.calls.length) {
+        if (round === 0 && needTool && !texts.length) { ai.text = '그룹웨어 자료를 조회할 도구가 호출되지 않아 단정적으로 답할 수 없습니다. 구체적으로 다시 질문해 주세요.'; return; }
+        ai.text = r.text || texts.join('\n'); return;
+      }
       let fc = 0;
       const keptParts = r.parts.filter(p => !p.functionCall || (++fc <= 4));
       contents.push({role: 'model', parts: keptParts});
@@ -263,7 +273,14 @@
     chatRefresh();
     try {
       const ready = chatMode().ready && allowed('aiAssistant');
-      const it = R.chatIntent(text, new Date());
+      let it = R.chatIntent(text, new Date());
+      if ((!it.tool || it.confidence < 0.9) && st.ctx && st.ctx.pendingSlot) {
+        const dt = R.chatParseDate(text, new Date()), rg = R.chatParseRange(text);
+        if (dt || rg.start) {
+          const merged = {...st.ctx.pendingSlot.args, ...(dt ? {date: dt.date, ...(dt.end ? {end_date: dt.end} : {})} : {}), ...(rg.start ? {start: rg.start} : {}), ...(rg.end ? {end: rg.end} : {})};
+          it = {tool: st.ctx.pendingSlot.tool, args: merged, confidence: 1};
+        }
+      }
       const known = it.tool && it.confidence >= (ready ? 0.9 : 0.6) && CHAT_TOOLS.has(it.tool); // AI가 있으면 확신이 낮은 추측은 AI에게 맡긴다
       if (known) {
         const res = await chatExec(it.tool, it.args, ai, {userText: text, viaAi: false});
