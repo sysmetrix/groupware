@@ -181,14 +181,30 @@
   const fontStep = n => { const order = ['s', 'm', 'l', 'xl']; const i = Math.max(0, Math.min(3, order.indexOf(S.settings.fontSize) + n)); S.settings.fontSize = order[i]; saveLocal(); applyLook(); };
   const toggleTheme = () => { S.settings.theme = S.settings.theme === 'dark' ? 'light' : 'dark'; saveLocal(); applyLook(); };
 
-  async function findAndOpenDocNo(no, t) {
-    const out = $('#docNoResult');
+  let docNoRequest = 0;
+  async function findAndOpenDocNo(no, t, rowDate = '') {
+    const request = ++docNoRequest, out = $('#docNoResult');
+    const source = {sel: S.sel, view: S.view, url: S.pane.url, user: currentKey};
+    const current = () => request === docNoRequest && S.sel === source.sel && S.view === source.view && S.pane.url === source.url && currentKey === source.user && (!out || $('#docNoResult') === out);
     if (out) out.innerHTML = '<p><span class="spin"></span> 문서를 찾는 중…</p>';
     try {
-      const p = await GW.docPreview({docNo: no, title: t});
-      if (p.found) { if (out) out.innerHTML = `<div class="box okb">${esc(p.title)} (${esc(p.docNo)})</div>`; if (!S.sel) S.sel = {type: 'frame', title: p.title, url: p.url}; openUrl(p.url, {title: p.title}); }
-      else if (out) out.innerHTML = '<div class="box warn">통합검색에서 같은 문서번호를 찾지 못했습니다. 권한이 없거나 아직 색인되지 않은 문서일 수 있습니다.</div>'; else toast('문서를 찾지 못했습니다.');
-    } catch (err) { if (out) out.innerHTML = `<p class="err">${esc(err.message)}</p>`; }
+      const date = String(arguments.length >= 3 ? rowDate || '' : (source.sel?.type === 'ledger' ? source.sel.row?.date || '' : ''));
+      const year = /^\d{4}/.test(date) ? date.slice(0, 4) : '';
+      if (!year && (arguments.length >= 3 || source.sel?.type === 'ledger')) {
+        const message = '결의 연도를 확인할 수 없어 문서를 자동으로 열지 않았습니다.';
+        if (out) out.innerHTML = `<div class="box warn">${esc(message)}</div>`; else toast(message);
+        return;
+      }
+      const p = await GW.docPreview({docNo: no, title: t, year});
+      if (!current()) return;
+      if (p.found && p.url) {
+        if (openUrl(p.url, {title: p.title})) return;
+        if (out && current()) out.innerHTML = '<div class="box warn">문서를 열지 않았습니다.</div>';
+      } else {
+        const message = p.reason === 'ambiguous' ? '같은 문서번호의 문서가 여러 건이라 자동으로 열지 않았습니다.' : p.reason === 'incomplete' ? '검색 결과가 너무 많아 문서를 확정할 수 없습니다.' : p.found ? '문서의 열기 주소가 없어 자동으로 열지 않았습니다.' : '통합검색에서 같은 문서번호를 찾지 못했습니다. 권한이 없거나 아직 색인되지 않은 문서일 수 있습니다.';
+        if (out) out.innerHTML = `<div class="box warn">${esc(message)}</div>`; else toast(message);
+      }
+    } catch (err) { if (!current()) return; if (out) out.innerHTML = `<p class="err">${esc(err.message)}</p>`; else toast('문서 검색 실패: ' + err.message); }
   }
   async function makeWeekly() {
     if (S.weekly && S.weekly.trim() && !confirm('지금 초안을 고친 내용이 있으면 사라집니다. 새로 만들까요?\n(필요하면 먼저 복사해 두세요)')) return;

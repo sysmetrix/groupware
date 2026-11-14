@@ -15,7 +15,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '0.59.0';
+  const VERSION = '0.60.0';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
@@ -506,7 +506,10 @@
       try {
         const d = await call('/gw/APIHandler/gw018A02', body, {timeoutMs: 20000});
         const items = arr(d && d.resultgrid).map(x => normalizeSearch(type, x, kw)).filter(Boolean);
-        groups[type] = {label: SEARCH_LABELS[type], total: num(d && d.totalcount), items};
+        const rawTotal = d && d.totalcount;
+        const totalNumber = rawTotal !== null && rawTotal !== undefined && String(rawTotal).trim() !== '' ? Number(rawTotal) : NaN;
+        const reliableTotal = Array.isArray(d?.resultgrid) && Number.isSafeInteger(totalNumber) && totalNumber >= items.length ? totalNumber : null;
+        groups[type] = {label: SEARCH_LABELS[type], total: num(rawTotal), reliableTotal, items};
       } catch (e) { groups[type] = {label: SEARCH_LABELS[type], total: 0, items: [], error: e.code || 'ERROR', message: e.message}; }
     }));
     return {keyword: kw, page, pageSize, groups, searchedAt: new Date().toISOString()};
@@ -686,16 +689,52 @@
   }
 
   // Preview of an approval document from the search index: no popup is opened, so no 열람 record.
-  async function docPreview({docNo = '', title = ''} = {}) {
-    // Search by document number when there is one (fast and exact); otherwise by title.
-    const tries = (docNo ? [docNo] : [title && title.replace(/[\[\]()「」『』]/g, ' ').trim().slice(0, 40)]).filter(t => t && t.length >= 2);
-    for (const q of tries) {
-      const r = await search(q, {types: ['doc'], pageSize: 10}).catch(() => null);
-      const items = r && r.groups.doc ? r.groups.doc.items : [];
-      const hit = items.find(x => docNo && x.docNo === docNo) || items.find(x => title && x.title.replace(/\s/g, '') === title.replace(/\s/g, ''));
-      if (hit) return {found: true, ...hit};
+  async function docPreview({docNo = '', title = '', year = ''} = {}) {
+    const number = String(docNo || '').trim();
+    const name = String(title || '').replace(/\s/g, '');
+    const q = number || String(title || '').replace(/[\[\]()「」『』]/g, ' ').trim().slice(0, 40);
+    if (q.length < 2) return {found: false};
+    if (year && !/^\d{4}$/.test(String(year))) return {found: false, reason: 'ambiguous'};
+    // A bounded complete scan is required: search ranking is not evidence of uniqueness.
+    const pageSize = 100, maxResults = 1000;
+    const collect = async keyword => {
+      let total = null; const items = [], seen = new Set();
+      for (let page = 1; ; page++) {
+        const r = await search(keyword, {types: ['doc'], pageSize, page});
+        const group = r && r.groups && r.groups.doc;
+        if (!group || group.error) throw new GwError(group?.error || 'SEARCH_ERROR', group?.message || '문서 검색 결과를 읽지 못했습니다.');
+        const rows = group.items;
+        if (!Array.isArray(rows) || !Number.isSafeInteger(group.reliableTotal) || group.reliableTotal < 0) return null;
+        if (total === null) total = group.reliableTotal;
+        if (group.reliableTotal !== total || total > maxResults || rows.length > pageSize || items.length + rows.length > total) return null;
+        for (const row of rows) {
+          // Repeated IDs across pages indicate an unstable result window; do not infer completeness.
+          const id = String(row.docId || '');
+          if (id && seen.has(id)) return null;
+          if (id) seen.add(id);
+          items.push(row);
+        }
+        if (items.length === total) return items;
+        if (rows.length !== pageSize) return null;
+      }
+    };
+    let items = await collect(q);
+    if (!items) return {found: false, reason: 'incomplete'};
+    // Some indexes tokenize the numeric part but return zero hits for the full number.
+    const suffix = number.match(/-(\d{2,})$/)?.[1] || '';
+    if (number && items.length === 0 && suffix && suffix !== q) {
+      items = await collect(suffix);
+      if (!items) return {found: false, reason: 'incomplete'};
     }
-    return {found: false};
+    // The fallback is only a search term, never an identity: require the entire number.
+    let hits = items.filter(x => number ? String(x.docNo || '').trim() === number : name && String(x.title || '').replace(/\s/g, '') === name);
+    if (year) {
+      if (hits.some(x => !/^\d{4}/.test(String(x.date || '')))) return {found: false, reason: 'ambiguous'};
+      hits = hits.filter(x => String(x.date).slice(0, 4) === String(year));
+    }
+    const ids = new Set(hits.map(x => x.docId).filter(Boolean));
+    if (hits.length && (ids.size !== 1 || hits.some(x => !x.docId))) return {found: false, reason: 'ambiguous'};
+    return hits.length ? {found: true, ...hits[0]} : {found: false};
   }
 
   // Forms I actually use (from my submitted documents) + the foundation's recommended forms.

@@ -6,7 +6,7 @@ import vm from 'node:vm';
 const read = n => readFileSync(new URL(`../src/live/wc/${n}`, import.meta.url), 'utf8');
 const search = read('09-search-board.js').split('  // ----- 할 일 보드')[0];
 const events = read('16-events.js');
-const handlers = events.slice(events.indexOf("  root.addEventListener('click'"), events.indexOf('  const csvCols')) + events.slice(events.indexOf("  root.addEventListener('input'"), events.indexOf("  root.addEventListener('keyup'"));
+const handlers = events.slice(events.indexOf("  root.addEventListener('click'"), events.indexOf('  const csvCols')) + events.slice(events.indexOf("  root.addEventListener('input'"), events.indexOf("  root.addEventListener('keydown'"));
 const keys = read('04-timers-keys.js');
 const keyFunction = keys.slice(keys.indexOf('  function handleKey('), keys.indexOf('\n  function ', keys.indexOf('  function handleKey(') + 3));
 function setup() {
