@@ -44,7 +44,7 @@
           ${s.done ? `<div class="box tip" style="margin-top:10px"><b>예약을 올렸습니다.</b> ${esc(s.done)}<div class="muted">변경·취소는 그룹웨어 자원 화면의 “나의예약현황”에서 합니다.</div></div>` : ''}</div>
         <h2>다가오는 예약 ${bookingsLoaded ? `<span class="muted">${upcoming.length}건</span>` : ''}</h2>
         ${!bookingsLoaded ? '<div class="list"><div class="empty">예약 현황을 조회하는 중입니다…</div></div>' : upcoming.length ? `<div class="list">${upcoming.map(b => `<div class="row" style="grid-template-columns:150px 1fr auto"><span class="muted">${esc(fmtB(b))}</span><div class="mn"><div class="t">${esc(b.title)}</div></div><div class="w">${esc(b.who)}${me && b.who === me ? ' (나)' : ''}</div></div>`).join('')}</div>` : '<div class="list"><div class="empty"><b>다가오는 예약이 없습니다</b></div></div>'}`;
-    return `${pgh('자원 예약', '공용차량 현황과 바로 예약', `<a class="btn sm" href="${esc(GW.links.route('#/UK/UKA/UKA0000?specialLnb=Y&moduleCode=UK&menuCode=UKA&pageCode=UKA0000'))}" target="_blank" rel="noopener">${ic('ext')}그룹웨어 자원 화면</a>`)}${body}`;
+    return `${pgh('자원 예약', '공용차량 현황과 바로 예약', `<button class="btn sm" data-act="openUrl" data-url="${esc(GW.links.route('#/UK/UKA/UKA0000?specialLnb=Y&moduleCode=UK&menuCode=UKA&pageCode=UKA0000'))}" data-title="그룹웨어 자원 화면">${ic('ext')}그룹웨어 자원 화면</button>`)}${body}`;
   }
 
   async function resLoad(force) {

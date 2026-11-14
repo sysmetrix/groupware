@@ -145,7 +145,7 @@
       case 'delRule': { const r = rel(); r[el.dataset.l].splice(Number(el.dataset.i), 1); saveLocal(); if (S.raw) reanalyze(); render(); break; }
       case 'mailDetail': { const m = findMail(el.dataset.box, el.dataset.uid); if (m && confirm('이 메일을 불러오면 그룹웨어에 읽음으로 표시됩니다. 불러올까요?')) loadMailDetail(m, true); break; }
       case 'searchExample': S.search.kw = el.dataset.v; runSearch(); break;
-      case 'view': go(v); break;
+      case 'view': closeOverlay(); go(v); break;
       case 'help': toggleHelp(); break;
       case 'closeHelp': case 'closeOverlay': closeOverlay(); break;
       case 'menuNew': openMenu('new'); break;
