@@ -201,8 +201,16 @@
         if (openUrl(p.url, {title: p.title})) return;
         if (out && current()) out.innerHTML = '<div class="box warn">문서를 열지 않았습니다.</div>';
       } else {
-        const message = p.reason === 'ambiguous' ? '같은 문서번호의 문서가 여러 건이라 자동으로 열지 않았습니다.' : p.reason === 'incomplete' ? '검색 결과가 너무 많아 문서를 확정할 수 없습니다.' : p.found ? '문서의 열기 주소가 없어 자동으로 열지 않았습니다.' : '통합검색에서 같은 문서번호를 찾지 못했습니다. 권한이 없거나 아직 색인되지 않은 문서일 수 있습니다.';
-        if (out) out.innerHTML = `<div class="box warn">${esc(message)}</div>`; else toast(message);
+        const message = p.reason === 'ambiguous' ? '통합검색에 같은 문서번호가 여러 건 있습니다.' : p.reason === 'incomplete' ? '통합검색 결과가 불완전합니다.' : p.found ? '검색된 문서의 열기 주소가 없습니다.' : '통합검색에서 정확한 문서번호를 찾지 못했습니다.';
+        if (!out || !year || !GW.approvalFallback) { if (out) out.innerHTML = `<div class="box warn">${esc(message)} 예실대비 원장과 원본 화면을 확인하세요.</div>`; else toast(message); return; }
+        out.innerHTML = `<div class="box warn">${esc(message)} 접근 가능한 결재함을 추가로 확인 중입니다…</div>`;
+        const now = new Date(); const days = Math.max(92, Math.min(36500, Math.ceil((now.getTime() - Date.UTC(Number(year), 0, 1)) / 86400000) + 2));
+        const fallback = await GW.approvalFallback({docNo: no, year, days});
+        if (!current()) return;
+        const coverage = Object.entries(fallback.coverage || {}).map(([k, v]) => `${k}: ${v.status} (${v.fetched || 0}건)`).join(' · ');
+        const unique = [...new Map((fallback.candidates || []).filter(x => x.docId && x.url).map(x => [x.docId, x])).values()];
+        const candidates = unique.map(x => `<div class="box"><b>${esc(x.title || '제목 없음')}</b><div>${esc(x.docNo || '')} · ${esc(x.date || '')} · ${esc(x.drafter || '')}</div><button class="btn sm" data-act="openUrl" data-url="${esc(x.url)}" data-title="${esc(x.title || '')}" data-unread="${x.unread ? '1' : '0'}" data-what="결재문서">후보 원문 열기</button></div>`).join('');
+        out.innerHTML = `<div class="box warn">${esc(message)} ${fallback.complete ? '결재함 검색 완료' : '결재함 일부만 확인됨'} · 계정 권한과 기간 내 결과입니다. 원장 내역은 위에 그대로 표시됩니다.<div class="muted">${esc(coverage)}</div>${unique.length ? '번호·연도가 일치하는 후보입니다. 직접 확인 후 여세요.' : '결재함에서 일치 후보를 찾지 못했습니다. 권한 또는 색인 문제일 수 있습니다.'}</div>${candidates}`;
       }
     } catch (err) { if (!current()) return; if (out) out.innerHTML = `<p class="err">${esc(err.message)}</p>`; else toast('문서 검색 실패: ' + err.message); }
   }

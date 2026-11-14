@@ -168,7 +168,16 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
     if (sel.type === 'search') return searchPane(sel.item);
     if (sel.type === 'ledger') {
       const r = sel.row;
-      return {title: r.desc, url: '', body: `<div class="kv"><b>결의일</b><span>${esc(ymd8(r.date))}</span><b>금액</b><span>${won(r.amount)}원</span><b>문서번호</b><span>${esc(r.docNo)}</span><b>작성</b><span>${esc(r.dept)} ${esc(r.writer)}</span><b>전표</b><span>${esc(r.slip)}</span><b>과목</b><span>${esc(r.name)} (${esc(r.code)})</span></div><div class="acts">${r.docNo ? `<button class="btn primary" data-act="findDocNo" data-no="${esc(r.docNo)}" data-t="${esc(r.desc)}" data-date="${esc(r.date || '')}">결재문서 찾아 열기</button>` : ''}<button class="btn" data-act="todoFromSel">할 일 추가</button></div><div id="docNoResult"></div>`};
+      const value = v => v == null || String(v).trim() === '' ? '확인 불가' : String(v);
+      const fields = [
+        ['결의일', value(r.date ? ymd8(r.date) : '')],
+        ['금액', r.amount == null || String(r.amount).trim() === '' || !Number.isFinite(Number(r.amount)) ? '확인 불가' : won(r.amount) + '원'],
+        ['문서번호', value(r.docNo)], ['작성자', value(r.writer)], ['부서', value(r.dept)],
+        ['전표', value(r.slip)], ['과목 코드', value(r.code)], ['과목명', value(r.name)], ['적요', value(r.desc)]
+      ];
+      const copy = fields.map(([label, v]) => label + ': ' + v).join('\n');
+      const budgetUrl = S.a?.budget?.url || '';
+      return {title: value(r.desc), url: budgetUrl, body: `<div class="box tip">원천 원장 내역입니다. 결재문서의 내용이나 열람 권한은 확인되지 않았습니다.</div><div class="kv">${fields.map(([label, v]) => `<b>${esc(label)}</b><span>${esc(v)}</span>`).join('')}</div><div class="acts">${r.docNo ? `<button class="btn primary" data-act="findDocNo" data-no="${esc(r.docNo)}" data-t="${esc(r.desc)}" data-date="${esc(r.date || '')}">결재문서 찾아 열기</button>` : ''}${budgetUrl ? `<button class="btn" data-act="openUrl" data-url="${esc(budgetUrl)}" data-title="예실대비현황">예실대비현황 원본 열기</button>` : '<span class="muted">예실대비현황 원본 주소 확인 불가</span>'}<button class="btn" data-act="copy" data-v="${esc(copy).replace(/\n/g, '&#10;')}">원장 내역 복사</button><button class="btn" data-act="todoFromSel">할 일 추가</button></div><div id="docNoResult"></div>`};
     }
     if (sel.type === 'frame') return {title: sel.title, url: sel.url, body: ''};
     return {title: '', url: '', body: ''};

@@ -15,7 +15,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '0.60.0';
+  const VERSION = '0.61.0';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
@@ -688,6 +688,46 @@
     return {kind, page, total, reliableTotal, from, to, docs: list.map(r => toDoc(r, kind))};
   }
 
+  // List-only fallback is limited to the approvalPage date range and current server permissions.
+  async function approvalFallback({docNo = '', year = '', days = 92} = {}) {
+    const number = String(docNo || '').trim(), wantedYear = String(year || '');
+    if (!number || !/^\d{4}$/.test(wantedYear) || !Number.isSafeInteger(days) || days < 1 || days > 36500)
+      throw new GwError('BAD_QUERY', '정확한 문서번호, 4자리 연도와 유효한 조회 일수가 필요합니다.');
+    const size = 100, maxResults = 1000, candidates = [], coverage = {};
+    for (const {key} of APPROVAL_LISTS) {
+      const info = coverage[key] = {status: 'incomplete', pages: 0, fetched: 0, total: null, from: null, to: null};
+      const seen = new Set(); let total = null;
+      for (let page = 1; page <= maxResults / size; page++) {
+        let result;
+        try { result = await approvalPage(key, page, {days, size}); }
+        catch (e) { info.status = 'error'; info.error = typeof e?.code === 'string' && /^[A-Z_]{1,40}$/.test(e.code) ? e.code : 'ERROR'; break; }
+        info.pages++;
+        if (!Array.isArray(result?.docs) || !Number.isSafeInteger(result.reliableTotal) || result.reliableTotal < 0) break;
+        if (total === null) { total = result.reliableTotal; info.total = total; info.from = result.from; info.to = result.to; }
+        if (result.reliableTotal !== total || result.from !== info.from || result.to !== info.to) break;
+        if (total > maxResults) { info.status = 'capped'; break; }
+        const rows = result.docs;
+        if (rows.length > size || info.fetched + rows.length > total) break;
+        let unstable = false;
+        for (const row of rows) {
+          const id = String(row?.docId || '').trim();
+          if (!id || seen.has(id)) unstable = true;
+          if (id) seen.add(id);
+          if (String(row?.docNo || '').trim() === number) candidates.push(row);
+        }
+        info.fetched += rows.length;
+        if (unstable) break;
+        if (info.fetched === total) { info.status = 'complete'; break; }
+        if (rows.length !== size) break;
+      }
+    }
+    const matching = candidates.filter(row => /^\d{4}/.test(String(row.date || '')) && String(row.date).slice(0, 4) === wantedYear);
+    const uncertain = candidates.some(row => !/^\d{4}/.test(String(row.date || '')) || !String(row.docId || '').trim());
+    const ids = new Set(matching.map(row => String(row.docId).trim()));
+    const complete = Object.values(coverage).every(x => x.status === 'complete');
+    return {candidates: matching, coverage, complete, reason: !complete ? 'incomplete' : uncertain || ids.size > 1 ? 'ambiguous' : ids.size === 1 ? 'unique' : 'not_found'};
+  }
+
   // Preview of an approval document from the search index: no popup is opened, so no 열람 record.
   async function docPreview({docNo = '', title = '', year = ''} = {}) {
     const number = String(docNo || '').trim();
@@ -838,7 +878,7 @@
   }
 
   window.BWYFGW = Object.freeze({
-    version: VERSION, collect, call, search, budgetCatalog, budgetProject, budgetAll, budgetLedger, budgetMonthly, attendanceDays, teamAttendance, teamPlanned, resourceList, resourceBookings, resourceDetail, resourceCheck, reserveResource, routingHistory, submittedRange, approvalPage, docPreview, frequentForms, findReply, mailDetail, mailAttachment, mailAttachmentPreview, saveBlob,
+    version: VERSION, collect, call, search, budgetCatalog, budgetProject, budgetAll, budgetLedger, budgetMonthly, attendanceDays, teamAttendance, teamPlanned, resourceList, resourceBookings, resourceDetail, resourceCheck, reserveResource, routingHistory, submittedRange, approvalPage, approvalFallback, docPreview, frequentForms, findReply, mailDetail, mailAttachment, mailAttachmentPreview, saveBlob,
     context: () => { const c = context(); return {name: c.name, deptName: c.deptName, compName: c.compName, duty: c.duty, position: c.position}; },
     readOnlyEndpoints: () => [...READ_ONLY], routes: ROUTES, links: LINKS, searchLabels: SEARCH_LABELS, defaults: DEFAULTS,
   });
