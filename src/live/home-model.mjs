@@ -25,7 +25,7 @@ export function homeTiles({urgent = 0, todo = 0, check = 0, wait = 0, events = 0
     {id: 'urgent', label: '급한 일', value: v(urgent), sub: hmoN(urgent) ? '기한이 지났거나 오늘까지' : '없음', tone: loaded && hmoN(urgent) ? 'urgent' : 'ok', view: 'today'},
     {id: 'todo', label: '내가 처리·확인할 일', value: v(open), sub: hmoN(check) ? `확인 필요 ${hmoN(check)}건 포함` : '조회된 처리·확인 항목', tone: loaded && open ? 'todo' : 'ok', view: 'today'},
     {id: 'wait', label: '기다리는 중', value: v(wait), sub: '조회된 대기 항목 · 처리할 일과 별도', tone: 'info', view: 'today'},
-    {id: 'schedule', label: '오늘 일정', value: v(events), sub: hmoN(events) ? '시간 순서로 아래에' : '일정 없음', tone: 'info', view: 'calendar'},
+    {id: 'schedule', label: '오늘 그룹웨어 일정', value: v(events), sub: hmoN(events) ? '구글 일정 제외' : '구글 일정 별도 확인', tone: 'info', view: 'calendar'},
     {id: 'away', label: '오늘 자리 비움', value: v(away), sub: hmoN(away) ? '조회된 휴가·출장·교육' : '조회된 부재 신청 없음', tone: 'info', view: 'calendar'},
   ];
 }
@@ -77,7 +77,7 @@ export function homeBriefing({urgent = 0, total = 0, wait = 0, events = 0, away 
   let lead = u ? `지금 바로 볼 일이 ${u}건 있습니다.` : t ? `급한 일은 없고, 처리·확인할 일이 ${t}건 있습니다.` : gaps ? '확인된 처리할 일은 없습니다.' : '지금 처리할 일이 없습니다.';
   if (weekend) lead = '주말입니다. ' + lead + (!u && t && nextLabel ? ` 다음 평일 ${nextLabel}에 이어서 보셔도 됩니다.` : '');
   const facts = [
-    {id: 'schedule', label: '오늘 일정', value: `${hmoN(events)}건`, tone: 'info'},
+    {id: 'schedule', label: '오늘 그룹웨어 일정 (구글 제외)', value: `${hmoN(events)}건`, tone: 'info'},
     {id: 'away', label: '자리 비움', value: away === null || away === undefined ? '확인 불가' : `${hmoN(away)}명`, tone: 'info'},
     {id: 'mail', label: '안 읽은 메일', value: unread === null || unread === undefined ? '확인 불가' : `${hmoN(unread)}건`, tone: hmoN(unread) ? 'todo' : 'info'},
     {id: 'wait', label: '기다리는 중', value: `${hmoN(wait)}건`, tone: 'info'},
