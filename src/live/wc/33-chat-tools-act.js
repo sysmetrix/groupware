@@ -6,10 +6,13 @@
   const chatDow = iso => new Date(iso + 'T00:00:00Z').getUTCDay();
   function chatBizDays(a, b) { let n = 0; for (let t = Date.parse(a + 'T00:00:00Z'), z = Date.parse(b + 'T00:00:00Z'); t <= z; t += 86400000) { const d = new Date(t).getUTCDay(); if (d !== 0 && d !== 6) n++; } return n; }
   const chatNeedDate = ex => ({ok: false, text: `어느 날짜인지 알려 주세요. 예) ${ex}`});
-  // 준비 창에서 취소했거나 근태신청 화면이 열리지 않았으면 "열었습니다"라고 말하지 않는다.
-  const chatAttResult = name => (S.pane.url === GW.links.route(GW.routes.attendanceRequest)
-    ? {ok: true, text: `${name}를 처리 창에 열었습니다. 채워진 내용을 확인하고 [신청완료]는 직접 눌러 주세요.`}
-    : {ok: false, text: `${name}를 열지 않았습니다(준비 창에서 취소했거나 근태신청 화면을 열지 못했습니다). 다시 하려면 같은 요청을 한 번 더 말씀해 주세요.`});
+  // URL만으로 자동 기입의 성공을 판단하지 않는다. 확인된 결과가 없으면 성공으로 보고하지 않는다.
+  const chatAttResult = (name, outcome) => {
+    if (outcome && outcome.status === 'success') return {ok: true, text: `${name}를 열고 자동 기입을 마쳤습니다. 내용을 확인하고 [신청완료]는 직접 눌러 주세요. 아직 제출하지 않았습니다.`};
+    if (outcome && outcome.status === 'partial') return {ok: true, text: `${name}를 일부만 자동 기입했습니다. 준비 결과에서 누락·실패 항목을 확인하고 직접 보완하세요. 아직 제출하지 않았으며 [신청완료]는 직접 눌러야 합니다.`};
+    if (outcome && outcome.status === 'failed') return {ok: false, text: `${name}의 자동 기입을 완료하지 못했습니다. 처리 창을 확인해 주세요. 제출하지 않았습니다.`};
+    return {ok: false, text: `${name} 준비가 취소되었거나 결과를 확인하지 못했습니다. 자동 기입 성공으로 확인되지 않았으며 제출하지 않았습니다.`};
+  };
   function chatDateWarn(iso, end) {
     const w = [];
     if (iso < today()) w.push('이미 지난 날짜입니다.');
@@ -34,7 +37,7 @@
       if (lv && kind === '연차' && Number.isFinite(Number(lv.remaining))) { const need = chatBizDays(iso, end || iso); if (need > Number(lv.remaining)) warn.push(`남은 연차(${fmtDays(lv.remaining)})보다 많이 쓰는 신청입니다.`); }
       const reason = String(a.reason || '').slice(0, 100);
       return {ok: true, text: `${chatSpan(iso, end)} ${kind} 신청을 준비했습니다. 아직 아무것도 제출하지 않았습니다. 확인 카드의 [신청서 열고 채우기]를 누르면 신청서가 열리고, [신청완료]는 직접 눌러야 합니다.`, cards: [{type: 'confirm', title: '휴가 신청서 준비', risk: 'low', rows: [['종류', kind], ['기간', chatSpan(iso, end)], ['사유', reason || '신청서에서 입력']], warn: warn.join(' '), confirmLabel: '신청서 열고 채우기', cancelLabel: '취소',
-        onConfirm: async () => { await quickAttendanceApplication('leave', {date: iso, to: end, kind, reason}); return chatAttResult('휴가 신청서'); }}]};
+        onConfirm: async () => { const outcome = await quickAttendanceApplication('leave', {date: iso, to: end, kind, reason}); return chatAttResult('휴가 신청서', outcome); }}]};
     },
   });
 
@@ -52,7 +55,7 @@
       if (ts && te && ts >= te) return {ok: false, text: '시작 시각이 종료 시각보다 늦습니다. 시간을 다시 알려 주세요.'};
       const tripTime = ts && te && !end ? `${ts}~${te}` : '';
       return {ok: true, text: `${chatSpan(iso, end)} ${scope}출장 신청을 준비했습니다.${place && reason ? '' : ' 출장지와 목적은 신청서에서 입력하세요.'} 아직 제출하지 않았습니다. 확인 카드의 [신청서 열고 채우기]를 눌러 진행하세요.`, cards: [{type: 'confirm', title: '출장 신청서 준비', risk: 'low', rows: [['구분', scope + '출장'], ['기간', chatSpan(iso, end)], ['시간', tripTime || '09:00~18:00 (신청서에서 바꿀 수 있음)'], ['출장지', place || '신청서에서 입력'], ['목적', reason || '신청서에서 입력']], warn: chatDateWarn(iso, end).join(' '), confirmLabel: '신청서 열고 채우기', cancelLabel: '취소',
-        onConfirm: async () => { await quickAttendanceApplication('trip', {kind: scope, date: iso, to: end, visit: place, purpose: reason, content: reason, time: tripTime}); return chatAttResult('출장 신청서'); }}]};
+        onConfirm: async () => { const outcome = await quickAttendanceApplication('trip', {kind: scope, date: iso, to: end, visit: place, purpose: reason, content: reason, time: tripTime}); return chatAttResult('출장 신청서', outcome); }}]};
     },
   });
 
@@ -68,7 +71,7 @@
       if (s && e && s >= e) return {ok: false, text: '시작 시각이 종료 시각보다 늦습니다. 시간을 다시 알려 주세요.'};
       const kind = chatDow(iso) === 0 || chatDow(iso) === 6 ? '휴일근무' : '연장근무', reason = String(a.reason || '').slice(0, 100);
       return {ok: true, text: `${iso} ${kind} 신청을 준비했습니다. 아직 제출하지 않았습니다. 확인 카드의 [신청서 열고 채우기]를 눌러 진행하세요.`, cards: [{type: 'confirm', title: '시간외·휴일근무 신청서 준비', risk: 'low', rows: [['근무 구분', kind], ['근무일', iso], ['시간', s && e ? `${s}~${e}` : '신청서에서 입력'], ['사유', reason || '신청서에서 입력']], warn: chatDateWarn(iso, '').filter(w => !/주말/.test(w)).join(' '), confirmLabel: '신청서 열고 채우기', cancelLabel: '취소',
-        onConfirm: async () => { await quickAttendanceApplication('overtime', {kind, date: iso, reason, time: s && e ? `${s}~${e}` : ''}); return chatAttResult('시간외 신청서'); }}]};
+        onConfirm: async () => { const outcome = await quickAttendanceApplication('overtime', {kind, date: iso, reason, time: s && e ? `${s}~${e}` : ''}); return chatAttResult('시간외 신청서', outcome); }}]};
     },
   });
 
@@ -166,5 +169,52 @@
       if (a.due && !due) return {ok: false, text: '기한 날짜를 알아보지 못했습니다.'};
       addTodo(title, due, '채팅');
       return {ok: true, text: `“${title}”을(를) 내 할 일에 추가했습니다${due ? ` (기한 ${chatMd(due)})` : ''}. 그룹웨어에는 보내지 않는 이 PC의 메모입니다.`, cards: [{type: 'nav', label: '할 일 보드에서 보기', view: 'board'}]};
+    },
+  });
+
+  // 실제 처리 버튼을 누르지 않고, 사용자가 확인할 목록 또는 비서의 상세 패널만 연다.
+  chatRegisterTool({
+    name: 'prepare_approval_queue', label: '결재·문서유통 목록 열기 준비', kind: 'act',
+    description: '결재 대기, 부서 접수 대기, 배부 대기, 발송 대기, 열람문서 또는 내 상신문서 목록을 열 준비를 한다. 확인 카드만 만들며 결재·접수·배부·발송은 하지 않는다.',
+    params: {type: 'object', properties: {queue: {type: 'string', enum: ['pending', 'deptWaiting', 'distWaiting', 'sendWaiting', 'viewing', 'submitted']}}, required: ['queue']},
+    run: async a => {
+      const labels = {pending: '결재 대기', deptWaiting: '부서 접수 대기', distWaiting: '배부 대기', sendWaiting: '발송 대기', viewing: '열람문서', submitted: '내 상신문서'};
+      if (!Object.prototype.hasOwnProperty.call(labels, a.queue)) return {ok: false, text: '열 목록을 알려 주세요. 결재 대기, 부서 접수 대기, 배부 대기, 발송 대기, 열람문서, 내 상신문서 중 선택할 수 있습니다.'};
+      if (!S.a) return chatNotReady();
+      const queue = a.queue, label = labels[queue];
+      return {ok: true, text: `${label} 목록을 열 준비를 했습니다. 결재·접수·배부·발송은 하지 않습니다.`, cards: [{type: 'confirm', title: `${label} 목록 열기`, risk: 'low', rows: [['대상', label], ['동작', '비서의 목록 화면만 열기'], ['실제 처리', '하지 않음']], confirmLabel: '목록 열기', cancelLabel: '취소', onConfirm: async () => {
+        if (!S.a) return chatNotReady();
+        if (go('approval') === false) return {ok: false, text: '작성 중인 화면이 있어 이동하지 않았습니다.'};
+        S.apTab = queue; S.apTabPinned = true; renderMain();
+        return {ok: true, text: `${label} 목록 화면을 열었습니다. 문서 처리나 발송은 하지 않았습니다.`};
+      }}]};
+    },
+  });
+
+  chatRegisterTool({
+    name: 'prepare_task_screen', label: '업무 항목 상세 확인 준비', kind: 'act',
+    description: '할 일의 정확한 itemId 또는 제목으로 대상을 찾아 비서 상세 패널을 열 준비를 한다. 여러 항목이 일치하면 선택지를 보여 주며 자동 선택하지 않는다. 그룹웨어 원문은 열지 않고 결재·접수·배부·발송하지 않는다.',
+    params: {type: 'object', properties: {itemId: {type: 'string'}, query: {type: 'string'}, area: {type: 'string', enum: ['결재', '메일', '근태', '공지']}}},
+    run: async a => {
+      if (!S.a || !Array.isArray(S.a.actions)) return chatNotReady();
+      const id = typeof a.itemId === 'string' ? a.itemId.trim() : '';
+      const q = typeof a.query === 'string' ? a.query.trim().replace(/\s+/g, '').toLocaleLowerCase() : '';
+      const areas = ['결재', '메일', '근태', '공지'];
+      if (a.area && !areas.includes(a.area)) return {ok: false, text: '업무 구분을 알 수 없습니다.'};
+      if (!id && !q) return {ok: false, text: '확인할 항목의 제목 또는 목록에서 받은 항목 ID를 알려 주세요.'};
+      let candidates = visibleActions().filter(x => !a.area || x.area === a.area);
+      if (id) candidates = candidates.filter(x => x.key === id);
+      else candidates = candidates.filter(x => String(x.title || '').replace(/\s+/g, '').toLocaleLowerCase().includes(q));
+      if (!candidates.length) return {ok: false, text: '일치하는 항목을 찾지 못했습니다. 제목이나 항목 ID를 확인해 주세요.'};
+      if (candidates.length > 1) return {ok: false, text: `일치하는 항목이 ${candidates.length}건입니다. 목록에서 항목을 고르거나 더 구체적인 제목을 알려 주세요.`, cards: [{type: 'list', title: '일치하는 업무', items: candidates.slice(0, 10).map(chatTaskItem), more: Math.max(0, candidates.length - 10)}]};
+      const x = candidates[0], key = x.key, originalTitle = x.title, area = x.area, title = x.title || '(제목 없음)';
+      return {ok: true, text: `“${title}”의 상세 확인을 준비했습니다. 원문 열기나 실제 처리는 하지 않습니다.`, cards: [{type: 'confirm', title: '업무 상세 확인', risk: 'low', rows: [['항목', title], ['구분', x.area || '업무'], ['동작', '비서 상세 패널만 열기'], ['원문 및 실제 처리', '열거나 실행하지 않음']], confirmLabel: '상세 확인', cancelLabel: '취소', onConfirm: async () => {
+        const current = S.a && visibleActions().find(t => t.key === key);
+        if (!current || current.title !== originalTitle || current.area !== area) return {ok: false, text: '항목이 변경되었거나 목록에서 사라졌습니다. 다시 찾아 주세요.'};
+        if (go('today') === false) return {ok: false, text: '작성 중인 화면이 있어 이동하지 않았습니다.'};
+        if (!(S.sel && S.sel.type === 'action' && S.sel.key === key)) selectAction(key);
+        if (!(S.sel && S.sel.type === 'action' && S.sel.key === key)) return {ok: false, text: '상세 패널을 열지 못했습니다. 작성 중인 화면을 확인해 주세요.'};
+        return {ok: true, text: `“${title}”의 비서 상세 패널을 열었습니다. 그룹웨어 원문과 실제 처리 버튼은 열거나 실행하지 않았습니다.`};
+      }}]};
     },
   });

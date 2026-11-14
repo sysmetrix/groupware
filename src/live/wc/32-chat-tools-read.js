@@ -60,6 +60,29 @@
   });
 
   chatRegisterTool({
+    name: 'list_deadlines', label: '마감 기한 확인', kind: 'read',
+    description: '수집된 내 처리 업무에 연결된 마감 기한을 날짜순으로 보여준다. days는 오늘부터 1~90일, include_overdue는 지난 기한 포함 여부다. 제목 등에서 추출된 기한이므로 원문 확인이 필요하다.',
+    params: {type: 'object', properties: {days: {type: 'number'}, include_overdue: {type: 'boolean'}, limit: {type: 'number'}}},
+    run: async a => {
+      if (!S.a || !Array.isArray(S.a.deadlines) || !Array.isArray(S.a.actions)) return chatNotReady();
+      const bounded = (value, fallback, max) => Number.isFinite(Number(value)) && Number(value) > 0 ? Math.min(max, Math.floor(Number(value))) : fallback;
+      const days = Math.max(1, bounded(a.days, 14, 90)), limit = Math.max(1, bounded(a.limit, 10, 30));
+      const start = today(), end = chatAddDays(start, days - 1);
+      const actions = new Map(S.a.actions.map(x => [x.key, x]));
+      const items = S.a.deadlines.filter(d => {
+        const owner = d.key && actions.get(d.key);
+        return owner && isMine(owner) && ['overdue', 'urgent', 'todo', 'check', 'confirm'].includes(stateOf(owner)) &&
+          /^\d{4}-\d{2}-\d{2}$/.test(String(d.date || '')) && d.date <= end && (a.include_overdue === true || d.date >= start);
+      }).sort((a, b) => a.date.localeCompare(b.date) || String(a.time || '').localeCompare(String(b.time || '')));
+      const scope = `오늘부터 ${days}일${a.include_overdue === true ? '과 지난 기한' : ''}`;
+      const note = '수집된 내 처리 업무에 연결된 기한만 확인했습니다. 제목이나 수집된 발췌에서 자동 추출한 값으로, 빠진 기한이 있을 수 있으니 원문에서 확인하세요.';
+      const text = `${scope} 중 확인된 기한은 ${items.length}건입니다.${items.length > limit ? ` ${limit}건만 표시합니다.` : ''}\n${note}`;
+      return {ok: true, text, llm: `${scope} 중 확인된 기한 ${items.length}건. ${note}`, data: {count: items.length, shown: Math.min(items.length, limit), days, include_overdue: a.include_overdue === true},
+        cards: items.length ? [{type: 'list', title: '내 업무 기한', more: Math.max(0, items.length - limit), items: items.slice(0, limit).map(d => ({title: d.title || '(제목 없음)', sub: [d.date + (d.time ? ' ' + d.time : ''), d.source].filter(Boolean).join(' · '), tone: d.date < start ? 'urgent' : 'info', act: {act: 'chatOpenItem', v: d.key}}))}] : []};
+    },
+  });
+
+  chatRegisterTool({
     name: 'get_schedule', label: '일정 확인', kind: 'read',
     description: '내 일정(그룹웨어 일정, 내 휴가·출장·교육, 시간외 근무 신청, 기한). date는 YYYY-MM-DD 또는 today/tomorrow, days는 1~7.',
     params: {type: 'object', properties: {date: {type: 'string'}, days: {type: 'number'}}},
@@ -71,7 +94,12 @@
       { const t = today(), endIso = chatAddDays(d0, n - 1); if (d0 < t && endIso >= t) { n = Math.round((Date.parse(endIso) - Date.parse(t)) / 86400000) + 1; d0 = t; } } // "이번 주"는 지난 요일을 빼고 오늘부터
       const isos = Array.from({length: n}, (_, i) => chatAddDays(d0, i));
       const teamOk = await chatLoadTeam(isos);
-      const sched = (S.raw.data && S.raw.data.schedule && S.raw.data.schedule.events) || [];
+      const scheduleData = S.raw.data && S.raw.data.schedule;
+      const scheduleOk = !!(scheduleData && Array.isArray(scheduleData.events) && (!S.raw.status || !S.raw.status.schedule || S.raw.status.schedule.ok !== false));
+      const from = String(scheduleData && scheduleData.start || '').replace(/-/g, '').slice(0, 8);
+      const to = String(scheduleData && scheduleData.end || '').replace(/-/g, '').slice(0, 8);
+      const inRange = !!(from && to && d0.replace(/-/g, '') >= from && isos[isos.length - 1].replace(/-/g, '') <= to);
+      const sched = scheduleOk ? scheduleData.events : [];
       const days = isos.map(iso => {
         const d8 = iso.replace(/-/g, ''), rows = [];
         for (const e of sched) { const s = String(e.start || ''), z = String(e.end || e.start || ''); if (s.slice(0, 8) <= d8 && z.slice(0, 8) >= d8) rows.push({from: e.allDay ? '' : s.slice(8, 10) + ':' + s.slice(10, 12), to: e.allDay || z.length < 12 || z.slice(0, 8) !== d8 ? '' : z.slice(8, 10) + ':' + z.slice(10, 12), label: e.title}); }
@@ -84,9 +112,14 @@
       });
       const total = days.reduce((s, d) => s + d.rows.length, 0);
       const lead = n === 1 ? `${chatMd(d0)} 일정` : `${chatMd(d0)}부터 ${n}일간 일정`;
-      const warn = teamOk ? '' : ' (직원 근태 자료를 아직 읽지 못해 내 휴가·출장은 빠졌을 수 있습니다)';
-      if (!total) return {ok: true, text: `${lead}은 없습니다.${warn}`, data: {days: []}, cards: []};
-      const text = n === 1 ? `${lead} ${total}건입니다.${warn}` : `${lead}은 모두 ${total}건입니다.${warn}`;
+      const gaps = [];
+      if (!scheduleOk) gaps.push('그룹웨어 일정을 불러오지 못했습니다');
+      else if (!inRange) gaps.push('요청 날짜가 그룹웨어 일정 수집 범위 밖이거나 범위가 확인되지 않습니다');
+      if (!teamOk) gaps.push('근태 자료를 불러오지 못해 휴가·출장이 빠졌을 수 있습니다');
+      const source = '출처: 그룹웨어 일정·내 근태·기한. 구글 캘린더 일정은 포함되지 않습니다.';
+      const warn = gaps.length ? `\n확인 제한: ${gaps.join('; ')}.` : '';
+      if (!total) return {ok: !gaps.length, text: `${lead}${gaps.length ? '은 확인된 항목이 없지만 전체 여부는 알 수 없습니다' : '은 없습니다'}.\n${source}${warn}`, data: {days: [], complete: !gaps.length}, cards: []};
+      const text = `${lead}에서 확인된 항목 ${total}건입니다.\n${source}${warn}`;
       const cards = n === 1 ? [{type: 'timeline', title: chatMd(d0), items: days[0].rows}] : days.filter(d => d.rows.length).map(d => ({type: 'timeline', title: chatMd(d.iso), items: d.rows}));
       return {ok: true, text, data: {days: days.filter(d => d.rows.length).map(d => ({date: d.iso, items: d.rows.map(r => ({time: r.from, label: r.label}))}))}, cards};
     },
@@ -318,6 +351,13 @@
         return {ok: true, text: `최근 7일 상신 문서는 ${docs.length}건입니다.\n` + docs.slice(0, 6).map(d => `• ${d.title} (${d.status || ''})`).join('\n'), llm: txt.slice(0, 1200), data: {count: docs.length}, cards: [{type: 'nav', label: '보고서 화면에서 초안 편집', view: 'report'}]};
       } catch (e) { return {ok: false, text: '주간 실적을 읽지 못했습니다: ' + String(e.message || e).slice(0, 80)}; }
     },
+  });
+
+  chatRegisterTool({
+    name: 'get_gcal_access', label: '구글 일정 조회 범위 안내', kind: 'read',
+    description: '구글 캘린더 일정의 직접 조회 가능 여부를 안내한다. 실제 일정은 조회하지 않는다.',
+    params: {type: 'object', properties: {}},
+    run: async () => ({ok: true, text: '이 비서의 일정 답변은 그룹웨어 일정과 근태를 기준으로 하며 구글 캘린더의 일정을 직접 읽지 않습니다. 구글 동기화 화면의 대조 결과는 별도이며, 구글 일정 전체를 조회한 결과가 아닙니다. 구글 캘린더에서 직접 확인하거나 Aside에게 조회를 요청해 주세요.', cards: [{type: 'nav', label: '구글 동기화 화면 열기', view: 'gsync'}]}),
   });
 
   chatRegisterTool({

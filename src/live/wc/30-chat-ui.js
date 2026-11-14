@@ -71,7 +71,7 @@
     if (!st.msgs.length) return `<div class="ch-empty"><p>말로 시키면 조회부터 신청서 준비까지 돕습니다. 신청과 예약은 항상 확인한 뒤에만 진행합니다.</p></div>`;
     return st.msgs.map(chatMsgHtml).join('');
   }
-  const CHAT_STARTERS = [['오늘 요약', '급한 일·결재·일정을 한눈에', '오늘 요약해줘'], ['오늘 누가 자리에 없어?', '휴가·출장·교육 현황', '오늘 누가 출장이야?'], ['답장할 메일', '답장이 필요한 메일만', '답장 필요한 메일 있어?'], ['내일 일정', '일정·기한 확인', '내일 일정 알려줘'], ['연차 신청 준비', '날짜만 말하면 신청서까지', '다음 주 월요일 연차 신청해줘'], ['차량 예약', '가능한 시간 확인', '차량 예약 가능한 시간']];
+  const CHAT_STARTERS = [['오늘 요약', '급한 일·결재·일정을 한눈에', '오늘 요약해줘'], ['마감 기한', '수집된 내 업무의 기한', '앞으로 2주 마감 기한 알려줘'], ['결재함 열기', '승인 없이 결재 대기 목록 열기', '결재 대기 화면 열어줘'], ['내일 일정', '일정·기한 확인', '내일 일정 알려줘'], ['연차 신청 준비', '신청서에 입력하되 제출하지 않음', '다음 주 월요일 연차 신청해줘'], ['차량 예약', '가능한 시간 확인', '차량 예약 가능한 시간']];
   const chatChipsHtml = () => { const st = chatState(); if (!st.busy && !st.msgs.length) return CHAT_STARTERS.map(([t, s, q]) => `<button class="ch-chip" data-act="chatChip" data-v="${esc(q)}" title="${esc(s)}">${esc(t)}</button>`).join(''); return st.busy ? '' : chatSuggestions().slice(0, st.msgs.length ? 3 : 6).map(q => `<button class="ch-chip" data-act="chatChip" data-v="${esc(q)}">${esc(q)}</button>`).join(''); };
   function chatFootHtml() {
     const m = chatMode();
@@ -81,7 +81,7 @@
   function chatView() {
     const st = chatState();
     queueMicrotask(() => { const l = $('#chLog'); if (l) l.scrollTop = l.scrollHeight; chatAutosize($('#chInput')); });
-    return `<section class="ch" aria-label="AI 도우미"><div class="ch-log" id="chLog" role="log" aria-live="polite" aria-relevant="additions" tabindex="0">${chatLogHtml()}</div><div class="ch-chips" id="chChips">${chatChipsHtml()}</div><div class="ch-composer" role="group" aria-label="AI에게 지시하기"><textarea class="ch-input" id="chInput" rows="1" maxlength="1000" placeholder="예) 내일 일정 알려줘 · 직원 이름 + 언제 출장이야? · 11/12 연차 신청해줘" aria-label="AI에게 지시하기">${esc(st.draft || '')}</textarea><span id="chBtns">${chatBtnsHtml()}</span></div><div class="ch-foot" id="chFoot">${chatFootHtml()}</div><div class="ch-sr" id="chStatus" role="status" aria-live="polite"></div></section>`;
+    return `<section class="ch" aria-label="AI 도우미"><div class="ch-log" id="chLog" role="log" aria-live="polite" aria-relevant="additions" tabindex="0">${chatLogHtml()}</div><div class="ch-chips" id="chChips">${chatChipsHtml()}</div><div class="ch-composer" role="group" aria-label="AI에게 지시하기"><textarea class="ch-input" id="chInput" rows="1" maxlength="1000" placeholder="예) 마감 기한 알려줘 · 결재 대기 화면 열어줘 · 다음 주 월요일 연차 신청해줘" aria-label="AI에게 지시하기">${esc(st.draft || '')}</textarea><span id="chBtns">${chatBtnsHtml()}</span></div><div class="ch-foot" id="chFoot">${chatFootHtml()}</div><div class="ch-sr" id="chStatus" role="status" aria-live="polite"></div></section>`;
   }
   const chatBtnsHtml = () => (chatState().busy ? `<button class="ch-stop" data-act="chatStop" aria-label="중지">${ic('x')}<span>중지</span></button>` : `<button class="ch-send" data-act="chatSend" aria-label="보내기">${ic('play')}<span>보내기</span></button>`);
 

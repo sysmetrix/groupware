@@ -241,13 +241,16 @@ test('google tabs are opened without noopener so a real block is told apart from
 });
 
 test('chat cards do not claim a form was opened when it was cancelled or failed', () => {
-  const ATT = 'https://gw.example/#/HP/HPD0110/HPD0110';
-  const g = {S: {pane: {url: ''}}, GW: {links: {route: r => 'https://gw.example/' + r}, routes: {attendanceRequest: '#/HP/HPD0110/HPD0110'}}};
-  const res = run(g, [pick('33-chat-tools-act.js', 'const chatAttResult =').replace(/\n$/, '') + '\n' + read('33-chat-tools-act.js').split('const chatAttResult =')[1].split('\n').slice(1, 3).join('\n')], 'chatAttResult');
+  const source = read('33-chat-tools-act.js');
+  const start = source.indexOf('  const chatAttResult =');
+  const end = source.indexOf('\n  function chatDateWarn', start);
+  assert.ok(start >= 0 && end > start);
+  const res = run({}, [source.slice(start, end)], 'chatAttResult');
   assert.equal(res('휴가 신청서').ok, false);
-  assert.match(res('휴가 신청서').text, /열지 않았습니다/);
-  g.S.pane.url = ATT;
-  assert.equal(res('휴가 신청서').ok, true);
+  assert.match(res('휴가 신청서').text, /취소|확인하지 못/);
+  assert.equal(res('휴가 신청서', {status: 'failed'}).ok, false);
+  assert.match(res('휴가 신청서', {status: 'partial'}).text, /일부만/);
+  assert.equal(res('휴가 신청서', {status: 'success'}).ok, true);
   const act = read('33-chat-tools-act.js');
   assert.doesNotMatch(act, /return \{ok: true, text: '(출장 |시간외 )?신청서 준비 창을 열었습니다/);
   assert.match(act, /if \(r !== 'filled' && r !== 'opened'\) return \{ok: false/);

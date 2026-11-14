@@ -8,7 +8,7 @@
 
   const CHAT_TOOLS = new Map();
   function chatRegisterTool(def) { if (def && def.name && typeof def.run === 'function') CHAT_TOOLS.set(def.name, def); }
-  const CHAT_COMPOSE = new Set(['get_overview', 'list_tasks', 'get_schedule', 'get_my_attendance', 'search_documents', 'get_resource_status', 'get_gcal_sync']); // 직원 실명(get_staff_status)과 연락처(lookup_person)는 외부 AI 정리로 보내지 않는다
+  const CHAT_COMPOSE = new Set(['get_overview', 'list_tasks', 'get_my_attendance', 'search_documents', 'get_resource_status']); // 직원 실명(get_staff_status)과 연락처(lookup_person)는 외부 AI 정리로 보내지 않는다
   const CHAT_HIST_VER = 3; // 올리면 예전 대화 기록을 한 번 비운다(형식이 바뀌었을 때)
 
   function chatState() {
@@ -64,7 +64,7 @@
   function chatSuggestions() {
     const out = [];
     const urgent = S.a ? mineVisible().filter(x => ['overdue', 'urgent'].includes(stateOf(x))).length : 0;
-    out.push(urgent ? '급한 일 알려줘' : '오늘 요약해줘', '내일 일정 알려줘', '오늘 누가 출장이야?', '답장 필요한 메일 있어?', '남은 연차 알려줘', '차량 예약 가능한 시간', '구글 캘린더에 올릴 거 있어?');
+    out.push(urgent ? '급한 일 알려줘' : '오늘 요약해줘', '앞으로 2주 마감 기한 알려줘', '결재 대기 화면 열어줘', '내일 일정 알려줘', '오늘 누가 출장이야?', '답장 필요한 메일 있어?', '남은 연차 알려줘', '차량 예약 가능한 시간', '구글 캘린더에 올릴 거 있어?');
     return [...new Set(out)];
   }
   const chatNowStr = () => { const p = R.kstNow(new Date()); return `${p.date} (${R.chatDowName(p.date)}) ${new Date(Date.now() + 9 * 3600000).toISOString().slice(11, 16)}`; };
@@ -273,7 +273,7 @@
     chatRefresh();
     try {
       const ready = chatMode().ready && allowed('aiAssistant');
-      let it = R.chatIntent(text, new Date());
+      let it = R.chatFollowupIntent(text, st.ctx.lastRead, new Date()) || R.chatIntent(text, new Date());
       if ((!it.tool || it.confidence < 0.9) && st.ctx && st.ctx.pendingSlot) {
         const dt = R.chatParseDate(text, new Date()), rg = R.chatParseRange(text);
         if (dt || rg.start) {
@@ -284,6 +284,7 @@
       const known = it.tool && it.confidence >= (ready ? 0.9 : 0.6) && CHAT_TOOLS.has(it.tool); // AI가 있으면 확신이 낮은 추측은 AI에게 맡긴다
       if (known) {
         const res = await chatExec(it.tool, it.args, ai, {userText: text, viaAi: false});
+        st.ctx.lastRead = res.ok && ['get_schedule', 'get_staff_status', 'get_resource_status'].includes(it.tool) ? {tool: it.tool, args: it.args} : null;
         if (st.stopped || st.seq !== runSeq) { ai.text = ai.text || '중지했습니다.'; }
         else {
           ai.text = res.text || '';
@@ -292,6 +293,7 @@
           if (ready && res.ok && def.kind !== 'act' && CHAT_COMPOSE.has(it.tool) && !st.stopped && (res.cards || []).length + (res.text || '').length > 30 && chatAvailable(await chatModelList()).length) await chatCompose(text, res, ai, runSeq);
         }
       } else if (ready && chatAvailable(await chatModelList()).length) {
+        st.ctx.lastRead = null;
         try { await chatRunAi(text, ai, runSeq); }
         catch (e) {
           if (st.stopped || st.seq !== runSeq) ai.text = ai.text || '중지했습니다.';
@@ -301,6 +303,7 @@
           }
         }
       } else {
+        st.ctx.lastRead = null;
         ai.text = CHAT_HELP;
         if (!ready) ai.cards.push({type: 'setup', reason: 'AI를 연결하면 이렇게 정해진 문장이 아니어도 자유롭게 시킬 수 있습니다.'});
       }
