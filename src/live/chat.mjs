@@ -67,7 +67,7 @@ export function chatParseRange(text) {
 }
 
 // ---------- 의도 분류 (키 없이도 동작하는 로컬 라우터) ----------
-const CH_STOP = new Set(['오늘', '내일', '모레', '어제', '이번', '다음', '다다음', '누가', '일정', '직원', '우리', '전체', '지금', '언제', '어디', '출장', '휴가', '연차', '교육', '자리', '부재', '내가', '제가', '남은', '잔여', '몇일', '쓴', '올해', '이번달', '나의', '저의', '그분', '이분', '담당', '부서']);
+const CH_STOP = new Set(['오늘', '내일', '모레', '어제', '이번', '다음', '다다음', '누가', '일정', '직원', '우리', '전체', '지금', '언제', '어디', '출장', '휴가', '연차', '교육', '자리', '부재', '내가', '제가', '남은', '잔여', '몇일', '쓴', '올해', '이번달', '나의', '저의', '그분', '이분', '담당', '부서', '구글', '캘린더', '스케줄', '그룹웨어', '회의', '일정도']);
 export function chatExtractName(text) {
   const t = String(text ?? '');
   const re = /([가-힣]{2,4})\s*(?:님|씨|팀장|실장|과장|대리|주임|센터장|선생님)?\s*(?:은|는|이|가|의)?\s*(?:언제|출장|휴가|연차|교육|오늘|내일|모레|이번|다음|자리|어디|있어|있나|계셔|근태|일정)/g;
@@ -99,12 +99,24 @@ export function chatIntent(text, now = new Date()) {
     if (/(보냈|확인)/.test(t) && /메일/.test(t)) return make('check_sent_reply', {index: idx, query: t});
     if (/(열어|자세히|보기|상세|선택)/.test(t)) return make('open_item', {index: idx});
   }
+  // 구체적인 항목명은 일치 후보를 확인한 뒤 상세 패널만 연다.
+  if (/(업무|할\s*일|메일|문서)/.test(t) && /(상세\s*(확인|열어|보기)|자세히\s*(확인|열어|보기))/.test(t)) {
+    const q = t.replace(/(업무|할\s*일|메일|문서|상세|자세히|확인해\s*줘|확인|열어\s*줘|열어|보여\s*줘|보기|좀)/g, ' ').replace(/\s+/g, ' ').trim();
+    if (q.length >= 2) return make('prepare_task_screen', {query: q, ...(/메일/.test(t) ? {area: '메일'} : {})});
+  }
   // 보낸메일함 답장 여부 확인
   if (/(보냈는지|보냈나|답장했는지|회신했는지)/.test(t)) return make('check_sent_reply', {query: t.replace(/(보냈는지|보냈나|답장했는지|회신했는지|보낸메일함|확인|해줘|줘)/g, ' ').replace(/\s+/g, ' ').trim()});
+  // 결재함은 먼저 대상 목록을 구분하고, 실제 문서 열람·처리는 사용자가 선택한다.
+  if (/(열어|보여|이동|화면|들어가)/.test(t) && /(결재|배부|접수|발송|상신|공람)/.test(t) && !/(신청|승인|반려|처리해|발송해)/.test(t)) {
+    const queue = /배부/.test(t) ? 'distWaiting' : /접수/.test(t) ? 'deptWaiting' : /발송/.test(t) ? 'sendWaiting' : /상신/.test(t) ? 'submitted' : /공람|열람/.test(t) ? 'viewing' : 'pending';
+    return make('prepare_approval_queue', {queue});
+  }
   // 주간 실적 정리
   if (/(주간\s*(?:업무)?\s*실적|이번\s*주\s*실적|주간\s*보고)/.test(t) && /(정리|요약|알려|뭐|만들)/.test(t)) return make('get_weekly_summary', {});
   // 답장이 필요한 메일이 있는지 묻는 말(초안 작성 요청이 아님)
   if (/(답장|회신)/.test(t) && /(필요|있어|있나|뭐|무슨|해야|안 ?한|남은|밀린|확인)/.test(t) && !/(써|작성|초안|보내)/.test(t)) return make('list_tasks', {state: 'all', area: '메일', limit: 8});
+  // 구글 일정 조회는 직원 이름이나 그룹웨어 일정으로 추측하지 않는다.
+  if (/(구글|google)/i.test(t) && /(일정|캘린더|달력|스케줄|약속)/.test(t) && !/(동기화|올려|올릴|등록|연동|반영)/.test(t)) return make('get_gcal_access', {});
   // 사람 찾기: 전화·부서·직급
   { const pn = chatExtractPerson(t); if (pn) return make('lookup_person', {name: pn}); }
   // --- 실행(확인 카드) ---
@@ -123,6 +135,11 @@ export function chatIntent(text, now = new Date()) {
   if (name && /(출장|휴가|연차|교육|언제|자리|어디|있어|있나|근태|일정)/.test(t) && !/내 /.test(t)) return make('get_staff_status', {name, date: dt ? dt.date : 'today', days: dt && dt.end ? 5 : 7});
   if (/누가/.test(t) && /(출장|휴가|연차|교육|자리|없|쉬|부재)/.test(t)) return make('get_staff_status', {date: dt ? dt.date : 'today', days: dt && dt.end ? 5 : 1});
   if (/(남은 연차|연차 ?잔여|잔여 ?연차|연차 몇|내 근태|출근|퇴근|지문|근태 확인|내 휴가)/.test(t)) return make('get_my_attendance', {month: dt ? dt.date.slice(0, 7) : ''});
+  if (/(마감|기한)/.test(t) && /(언제|알려|보여|조회|목록|기한|마감)/.test(t) && !/(신청|등록|추가|변경|삭제)/.test(t)) {
+    const wk = t.match(/(\d+)\s*주/), day = t.match(/(\d+)\s*일/);
+    const days = wk ? Math.min(Number(wk[1]) * 7, 90) : day ? Math.min(Number(day[1]), 90) : /이번\s*주/.test(t) ? 7 : 14;
+    return make('list_deadlines', {days, include_overdue: /지난|지났|초과|밀린/.test(t), limit: 10});
+  }
   if (/(급한|긴급|시급|마감|기한)/.test(t)) return make('list_tasks', {state: 'urgent', limit: 8});
   if (/(결재 대기|기다리는|결재 중)/.test(t)) return make('list_tasks', {state: 'wait', limit: 8});
   if (/(메일).*(처리|확인|뭐|무슨|안 ?읽|받은)|(받은|안 ?읽은).*메일/.test(t)) return make('list_tasks', {state: 'all', area: '메일', limit: 8});
@@ -134,6 +151,19 @@ export function chatIntent(text, now = new Date()) {
   if (/(검색|찾아|어디 있)/.test(t)) return make('search_documents', {query: t.replace(/(검색|찾아줘|찾아 줘|찾아|해줘|해 줘|문서|에서)/g, ' ').replace(/\s+/g, ' ').trim(), scope: /메일/.test(t) ? 'mail' : /공지|게시/.test(t) ? 'notice' : /결재|기안|문서/.test(t) ? 'approval' : 'all'});
   if (dt && /(뭐|무슨|있)/.test(t)) return make('get_schedule', {date: dt.date, days: dt.end ? 5 : 1}, 0.6);
   return none;
+}
+
+// 직전 조회의 범위만 이어받는다. 실행·신청·발송이나 새로운 주제는 절대 이어받지 않는다.
+export function chatFollowupIntent(text, previous, now = new Date()) {
+  const t = String(text || '').trim();
+  const allowed = new Set(['get_schedule', 'get_staff_status', 'get_resource_status']);
+  if (!previous || !allowed.has(previous.tool) || t.length > 35) return null;
+  if (/(신청|예약해|등록|보내|작성|삭제|취소|결재|연차 써|구글|검색|메일|예산)/.test(t)) return null;
+  const dt = chatParseDate(t, now);
+  if (!dt) return null;
+  const remainder = t.replace(/^(그럼|그러면|그렇다면|그때는)\s*/, '').replace(/\d{4}[-./]\d{1,2}[-./]\d{1,2}|\d{1,2}\s*[/.월]\s*\d{1,2}\s*일?|\d{1,2}일|다음\s*주\s*[월화수목금토일]요일|이번\s*주\s*[월화수목금토일]요일|다음\s*주|이번\s*주|[월화수목금토일]요일|오늘|내일|모레|어제/g, '').replace(/[\s?？!.,은는에는도요알려줘보여줘확인해줘어때있어뭐]/g, '');
+  if (remainder) return null;
+  return {tool: previous.tool, args: {...previous.args, date: dt.date, days: dt.end ? 5 : 1}, confidence: 1};
 }
 
 // ---------- Gemini 변환 ----------
