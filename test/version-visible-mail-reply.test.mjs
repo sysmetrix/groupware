@@ -80,7 +80,7 @@ test('update check never reports "최신" when it could not check, and stays on 
   assert.match(newer.g.toast.calls[0][0], /새 버전 v0\.53\.0/);
   for (const t of [off, fail]) assert.doesNotMatch(t.g.toast.calls[0][0], /최신 버전입니다/);
   const gov = read('21-governance.js');
-  assert.match(gov, /Date\.now\(\) - cached\.at < 3600e3 && R\.compareVersions\(cached\.latest, VERSION\) >= 0/); // hourly, and re-check right after an update
+  assert.match(gov, /Date\.now\(\) - cached\.at < 10 \* 60e3 && R\.compareVersions\(cached\.latest, VERSION\) >= 0/); // hourly, and re-check right after an update
 });
 
 // ---------- mail: read view vs compose ----------
