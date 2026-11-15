@@ -62,3 +62,9 @@ test('모델이 임의의 할 일을 직접 저장하지 못한다',async()=>{
  a.api.chatRegisterTool({name:'add_todo',kind:'act',run:async()=>{writes++;return {ok:true,text:'저장됨'};}});
  await a.api.chatSend('오늘 해야 할 것을 알려줘'); assert.equal(writes,0);assert.match(JSON.stringify(a.requests[1]),/자동 저장하지 않았습니다/);assert.match(a.api.chatState().msgs.at(-1).text,/자동 저장하지 않았습니다/);assert.doesNotMatch(a.api.chatState().msgs.at(-1).text,/추가했습니다/);
 });
+
+test('무관한 도구 성공으로 일정 검색을 했다고 말하지 않는다',async()=>{
+ const a=setup([response([{functionCall:{name:'get_overview',args:{}}}]),response([{text:'그룹웨어 일정을 검색했지만 없습니다.'}])]);
+ a.api.chatRegisterTool({name:'get_overview',kind:'read',run:async()=>({ok:true,text:'요약 조회'})});
+ await a.api.chatSend('이주배경 사업 일정 언제야');assert.match(a.api.chatState().msgs.at(-1).text,/아직 일정을 조회하지 않았습니다/);
+});
