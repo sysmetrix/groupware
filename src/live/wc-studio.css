@@ -214,6 +214,28 @@
 .wc .hm-q:hover{background:var(--soft)}
 .wc .hm-link{color:var(--accent);font-weight:600}
 .wc .hm-tl-t{color:var(--muted);font-weight:600}
+/* 홈 배치(v0.71): 인사 → 지금 할 일 한 가지 → 숫자 한 줄 → 대화. 오른쪽은 오늘 일정과 참고만 */
+.wc .hm{grid-template-columns:minmax(0,1fr) clamp(320px,28%,400px);gap:28px}
+.wc .hm-main{gap:14px}
+.wc #hmTop{flex:none;gap:10px}
+.wc .hm-next{padding:18px 20px;border-color:var(--line2);box-shadow:var(--sh-md)}
+.wc .hm-next:has(.hm-queue){display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,38%);column-gap:24px;align-content:start}
+.wc .hm-next:has(.hm-queue)>*{grid-column:1}
+.wc .hm-next:has(.hm-queue)>.hm-queue-k{grid-column:2;grid-row:1;margin:0;padding-left:20px;border-left:1px solid var(--line);align-self:stretch}
+.wc .hm-next:has(.hm-queue)>.hm-queue{grid-column:2;grid-row:2/5;margin:0;padding-left:14px;border-left:1px solid var(--line);align-self:stretch}
+.wc .hm-next-t{font-size:18px;line-height:1.4}
+.wc .hm-next-a{margin-top:12px}
+.wc .hm-stats{padding:0;border:0;background:none}
+.wc .hm-tiles{grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.wc .hm-tile,.wc .hm-tile-urgent,.wc .hm-tile-todo{grid-column:auto;min-height:0;padding:10px 12px;gap:0}
+.wc .hm-tile-l{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.wc .hm-tile-v,.wc .hm-tile-urgent .hm-tile-v,.wc .hm-tile-todo .hm-tile-v{font-size:22px;line-height:1.3}
+.wc .hm-tile-s{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.wc .hm-today .dr{margin:2px 0 0;padding:24px 0 20px}
+.wc .hm-today .dr-note{margin:4px 0 10px;font-size:12.5px}
+.wc .hm-today .dr-b{font-size:0;padding:0}
+@container (max-width:1000px){.wc #hmHead{order:1}.wc #hmTop{order:2}.wc .hm-chatcol{order:3;flex:none}.wc #hmDash{order:4}.wc .hm-next:has(.hm-queue){display:block}.wc .hm-next:has(.hm-queue)>.hm-queue-k,.wc .hm-next:has(.hm-queue)>.hm-queue{padding-left:0;border-left:0}.wc .hm-next:has(.hm-queue)>.hm-queue-k{margin-top:14px}}
+@container (max-width:640px){.wc .hm-tiles{grid-template-columns:repeat(3,minmax(0,1fr))}.wc .hm-tile-s{display:none}}
 
 /* 하루 띠: 08~19시 한 줄. 일정은 칸, 지금은 바늘. (그리는 곳: wc/29-home-view.js homeRailHtml) */
 .wc .dr{position:relative;margin:14px 0 2px;padding:26px 0 22px;user-select:none}

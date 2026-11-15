@@ -69,7 +69,7 @@
     chatRenderedDay = day;
   }, 30000);
 
-  // 새 대화가 없을 때: 비서가 먼저 건네는 브리핑(조회된 숫자 그대로)과 맡길 수 있는 일.
+  // 새 대화가 없을 때: 비서의 첫 한마디와 맡길 수 있는 일.
   const CHAT_CAPS_HOME = [['sun', '오늘 브리핑', '급한 일·일정·메일을 한 번에', '아침 브리핑 해줘'], ['mail', '메일', '안 읽은 메일, 답장할 메일', '안 읽은 메일 보여줘'], ['doc', '결재·문서', '결재할 문서, 올린 문서 진행', '결재 현황 알려줘'], ['cal', '일정·근태', '내 일정, 직원 부재, 연차', '이번 주 일정 알려줘'], ['wallet', '예산', '사업·과목별 집행과 잔액', '예산 집행 현황 알려줘'], ['clock', '자동화', '정한 시각에 먼저 알려 드림', '자동화 목록 보여줘']];
   function chatBriefHtml() {
     if (typeof homeData !== 'function') return '';
@@ -79,9 +79,9 @@
     const total = d.urgent + d.todo + d.check, teamGap = !!(d.teamLoading || d.teamError || d.teamUnknown);
     const next = R.homeNextAction(d.mine.map(x => ({key: x.key, title: x.title, state: stateOf(x)})));
     const b = R.homeBriefing({urgent: d.urgent, total, wait: d.wait, events: d.scheduleUnknown || teamGap ? null : d.events.length, away: teamGap ? null : d.away.length, unread: d.unread, leave: d.leave, refN: d.refN, gaps: d.taskGaps, first: next ? next.title : ''});
-    const facts = b.facts.map(f => `<button class="ch-fact ch-tone-${chatTone(f.tone)}" data-act="homeTile" data-v="${esc(f.id)}"><span>${esc(f.label)}</span><b>${esc(f.value)}</b></button>`).join('');
-    const say = b.first ? `먼저 볼 일은 <b>${esc(b.first)}</b>입니다.` : total ? '' : d.taskGaps ? '확인된 처리할 일이 없습니다.' : '새로 도착한 처리할 일이 없습니다.';
-    return wrap(`<div class="ch-bubble">지금까지 확인한 내용입니다. ${say}${b.note ? `<br><span class="ch-brief-note">${esc(b.note)}</span>` : ''}</div><div class="ch-facts">${facts}</div><div class="ch-actions">${next ? `<button class="ch-btn ch-btn-primary" data-act="homeNext" data-v="${esc(next.key)}">먼저 볼 일 열기</button>` : ''}<button class="ch-btn ch-btn-ghost" data-act="chatChip" data-v="아침 브리핑 해줘">자세한 브리핑 듣기</button></div>`);
+    // 숫자와 '먼저 볼 일'은 홈의 카드와 숫자 줄에 이미 있다. 여기서는 되풀이하지 않고 무엇을 맡길 수 있는지만 건넨다.
+    const say = next ? '위의 <b>지금 가장 먼저 할 일</b>부터 보시거나, 궁금한 것을 물어보세요.' : total ? '처리·확인할 일은 할 일 목록에 있습니다. 궁금한 것을 물어보세요.' : d.taskGaps ? '확인된 처리할 일이 없습니다. 궁금한 것을 물어보세요.' : '새로 도착한 처리할 일이 없습니다. 궁금한 것을 물어보세요.';
+    return wrap(`<div class="ch-bubble">${say}${b.note ? `<br><span class="ch-brief-note">${esc(b.note)}</span>` : ''}</div><div class="ch-actions"><button class="ch-btn ch-btn-ghost" data-act="chatChip" data-v="아침 브리핑 해줘">오늘 브리핑 듣기</button></div>`);
   }
   const chatWelcomeHtml = () => `<div class="ch-welcome">${chatBriefHtml()}<div class="ch-caps-k">이런 일을 맡길 수 있습니다</div><div class="ch-caps">${CHAT_CAPS_HOME.map(([i, t, s, q]) => `<button class="ch-cap" data-act="chatChip" data-v="${esc(q)}"><span class="ch-cap-i">${ic(i)}</span><span class="ch-cap-b"><b>${esc(t)}</b><span>${esc(s)}</span></span></button>`).join('')}</div><button class="ch-link ch-caps-more" data-act="chatChip" data-v="뭘 할 수 있어?">할 수 있는 일 전체 보기</button></div>`;
 
@@ -91,7 +91,7 @@
     const past = st.msgs.filter(m => m.restored), current = st.msgs.filter(m => !m.restored);
     return (past.length ? `<details class="ch-more ch-past" data-chat-history ${st.historyExpanded ? 'open' : ''}><summary>이전 대화 보기 (${past.length}개 메시지)</summary>${past.map(chatMsgHtml).join('')}</details>` : '') + (current.length ? current.map(chatMsgHtml).join('') : chatWelcomeHtml());
   }
-  const chatChipsHtml = () => { const st = chatState(); if (st.busy) return ''; const fresh = !st.msgs.some(m => !m.restored); return chatSuggestions().slice(0, fresh ? 4 : 3).map(q => `<button class="ch-chip" data-act="chatChip" data-v="${esc(q)}">${esc(q)}</button>`).join(''); };
+  const chatChipsHtml = () => { const st = chatState(); if (st.busy) return ''; const fresh = !st.msgs.some(m => !m.restored); if (fresh) return ''; return chatSuggestions().slice(0, 3).map(q => `<button class="ch-chip" data-act="chatChip" data-v="${esc(q)}">${esc(q)}</button>`).join(''); };
   function chatFootHtml() {
     const m = chatMode();
     return `${m.ready ? '<small class="ch-help">외부 전송: 질문·최근 대화 일부·조회 요약을 Google Gemini로 보냅니다. 자동 가림은 완전하지 않으므로 개인정보·비공개 문서를 입력하지 마세요.</small>' : ''}<span class="ch-mode ${m.ready && !m.limited ? 'ch-mode-ai' : ''}" ${m.ready && m.model ? `title="${esc(m.model)}"` : ''}><i class="ch-dot" aria-hidden="true"></i>${m.ready ? (m.limited ? 'AI 사용 한도에 도달해 기본 모드로 답합니다(잠시 뒤 자동 재시도)' : `AI 연결됨${m.model ? ' · ' + esc(m.model) : ''}`) : '기본 모드 · 정해진 질문을 이해합니다'}</span>`;

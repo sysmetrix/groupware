@@ -1,4 +1,5 @@
-// GW 비서 · 첫 화면 "홈" (왼쪽: 인사와 비서 대화, 오른쪽: 오늘 현황·지금 할 일·일정·챙겨 둘 것·자동화)
+// GW 비서 · 첫 화면 "홈" (왼쪽: 인사 → 지금 할 일 한 가지 → 숫자 한 줄 → 비서 대화, 오른쪽: 오늘 일정·챙겨 둘 것·자동화)
+// 같은 내용은 한 곳에만 둔다: 할 일 숫자는 숫자 줄, 먼저 할 일은 맨 위 카드, 일정은 오른쪽 '오늘' 카드, 메일·연차는 '챙겨 둘 것'.
 // 읽기 전용 요약. 숫자는 '오늘 할 일'과 같은 기준(mineVisible, stateOf)을 쓴다.
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
 
@@ -66,7 +67,7 @@
     const g = R.homeGreeting({hour, name, urgent: d.urgent, total: d.urgent + d.todo + d.check, loading: !d.loaded, weekend: day.weekend, nextLabel: day.nextLabel});
     if (!d.loaded && S.error) g.sub = '그룹웨어 자료를 읽지 못했습니다';
     if (d.loaded && d.taskGaps) { g.sub = '일부 자료를 읽지 못해 할 일 현황이 불완전할 수 있습니다'; g.tone = 'warn'; }
-    return `<div class="hm-head">${day.label ? `<div class="hm-eyebrow"><span>${esc(day.label)}</span>${day.weekend ? '<span class="hm-pill">주말</span>' : ''}${day.holiday ? `<span class="hm-pill">${esc(day.holiday)}</span>` : ''}</div>` : ''}<h1 class="hm-hello">${esc(g.title)}</h1><p class="hm-sub hm-tone-${g.tone}">${esc(g.sub)}</p>${homeRailHtml(d, day)}</div>`;
+    return `<div class="hm-head">${day.label ? `<div class="hm-eyebrow"><span>${esc(day.label)}</span>${day.weekend ? '<span class="hm-pill">주말</span>' : ''}${day.holiday ? `<span class="hm-pill">${esc(day.holiday)}</span>` : ''}</div>` : ''}<h1 class="hm-hello">${esc(g.title)}</h1><p class="hm-sub hm-tone-${g.tone}">${esc(g.sub)}</p></div>`;
   }
 
   // 하루 띠: 08~19시를 한 줄로 놓고 오늘 일정과 내 부재를 칸으로, 지금 시각을 바늘로 보여 준다(계산은 R.homeDayRail).
@@ -87,7 +88,7 @@
     return `<div class="dr" id="dayRail" role="group" aria-label="오늘 하루 시간표 (8시부터 19시)"><div class="dr-track"><i class="dr-past" id="drPast" style="width:${r.now.left}%"></i><i class="dr-lunch" style="left:${r.lunch.left}%;width:${r.lunch.width}%" title="점심"></i>${blocks}</div>${r.now.inRange ? `<div class="dr-now${r.now.edge ? ' dr-edge-' + r.now.edge : ''}" id="drNow" style="left:${r.now.left}%" aria-hidden="true"><b>${esc(r.now.label)}</b></div>` : ''}<div class="dr-ticks" aria-hidden="true">${r.ticks.map(t => `<span class="dr-tick" style="left:${t.left}%">${t.h}</span>`).join('')}</div></div>${notes.length ? `<div class="dr-note">${notes.join('')}</div>` : ''}`;
   }
 
-  // 오른쪽 위: 핵심 숫자와 지금 가장 먼저 할 일(이어서 볼 일 2건까지).
+  // 인사 바로 아래: 지금 가장 먼저 할 일(이어서 볼 일 2건까지)과 핵심 숫자 한 줄.
   function homeTopHtml(d) {
     if (!d.loaded && S.error) return `<section class="hm-card hm-next" role="status">그룹웨어 자료를 읽지 못했습니다. 새로 고침 후 다시 확인하세요.</section>`;
     if (!d.loaded) return `<section class="hm-card hm-stats" aria-label="핵심 현황"><div class="hm-tiles">${'<div class="hm-tile hm-skel" aria-hidden="true"></div>'.repeat(5)}</div></section>`;
@@ -107,10 +108,10 @@
     const nextHtml = next
       ? `<section class="hm-card hm-next" aria-label="지금 할 일 한 가지"><div class="hm-card-h"><h2 class="hm-card-k">지금 가장 먼저 할 일</h2><span class="hm-badge hm-tone-${tone(next.state)}">${esc(STATE_NAME[next.state] || '')}</span></div><div class="hm-next-b"><div class="hm-next-t">${esc(next.title)}</div>${next.sub || next.deadline ? `<div class="hm-next-s">${esc([next.sub, next.deadline ? '기한 ' + next.deadline : ''].filter(Boolean).join(' · '))}</div>` : ''}</div><div class="hm-next-a"><button class="ch-btn ch-btn-primary" data-act="homeNext" data-v="${esc(next.key)}">열어서 처리</button><button class="ch-btn ch-btn-ghost" data-act="homeOpenToday">할 일 전체 ${total}건 보기</button></div>${queueHtml}</section>`
       : `<section class="hm-card hm-next hm-next-ok" aria-label="지금 할 일"><div class="hm-card-h"><h2 class="hm-card-k">${d.taskGaps ? '확인된 처리할 일이 없습니다' : '지금 처리할 일이 없습니다'}</h2></div><div class="hm-next-s">${d.taskGaps ? '일부 자료를 읽지 못해 전체 할 일을 확인할 수 없습니다.' : d.refN ? `부서 참고 공문 ${d.refN}건이 등록되어 있습니다.` : '새로 도착한 일이 없습니다.'}</div><div class="hm-next-a"><button class="ch-btn ch-btn-ghost" data-act="homeOpenToday">할 일 목록 열기</button></div></section>`;
-    return `<section class="hm-card hm-stats" aria-label="핵심 현황"><div class="hm-tiles">${tileHtml}</div></section>${nextHtml}`;
+    return `${nextHtml}<section class="hm-card hm-stats" aria-label="핵심 현황"><div class="hm-tiles">${tileHtml}</div></section>`;
   }
 
-  // 오른쪽 아래: 오늘 일정과 자리 비움, 챙겨 둘 것, 자동화, 자원 예약.
+  // 오른쪽: 오늘 일정(하루 띠 + 목록 + 자리 비움), 챙겨 둘 것, 자동화, 자원 예약.
   function homeDashHtml(d) {
     if (!d.loaded) return '';
     const tl = R.homeTimelineCompact(d.timeline, 5);
@@ -123,8 +124,9 @@
     else if (d.resUnknown) resourceGaps.push('오늘 자원 예약 조회 여부를 확인할 수 없습니다.');
     else if (d.resPartial) resourceGaps.push('자원 예약은 일부 자원만 조회했습니다.');
     const holiday = (d.holidays || []).map(h => h.title || '휴일').join(' · ');
+    const dayInfo = typeof R.homeDayInfo === 'function' ? R.homeDayInfo({date: R.kstNow(new Date()).date, holidays: d.holidays || []}) : null;
     const rowHtml = r => `<li class="hm-tl-${esc(r.kind)}"><span class="hm-tl-t">${r.allDay ? '종일' : esc(r.from) + (r.to ? '~' + esc(r.to) : '')}</span><span class="hm-tl-l">${esc(r.label)}</span></li>`;
-    const tlHtml = `<section class="hm-card hm-today" aria-label="오늘 일정"><div class="hm-card-h"><h2 class="hm-card-k hm-today-k">오늘 그룹웨어 일정</h2><button class="hm-link" data-act="homeTile" data-v="schedule">달력 열기</button></div>${holiday ? `<div class="hm-empty">그룹웨어 휴일 정보: ${esc(holiday)} (근무 여부는 별도 확인)</div>` : ''}${tl.rows.length ? `<ul class="hm-tl">${tl.rows.map(rowHtml).join('')}</ul>${tl.more ? `<div class="hm-more">외 ${tl.more}건 · <button class="hm-link" data-act="homeTile" data-v="schedule">일정 달력에서 보기</button></div>` : ''}` : d.scheduleUnknown || d.teamLoading || d.teamError || d.teamUnknown ? '<div class="hm-empty">일정 일부가 미확인입니다. 확인 후 다시 안내합니다.</div>' : '<div class="hm-empty">조회된 그룹웨어 일정이 없습니다. 구글 일정은 별도로 확인하세요.</div>'}${awayLine ? `<div class="hm-away"><span class="hm-away-k">자리 비움</span> ${esc(awayLine)}</div>` : ''}${d.teamError ? '<div class="hm-empty">직원 근태를 조회하지 못해 자리 비움 현황을 확인할 수 없습니다.</div>' : d.teamLoading ? '<div class="hm-empty">직원 근태를 확인하는 중입니다.</div>' : d.teamUnknown ? '<div class="hm-empty">직원 근태 조회 여부를 확인할 수 없습니다.</div>' : ''}${gaps.map(x => `<div class="hm-empty">${esc(x)}</div>`).join('')}</section>`;
+    const tlHtml = `<section class="hm-card hm-today" aria-label="오늘 일정"><div class="hm-card-h"><h2 class="hm-card-k hm-today-k">오늘 그룹웨어 일정</h2><button class="hm-link" data-act="homeTile" data-v="schedule">달력 열기</button></div>${homeRailHtml(d, dayInfo)}${holiday ? `<div class="hm-empty">그룹웨어 휴일 정보: ${esc(holiday)} (근무 여부는 별도 확인)</div>` : ''}${tl.rows.length ? `<ul class="hm-tl">${tl.rows.map(rowHtml).join('')}</ul>${tl.more ? `<div class="hm-more">외 ${tl.more}건 · <button class="hm-link" data-act="homeTile" data-v="schedule">일정 달력에서 보기</button></div>` : ''}` : d.scheduleUnknown || d.teamLoading || d.teamError || d.teamUnknown ? '<div class="hm-empty">일정 일부가 미확인입니다. 확인 후 다시 안내합니다.</div>' : '<div class="hm-empty">조회된 그룹웨어 일정이 없습니다. 구글 일정은 별도로 확인하세요.</div>'}${awayLine ? `<div class="hm-away"><span class="hm-away-k">자리 비움</span> ${esc(awayLine)}</div>` : ''}${d.teamError ? '<div class="hm-empty">직원 근태를 조회하지 못해 자리 비움 현황을 확인할 수 없습니다.</div>' : d.teamLoading ? '<div class="hm-empty">직원 근태를 확인하는 중입니다.</div>' : d.teamUnknown ? '<div class="hm-empty">직원 근태 조회 여부를 확인할 수 없습니다.</div>' : ''}${gaps.map(x => `<div class="hm-empty">${esc(x)}</div>`).join('')}</section>`;
     const resources = R.homeTimelineCompact(d.resources, 5);
     const resourceHtml = `<section class="hm-card hm-today hm-res" aria-label="오늘 자원 예약"><div class="hm-card-h"><h2 class="hm-card-k hm-today-k">오늘 자원 예약 (직원 전체)</h2></div>${resources.rows.length ? `<ul class="hm-tl">${resources.rows.map(r => `<li class="hm-tl-car"><span class="hm-tl-t">${esc(r.from)}${r.to ? '~' + esc(r.to) : ''}</span><span class="hm-tl-l">${esc(r.label)}</span></li>`).join('')}</ul>${resources.more ? `<div class="hm-more">외 ${resources.more}건</div>` : ''}` : resourceGaps.length ? '' : '<div class="hm-empty">조회된 자원 예약이 없습니다.</div>'}${resourceGaps.map(x => `<div class="hm-empty">${esc(x)}</div>`).join('')}</section>`;
     const sum = (S.a && S.a.summary) || {};
@@ -133,10 +135,10 @@
     return tlHtml + signals + (typeof autoCardHtml === 'function' ? autoCardHtml() : '') + resourceHtml;
   }
 
-  // 넓은 화면: 왼쪽은 비서(인사 + 대화), 오른쪽은 오늘 현황. 좁은 화면에서는 인사 → 대화 → 현황 순으로 쌓인다(순서는 CSS order).
+  // 넓은 화면: 왼쪽은 인사 → 지금 할 일 → 숫자 줄 → 대화, 오른쪽은 오늘 일정과 참고. 좁은 화면에서는 같은 순서로 한 줄로 쌓인다(순서는 CSS order).
   function vHome() {
     const d = homeData();
-    return `<div class="hm" id="hm"><div class="hm-main"><div id="hmHead">${homeHeadHtml(d)}</div><div class="hm-chatcol">${typeof chatView === 'function' ? chatView() : ''}</div></div><aside class="hm-rail" aria-label="오늘 현황"><div id="hmTop">${homeTopHtml(d)}</div><div id="hmDash">${homeDashHtml(d)}</div></aside></div>`;
+    return `<div class="hm" id="hm"><div class="hm-main"><div id="hmHead">${homeHeadHtml(d)}</div><div id="hmTop">${homeTopHtml(d)}</div><div class="hm-chatcol">${typeof chatView === 'function' ? chatView() : ''}</div></div><aside class="hm-rail" aria-label="오늘 일정과 참고"><div id="hmDash">${homeDashHtml(d)}</div></aside></div>`;
   }
   // 홈이 이미 그려져 있으면 입력창을 건드리지 않고 머리말과 요약만 새로 그린다(비동기 자료가 도착할 때 입력 중 포커스를 잃지 않게). 그렸으면 true.
   // Replacing summary regions must not discard the keyboard user's current control.
