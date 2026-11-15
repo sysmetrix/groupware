@@ -17,10 +17,10 @@ test('기능 안내 다음 문장 형식 요청은 버튼 대신 문장으로 �
  await a.api.chatSend('너가 할 수 있는 일을 말해봐');await a.api.chatSend('너가 할 수 있는 일을 문장으로 말해봐');
  const m=a.api.chatState().msgs.at(-1);assert.match(m.text,/아래 예시를 누르세요/);assert.equal(m.cards.length,0);
 });
-test('직전 대화의 형식 변경은 Gemini에 문맥을 포함해 전달한다',async()=>{
- const a=setup([reply([{text:'먼저 답합니다.'}]),reply([{text:'문장으로 답합니다.'}])]);
+test('안전하게 전달할 직전 답변이 없으면 임의의 맥락을 만들어내지 않는다',async()=>{
+ const a=setup([reply([{text:'먼저 답합니다.'}])]);
  await a.api.chatSend('안녕하세요');await a.api.chatSend('방금 답을 문장으로 다시 말해줘');
- const c=a.requests[1].contents;assert.match(JSON.stringify(c),/먼저 답합니다/);assert.match(JSON.stringify(c),/문장으로 다시/);assert.match(a.api.chatState().msgs.at(-1).text,/문장으로/);
+ assert.equal(a.requests.length,1);assert.match(a.api.chatState().msgs.at(-1).text,/직전 답변을 안전하게 이어받을 수 없습니다/);
 });
 test('결재 질문에 일정 도구만 성공해도 결재 조회라고 허위 답하지 않는다',async()=>{
  const a=setup([reply([{functionCall:{name:'get_overview',args:{}}}]),reply([{text:'결재 문서가 없습니다.'}])]);

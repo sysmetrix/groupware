@@ -268,6 +268,7 @@
     const contents = [];
     const rephrase = /(?:방금|직전|앞서|위에|그것|그거)/.test(text) && /(?:다시|문장|요약|정리|간결|설명|표현)/.test(text);
     for (const m of (rephrase ? st.msgs.slice(-4, -2) : st.msgs.slice(-9, -2))) if (m.text && m.state === 'done' && chatHistoryCurrent(m.at) && m.role === 'ai' && m.historySafe === true) contents.push({role: 'model', parts: [{text: R.chatSanitizeText(m.text, 400)}]});
+    if (rephrase && !contents.length) { ai.text = '직전 답변을 안전하게 이어받을 수 없습니다. 바꾸고 싶은 문장을 직접 알려 주세요.'; return; }
     contents.push({role: 'user', parts: [{text: R.chatSanitizeText(text, 600)}]});
     const tools = rephrase ? [] : R.chatToGeminiTools([...CHAT_TOOLS.values()]);
     const system = R.chatSystemPrompt(chatNowStr(), name, org);
@@ -290,7 +291,7 @@
         if (texts.length && !anySuccess) { ai.text = texts.join('\n'); return; }
         if (needTool && expectedTool && !relevantSuccess) { ai.text = '요청에 맞는 자료를 확인하지 못했습니다. 해당 자료는 아직 조회하지 않았습니다.'; return; }
         if (needTool && !expectedTool && texts.length) { ai.text = texts.join('\n'); return; }
-        ai.text = privateResult ? (texts.join('\n') || '조회 결과는 화면의 카드에서 확인해 주세요.') : (r.text || texts.join('\n')); ai.historySafe = !privateResult; return;
+        ai.text = privateResult ? (texts.join('\n') || '조회 결과는 화면의 카드에서 확인해 주세요.') : (r.text || texts.join('\n')); ai.historySafe = false; return;
       }
       let fc = 0;
       const keptParts = r.parts.filter(p => !p.functionCall || (++fc <= 4));
