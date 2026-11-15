@@ -45,6 +45,7 @@
     add('도움말', '사용법·용어', () => toggleHelp(true));
     add('글자 크게', '보기', () => fontStep(1)); add('글자 작게', '보기', () => fontStep(-1));
     add(S.settings.theme === 'dark' ? '밝은 테마' : '어두운 테마', '보기', () => toggleTheme());
+    add(S.settings.navMini ? '왼쪽 메뉴 펴기' : '왼쪽 메뉴 접기', '보기', () => HOME_ACTS.navMini());
     for (const x of visibleActions().slice(0, 60)) { add(dispTitle(x), x.headline || x.kind, () => { if (go('today')) selectAction(x.key); }, x.detail, {doc: 'doc', mail: 'mail', attendance: 'clock', notice: 'bell'}[x.type] || 'doc'); cmds[cmds.length - 1].work = isMine(x) ? 2 : 1; }
     if (/^[A-Za-z]\d{3}$/.test(qq)) add(`예산 ${qq.toUpperCase()} 조회`, '프로젝트 코드', () => { if (!go('budget')) return; S.budget.project = qq.toUpperCase(); S.budget.filter = ''; S.budget.table = null; renderMain(); });
     if (/[가-힣A-Za-z0-9]+-\d{2,}/.test(qq)) add(`문서번호 ${qq} 찾아 열기`, '결재문서', () => findAndOpenDocNo(qq, ''));

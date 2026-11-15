@@ -1,4 +1,4 @@
-// 결재판 디자인(v0.69): 하루 띠 계산, 디자인 레이어와 움직임 모듈이 지켜야 할 약속.
+// 디자인 레이어(v0.69 결재판 → v0.70 차분한 작업 화면): 하루 띠 계산, 디자인 레이어와 움직임 모듈이 지켜야 할 약속.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';

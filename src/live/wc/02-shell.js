@@ -108,14 +108,17 @@
     snooze: '<path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="9"/>',
     eye: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
     star: '<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>',
+    side: '<rect x="3" y="4.5" width="18" height="15" rx="3"/><path d="M9 4.5v15"/>',
+    spark: '<path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/><path d="M19 15.5v4M17 17.5h4"/>',
   };
   const ic = (n, extra = '') => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true" ${extra}>${ICONS[n] || ''}</svg>`;
   root.innerHTML = `<style>${WC_CSS}</style><div class="wc nopane" id="wc" role="region" aria-label="GW 비서"><header role="banner">
 <button class="skip-main" data-act="skipMain">본문으로 건너뛰기</button><button class="home" data-act="home" title="처음 화면(오늘 할 일)으로 · H" aria-label="GW 비서 처음 화면"><span class="logo">${brandImage}</span><span class="brand-name"><b>GW 비서</b><small id="orgName">부천여성청소년재단</small></span></button>
+<button class="hb icon navtg" data-act="navMini" id="navTg" title="왼쪽 메뉴 접기·펴기" aria-label="왼쪽 메뉴 접기·펴기" aria-pressed="false">${ic('side')}</button>
 <label class="srch" title="통합검색 또는 명령 (Ctrl+K)">${ic('search')}<input id="gsearch" placeholder="메일·문서·사람 검색 또는 명령" autocomplete="off" aria-label="통합검색"><kbd>Ctrl K</kbd></label>
 <span class="sp"></span>${window.BWYFGW_DEMO ? '<span class="demo-pill" title="로그인 없이 살펴보는 화면입니다. 보이는 기관·사람·문서·금액은 모두 지어낸 것이며 그룹웨어에는 아무 요청도 보내지 않습니다.">둘러보기 · 지어낸 자료</span>' : ''}
 <button class="stat" id="meta" data-act="refresh" title="지금 다시 읽기 (R)"></button>
-<button class="hb primary" data-act="openCmd" title="AI 업무 지시창 (자연어로 기안·회신·신청 자동화)">${ic('star')}AI 지시</button>
+<button class="hb primary" data-act="openCmd" title="AI 업무 지시창 (자연어로 기안·회신·신청 자동화)">${ic('spark')}AI 지시</button>
 <button class="hb" data-act="menuNew" title="새 메일·새 기안·근태신청">${ic('plus')}새로 만들기</button>
 <button class="hb icon" data-act="menuBell" id="bell" title="새로 들어온 항목" aria-label="알림">${ic('bell')}</button>
 <button class="hb icon" data-act="menuView" title="더 보기: 화면 모드·글자 크기·사용법·작업 내역·업데이트 내역" aria-label="더 보기" aria-haspopup="menu">${ic('more')}</button>
@@ -126,6 +129,8 @@
   const applyLook = () => {
     wcEl.dataset.fs = S.settings.fontSize;
     wcEl.classList.toggle('dark', S.settings.theme === 'dark');
+    wcEl.classList.toggle('navmini', !!S.settings.navMini);
+    { const nt = wcEl.querySelector('#navTg'); if (nt) nt.setAttribute('aria-pressed', String(!!S.settings.navMini)); }
   { const tb = wcEl.querySelector('#themeBtn'); if (tb) { tb.innerHTML = ic(S.settings.theme === 'dark' ? 'sun' : 'moon'); tb.title = (S.settings.theme === 'dark' ? '라이트 모드로' : '다크 모드로') + ' 전환 (Shift+D)'; } }
     const pw = Math.max(360, Math.min(window.innerWidth * 0.75, S.settings.paneWidth));
     wcEl.style.setProperty('--paneW', `${pw}px`);
