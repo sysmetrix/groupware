@@ -27,3 +27,24 @@ test('releaseNotes makes the title and bullet list for a version, and fails for 
   assert.deepEqual(releaseNotes('0.72.0', log), {title: 'v0.72.0 새 제목', body: '- 하나\n- 둘\n'});
   assert.throws(() => releaseNotes('9.9.9', log));
 });
+
+test('trimChangelog keeps details only for the newest versions and leaves odd-looking sources alone', async () => {
+  const {trimChangelog, assemble, readSources, CHANGELOG_DETAIL} = await import('../scripts/live-build.mjs');
+  const src = 'x\nexport const CHANGELOG = [\n  {v: "0.3.0", date: "d", old: "", title: "c", items: ["3"]},\n  {"v":"0.2.0","date":"d","old":"","title":"b","items":["2", "]}"]},\n  {v: "0.1.0", date: "d", old: "3", title: "a", items: ["1"]},\n];\ny';
+  const out = trimChangelog(src, 1);
+  assert.ok(out.includes('title: "c", items: ["3"]},'), 'newest keeps its list');
+  assert.ok(out.includes('"title":"b","items":[]},'), 'older (quoted style) loses its list but keeps the title');
+  assert.ok(out.includes('title: "a", items: []},'));
+  assert.ok(out.startsWith('x\n') && out.endsWith('\n];\ny'));
+  const odd = 'export const CHANGELOG = [\n  {v: "0.1.0",\n   items: ["multi-line"]},\n];';
+  assert.equal(trimChangelog(odd, 0), odd);
+  assert.equal(trimChangelog('no changelog here'), 'no changelog here');
+  // 실제 번들: 최근 것은 목록이 있고 오래된 것은 비어 있으며, 소스의 전체 내역은 그대로다
+  const {CHANGELOG} = await import('../src/live/briefing.mjs');
+  assert.ok(CHANGELOG.length > CHANGELOG_DETAIL && CHANGELOG.every(c => c.items.length), 'source keeps every detail');
+  const {bundle} = assemble(await readSources(new URL('..', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')));
+  const old = CHANGELOG[CHANGELOG_DETAIL];
+  assert.ok(!bundle.includes(old.items[0]), 'an old detail line is not shipped');
+  assert.ok(bundle.includes(CHANGELOG[0].items[0]), 'the newest detail line is shipped');
+  assert.ok(bundle.includes(old.title), 'old titles stay');
+});

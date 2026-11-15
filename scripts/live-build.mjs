@@ -171,11 +171,28 @@ export function trimIndentLines(src) {
   return inTpl ? src : out.join('\n');
 }
 
+export const CHANGELOG_DETAIL = 12;
+/**
+ * 업데이트 내역 줄이기: 최근 CHANGELOG_DETAIL개 버전만 바뀐 점 목록을 싣고, 그보다 오래된 버전은 제목만 남긴다.
+ * (전체 내역은 소스와 GitHub 릴리스에 있다. 89개 버전의 목록이 번들의 60KB를 차지했다.)
+ * 한 줄에 한 버전이라는 약속(scripts/bump.mjs가 지킨다)에 기대며, 모양이 다르면 손대지 않는다.
+ */
+export function trimChangelog(src, keep = CHANGELOG_DETAIL) {
+  const mark = 'export const CHANGELOG = [\n';
+  const a = src.indexOf(mark), b = a < 0 ? -1 : src.indexOf('\n];', a);
+  if (a < 0 || b < 0) return src;
+  const lines = src.slice(a + mark.length, b).split('\n');
+  // 예전 줄은 {"v":…,"items":[…]} 처럼 따옴표가 붙은 것도 있다. 두 모양 모두 다룬다.
+  const row = /^(\s*\{"?v"?: ?"\d+\.\d+\.\d+",.*,\s?"?items"?: ?)\[.*\]\},?$/;
+  if (!lines.every(l => row.test(l))) return src;
+  return src.slice(0, a + mark.length) + lines.map((l, i) => (i < keep ? l : l.replace(row, '$1[]},'))).join('\n') + src.slice(b);
+}
+
 /** Assembles the bundle text from sources. Pure: same input, same output. Returns a line map for error reporting. */
 export function assemble({collector, css, parts, template, briefing: briefingSrc}) {
   if (parts.length < 10) throw new Error('work center parts missing');
   collector = trimIndentLines(stripCommentLines(collector));
-  briefingSrc = trimIndentLines(stripCommentLines(briefingSrc));
+  briefingSrc = trimIndentLines(stripCommentLines(trimChangelog(briefingSrc)));
   parts = parts.map(p => ({...p, src: trimIndentLines(stripCommentLines(p.src))}));
   const halves = template.split(PARTS_MARK);
   if (halves.length !== 2) throw new Error('work center parts were not assembled (workcenter.browser.js needs exactly one /*@WC_PARTS@*/ marker)');

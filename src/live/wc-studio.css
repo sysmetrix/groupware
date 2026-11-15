@@ -131,7 +131,9 @@
 .wc .seg .on,.wc .seg button.on,.wc .seg a.on,.wc.dark .seg button.on{background:var(--card);color:var(--fg);font-weight:700;box-shadow:var(--sh-sm),0 0 0 1px var(--line)}
 .wc .chip{border-radius:999px;border-color:var(--line2);box-shadow:none}
 .wc .chip:hover{border-color:var(--muted);color:var(--fg);background:var(--soft)}
-.wc .chip.on{background:var(--pri);border-color:var(--pri);color:var(--pri-fg)}
+/* 고른 칩: 여러 개가 함께 켜지는 거름 칩이라 잉크색이면 화면이 까맣게 된다. 옅은 파랑으로 */
+.wc .chip.on,.wc .chip.on:hover{background:var(--accent-soft);border-color:transparent;color:var(--accent);font-weight:700}
+.wc .chip:disabled{opacity:1;cursor:default;background:var(--soft);border-color:transparent;color:var(--fg-secondary)}
 .wc kbd{border:0;background:var(--soft);color:var(--muted);border-radius:5px}
 
 /* 면: 흰 종이 위에서는 가는 선 하나로 충분하다 */
@@ -191,6 +193,29 @@
 .wc .gs-picks .muted{flex-basis:100%}
 .wc .gs-pick{display:inline-flex;align-items:center;gap:8px;font-size:13px}
 .wc .gs-pick select{height:32px;max-width:240px}
+/* 본문·처리 창 안의 nav(쪽 넘김 등)는 왼쪽 메뉴의 세로 배치 규칙을 받지 않는다 */
+.wc main nav,.wc aside nav,.wc.dark main nav,.wc.dark aside nav{grid-row:auto;display:flex;flex-direction:row;align-items:center;flex-wrap:wrap;gap:8px;padding:0;overflow:visible;background:none;border:0}
+.wc main nav.bar [role="status"]{font-size:13px;color:var(--muted)}
+/* 할 일 보드: 카드마다 되풀이되는 버튼은 작고 조용하게, 종류는 왼쪽 선 색으로 */
+.wc .board{gap:12px}
+.wc .col{padding:10px 8px}
+.wc .col .col-h{font-size:13px;font-weight:700;color:var(--fg-secondary);padding:0 4px}
+.wc .col .hint{border-color:var(--line2);border-radius:10px;font-size:12.5px}
+.wc .card{padding:10px 11px;font-size:13.5px;line-height:1.5}
+.wc .card.todo,.wc .card.act{border-left-width:3px}
+.wc .card.todo{border-left-color:var(--md)}.wc .card.act{border-left-color:var(--accent)}.wc .card.act.high{border-left-color:var(--hi)}
+.wc .card .btn.sm{height:26px;margin-top:8px;padding:0 8px;font-size:12.5px;font-weight:500;box-shadow:none;border-color:var(--line);color:var(--fg-secondary)}
+.wc .card .btn.sm:hover{color:var(--fg);border-color:var(--line2)}
+/* 통합알림: 한 건이 한 장. 안의 버튼은 조용하게 */
+.wc article.card2{padding:12px 16px}
+.wc article.card2 .btn.sm{box-shadow:none;font-weight:500}
+/* 조직도: 글머리표 대신 가는 연결선 */
+.wc .org-chart,.wc .org-chart ul{list-style:none;margin:0;padding:0}
+.wc .org-chart ul{margin:2px 0 2px 13px;padding-left:14px;border-left:1px solid var(--line2)}
+.wc .org-chart li{margin:4px 0}
+.wc .org-chart .chip{height:28px;font-weight:600}
+.wc .org-chart .chip .muted{font-weight:400;font-size:12px;margin-left:2px}
+.wc .legend i{border:1px solid var(--line2);border-radius:4px}
 /* 처리 창 */
 .wc .ph .top{background:var(--card);border-radius:14px 0 0 0}
 .wc.expanded .ph .top{background:var(--card);color:var(--fg)}
