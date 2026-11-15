@@ -342,6 +342,7 @@
     if (t.id === 'bproj' && t.value === '__custom') { S.budget.custom = true; renderMain(); }
     if (t.id === 'bproj' && t.value !== '__custom') { S.budget.custom = false; const [p, f] = t.value.split('|'); S.budget.project = p; S.budget.filter = f; loadBudget(); }
     if (t.id === 'bCatProj') { S.budget.project = t.value; S.budget.filter = ''; loadBudget(); }
+    if (t.id === 'budgetChartSort' && ['executed', 'rate', 'balance', 'name'].includes(t.value)) { S.budget.chartSort = t.value; renderMain(); root.querySelector('#budgetChartSort')?.focus(); }
     if (t.id === 'resDate') resGo();
     if (t.id === 'payPlan') payPlanChanged();
     if (t.id === 'resTitle') resSyncForm(); // 예약명만 바꾸면 겹침 확인 결과는 그대로 둔다(다시 그리면 누르려던 버튼이 사라져 클릭이 씹힘)
