@@ -31,9 +31,41 @@
 
   // ---------- 업데이트 확인 ----------
   const UPDATE_BASE = 'https://sysmetrix.github.io/groupware/';
+  const UPDATE_CACHE = 'bwyfgw-wc', UPDATE_META = 'bwyfgw:wc:auto';
+  /** 배포 사이트에서 최신 묶음을 받아 SHA-256이 맞을 때만 돌려준다: {src, sha256, version}. 북마크 "GW 비서 열기"와 같은 절차다. */
+  async function updateFetch() {
+    const opt = {cache: 'no-store', credentials: 'omit', redirect: 'error'};
+    const r = await fetch(UPDATE_BASE + 'current.json', opt);
+    if (!r.ok) throw new Error('버전 정보 HTTP ' + r.status);
+    const m = await r.json();
+    if (!/^[a-f0-9]{64}$/.test(m.sha256 || '') || m.file !== 'gw-live-' + m.sha256 + '.js') throw new Error('버전 정보가 올바르지 않습니다');
+    const b = await fetch(UPDATE_BASE + m.file, opt);
+    if (!b.ok) throw new Error('실행 파일 HTTP ' + b.status);
+    const src = await b.text();
+    const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(src));
+    if (Array.from(new Uint8Array(d), x => x.toString(16).padStart(2, '0')).join('') !== m.sha256) throw new Error('실행 파일 무결성 확인 실패');
+    const version = (src.slice(0, 200).match(/live bundle v(\d+\.\d+\.\d+)/) || [])[1] || '';
+    if (!version) throw new Error('실행 파일의 버전을 알 수 없습니다');
+    return {src, sha256: m.sha256, version};
+  }
+  /** 확장 프로그램용 보관: 받아 둔 묶음을 이 브라우저에 두어, 다음에 그룹웨어를 열 때 내려받지 않고 바로 새 버전으로 시작한다(확장의 mount.js가 읽는다). */
+  async function updateStore(u) {
+    try {
+      if (!window.BWYFGW_EXT || !window.caches) return false;
+      const c = await window.caches.open(UPDATE_CACHE);
+      for (const k of await c.keys()) await c.delete(k);
+      await c.put('/bwyfgw-wc/' + u.sha256, new Response(u.src, {headers: {'content-type': 'text/javascript; charset=utf-8'}}));
+      localStorage.setItem(UPDATE_META, JSON.stringify({sha256: u.sha256, version: u.version, at: Date.now()}));
+      return true;
+    } catch (e) { logError('updateStore', String((e && e.message) || e)); return false; }
+  }
+  /** 받아 둔 묶음을 실행한다. 새 묶음은 스스로 이전 화면을 정리한다. reopen이면 업무센터를 열고, 아니면 버튼만 다시 띄운다. */
+  function updateApply(u, reopen) {
+    (0, eval)(u.src);
+    if (reopen) window.BWYFGW_WC.open(); else window.BWYFGW_WC.mount();
+  }
   /**
-   * 지금 바로 새 버전으로 바꾸기(사용자가 누를 때만). 북마크 "GW 비서 열기"와 같은 절차다:
-   * 배포 사이트의 버전 정보 → 실행 파일 → SHA-256 대조 → 실행. 새 묶음은 스스로 이전 화면을 정리하고 자리를 잡는다.
+   * 지금 바로 새 버전으로 바꾸기(사용자가 누를 때).
    * 작성 중인 내용이 있으면 먼저 묻고, 실패하면 지금 화면은 그대로 둔다.
    */
   async function updateNow() {
@@ -42,21 +74,10 @@
     if (S.updBusy || !leavePane()) return;
     S.updBusy = true; toast('새 버전을 받는 중입니다…');
     try {
-      const opt = {cache: 'no-store', credentials: 'omit', redirect: 'error'};
-      const r = await fetch(UPDATE_BASE + 'current.json', opt);
-      if (!r.ok) throw new Error('버전 정보 HTTP ' + r.status);
-      const m = await r.json();
-      if (!/^[a-f0-9]{64}$/.test(m.sha256 || '') || m.file !== 'gw-live-' + m.sha256 + '.js') throw new Error('버전 정보가 올바르지 않습니다');
-      const b = await fetch(UPDATE_BASE + m.file, opt);
-      if (!b.ok) throw new Error('실행 파일 HTTP ' + b.status);
-      const src = await b.text();
-      const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(src));
-      if (Array.from(new Uint8Array(d), x => x.toString(16).padStart(2, '0')).join('') !== m.sha256) throw new Error('실행 파일 무결성 확인 실패');
-      // 예전 "설치 북마크"로 이 브라우저에 저장해 둔 실행 파일이 있으면 그것도 새것으로 바꿔 둔다(다음에 열 때도 새 버전).
-      let stored = false; try { stored = !!localStorage.getItem('bwyfgw:wc:src'); } catch {}
-      (0, eval)(src);
-      if (stored) { try { window.BWYFGW_WC.install(src); } catch {} }
-      window.BWYFGW_WC.open();
+      const u = S.updReady || await updateFetch();
+      await updateStore(u);
+      S.updReady = null;
+      updateApply(u, true);
     } catch (e) {
       S.updBusy = false; logError('update', String((e && e.message) || e));
       const msg = `새 버전으로 바꾸지 못했습니다(${String((e && e.message) || e).slice(0, 60)}). 그룹웨어를 새로고침한 뒤 북마크 "GW 비서 열기"를 눌러 주세요.`;
@@ -64,10 +85,50 @@
       if (typeof root !== 'undefined' && root && root.host && !root.host.isConnected) window.alert(msg);
     }
   }
+  /**
+   * 자동 최신화: 새 버전이 배포되면 미리 받아 두고, 업무센터를 쓰고 있지 않을 때 조용히 바꾼다.
+   * - 버튼만 떠 있을 때(닫혀 있을 때): 바로 바꾼다. 화면에는 버튼이 잠깐 다시 그려질 뿐이다.
+   * - 열어서 쓰는 중: 건드리지 않는다. 닫는 순간(또는 다음에 열 때) 바뀐다. 급하면 업데이트 내역의 "지금 바꾸기".
+   * 같은 묶음은 한 탭에서 한 번만 시도한다(문제가 있는 배포가 화면을 계속 다시 그리지 않게).
+   */
+  async function autoUpdate() {
+    if (S.updBusy || window.BWYFGW_DEMO || !allowed('updateCheck') || S.settings.autoUpdate === false) return;
+    const i = await checkUpdate(false);
+    if (!i || !i.latest || R.compareVersions(i.latest, VERSION) <= 0) return;
+    if (!S.updReady || R.compareVersions(i.latest, S.updReady.version) > 0) {
+      S.updBusy = true;
+      try {
+        const u = await updateFetch();
+        if (R.compareVersions(u.version, VERSION) <= 0) return;
+        await updateStore(u);
+        S.updReady = u;
+      } catch (e) { logError('autoUpdate', String((e && e.message) || e)); return; } finally { S.updBusy = false; }
+    }
+    autoUpdateApply();
+  }
+  function autoUpdateApply(reopen) {
+    const u = S.updReady;
+    if (!u) return false;
+    let tried = ''; try { tried = sessionStorage.getItem(UPDATE_META) || ''; } catch {}
+    if (tried === u.sha256) return false;
+    if (S.open && !reopen) {
+      if (S.updNoted !== u.version) { S.updNoted = u.version; renderNav(); toast(`새 버전 v${u.version} 을 받아 두었습니다. GW 비서를 닫으면 자동으로 바뀝니다.`); }
+      return false;
+    }
+    try { sessionStorage.setItem(UPDATE_META, u.sha256); } catch {}
+    S.updReady = null;
+    try { updateApply(u, !!reopen); return true; } catch (e) { logError('autoUpdate.apply', String((e && e.message) || e)); return false; }
+  }
+  // 10분마다, 그리고 다른 탭을 보다가 돌아왔을 때 확인한다(보이지 않는 탭에서는 확인하지 않는다).
+  const onUpdateVisible = () => { if (document.visibilityState !== 'hidden') autoUpdate().catch(() => {}); };
+  const updateTimer = setInterval(onUpdateVisible, 10 * 60e3);
+  const updateFirst = setTimeout(onUpdateVisible, 5000);
+  document.addEventListener('visibilitychange', onUpdateVisible);
+  function updateStop() { clearInterval(updateTimer); clearTimeout(updateFirst); document.removeEventListener('visibilitychange', onUpdateVisible); }
   async function checkUpdate(force) {
     if (!allowed('updateCheck')) return null;
     const cached = store.get('updateInfo', null);
-    if (!force && cached && /^\d+\.\d+\.\d+$/.test(cached.latest || '') && Date.now() - cached.at < 3600e3 && R.compareVersions(cached.latest, VERSION) >= 0) return cached; // 1시간. 방금 갱신돼 설치본이 더 새것이면 다시 확인한다
+    if (!force && cached && /^\d+\.\d+\.\d+$/.test(cached.latest || '') && Date.now() - cached.at < 10 * 60e3 && R.compareVersions(cached.latest, VERSION) >= 0) return cached; // 10분. 방금 갱신돼 설치본이 더 새것이면 다시 확인한다
     // 실패한 확인도 10분은 다시 요청하지 않는다(접속이 막힌 곳에서 열 때마다 기다리지 않게, 요청 한도도 아끼게).
     if (!force && cached && !cached.latest && cached.err && Date.now() - cached.at < 10 * 60e3) return cached;
     // ① 배포 사이트(북마크 "GW 비서 열기"가 실제로 받아 오는 곳)의 버전이 기준이다. 릴리스를 따로 만들지 않아도 맞는다.

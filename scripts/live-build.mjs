@@ -62,23 +62,63 @@ window.BWYFGW_POLICY = {
 `;
 
 // Extension launcher. Runs in every top-level gw.bwyf.or.kr page (all_frames: false keeps it out of iframes).
-export const MOUNT_JS = `// Shows the "GW 비서" launcher once the groupware app has loaded (retries up to ~20 s).
+export const MOUNT_JS = `// GW 비서 확장 프로그램의 시작 스크립트. 한 번 설치하면 다시 설치할 필요가 없도록, 새 버전은 GW 비서가 스스로 받아 온다.
+//  1) 자동 업데이트가 이 브라우저에 받아 둔 더 새 묶음이 있으면(SHA-256 확인) 그것으로 시작한다. 없거나 맞지 않으면 함께 설치된 묶음을 쓴다.
+//  2) 그룹웨어 화면이 뜨면 "GW 비서" 버튼을 띄운다. 20초 안에 화면을 알아보지 못해도 버튼은 띄운다.
 (function () {
   try { if (window.top !== window) return; } catch (e) { return; }
   // The groupware opens its own screens (결재문서, 메일 쓰기, 게시글 등) as top-level popup windows at /#popup?… or /#/popup?….
   // They are not the main app: no launcher, no data read there.
   if (/^#\\/?popup(?:[?/&]|$)/i.test(location.hash || '')) return;
-  var started = false;
-  function wait(n) {
-    try { if (Object.keys(window).some(function (k) { return k.indexOf('webpackChunk') === 0; }) && document.body) { window.BWYFGW_WC.mount(); return; } } catch (e) {}
-    if (n < 40) { setTimeout(function () { wait(n + 1); }, 500); return; }
-    // Could not start: tell the user instead of failing silently.
+  window.BWYFGW_EXT = 1;
+  var started = false, usedStored = false;
+  function note(text) {
     var d = document.createElement('div');
-    d.textContent = 'GW 비서를 불러오지 못했습니다. 그룹웨어에 로그인한 뒤 새로고침(F5) 해 주세요.';
+    d.textContent = text;
     d.style.cssText = 'position:fixed;left:50%;top:12px;transform:translateX(-50%);z-index:2147483500;background:#fff4e0;color:#7a4b00;border:1px solid #f0d68a;border-radius:10px;padding:8px 14px;font:13px "Malgun Gothic",sans-serif';
     if (document.body) { document.body.append(d); setTimeout(function () { d.remove(); }, 12000); }
   }
-  function start() { if (started) return; started = true; wait(0); }
+  function mount() { try { window.BWYFGW_WC.mount(); return ''; } catch (e) { return String((e && e.message) || e) || '알 수 없는 오류'; } }
+  function wait(n) {
+    var ready = false;
+    try { ready = !!document.body && Object.keys(window).some(function (k) { return k.indexOf('webpackChunk') === 0; }); } catch (e) {}
+    if (ready && !mount()) return;
+    if (n < 40) { setTimeout(function () { wait(n + 1); }, 500); return; }
+    // 그룹웨어 화면을 알아보지 못했어도 버튼은 띄운다(눌렀을 때 자료를 읽지 못하면 그 화면에서 이유를 알려 준다).
+    var err = document.body ? mount() : '화면이 아직 준비되지 않았습니다';
+    // 받아 둔 묶음으로 시작했다가 실패했다면 그것을 잊는다. 새로고침하면 함께 설치된 묶음으로 돌아간다.
+    if (err && usedStored) forget();
+    if (err) note('GW 비서를 불러오지 못했습니다(' + err.slice(0, 60) + '). 그룹웨어에 로그인한 뒤 새로고침(F5) 해 주세요.');
+  }
+  function newer(a, b) { var x = String(a).split('.'), y = String(b).split('.'); for (var i = 0; i < 3; i++) { if (+x[i] !== +y[i]) return +x[i] > +y[i]; } return false; }
+  function meta() {
+    try {
+      var p = window.BWYFGW_POLICY;
+      if (p && p.features && p.features.updateCheck === false) return null;
+      if (typeof localStorage === 'undefined' || typeof caches === 'undefined') return null;
+      var m = JSON.parse(localStorage.getItem('bwyfgw:wc:auto') || 'null');
+      if (!m || !/^[a-f0-9]{64}$/.test(m.sha256 || '') || !/^\\d+\\.\\d+\\.\\d+$/.test(m.version || '')) return null;
+      return newer(m.version, window.BWYFGW_WC.version) ? m : null;
+    } catch (e) { return null; }
+  }
+  function forget() { try { localStorage.removeItem('bwyfgw:wc:auto'); } catch (e) {} }
+  function useStored(m) {
+    return caches.open('bwyfgw-wc').then(function (c) { return c.match('/bwyfgw-wc/' + m.sha256); }).then(function (r) { return r ? r.text() : ''; }).then(function (s) {
+      if (!s) { forget(); return; }
+      return crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)).then(function (d) {
+        var h = Array.from(new Uint8Array(d), function (x) { return x.toString(16).padStart(2, '0'); }).join('');
+        if (h !== m.sha256) { forget(); return; }
+        var old = window.BWYFGW_WC;
+        try { (0, eval)(s); usedStored = true; } catch (e) { forget(); if (!window.BWYFGW_WC) window.BWYFGW_WC = old; }
+      });
+    });
+  }
+  function start() {
+    if (started) return; started = true;
+    var m = meta();
+    if (!m) { wait(0); return; }
+    useStored(m).then(function () { wait(0); }, function () { wait(0); });
+  }
   // mount() reads the groupware once to fill the launcher badge. A tab opened in the background does not need that
   // until the user actually looks at it, so wait for it to become visible instead of reading in every hidden tab.
   if (document.visibilityState === 'hidden') {

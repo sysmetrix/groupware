@@ -16,7 +16,8 @@
   fab.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
   fab.title = 'GW 비서 열기 (Alt+G)';
   // 런처 스타일: 어두운 유리 질감의 상단 "아일랜드". 마우스를 올리면 오늘 요약이 펼쳐지고 커서를 따라 빛이 움직인다.
-  if (!document.getElementById('bwyfgw-wc-fab-style')) {
+  function fabStyle() {
+    if (document.getElementById('bwyfgw-wc-fab-style')) return;
     const st = document.createElement('style');
     st.id = 'bwyfgw-wc-fab-style';
     st.textContent = `
@@ -50,8 +51,9 @@
 @keyframes bwFabIn{from{opacity:0;transform:translateY(12px) scale(.92)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){#bwyfgw-wc-fab,#bwyfgw-wc-fab *{animation:none!important;transition:none!important}}
 `;
-    document.head.appendChild(st);
+    (document.head || document.documentElement).appendChild(st);
   }
+  fabStyle();
   // 끌어서 옮기기: 다른 화면 요소와 겹치면 원하는 곳으로 옮긴다. 놓으면 가까운 좌우 끝에 붙고, 위치는 기억한다.
   try { const p = JSON.parse(localStorage.getItem('bwyfgw:fabpos') || 'null'); if (p && Number.isFinite(p.top)) { fab.style.top = Math.max(8, Math.min(p.top, innerHeight - 56)) + 'px'; fab.style.bottom = 'auto'; if (p.side === 'left') { fab.style.left = '22px'; fab.style.right = 'auto'; } } } catch {}
   let dragSt = null, wasDrag = false;
@@ -70,6 +72,17 @@
   let tipTimer = 0;
   fab.addEventListener('click', () => { if (wasDrag) return; open(); });
   document.body.append(host, fab, tipBubble);
+  // 그룹웨어가 화면을 통째로 다시 그리면(로그인 직후, 세션 만료 뒤 등) 버튼과 스타일이 문서에서 떨어져 나가 버튼이 보이지 않게 된다.
+  // 2초마다 붙어 있는지 보고, 떨어졌으면 다시 붙인다. 창 크기가 달라 화면 밖으로 나간 버튼도 안으로 들인다.
+  function fabKeep() {
+    if (!document.body) return;
+    fabStyle();
+    if (!host.isConnected) document.body.append(host);
+    if (!fab.isConnected) document.body.append(fab);
+    if (!tipBubble.isConnected) document.body.append(tipBubble);
+    if (fab.style.display !== 'none') { const r = fab.getBoundingClientRect(); if (r.width && (r.top < 0 || r.bottom > innerHeight || r.left < 0 || r.right > innerWidth)) { fab.style.top = ''; fab.style.left = ''; fab.style.right = ''; fab.style.bottom = ''; } }
+  }
+  const fabKeepTimer = setInterval(fabKeep, 2000);
 
   const WC_CSS = '/*@WC_CSS@*/';
   // One small line-icon set (stroke icons, 24px grid) so every screen uses the same visual language.
