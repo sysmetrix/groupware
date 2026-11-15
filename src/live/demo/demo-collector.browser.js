@@ -297,6 +297,8 @@
   window.BWYFGW_DEMO = true;
   window.BWYFGW = Object.freeze({
     version: VERSION, collect, search,
+    organizationTree: async () => [{key:"d1", parent:"", name:"청소년사업팀 (예시)", count:2, orgGubun:"d"}],
+    organizationMembers: async key => key === "d1" ? [{name:"정민재", dept:"청소년사업팀 (예시)", duty:"팀장", position:"", tel:"", email:""}, {name:"김하늘", dept:"청소년사업팀 (예시)", duty:"직원", position:"", tel:"", email:""}] : [],
     call: notHere('그룹웨어 API를 부를'),
     budgetCatalog: async () => { await wait(); return Object.entries(BUDGETS).map(([project, b]) => ({project, name: b.name})); },
     budgetProject: async (t, opt = {}) => { await wait(); return budgetTable(t, opt); },
