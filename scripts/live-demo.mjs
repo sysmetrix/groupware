@@ -36,6 +36,17 @@ body{font:15px/1.6 "Pretendard","Malgun Gothic","Apple SD Gothic Neo",system-ui,
 <p>로그인 없이 GW 비서 화면을 살펴보는 곳입니다. 보이는 기관·사람·문서·금액은 모두 지어낸 것입니다.</p>
 <p><button id="open" type="button">GW 비서 열기</button></p>
 <div class="gw-note">실제 그룹웨어에는 아무 요청도 보내지 않습니다. 숨기기·할 일·설정은 이 브라우저의 둘러보기 전용 저장소에만 남습니다.</div></main></div>
+<script>
+// 둘러보기 전용: 주소에 ?at=13:20 을 붙이면 그 시각(한국 시간)인 것처럼 보여 준다. 근무 시간 밖에도 하루 띠의 바늘 같은 화면을 확인하려는 용도.
+(function () {
+  var m = /[?&]at=(\\d{1,2}):(\\d{2})/.exec(location.search);
+  if (!m) return;
+  var RD = Date, k = new RD(RD.now() + 9 * 36e5), shift = ((+m[1]) * 60 + (+m[2]) - (k.getUTCHours() * 60 + k.getUTCMinutes())) * 6e4;
+  function FD() { if (!new.target) return new RD(RD.now() + shift).toString(); return arguments.length ? new RD(...arguments) : new RD(RD.now() + shift); }
+  FD.prototype = RD.prototype; FD.now = function () { return RD.now() + shift; }; FD.parse = RD.parse; FD.UTC = RD.UTC;
+  window.Date = FD;
+})();
+</script>
 <script src="gw-demo.js"></script>
 <script>
 document.getElementById('open').addEventListener('click', function () { window.BWYFGW_WC.open(); });

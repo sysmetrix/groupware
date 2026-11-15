@@ -1,0 +1,188 @@
+/* =====================================================================
+   GW 비서 · 결재판 디자인(v0.69). 서류·도장·형광펜에서 가져온 화면.
+   - 펜 파랑(--accent): 내가 누르는 것 / 인주 빨강(--hi): 내 도장이 급한 것 / 형광펜(--hl): 지금 보고 있는 곳
+   - 마지막에 이어 붙어 앞 파일의 토큰과 규칙을 덮어쓴다. 색은 여기 토큰만 쓴다. 글자 12px 이상.
+   - 움직임은 두 가지뿐: 화면을 바꿨을 때 한 번의 등장, 사용자가 누른 것에 대한 응답. (wc/39-motion.js가 .m-* 클래스를 붙인다)
+   ===================================================================== */
+.wc{--bg:#f4f5f7;--card:#fff;--fg:#16191f;--muted:#58606e;--fg-secondary:#3d4450;--line:#e1e4ea;--line2:#b9bfcb;--soft:#eef0f4;--sel:#fff6bd;
+ --accent:#2742c7;--accent2:#2742c7;--accent3:#2742c7;--grad:#2742c7;--accent-soft:#e7ebfc;--accent-text:#2742c7;--pri:#2742c7;--pri-h:#1c33a6;
+ --hi:#c5281c;--hi-soft:#fdecea;--md:#8a5a00;--md-soft:#fff2d2;--ok:#1d7048;--ok-soft:#e3f3ea;--ok-text:#1d7048;--hl:#ffe24a;
+ --head:transparent;--r:8px;--sh:none;--sh-sm:none;--sh-md:0 8px 24px -12px rgba(22,25,31,.25);--sh2:0 18px 44px -18px rgba(22,25,31,.35);
+ --card-hover:rgba(39,66,199,.05);--bg-subtle:rgba(22,25,31,.04);
+ --e-out:cubic-bezier(.2,.8,.2,1);--e-pop:cubic-bezier(.3,1.5,.5,1);--t1:.12s;--t2:.22s;--t3:.42s;
+ background:var(--bg);letter-spacing:-.012em;font-variant-numeric:tabular-nums}
+.wc.dark{--bg:#131519;--card:#1b1e24;--fg:#eef0f3;--muted:#a9b0bd;--fg-secondary:#c9ced8;--line:#2b3038;--line2:#4a515d;--soft:#22262d;--sel:#3b3512;
+ --accent:#a3b4ff;--accent2:#a3b4ff;--accent3:#a3b4ff;--grad:#3f5be0;--accent-soft:#232c52;--accent-text:#c3ceff;--pri:#3f5be0;--pri-h:#526df0;
+ --hi:#ff8f84;--hi-soft:#47201c;--md:#f0c674;--md-soft:#443613;--ok:#86d3a6;--ok-soft:#1c3a2a;--ok-text:#a9e6c3;--hl:#f5d53a;
+ --sh-md:0 8px 24px -12px rgba(0,0,0,.7);--sh2:0 18px 44px -18px rgba(0,0,0,.8);--card-hover:rgba(163,180,255,.08);--bg-subtle:rgba(255,255,255,.04);background:var(--bg)}
+.wc .hm,.wc.dark .hm{--hm-grad:var(--pri);--hm-sh:none}
+
+/* ---------- 공통: 초점·누름·선택 ---------- */
+.wc :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.wc ::selection{background:var(--hl);color:#16191f}
+.wc .btn,.wc .hb,.wc .ch-btn,.wc .chip,.wc .ch-chip,.wc .ch-cap,.wc .ch-fact,.wc .hm-tile,.wc .hm-q{transition:background var(--t1),border-color var(--t1),color var(--t1),transform var(--t1) var(--e-out)}
+.wc .btn:active,.wc .hb:active,.wc .ch-btn:active,.wc .chip:active,.wc .ch-chip:active{transform:translateY(1px) scale(.985)}
+
+/* ---------- 머리글 ---------- */
+.wc header{background:var(--card);border-bottom:1px solid var(--line);backdrop-filter:none;-webkit-backdrop-filter:none;position:relative}
+.wc header .brand-name b{font-size:16px;font-weight:800;letter-spacing:-.03em}
+.wc header .srch{border-radius:8px;border:1px solid var(--line);background:var(--bg)}
+.wc header .srch:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);background:var(--card)}
+.wc header .hb{border-radius:8px}
+.wc header .hb.primary{background:var(--accent-soft);color:var(--accent);border-color:transparent;font-weight:700}
+.wc header .hb.primary:hover{background:var(--accent);color:var(--card)}
+.wc header .hb[data-act="menuNew"]{background:var(--pri);color:#fff;border-color:var(--pri);font-weight:700}
+.wc header .hb[data-act="menuNew"]:hover{background:var(--pri-h);border-color:var(--pri-h);color:#fff}
+/* 읽는 중: 머리글 아래를 지나가는 한 줄 */
+.wc header::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--accent);transform:scaleX(0);transform-origin:0 50%;opacity:0}
+.wc header.m-loading::after{opacity:1;animation:stLoad 1.1s var(--e-out) infinite}
+@keyframes stLoad{0%{transform:scaleX(0);transform-origin:0 50%}55%{transform:scaleX(1);transform-origin:0 50%}56%{transform-origin:100% 50%}100%{transform:scaleX(0);transform-origin:100% 50%}}
+
+/* ---------- 왼쪽 메뉴: 상자 대신 형광펜 ---------- */
+.wc nav{background:var(--bg);border-right:1px solid var(--line)}
+.wc nav a{border:0;background:none;box-shadow:none;border-radius:6px;color:var(--fg-secondary);font-weight:500}
+.wc nav a:hover{background:var(--soft);color:var(--fg)}
+.wc nav a .lb{flex:0 1 auto;background:linear-gradient(var(--hl),var(--hl)) no-repeat 0 72%/0 52%;padding:0 3px;margin:0 -3px;transition:background-size var(--t2) var(--e-out)}
+.wc nav a.on{background:none;border:0;box-shadow:none;color:var(--fg);font-weight:800}
+.wc nav a.on .lb{background-size:100% 52%}
+.wc nav a .n,.wc nav a .nav-chevron{margin-left:auto}
+.wc nav a.on .i{color:var(--accent)}
+.wc.dark nav a.on .lb{background-size:100% 100%;background-position:0 50%;color:#16191f;border-radius:3px}
+.wc nav .foot a.on .lb,.wc nav .navver .lb{background:none}
+.wc nav a .n{background:none;border:0;color:var(--muted);font-weight:700;min-width:0;padding:0 2px;font-size:13px}
+.wc nav a .n.mine{color:var(--accent)}
+.wc.dark nav a .n.mine{background:none;color:var(--accent)}
+.wc nav a .n.hot{color:#fff;background:var(--hi);border-radius:999px;min-width:22px;padding:0 6px;text-align:center}
+.wc.dark nav a .n.hot{color:#16191f}
+.wc nav a .n.m-bump{animation:stBump var(--t3) var(--e-pop)}
+@keyframes stBump{0%{transform:scale(1)}40%{transform:scale(1.35)}100%{transform:scale(1)}}
+
+/* ---------- 본문 공통 ---------- */
+.wc .pgh h1{font-size:26px;font-weight:800;letter-spacing:-.035em}
+.wc .btn{border-radius:7px;border:1px solid var(--line2);background:var(--card);color:var(--fg);font-weight:600;box-shadow:none}
+.wc .btn:hover{border-color:var(--fg);color:var(--fg);background:var(--card)}
+.wc .btn.primary,.wc .ch-btn-primary{background:var(--pri);border-color:var(--pri);color:#fff;font-weight:700;box-shadow:none;filter:none}
+.wc .btn.primary:hover,.wc .ch-btn-primary:hover{background:var(--pri-h);border-color:var(--pri-h);color:#fff;filter:none}
+.wc.dark .btn.primary,.wc.dark .ch-btn-primary,.wc.dark .ch-send{background:var(--pri);border-color:var(--pri);color:#fff}
+.wc.dark .btn.primary:hover,.wc.dark .ch-btn-primary:hover,.wc.dark .ch-send:hover{background:var(--pri-h);border-color:var(--pri-h);color:#fff}
+.wc .btn.ghost{background:transparent;border-color:transparent;color:var(--fg-secondary)}
+.wc .btn.ghost:hover{background:var(--soft);border-color:transparent;color:var(--fg)}
+.wc .btn.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.wc .btn.danger{color:var(--hi);border-color:color-mix(in srgb,var(--hi) 45%,transparent)}
+.wc .btn.danger:hover{background:var(--hi-soft);border-color:var(--hi);color:var(--hi)}
+.wc .inp,.wc select.f,.wc input.f,.wc textarea{border-radius:7px}
+.wc .inp:focus,.wc select.f:focus,.wc input.f:focus,.wc textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);outline:0}
+.wc .box,.wc .card2,.wc .hm-card,.wc .ch,.wc .list{border-radius:10px;box-shadow:none}
+.wc .seg{border-radius:8px;background:var(--soft);border-color:transparent}
+.wc .seg .on,.wc .seg button.on,.wc .seg a.on{background:var(--card);color:var(--fg);font-weight:700;box-shadow:0 0 0 1px var(--line2)}
+.wc .chip{border-radius:999px}
+.wc .chip.on{background:var(--fg);border-color:var(--fg);color:var(--card)}
+
+/* 배지: 급한 것은 도장, 나머지는 조용하게 */
+.wc .bdg{border-radius:5px;font-weight:700}
+.wc .bdg.urgent,.wc .bdg.overdue,.wc .hm-badge.hm-tone-urgent{background:transparent;color:var(--hi);border:1.5px solid var(--hi);border-radius:5px;font-weight:800;letter-spacing:.02em;transform:rotate(-3deg);transform-origin:50% 60%}
+.wc .bdg.overdue{background:var(--hi);color:#fff}
+.wc.dark .bdg.overdue{color:#16191f}
+.wc .bdg.todo{background:var(--accent-soft);color:var(--accent)}
+.wc .bdg.new{background:var(--fg);color:var(--card)}
+.wc .bdg.date.hot{background:transparent;color:var(--hi);border:1px solid color-mix(in srgb,var(--hi) 45%,transparent)}
+
+/* 목록: 줄 쳐진 서류처럼. 올리면 왼쪽에 펜 선, 고르면 형광펜 */
+.wc .row{position:relative;transition:background var(--t1)}
+.wc .row::before{content:'';position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:2px;background:var(--accent);transform:scaleY(0);transition:transform var(--t2) var(--e-out)}
+.wc .row:hover{background:var(--soft)}
+.wc .row:hover::before,.wc .row:focus-within::before{transform:scaleY(1)}
+.wc .row.sel,.wc .row.sel:hover{background:var(--sel)}
+.wc .row.sel::before{transform:scaleY(1);background:var(--fg)}
+.wc .row.lean.df-row::before{content:none}
+.wc .row .t{letter-spacing:-.02em}
+
+/* ---------- 홈 ---------- */
+.wc .hm-eyebrow{font-size:13px;font-weight:600;color:var(--muted);letter-spacing:0}
+.wc .hm-hello{font-size:clamp(26px,2.6vw,36px);font-weight:800;letter-spacing:-.045em;line-height:1.2}
+.wc .hm-sub{font-size:15px;font-weight:600}
+.wc .hm-sub.hm-tone-urgent{color:var(--hi)}
+.wc .hm-card{border:1px solid var(--line);background:var(--card)}
+.wc .hm-card-k{font-size:13px;font-weight:700;color:var(--muted)}
+.wc .hm-tiles{border:0;border-radius:0;background:none;gap:0}
+.wc .hm-tile,.wc #hmTop .hm-tile,.wc .hm-tile.hm-tile-urgent{background:none;border:0;border-radius:8px;box-shadow:none}
+.wc .hm-tile:hover{background:var(--soft);transform:none}
+.wc .hm-tile-l{font-size:13px;font-weight:600;color:var(--muted)}
+.wc .hm-tile-v{font-size:34px;font-weight:800;letter-spacing:-.04em;line-height:1.15;color:var(--fg)}
+.wc .hm-tile.hm-tone-urgent .hm-tile-v,.wc .hm-tile.hm-tone-urgent .hm-tile-l{color:var(--hi)}
+.wc .hm-tile.hm-tone-todo .hm-tile-v{color:var(--accent)}
+.wc .hm-tile.hm-tone-ok .hm-tile-v{color:var(--ok)}
+.wc .hm-next-t{font-size:17px;font-weight:800;letter-spacing:-.03em;line-height:1.4}
+.wc .hm-q{border-radius:6px}
+.wc .hm-q:hover{background:var(--soft)}
+.wc .hm-link{color:var(--accent);font-weight:600}
+.wc .hm-tl-t{color:var(--muted);font-weight:600}
+
+/* 하루 띠: 08~19시 한 줄. 일정은 칸, 지금은 바늘. (그리는 곳: wc/29-home-view.js homeRailHtml) */
+.wc .dr{position:relative;margin:14px 0 2px;padding:26px 0 22px;user-select:none}
+.wc .dr-track{position:relative;height:30px;border-radius:6px;background:var(--card);border:1px solid var(--line);overflow:hidden}
+.wc .dr-lunch{position:absolute;top:0;bottom:0;background:repeating-linear-gradient(135deg,transparent 0 5px,var(--soft) 5px 10px)}
+.wc .dr-past{position:absolute;left:0;top:0;bottom:0;background:var(--soft);transition:width var(--t3) var(--e-out)}
+.wc .dr-b{position:absolute;top:4px;bottom:4px;min-width:6px;border:0;border-radius:4px;padding:0 6px;background:var(--accent);color:#fff;font:inherit;font-size:12px;font-weight:700;line-height:22px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;transform-origin:0 50%;transition:filter var(--t1),top var(--t1),bottom var(--t1)}
+.wc.dark .dr-b{color:#16191f}
+.wc .dr-b.dr-away{background:var(--md)}
+.wc .dr-b.dr-car{background:var(--ok)}
+.wc .dr-b.dr-done{opacity:.45}
+.wc .dr-b:hover,.wc .dr-b:focus-visible{top:1px;bottom:1px;filter:brightness(1.12);z-index:2;line-height:28px}
+.wc .dr-ticks{position:absolute;left:0;right:0;bottom:0;height:18px}
+.wc .dr-tick{white-space:nowrap;position:absolute;bottom:0;transform:translateX(-50%);font-size:12px;color:var(--muted);font-weight:500}
+.wc .dr-tick:first-child{transform:none}.wc .dr-tick:last-child{transform:translateX(-100%)}
+.wc .dr-tick:first-child::before{left:0}.wc .dr-tick:last-child::before{left:auto;right:0}
+.wc .dr-tick::before{content:'';position:absolute;left:50%;bottom:17px;width:1px;height:5px;background:var(--line2)}
+.wc .dr-now{position:absolute;top:0;bottom:18px;width:0;transition:left var(--t3) var(--e-out);z-index:3;pointer-events:none}
+.wc .dr-now::before{content:'';position:absolute;left:-1px;top:22px;bottom:0;width:2px;background:var(--hi);border-radius:1px}
+.wc .dr-now b{position:absolute;top:0;left:0;transform:translateX(-50%);padding:0 7px;height:20px;line-height:20px;border-radius:999px;background:var(--hi);color:#fff;font-size:12px;font-weight:800;white-space:nowrap}
+.wc.dark .dr-now b{color:#16191f}
+.wc .dr-now.dr-edge-l b{transform:none}.wc .dr-now.dr-edge-r b{transform:translateX(-100%)}
+.wc .dr-note{display:flex;gap:6px 14px;flex-wrap:wrap;margin-top:6px;font-size:13px;color:var(--muted)}
+.wc .dr-note b{color:var(--fg);font-weight:700}
+.wc .dr-allday{display:inline-flex;align-items:center;gap:5px}
+.wc .dr-allday i{width:8px;height:8px;border-radius:2px;background:var(--accent)}
+
+/* ---------- 채팅 ---------- */
+.wc .ch{border:1px solid var(--line);background:var(--card)}
+.wc .ch-mark,.wc .ch-av{background:var(--pri);color:#fff;border-radius:8px}
+.wc .ch-fact,.wc .ch-cap,.wc .ch-chip{border-radius:8px}
+.wc .ch-cap:hover,.wc .ch-fact:hover,.wc .ch-chip:hover{border-color:var(--fg);background:var(--card);transform:none}
+.wc .ch-user .ch-bubble{background:var(--fg);color:var(--card)}
+.wc .ch-composer:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.wc .ch-send{background:var(--pri);border-radius:8px}
+.wc .ch-send:hover{background:var(--pri-h)}
+
+/* ---------- 겹쳐 뜨는 것: 창·명령·알림 ---------- */
+.wc .dlg,.wc .menu,.wc .modal{border-radius:12px;box-shadow:var(--sh2)}
+.wc #overlay .dlg,.wc #overlay .modal{animation:stRise var(--t2) var(--e-out) both}
+.wc .menu{animation:stDrop var(--t1) var(--e-out) both;transform-origin:50% 0}
+.wc .toast{border-radius:10px;background:var(--fg);color:var(--card);box-shadow:var(--sh2);animation:stToast var(--t3) var(--e-pop) both}
+@keyframes stRise{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
+@keyframes stDrop{from{opacity:0;transform:scaleY(.94)}to{opacity:1;transform:none}}
+@keyframes stToast{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+
+/* ---------- 움직임: 화면을 바꿨을 때 한 번 ---------- */
+.wc main{animation:none}
+.wc.m-view main>*{animation:stIn var(--t2) var(--e-out) both}
+.wc.m-view main .row:nth-child(-n+8),.wc.m-view main .hm-card,.wc.m-view main .box,.wc.m-view main .card2{animation:stIn var(--t3) var(--e-out) both;animation-delay:calc(var(--i,0)*28ms)}
+@keyframes stIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+/* 도장: 급함 표시는 화면에 들어올 때 한 번 찍힌다 */
+.wc.m-view main .bdg.urgent,.wc.m-view main .bdg.overdue,.wc.m-view main .hm-badge.hm-tone-urgent{animation:stStamp .5s var(--e-pop) both;animation-delay:calc(140ms + var(--i,0)*45ms)}
+@keyframes stStamp{0%{opacity:0;transform:rotate(-14deg) scale(1.9)}55%{opacity:1;transform:rotate(-1deg) scale(.94)}100%{opacity:1;transform:rotate(-3deg) scale(1)}}
+/* 하루 띠: 칸이 왼쪽부터 그려지고 바늘이 지금으로 간다 */
+.wc.m-view .dr-b{animation:stDraw var(--t3) var(--e-out) both;animation-delay:calc(180ms + var(--i,0)*70ms)}
+@keyframes stDraw{from{transform:scaleX(0);opacity:.2}to{transform:none;opacity:1}}
+/* 처리 창: 오른쪽에서 들어온다 */
+.wc.m-pane aside#pane>*{animation:stPane var(--t3) var(--e-out) both}
+@keyframes stPane{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:none}}
+/* 밝게·어둡게: 색만 부드럽게 넘어간다 */
+.wc.m-theme,.wc.m-theme *{transition:background-color .35s ease,border-color .35s ease,color .35s ease!important}
+/* 숫자가 바뀌었을 때 */
+.wc .m-tick{display:inline-block;animation:stTick var(--t3) var(--e-out)}
+@keyframes stTick{from{transform:translateY(40%);opacity:0}to{transform:none;opacity:1}}
+
+@media (max-width:900px){.wc .dr-b{font-size:0;padding:0}.wc .dr-tick:nth-child(even){display:none}}
+@media (prefers-reduced-motion:reduce){.wc *,.wc *::before,.wc *::after{animation:none!important;transition:none!important}}
+.wc.m-off *,.wc.m-off *::before,.wc.m-off *::after{animation:none!important;transition:none!important}
