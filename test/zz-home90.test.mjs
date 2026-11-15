@@ -40,7 +40,7 @@ test('clear discards deferred local result and can immediately accept a new requ
 test('unknown schedule propagates to tile and briefing, and invalid coverage hides stale events',()=>{
  const {c,S}=setup(); S.raw.data.schedule.start='20261001';S.raw.data.schedule.end='20261031';S.raw.data.schedule.events=[{start:'202611150900',end:'202611151000',title:'stale'}];
  const d=c.homeData();assert.equal(d.scheduleUnknown,true);assert.equal(d.events.length,0);
- assert.match(c.homeTopHtml(d),/일부 미확인/);assert.match(c.chatBriefHtml(),/오늘 그룹웨어 일정 \(구글 제외\)<\/span><b>확인 불가/);
+ assert.match(c.homeTopHtml(d),/일부 미확인/);assert.match(c.homeDashHtml(d),/일정 조회 또는 오늘 날짜 범위/);assert.doesNotMatch(c.chatBriefHtml(),/ch-fact|\d+건/,'the chat opener repeats no numbers; tiles and cards own them');
  assert.doesNotMatch(c.homeDashHtml(d),/조회된 그룹웨어 일정이 없습니다/);
  assert.equal(model.homeBriefing({events:null}).facts[0].value,'확인 불가');
  assert.equal(model.homeTiles({events:null})[3].value,'–');

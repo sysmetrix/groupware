@@ -10,7 +10,7 @@
     $('#overlay').innerHTML = `<div class="modal" data-act="closeOverlay"><div class="dlg" data-stop="1" style="width:min(720px,95vw);padding:22px 24px;max-height:88vh;overflow:auto" role="dialog" aria-label="업데이트 내역"><button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button>
       <h2 style="margin:0 0 4px;font-size:18px">업데이트 내역</h2>
       <div style="margin-bottom:10px">설치된 버전 <b>v${esc(VERSION)}</b> · 수집기 v${esc(GW.version)}${(() => { const v = versionInfo(); return v.applied ? ` · ${esc(v.applied)} 적용${v.from ? ` (이전 v${esc(v.from)})` : ''}` : ''; })()} ${newer ? `<span class="bdg urgent">새 버전 v${esc(up.latest)} 있음</span>` : upOk ? '<span class="bdg confirm">최신 버전</span>' : '<span class="bdg info">최신 여부 확인 전</span>'}
-        <div class="acts" style="margin-top:6px"><button class="btn sm" data-act="govUpdate">업데이트 확인</button><a class="btn sm" href="https://github.com/sysmetrix/groupware/releases/latest" target="_blank" rel="noopener">${ic('ext')}최신 릴리스 열기</a></div></div>
+        <div class="acts" style="margin-top:6px">${newer ? `<button class="btn sm primary" data-act="updateNow">${ic('refresh')}지금 v${esc(up.latest)}(으)로 바꾸기</button>` : ''}<button class="btn sm" data-act="govUpdate">업데이트 확인</button><a class="btn sm" href="https://sysmetrix.github.io/groupware/" target="_blank" rel="noopener">${ic('ext')}시작 페이지 열기</a></div>${newer ? '<div class="muted" style="font-size:12.5px;margin-top:6px">누르면 이 화면에서 바로 새 버전으로 바뀝니다. 설정과 할 일은 그대로 남습니다. 북마크 “GW 비서 열기”를 쓰고 있다면 다음부터는 누를 때마다 자동으로 최신 버전이 열립니다.</div>' : ''}</div>
       <div class="muted" style="font-size:12.5px;margin:4px 0 8px">버전 번호는 0.1.0부터 다시 매겼습니다. 옛 표기(v3·v4·v5)는 각 줄의 “이전”에 남겨 두었습니다. 모두 ${R.CHANGELOG.length}개 버전.</div>
       ${rows}</div></div>`;
   }

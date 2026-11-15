@@ -151,3 +151,16 @@ test('indistinguishable attendance records require review instead of false synce
   const confirmed = gsyncPlan({apps:[app({noDoc:'doc1'}),app({noDoc:'doc2'})],me:'016025',existing,now:NOW,synced:{'gs:doc1:20261110:관내출장':1}});
   assert.equal(confirmed.items.find(x => x.docNo === 'doc1').state, 'synced');
 });
+
+test('gsyncCalendarId: a calendar the user picked wins, and loosely written names still connect', () => {
+  // 이름을 조금 다르게 적어도 연결된 것으로 본다(예전에는 "5 BWYF 근태"와 글자가 맞아야만 했다)
+  for (const name of ['근태', 'BWYF근태', '5BWYF 근태', '회사 근태 (BWYF)']) assert.equal(gsyncCalendarId([{id: 'x@group.calendar.google.com', name}], GSYNC_LAYERS.attend), 'x@group.calendar.google.com', name);
+  assert.equal(gsyncCalendarId([{id: 'p@group.calendar.google.com', name: '개인'}], GSYNC_LAYERS.personal), 'p@group.calendar.google.com');
+  // 이름이 없어도 직접 고르면 연결된다. 고른 것이 이름 일치보다 먼저다
+  const cals = [{id: 'a@gmail.com', name: ''}, {id: 'n@group.calendar.google.com', name: '5 BWYF 근태'}, {id: 'b@group.calendar.google.com', name: '', layer: 'attend'}];
+  assert.equal(gsyncCalendarId(cals, GSYNC_LAYERS.attend), 'b@group.calendar.google.com');
+  assert.equal(gsyncCalendarId([{id: 'a@gmail.com', name: '', layer: GSYNC_LAYERS.personal}], GSYNC_LAYERS.personal), 'a@gmail.com');
+  // 관계없는 이름은 여전히 연결로 보지 않는다
+  assert.equal(gsyncCalendarId([{id: 'a@gmail.com', name: '1 Daily'}, {id: 'c@gmail.com', name: ''}], GSYNC_LAYERS.attend), '');
+  assert.equal(gsyncCalendarId([{name: '근태'}, null], GSYNC_LAYERS.attend), '', 'an entry without an id is ignored');
+});

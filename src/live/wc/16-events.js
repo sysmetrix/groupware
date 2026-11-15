@@ -89,6 +89,7 @@
     case 'govExportAudit': govExportAudit(); break;
     case 'govCopyDiag': copyText(diagText(diagChecks())); toast('진단 보고서를 복사했습니다.'); break;
     case 'govUpdate': govUpdate(); break;
+    case 'updateNow': updateNow(); break;
     case 'govAck': govAck(); break;
     case 'payPickBase': payForm(el.dataset.id); break;
     case 'payRun': payRun(); break;
@@ -357,6 +358,7 @@
     if (t.id === 'setImportFile') settingsImport(t);
     if (t.classList && t.classList.contains('setc')) saveSettingField(t);
     if (t.dataset && t.dataset.b) saveBudgetRows();
+    if (t.dataset && t.dataset.gsl) gsyncPick(t.dataset.gsl, t.value);
   });
   root.addEventListener('keydown', e => {
     const t = e.composedPath()[0];

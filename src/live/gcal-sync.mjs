@@ -84,9 +84,21 @@ function gsyncSettle(ev, synced, existing, ready) {
 }
 
 /** 캘린더 설정 목록에서 레이어 이름에 맞는 항목을 찾는다. */
+// 이름 비교용: 띄어쓰기·번호·기호·기관 머리글(BWYF)을 떼고 본다. "5 BWYF 근태" → "근태", "BWYF근태" → "근태".
+const gsNorm = s => String(s ?? '').toLowerCase().replace(/[\s\d._\-·()[\]]+/g, '').replace(/bwyf/g, '');
+/**
+ * 레이어(근태·개인·부서)에 쓸 캘린더 ID.
+ * ① 사용자가 직접 고른 캘린더(항목의 layer가 레이어 이름 또는 키)가 가장 먼저다.
+ * ② 고른 적이 없으면 이름으로 찾는다. 이름을 "근태"·"BWYF근태"처럼 조금 다르게 적어도 같은 것으로 본다.
+ * 이름도 없고 고르지도 않았으면 빈 문자열(연결 안 됨).
+ */
 export function gsyncCalendarId(cals, layerName) {
-  const bare = String(layerName).replace(/^\d+\s*/, '');
-  const hit = (Array.isArray(cals) ? cals : []).find(c => c && c.id && (String(c.name || '') === layerName || String(c.name || '').includes(layerName) || (bare && String(c.name || '').includes(bare))));
+  const list = (Array.isArray(cals) ? cals : []).filter(c => c && c.id);
+  const key = Object.keys(GSYNC_LAYERS).find(k => GSYNC_LAYERS[k] === layerName) || '';
+  const picked = list.find(c => c.layer && (c.layer === layerName || c.layer === key));
+  if (picked) return picked.id;
+  const bare = String(layerName).replace(/^\d+\s*/, ''), want = gsNorm(layerName);
+  const hit = list.find(c => { const n = String(c.name || ''); return n === layerName || n.includes(layerName) || (bare && n.includes(bare)) || (want && gsNorm(n).includes(want)); });
   return hit ? hit.id : '';
 }
 

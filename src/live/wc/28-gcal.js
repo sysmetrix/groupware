@@ -57,7 +57,7 @@
     return `${pgh('구글 일정', esc(c.email) + (list.length > 1 ? ` 외 ${list.length - 1}개` : ''), tools)}
       ${legend ? `<div class="muted" style="font-size:13px;margin:2px 0 8px">${legend}</div>` : ''}
       <iframe id="gcalFrame" title="구글 캘린더, Google 계정 로그인 필요" aria-describedby="gcalHelp" src="${esc(gcalUrl(c))}" referrerpolicy="no-referrer" style="width:100%;height:calc(100vh - 270px);min-height:520px;border:1px solid var(--line, #d0d5dd);border-radius:12px;background:#fff"></iframe>
-      <div id="gcalHelp" class="muted" style="font-size:12px;margin-top:6px">일정이 안 보이고 로그인 화면이 나오면 "구글 캘린더 열기"로 로그인한 뒤 다시 들어오세요. 일정을 고치려면 "구글 캘린더 열기"를 누르세요.</div>`;
+      <div id="gcalHelp" class="muted" style="font-size:12px;margin-top:6px">일정이 안 보이고 로그인 화면이 나오면 "구글 캘린더 열기"로 로그인한 뒤 다시 들어오세요. <b>로그인했는데도 계속 안 보이면</b> 브라우저가 다른 사이트 쿠키를 막고 있는 것입니다. 주소창 왼쪽의 자물쇠(사이트 설정)에서 이 그룹웨어 주소에 "서드 파티 쿠키 허용"을 켜 주세요. 캘린더 등록은 그대로 남아 있습니다. 일정을 고치려면 "구글 캘린더 열기"를 누르세요.</div>`;
   }
   function gcalSave() {
     const email = ($('#gcalEmail') || {}).value ? $('#gcalEmail').value.trim() : '';
@@ -67,6 +67,7 @@
     const seen = new Set(), cals = [];
     for (const x of p.list) if (!seen.has(x.id)) { seen.add(x.id); cals.push(x); }
     const c = gcalCfg(); c.email = email; c.cals = cals.slice(0, 12); delete c.extra;
+    if (c.layers) { const ids = new Set(gcalList(c).map(x => x.id)); for (const k of Object.keys(c.layers)) if (!ids.has(c.layers[k])) delete c.layers[k]; }
     S.gcalEdit = false; saveLocal(); renderMain(); toast('구글 일정을 저장했습니다.');
   }
   // noopener를 주면 window.open은 탭이 열려도 항상 null을 돌려주므로, 연 뒤에 opener를 끊는다(막힘 여부를 정확히 알기 위해).
