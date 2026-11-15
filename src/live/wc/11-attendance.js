@@ -44,7 +44,7 @@
     const selRow = st.day ? byDate.get(st.day) : null;
     const isWork = S.a.today ? S.a.today.isWorkday : true;
     const todayBox = !at?.today || at.today.error ? '오늘 근태 자료를 확인할 수 없습니다.' : isWork ? `퇴근 <b>${esc(hm4(at?.today.leave) || '기록 없음')}</b>` : '오늘은 근무일이 아닙니다.';
-    const legend = [['#e6f4ea', '정상 근무'], ['#fef7e0', '일부 근무(외출·조퇴 등)'], ['#e8f0fe', '휴가'], ['#f7f9fc', '휴일'], ['#fce8e6', '시간외 신청일 퇴근 지문 확인 필요']];
+    const legend = [['var(--ok-soft)', '정상 근무'], ['var(--md-soft)', '일부 근무(외출·조퇴 등)'], ['var(--accent-soft)', '휴가'], ['var(--soft)', '휴일'], ['var(--hi-soft)', '시간외 신청일 퇴근 지문 확인 필요']];
     const attActs = S.a.actions.filter(x => x.type === 'attendance');
     return `${pgh('근태·연차', '', `<button class="btn sm" data-act="openUrl" data-url="${esc(at?.url || '')}" data-title="근무시간 현황">${ic('ext')}근무시간 현황</button><button class="btn sm primary" data-act="openUrl" data-url="${esc(at?.requestUrl || '')}" data-title="근태신청">${ic('plus')}근태신청</button>`)}
 <div class="cards"><div class="card2"><div class="ct">오늘</div>${todayBox}<div class="muted" style="margin-top:6px">이번 달 인정된 근무시간 ${mins(at?.month?.recognizedMin)} · 초과 근무 ${mins(at?.month?.overtimeMin)}<span class="term" title="기본 ${mins(at?.month?.basicMin)}, 근무시간에서 뺀 시간(외출·휴게 등) ${mins(at?.month?.exceptMin)}"> (자세히)</span></div></div>

@@ -51,6 +51,9 @@ test('studio layer is bundled last, respects reduced motion and keeps text at 12
   assert.match(css, /@media \(prefers-reduced-motion:reduce\)\{[^}]*animation:none!important;transition:none!important/);
   assert.match(css, /\.wc\.m-off \*/);
   for (const m of css.matchAll(/font-size:\s*(\d+(?:\.\d+)?)px/g)) assert.ok(+m[1] >= 12, `font-size ${m[1]}px`);
+  // 본문 안의 nav(쪽 넘김)는 왼쪽 메뉴의 세로 배치를 물려받지 않는다. 고른 칩은 잉크색이 아니다
+  assert.match(css, /\.wc main nav,[^{]*\{[^}]*flex-direction:row/);
+  assert.match(css, /\.wc \.chip\.on,[^{]*\{background:var\(--accent-soft\)/);
   // 밝게·어둡게 모두 같은 토큰 이름을 정의한다
   const tokens = block => new Set([...block.matchAll(/(--[a-z0-9-]+):/g)].map(m => m[1]));
   const light = tokens(css.slice(css.indexOf('.wc{'), css.indexOf('.wc.dark{'))), dark = tokens(css.slice(css.indexOf('.wc.dark{'), css.indexOf('.wc .hm,')));
