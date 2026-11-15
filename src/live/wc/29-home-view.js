@@ -27,7 +27,7 @@
     const start = String(schedule && schedule.start || '').replace(/-/g, '').slice(0, 8), end = String(schedule && schedule.end || '').replace(/-/g, '').slice(0, 8);
     out.scheduleUnknown = !!(S.error || S.raw.sessionExpired || !schedule || !Array.isArray(schedule.events) || (scheduleStatus && (scheduleStatus.ok === false || scheduleStatus.error)) || !start || !end || t8 < start || t8 > end);
     out.holidays = !out.scheduleUnknown && schedule && Array.isArray(schedule.holidays) ? schedule.holidays.filter(h => String(h.date || '').replace(/-/g, '').slice(0, 8) === t8) : [];
-    const sched = schedule && Array.isArray(schedule.events) && !(scheduleStatus && (scheduleStatus.ok === false || scheduleStatus.error)) ? schedule.events : [];
+    const sched = !out.scheduleUnknown ? schedule.events : [];
     for (const e of sched) {
       const s = String(e.start || ''), z = String(e.end || e.start || '');
       if (s.slice(0, 8) <= t8 && z.slice(0, 8) >= t8) out.timeline.push({from: e.allDay ? '' : s.slice(8, 10) + ':' + s.slice(10, 12), to: e.allDay || z.length < 12 ? '' : z.slice(8, 10) + ':' + z.slice(10, 12), label: e.title, allDay: !!e.allDay, kind: 'etc'});
@@ -63,7 +63,7 @@
     const day = typeof R.homeDayInfo === 'function' ? R.homeDayInfo({date: R.kstNow(new Date()).date, holidays: d.holidays || []}) : {label: '', weekend: false, holiday: '', nextLabel: ''};
     const g = R.homeGreeting({hour, name, urgent: d.urgent, total: d.urgent + d.todo + d.check, loading: !d.loaded, weekend: day.weekend, nextLabel: day.nextLabel});
     if (!d.loaded && S.error) g.sub = '그룹웨어 자료를 읽지 못했습니다';
-    if (d.loaded && d.taskGaps) g.sub = '일부 자료를 읽지 못해 할 일 현황이 불완전할 수 있습니다';
+    if (d.loaded && d.taskGaps) { g.sub = '일부 자료를 읽지 못해 할 일 현황이 불완전할 수 있습니다'; g.tone = 'warn'; }
     return `<div class="hm-head">${day.label ? `<div class="hm-eyebrow"><span>${esc(day.label)}</span>${day.weekend ? '<span class="hm-pill">주말</span>' : ''}${day.holiday ? `<span class="hm-pill">${esc(day.holiday)}</span>` : ''}</div>` : ''}<h1 class="hm-hello">${esc(g.title)}</h1><p class="hm-sub hm-tone-${g.tone}">${esc(g.sub)}</p></div>`;
   }
 
@@ -76,7 +76,7 @@
       if (t.id === 'away' && (d.teamLoading || d.teamError || d.teamUnknown)) return {...t, value: '–', sub: d.teamError ? '조회 실패' : d.teamLoading ? '확인 중' : '조회 여부 확인 불가'};
       if (t.id === 'wait' && d.taskGaps) return {...t, sub: '일부 자료 누락 가능 · 확인된 건수'};
       if (['urgent', 'todo'].includes(t.id) && d.taskGaps) return {...t, sub: '일부 자료 누락 가능 · 확인된 건수'};
-      if (t.id === 'schedule' && (d.scheduleUnknown || d.teamLoading || d.teamError || d.teamUnknown)) return {...t, sub: '일부 미확인 · 구글 제외'};
+      if (t.id === 'schedule' && (d.scheduleUnknown || d.teamLoading || d.teamError || d.teamUnknown)) return {...t, value: '–', sub: '일부 미확인 · 구글 제외'};
       return t;
     }).map(t => `<button class="hm-tile hm-tile-${esc(t.id)} hm-tone-${t.tone}" data-act="homeTile" data-v="${t.id}" aria-label="${esc(t.label + ' ' + t.value + ' ' + t.sub)}"><span class="hm-tile-l">${esc(t.label)}</span><b class="hm-tile-v">${esc(t.value)}</b><span class="hm-tile-s">${esc(t.sub)}</span></button>`).join('');
     const total = d.urgent + d.todo + d.check;
@@ -104,7 +104,7 @@
     else if (d.resPartial) resourceGaps.push('자원 예약은 일부 자원만 조회했습니다.');
     const holiday = (d.holidays || []).map(h => h.title || '휴일').join(' · ');
     const rowHtml = r => `<li class="hm-tl-${esc(r.kind)}"><span class="hm-tl-t">${r.allDay ? '종일' : esc(r.from) + (r.to ? '~' + esc(r.to) : '')}</span><span class="hm-tl-l">${esc(r.label)}</span></li>`;
-    const tlHtml = `<section class="hm-card hm-today" aria-label="오늘 일정"><div class="hm-card-h"><h2 class="hm-card-k hm-today-k">오늘 그룹웨어 일정</h2><button class="hm-link" data-act="homeTile" data-v="schedule">달력 열기</button></div>${holiday ? `<div class="hm-empty">그룹웨어 휴일 정보: ${esc(holiday)} (근무 여부는 별도 확인)</div>` : ''}${tl.rows.length ? `<ul class="hm-tl">${tl.rows.map(rowHtml).join('')}</ul>${tl.more ? `<div class="hm-more">외 ${tl.more}건 · <button class="hm-link" data-act="homeTile" data-v="schedule">일정 달력에서 보기</button></div>` : ''}` : '<div class="hm-empty">조회된 그룹웨어 일정이 없습니다. 구글 일정은 별도로 확인하세요.</div>'}${awayLine ? `<div class="hm-away"><span class="hm-away-k">자리 비움</span> ${esc(awayLine)}</div>` : ''}${d.teamError ? '<div class="hm-empty">직원 근태를 조회하지 못해 자리 비움 현황을 확인할 수 없습니다.</div>' : d.teamLoading ? '<div class="hm-empty">직원 근태를 확인하는 중입니다.</div>' : d.teamUnknown ? '<div class="hm-empty">직원 근태 조회 여부를 확인할 수 없습니다.</div>' : ''}${gaps.map(x => `<div class="hm-empty">${esc(x)}</div>`).join('')}</section>`;
+    const tlHtml = `<section class="hm-card hm-today" aria-label="오늘 일정"><div class="hm-card-h"><h2 class="hm-card-k hm-today-k">오늘 그룹웨어 일정</h2><button class="hm-link" data-act="homeTile" data-v="schedule">달력 열기</button></div>${holiday ? `<div class="hm-empty">그룹웨어 휴일 정보: ${esc(holiday)} (근무 여부는 별도 확인)</div>` : ''}${tl.rows.length ? `<ul class="hm-tl">${tl.rows.map(rowHtml).join('')}</ul>${tl.more ? `<div class="hm-more">외 ${tl.more}건 · <button class="hm-link" data-act="homeTile" data-v="schedule">일정 달력에서 보기</button></div>` : ''}` : d.scheduleUnknown || d.teamLoading || d.teamError || d.teamUnknown ? '<div class="hm-empty">일정 일부가 미확인입니다. 확인 후 다시 안내합니다.</div>' : '<div class="hm-empty">조회된 그룹웨어 일정이 없습니다. 구글 일정은 별도로 확인하세요.</div>'}${awayLine ? `<div class="hm-away"><span class="hm-away-k">자리 비움</span> ${esc(awayLine)}</div>` : ''}${d.teamError ? '<div class="hm-empty">직원 근태를 조회하지 못해 자리 비움 현황을 확인할 수 없습니다.</div>' : d.teamLoading ? '<div class="hm-empty">직원 근태를 확인하는 중입니다.</div>' : d.teamUnknown ? '<div class="hm-empty">직원 근태 조회 여부를 확인할 수 없습니다.</div>' : ''}${gaps.map(x => `<div class="hm-empty">${esc(x)}</div>`).join('')}</section>`;
     const resources = R.homeTimelineCompact(d.resources, 5);
     const resourceHtml = `<section class="hm-card hm-today hm-res" aria-label="오늘 자원 예약"><div class="hm-card-h"><h2 class="hm-card-k hm-today-k">오늘 자원 예약 (직원 전체)</h2></div>${resources.rows.length ? `<ul class="hm-tl">${resources.rows.map(r => `<li class="hm-tl-car"><span class="hm-tl-t">${esc(r.from)}${r.to ? '~' + esc(r.to) : ''}</span><span class="hm-tl-l">${esc(r.label)}</span></li>`).join('')}</ul>${resources.more ? `<div class="hm-more">외 ${resources.more}건</div>` : ''}` : resourceGaps.length ? '' : '<div class="hm-empty">조회된 자원 예약이 없습니다.</div>'}${resourceGaps.map(x => `<div class="hm-empty">${esc(x)}</div>`).join('')}</section>`;
     const sum = (S.a && S.a.summary) || {};
@@ -119,12 +119,26 @@
     return `<div class="hm" id="hm"><div class="hm-main"><div id="hmHead">${homeHeadHtml(d)}</div><div class="hm-chatcol">${typeof chatView === 'function' ? chatView() : ''}</div></div><aside class="hm-rail" aria-label="오늘 현황"><div id="hmTop">${homeTopHtml(d)}</div><div id="hmDash">${homeDashHtml(d)}</div></aside></div>`;
   }
   // 홈이 이미 그려져 있으면 입력창을 건드리지 않고 머리말과 요약만 새로 그린다(비동기 자료가 도착할 때 입력 중 포커스를 잃지 않게). 그렸으면 true.
+  // Replacing summary regions must not discard the keyboard user's current control.
+  function homeReplaceHtml(region, html) {
+    if (!region) return;
+    const active = root.activeElement;
+    const owned = !!(active && region.contains(active));
+    const controls = owned ? [...region.querySelectorAll('[data-act], summary, [tabindex]')] : [];
+    const peers = owned ? controls.filter(el => el.tagName === active.tagName && el.dataset.act === active.dataset.act && el.dataset.v === active.dataset.v) : [];
+    const occurrence = peers.indexOf(active);
+    region.innerHTML = html;
+    if (!owned) return;
+    const candidates = [...region.querySelectorAll('[data-act], summary, [tabindex]')].filter(el => el.tagName === active.tagName && el.dataset.act === active.dataset.act && el.dataset.v === active.dataset.v);
+    const target = candidates[occurrence] || $('#chInput');
+    if (target) target.focus({preventScroll: true});
+  }
   function homePartialRefresh() {
     const head = $('#hmHead'), dash = $('#hmDash');
     if (S.view !== 'home' || !head || !dash) return false;
     const d = homeData();
-    head.innerHTML = homeHeadHtml(d); dash.innerHTML = homeDashHtml(d);
-    const top = $('#hmTop'); if (top) top.innerHTML = homeTopHtml(d);
+    homeReplaceHtml(head, homeHeadHtml(d)); homeReplaceHtml(dash, homeDashHtml(d));
+    const top = $('#hmTop'); if (top) homeReplaceHtml(top, homeTopHtml(d));
     // 새 대화가 없을 때 보이는 첫 브리핑도 같은 자료로 맞춘다(입력창은 그대로 둔다).
     try { if (typeof chatRefresh === 'function' && typeof chatState === 'function' && !chatState().busy && !chatState().msgs.some(m => !m.restored)) chatRefresh(); } catch (e) { logError('home.brief', e.message); }
     return true;

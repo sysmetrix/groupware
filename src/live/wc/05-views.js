@@ -42,7 +42,7 @@
   };
   const selectedAction = () => S.sel && S.sel.type === 'action' ? S.a && S.a.actions.find(x => x.key === S.sel.key) : null;
   function moveSel(step) {
-    const q = queue();
+    const q = todayQueue();
     if (!q.length) return;
     let i = q.findIndex(x => S.sel && S.sel.key === x.key);
     i = Math.max(0, Math.min(q.length - 1, i + step));
@@ -133,7 +133,7 @@
     if (S.view === 'notifications' && NTF.items === null && !NTF.loading && !NTF.error) { loadNotifications(); return; }
     if (S.view === 'report') { const f = $('#briefFrame'); if (f) f.srcdoc = R.renderHtml(S.a); }
     if (S.view === 'budget' && !S.budget.table && !S.budget.busy) loadBudget();
-    if (S.view === 'attendance' && !S.att.rows && !S.att.busy) loadAttendance();
+    if (S.view === 'attendance' && !S.att.rows && !S.att.busy && !S.att.error) loadAttendance();
     if (S.view === 'attendance' && GW.teamPlanned) loadApps().catch(() => {});
     if (S.view === 'gsync' && GW.teamPlanned) loadApps().catch(() => {});
     if (S.view === 'resource' && !resState().bookings && !resState().busy && !resState().err) resLoad();

@@ -2,9 +2,9 @@
 // 원칙: 그룹웨어에 새 요청을 만들지 않는다(검색 결과만 다룬다) / 구분은 문서 양식과 본문 머리의 "수신자" 줄로 추정하며 화면에 추정임을 밝힌다.
 // 이 파일은 briefing.mjs 뒤에 이어 붙어 한 범위로 번들되므로 import 없이, 이름은 df* 접두를 쓴다.
 
-export const DF_VERSION = 1;
-export const DF_KINDS = [['draft', '기안'], ['recv', '접수'], ['send', '발송']];
-export const DF_KIND_NAME = {draft: '기안', recv: '접수', send: '발송'};
+export const DF_VERSION = 2;
+export const DF_KINDS = [['draft', '기안'], ['recv', '접수'], ['send', '발송'], ['unknown', '확인 불가']];
+export const DF_KIND_NAME = {draft: '기안', recv: '접수', send: '발송', unknown: '확인 불가'};
 
 const dfStr = v => String(v ?? '');
 const dfNorm = v => dfStr(v).replace(/\s+/g, '').toLowerCase();
@@ -15,13 +15,14 @@ export function dfRecipient(text) {
   return m ? m[1].replace(/\s+/g, ' ').trim() : '';
 }
 
-/** 기안(draft) / 접수(recv) / 발송(send). 접수는 양식 이름, 발송은 수신자가 내부결재가 아닌 기안문으로 추정한다. */
+/** 접수는 양식, 기안·발송은 수신자로 추정한다. 수신자 근거가 없거나 불명확하면 unknown. 발송 완료 여부를 증명하지는 않는다. */
 export function dfKind(doc) {
-  if (!doc) return 'draft';
+  if (!doc) return 'unknown';
   if (/접수/.test(dfStr(doc.form))) return 'recv';
   const to = dfRecipient(doc.text);
-  if (to && !/내부\s*결재/.test(to)) return 'send';
-  return 'draft';
+  if (/^내부\s*결재$/.test(to)) return 'draft';
+  if (to && !/내부\s*결재|확인\s*불가|알\s*수\s*없|미정|^(?:[-?…]+)$/.test(to)) return 'send';
+  return 'unknown';
 }
 
 /** 같은 부서인지: 이름이 같거나 한쪽이 다른 쪽을 포함(예: "재단 전략경영실" ↔ "전략경영실"). */

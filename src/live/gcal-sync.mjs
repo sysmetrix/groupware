@@ -125,13 +125,23 @@ export function gsyncParseDayText(text, ymd) {
   return {date: String(ymd), cal: m[4].trim(), title, from: m[1] || '', to: m[2] || ''};
 }
 export function gsyncNormalizeExisting(payload) {
-  const days = (payload && payload.days) || {}, records = [], dates = [];
+  const days = payload && payload.days, records = [], dates = [], unknownDates = [];
+  if (!days || typeof days !== 'object' || Array.isArray(days)) return {at: Date.now(), dates, records, unknownDates};
   for (const [d, list] of Object.entries(days)) {
     if (!gsValidYmd(d)) continue;
-    dates.push(d);
-    for (const x of Array.isArray(list) ? list : []) { const r = typeof x === 'string' ? gsyncParseDayText(x, d) : (x && x.title ? {date: d, cal: String(x.cal || ''), title: String(x.title), from: String(x.from || ''), to: String(x.to || '')} : null); if (r) records.push(r); }
+    if (!Array.isArray(list) || dates.length >= 500) { unknownDates.push(d); continue; }
+    const parsed = []; let complete = true;
+    for (const x of list) {
+      if (typeof x === 'string' && /^(?:할 일|cake )|, 완료(?:되지 않음|됨),/.test(x.trim())) continue;
+      const r = typeof x === 'string' ? gsyncParseDayText(x, d) : (x && typeof x.title === 'string' && x.title.trim() && typeof x.cal === 'string' && x.cal.trim() ? {date: d, cal: x.cal, title: x.title, from: String(x.from || ''), to: String(x.to || '')} : null);
+      if (!r || !r.cal || (r.from && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(r.from)) || (r.to && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(r.to))) complete = false;
+      else parsed.push(r);
+    }
+    // A partial or truncated day can never establish absence or an exact match.
+    if (!complete || records.length + parsed.length > 5000) { unknownDates.push(d); continue; }
+    dates.push(d); records.push(...parsed);
   }
-  return {at: Number(payload && payload.at) || Date.now(), dates: dates.slice(0, 500), records: records.slice(0, 5000)};
+  return {at: Number(payload && payload.at) || Date.now(), dates, records, unknownDates};
 }
 const gsDays = (s, e) => { const out = []; for (let d = String(s); d <= String(e) && out.length < 40; d = gsPlus(d, 1)) out.push(d); return out; };
 /** 대조해야 할 날짜(후보들의 모든 날). 이 날짜들의 일 보기를 읽어 gsyncNormalizeExisting에 넣는다. */
@@ -143,7 +153,7 @@ const gsMin = hm => (/^\d{2}:\d{2}$/.test(hm || '') ? +hm.slice(0, 2) * 60 + +hm
 export function gsyncMatch(item, existing) {
   if (!existing || !Array.isArray(existing.dates) || !existing.dates.length) return {level: 'unknown'};
   const days = gsDays(item.startYmd, item.endYmd);
-  if (!days.every(d => existing.dates.includes(d))) return {level: 'unknown'};
+  if (!days.length || days[days.length - 1] !== item.endYmd || !days.every(d => existing.dates.includes(d) && !(existing.unknownDates || []).includes(d))) return {level: 'unknown'};
   const recs = (existing.records || []).filter(r => days.includes(r.date));
   const bare = String(item.layer).replace(/^\d+\s*/, '').replace(/^BWYF\s*/, '');
   const inLayer = r => r.cal && (r.cal.includes(item.layer) || r.cal.includes(bare));
@@ -153,7 +163,7 @@ export function gsyncMatch(item, existing) {
     if (is === null || !r.from) return false;
     const rs = gsMin(r.from), re = gsMin(r.to);
     if (rs !== is) return false;
-    if (ie !== null && re !== null) return re === ie;
+    if (ie !== null) return re !== null && re === ie;
     return true;
   };
   const timeOverlap = r => {
@@ -231,6 +241,7 @@ export function gsyncPlan({apps = [], me = '', deadlines = [], cals = [], synced
     const cancelled = (Array.isArray(apps) ? apps : []).filter(a => a && String(a.empCd) === String(me) && (a.deleteReqYn === 'Y' || a.docdelYn === 'N') && gsyncKind(a.atNm));
     const activeAttend = items.filter(i => i.source === 'attend');
     for (const r of existing.records || []) {
+      if (!existing.dates.includes(r.date) || (existing.unknownDates || []).includes(r.date)) continue;
       const bare = GSYNC_LAYERS.attend.replace(/^\d+\s*/, '').replace(/^BWYF\s*/, '');
       if (!r.cal || (!r.cal.includes(GSYNC_LAYERS.attend) && !r.cal.includes(bare))) continue;
       const rk = gsyncKindOfTitle(r.title);
@@ -241,5 +252,5 @@ export function gsyncPlan({apps = [], me = '', deadlines = [], cals = [], synced
       diffs.push({action: canc ? 'cancel' : 'orphan', date: r.date, title: r.title, googleTitle: r.title, detail: canc ? `그룹웨어에서 취소·삭제된 근태(${canc.atNm})가 구글에 남아 있습니다` : '해당 날짜의 그룹웨어 결재완료·진행 근태와 짝이 맞지 않습니다', docNo: (canc && canc.noDoc) || ''});
     }
   }
-  return {items, counts, diffs, today, compared: !!(existing && existing.dates && existing.dates.length), comparedAt: existing ? existing.at || 0 : 0};
+  return {items, counts, diffs, today, compared: !!(existing && existing.dates && existing.dates.length), comparedAt: existing ? existing.at || 0 : 0, comparedDates: existing && existing.dates || [], unknownDates: existing && existing.unknownDates || []};
 }

@@ -78,9 +78,9 @@
     if (!d.loaded) return wrap(`<div class="ch-bubble">${S.error ? '그룹웨어 자료를 읽지 못했습니다. 위쪽의 새로 고침을 누른 뒤 다시 확인해 주세요.' : '<span class="ch-dots" aria-hidden="true"><i></i><i></i><i></i></span> 그룹웨어 자료를 읽고 있습니다.'}</div>`);
     const total = d.urgent + d.todo + d.check, teamGap = !!(d.teamLoading || d.teamError || d.teamUnknown);
     const next = R.homeNextAction(d.mine.map(x => ({key: x.key, title: x.title, state: stateOf(x)})));
-    const b = R.homeBriefing({urgent: d.urgent, total, wait: d.wait, events: d.events.length, away: teamGap ? null : d.away.length, unread: d.unread, leave: d.leave, refN: d.refN, gaps: d.taskGaps, first: next ? next.title : ''});
+    const b = R.homeBriefing({urgent: d.urgent, total, wait: d.wait, events: d.scheduleUnknown || teamGap ? null : d.events.length, away: teamGap ? null : d.away.length, unread: d.unread, leave: d.leave, refN: d.refN, gaps: d.taskGaps, first: next ? next.title : ''});
     const facts = b.facts.map(f => `<button class="ch-fact ch-tone-${chatTone(f.tone)}" data-act="homeTile" data-v="${esc(f.id)}"><span>${esc(f.label)}</span><b>${esc(f.value)}</b></button>`).join('');
-    const say = b.first ? `먼저 볼 일은 <b>${esc(b.first)}</b>입니다.` : total ? '' : '새로 도착한 처리할 일이 없습니다.';
+    const say = b.first ? `먼저 볼 일은 <b>${esc(b.first)}</b>입니다.` : total ? '' : d.taskGaps ? '확인된 처리할 일이 없습니다.' : '새로 도착한 처리할 일이 없습니다.';
     return wrap(`<div class="ch-bubble">지금까지 확인한 내용입니다. ${say}${b.note ? `<br><span class="ch-brief-note">${esc(b.note)}</span>` : ''}</div><div class="ch-facts">${facts}</div><div class="ch-actions">${next ? `<button class="ch-btn ch-btn-primary" data-act="homeNext" data-v="${esc(next.key)}">먼저 볼 일 열기</button>` : ''}<button class="ch-btn ch-btn-ghost" data-act="chatChip" data-v="아침 브리핑 해줘">자세한 브리핑 듣기</button></div>`);
   }
   const chatWelcomeHtml = () => `<div class="ch-welcome">${chatBriefHtml()}<div class="ch-caps-k">이런 일을 맡길 수 있습니다</div><div class="ch-caps">${CHAT_CAPS_HOME.map(([i, t, s, q]) => `<button class="ch-cap" data-act="chatChip" data-v="${esc(q)}"><span class="ch-cap-i">${ic(i)}</span><span class="ch-cap-b"><b>${esc(t)}</b><span>${esc(s)}</span></span></button>`).join('')}</div><button class="ch-link ch-caps-more" data-act="chatChip" data-v="뭘 할 수 있어?">할 수 있는 일 전체 보기</button></div>`;
@@ -94,7 +94,7 @@
   const chatChipsHtml = () => { const st = chatState(); if (st.busy) return ''; const fresh = !st.msgs.some(m => !m.restored); return chatSuggestions().slice(0, fresh ? 4 : 3).map(q => `<button class="ch-chip" data-act="chatChip" data-v="${esc(q)}">${esc(q)}</button>`).join(''); };
   function chatFootHtml() {
     const m = chatMode();
-    return `<span class="ch-mode ${m.ready && !m.limited ? 'ch-mode-ai' : ''}" ${m.ready && m.model ? `title="${esc(m.model)}"` : ''}><i class="ch-dot" aria-hidden="true"></i>${m.ready ? (m.limited ? 'AI 사용 한도에 도달해 기본 모드로 답합니다(잠시 뒤 자동 재시도)' : `AI 연결됨${m.model ? ' · ' + esc(m.model) : ''}`) : '기본 모드 · 정해진 질문을 이해합니다'}</span>`;
+    return `${m.ready ? '<small class="ch-help">외부 전송: 질문·최근 대화 일부·조회 요약을 Google Gemini로 보냅니다. 자동 가림은 완전하지 않으므로 개인정보·비공개 문서를 입력하지 마세요.</small>' : ''}<span class="ch-mode ${m.ready && !m.limited ? 'ch-mode-ai' : ''}" ${m.ready && m.model ? `title="${esc(m.model)}"` : ''}><i class="ch-dot" aria-hidden="true"></i>${m.ready ? (m.limited ? 'AI 사용 한도에 도달해 기본 모드로 답합니다(잠시 뒤 자동 재시도)' : `AI 연결됨${m.model ? ' · ' + esc(m.model) : ''}`) : '기본 모드 · 정해진 질문을 이해합니다'}</span>`;
   }
   const chatHeadActsHtml = () => `${chatState().msgs.length ? `<button class="ch-hbtn" data-act="chatClear" title="대화 기록을 지우고 새로 시작합니다">${ic('refresh')}<span>새 대화</span></button>` : ''}<button class="ch-hbtn" data-act="chatSetupAi" aria-label="${chatMode().ready ? 'AI 설정' : 'AI 연결하기'}" title="${chatMode().ready ? 'AI 설정' : 'AI 연결하기'}">${ic('gear')}<span>${chatMode().ready ? 'AI 설정' : 'AI 연결하기'}</span></button>`;
 
@@ -115,22 +115,21 @@
     const near = log.scrollHeight - log.scrollTop - log.clientHeight < 90;
     const top = log.scrollTop, hasCurrent = st.msgs.some(m => !m.restored);
     const opened = [...log.querySelectorAll('details.ch-more')].map(d => d.open);
-    const active = root.activeElement;
-    const activeAct = active && active.dataset.act, activeValue = active && active.dataset.v;
-    log.innerHTML = chatLogHtml();
+    const replace = (el, html) => { if (!el) return; if (typeof homeReplaceHtml === 'function') homeReplaceHtml(el, html); else el.innerHTML = html; };
+    replace(log, chatLogHtml());
     log.querySelectorAll('details.ch-more').forEach((d, i) => { if (opened[i] !== undefined) d.open = opened[i]; });
-    if (activeAct) { const replacement = [...log.querySelectorAll('[data-act]')].find(el => el.dataset.act === activeAct && el.dataset.v === activeValue); if (replacement) replacement.focus({preventScroll: true}); }
-    const chips = $('#chChips'); if (chips) chips.innerHTML = chatChipsHtml();
-    const b = $('#chBtns'); if (b) b.innerHTML = chatBtnsHtml();
-    const f = $('#chFoot'); if (f) f.innerHTML = chatFootHtml();
-    const h = $('#chHeadA'); if (h) h.innerHTML = chatHeadActsHtml();
+    const chips = $('#chChips'); if (chips) replace(chips, chatChipsHtml());
+    const b = $('#chBtns'); if (b) replace(b, chatBtnsHtml());
+    const f = $('#chFoot'); if (f) replace(f, chatFootHtml());
+    const h = $('#chHeadA'); if (h) replace(h, chatHeadActsHtml());
     const last = st.msgs[st.msgs.length - 1];
     if (!hasCurrent) log.scrollTop = top; // 환영 화면은 읽던 위치를 지킨다
     else if (force || near) log.scrollTop = log.scrollHeight;
     else log.scrollTop = top;
     st.logTop = log.scrollTop;
     const fresh = log.querySelector('[data-autofocus]');
-    if (fresh) { if (root.activeElement !== $('#chInput')) fresh.focus({preventScroll: true}); st.msgs.forEach(m => (m.cards || []).forEach(c => { if (c.fresh) c.fresh = false; })); }
+    if (fresh) { // Confirmation cards stay in keyboard order without stealing focus during async updates.
+      st.msgs.forEach(m => (m.cards || []).forEach(c => { if (c.fresh) c.fresh = false; })); }
     if (last && last.role !== 'user' && last.state === 'done' && st.announced !== last.id) { st.announced = last.id; const sr = $('#chStatus'); if (sr) sr.textContent = '답변이 도착했습니다.'; }
   }
   const chatFocusInput = () => { const i = $('#chInput'); if (i) { i.scrollIntoView({behavior: 'smooth', block: 'center'}); i.focus(); } };

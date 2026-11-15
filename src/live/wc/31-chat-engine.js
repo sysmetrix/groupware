@@ -40,8 +40,17 @@
     if (st.msgs.length > 60) st.msgs.splice(0, st.msgs.length - 60);
     return m;
   }
-  function chatClear() { const st = chatState(); st.seq++; if (st.abort) st.abort.abort(); st.msgs = []; st.pending = {}; st.busy = false; st.draft = ''; st.ctx = {lastItems: [], pendingSlot: null}; try { store.del('chatHist'); } catch {} }
-  function chatStop() { const st = chatState(); st.stopped = true; st.seq++; if (st.abort) st.abort.abort(); }
+  function chatClear() { const st = chatState(); st.seq++; st.stopped = true; const ctl = st.abort; st.abort = null; st.activeReply = null; if (ctl) ctl.abort(); st.msgs = []; st.pending = {}; st.busy = false; st.draft = ''; st.ctx = {lastItems: [], pendingSlot: null}; try { store.del('chatHist'); } catch {} }
+  function chatStop() {
+    const st = chatState(), ai = st.activeReply, ctl = st.abort;
+    st.stopped = true; st.seq++; st.busy = false; st.abort = null; st.activeReply = null;
+    if (ctl) ctl.abort();
+    if (ai) {
+      ai.state = 'done'; ai.text = ai.text || '중지했습니다. 새 질문을 보낼 수 있습니다.';
+      for (const t of ai.tools || []) if (t.state === 'run') t.state = 'err';
+    }
+    chatSave(); chatRefresh();
+  }
 
   // ---------- 모델 선택과 한도 ----------
   const chatCool = () => store.get('chatCool', {});
@@ -85,7 +94,7 @@
     const chip = {name, label: def.label || name, state: 'run'};
     msg.tools.push(chip); chatRefresh();
     if (ctx.auto && (def.kind === 'act' || CHAT_AUTO_BLOCK.has(name))) { chip.state = 'err'; return {ok: false, text: '자동 실행에서는 조회만 합니다. 신청·예약·작성·화면 이동은 직접 요청해 주세요.'}; }
-    const st = chatState(), owner = S.userKey;
+    const st = chatState(), owner = S.userKey, seq = st.seq;
     const runArgs = args && typeof args === 'object' ? {...args} : {};
     if (runArgs.index && !runArgs.itemId && !runArgs.key && st.ctx && Array.isArray(st.ctx.lastItems)) {
       const hit = st.ctx.lastItems[Number(runArgs.index) - 1];
@@ -100,7 +109,7 @@
       res = await Promise.race([def.run(runArgs, {S, now: new Date(), userText: ctx.userText || '', viaAi: !!ctx.viaAi}), new Promise((_, rej) => setTimeout(() => rej(new Error('시간이 너무 오래 걸립니다')), 25000))]);
       if (!res || typeof res !== 'object') res = {ok: false, text: '결과를 받지 못했습니다.'};
     } catch (e) { logError('chatTool.' + name, e.message); res = {ok: false, text: '처리하지 못했습니다: ' + String(e.message || e).slice(0, 100)}; }
-    if (S.userKey !== owner || S.chat !== st) return {ok: false, text: '사용자가 바뀌어 이전 조회 결과를 버렸습니다.'};
+    if (S.userKey !== owner || S.chat !== st || st.seq !== seq || st.stopped) return {ok: false, text: '사용자가 바뀌어 이전 조회 결과를 버렸습니다.'};
     chip.state = res.ok ? 'ok' : 'err';
     if (res.ok && res.data && Array.isArray(res.data.items) && res.data.items.length) {
       st.ctx.lastItems = res.data.items.map(it => ({itemId: it.itemId || '', title: it.title || '', uid: it.uid || '', url: it.url || '', type: it.type || ''}));
@@ -149,8 +158,10 @@
 
   // ---------- Gemini 호출 (모델 자동 전환) ----------
   async function chatGemini(body, ctl) {
+    const st = chatState(), owner = S.userKey;
     const c = aiCfg();
     const avail = chatAvailable(await chatModelList());
+    if (ctl.signal.aborted || S.chat !== st || S.userKey !== owner) throw Object.assign(new Error('abort'), {aborted: true});
     if (!avail.length) throw Object.assign(new Error('quota'), {status: 429, kind: 'quota', cooled: true});
     let last = null;
     for (const model of avail.slice(0, 3)) {
@@ -163,7 +174,8 @@
       try {
         const r = await fetch(`${AI_HOST}/models/${model}:generateContent`, {method: 'POST', headers: {'x-goog-api-key': c.key, 'Content-Type': 'application/json'}, body: JSON.stringify(body), signal: mc.signal});
         const j = await r.json().catch(() => ({}));
-        if (r.ok) { chatState().model = model; return j; }
+        if (ctl.signal.aborted || S.chat !== st || S.userKey !== owner) throw Object.assign(new Error('abort'), {name: 'AbortError'});
+        if (r.ok) { st.model = model; return j; }
         const msg = (j.error && j.error.message) || 'HTTP ' + r.status;
         const ri = ((j.error && j.error.details) || []).find(d => /RetryInfo/.test(d['@type'] || ''));
         chatSetCool(model, R.chatCooldownFor(r.status, msg, ri && ri.retryDelay));
@@ -193,6 +205,7 @@
       const body = R.chatBuildRequest({system: R.chatSystemPrompt(chatNowStr(), (S.raw && S.raw.principal && S.raw.principal.name) || '', org), contents: [{role: 'user', parts: [{text: R.chatComposePrompt(qSafe, rSafe, dSafe)}]}], maxTokens: 500});
       const c = aiCfg();
       const avail = chatAvailable(await chatModelList());
+      if (S.chat !== st || st.stopped || st.seq !== runSeq) return;
       let streamed = '';
       if (avail.length) {
         const model = avail[0];
@@ -207,7 +220,7 @@
             let buf = '';
             while (true) {
               const {done, value} = await reader.read();
-              if (done || st.stopped || st.seq !== runSeq) break;
+              if (done || S.chat !== st || st.stopped || st.seq !== runSeq) break;
               buf += dec.decode(value, {stream: true});
               const lines = buf.split('\n'); buf = lines.pop() || '';
               for (const ln of lines) {
@@ -223,9 +236,9 @@
           }
         } catch {} finally { clearTimeout(tm); ctl.signal.removeEventListener('abort', onStop); }
       }
-      if (st.stopped || st.seq !== runSeq) return;
+      if (S.chat !== st || st.stopped || st.seq !== runSeq) return;
       const r = R.chatParseResponse(await chatGemini(body, ctl));
-      if (st.stopped || st.seq !== runSeq) return;
+      if (S.chat !== st || st.stopped || st.seq !== runSeq) return;
       if (r.text) { ai.text = r.text; ai.composed = true; chip.state = 'ok'; return; }
     } catch (e) {
       if (!st.stopped && st.seq === runSeq) logError('chatCompose', e.message);
@@ -248,10 +261,10 @@
     const texts = [];
     const needTool = /일정|할\s*일|연차|근태|근무|출장|휴가|예산|결재|상신|메일|공지|알림|공문|차량|예약|지문|실적|기한|마감|신청|자동화|브리핑/.test(text);
     for (let round = 0; round < 3; round++) {
-      if (st.stopped || st.seq !== runSeq) return;
+      if (S.chat !== st || st.stopped || st.seq !== runSeq) return;
       const mode = round === 0 && needTool ? 'ANY' : 'AUTO';
       const j = await chatGemini(R.chatBuildRequest({system, contents, tools, maxTokens: 1024, toolMode: mode}), ctl);
-      if (st.stopped || st.seq !== runSeq) return;
+      if (S.chat !== st || st.stopped || st.seq !== runSeq) return;
       const r = R.chatParseResponse(j);
       if (r.blocked) throw Object.assign(new Error('blocked'), {status: 200, kind: 'blocked'});
       if (r.error && !r.calls.length) throw Object.assign(new Error(r.error), {status: 200, kind: 'server'});
@@ -264,9 +277,9 @@
       contents.push({role: 'model', parts: keptParts});
       const resp = [];
       for (const call of r.calls.slice(0, 4)) {
-        if (st.stopped || st.seq !== runSeq) return;
+        if (S.chat !== st || st.stopped || st.seq !== runSeq) return;
         const res = await chatExec(call.name, call.args, ai, {userText: text, viaAi: true});
-        if (st.stopped || st.seq !== runSeq) return;
+        if (S.chat !== st || st.stopped || st.seq !== runSeq) return;
         if (res.text) texts.push(res.text);
         resp.push({functionResponse: {name: call.name, response: {result: R.chatSanitizeForLlm({ok: res.ok, text: res.llm !== undefined ? res.llm : res.text, data: res.data})}}});
       }
@@ -285,6 +298,7 @@
     const runSeq = ++st.seq, owner = S.userKey;
     chatPush('user', text, auto ? {auto} : {});
     const ai = chatPush('ai', '', {state: 'pending'});
+    st.activeReply = ai;
     chatRefresh();
     try {
       const ready = !auto && chatMode().ready && allowed('aiAssistant');
@@ -305,24 +319,27 @@
       const known = it.tool && it.confidence >= (ready ? 0.9 : 0.6) && CHAT_TOOLS.has(it.tool); // AI가 있으면 확신이 낮은 추측은 AI에게 맡긴다
       if (known) {
         const res = await chatExec(it.tool, it.args, ai, {userText: text, viaAi: false, auto: !!auto});
+        if (S.userKey !== owner || S.chat !== st || st.seq !== runSeq) return;
         st.ctx.lastRead = res.ok && ['get_schedule', 'get_staff_status', 'get_resource_status'].includes(it.tool) ? {tool: it.tool, args: it.args} : null;
-        if (st.stopped || st.seq !== runSeq) { ai.text = ai.text || '중지했습니다.'; }
+        if (S.chat !== st || st.stopped || st.seq !== runSeq) { ai.text = ai.text || '중지했습니다.'; }
         else {
           ai.text = res.text || '';
           ai.state = 'done'; chatRefresh();   // ① 로컬 답을 먼저 보여 준다
           const def = CHAT_TOOLS.get(it.tool);
-          if (ready && res.ok && def.kind !== 'act' && CHAT_COMPOSE.has(it.tool) && !st.stopped && (res.cards || []).length + (res.text || '').length > 30 && chatAvailable(await chatModelList()).length) await chatCompose(text, res, ai, runSeq);
+          if (ready && res.ok && def.kind !== 'act' && CHAT_COMPOSE.has(it.tool) && !st.stopped && (res.cards || []).length + (res.text || '').length > 30 && chatAvailable(await chatModelList()).length && st.seq === runSeq) await chatCompose(text, res, ai, runSeq);
         }
-      } else if (ready && chatAvailable(await chatModelList()).length) {
+      } else if (ready && chatAvailable(await chatModelList()).length && st.seq === runSeq) {
         st.ctx.lastRead = null;
         try { await chatRunAi(text, ai, runSeq); }
         catch (e) {
-          if (st.stopped || st.seq !== runSeq) ai.text = ai.text || '중지했습니다.';
+          if (S.chat !== st || st.stopped || st.seq !== runSeq) ai.text = ai.text || '중지했습니다.';
           else {
             logError('chatAi', e.message);
             if (!ai.text) { ai.text = CHAT_HELP; if (e.kind === 'key') ai.cards.push({type: 'setup', reason: '저장된 AI 키가 거절되었습니다. 다시 연결해 주세요.'}); else if (!e.cooled) ai.cards.push({type: 'note', tone: 'warn', text: R.chatErrorMessage(e.status || 0, e.message, e.kind || '')}); }
           }
         }
+      } else if (S.chat !== st || S.userKey !== owner || st.seq !== runSeq) {
+        return;
       } else if (auto) {
         st.ctx.lastRead = null;
         ai.text = '이 자동화 문장은 정해진 조회로 알아듣지 못해 실행하지 않았습니다. 자동화를 지우고 다시 등록해 주세요.';
@@ -331,10 +348,10 @@
         ai.text = CHAT_HELP;
         if (!chatMode().ready) ai.cards.push({type: 'setup', reason: 'AI를 연결하면 이렇게 정해진 문장이 아니어도 자유롭게 시킬 수 있습니다.'});
       }
-    } catch (e) { logError('chatSend', e.message); ai.text = '처리하지 못했습니다: ' + String(e.message || e).slice(0, 100); ai.state = 'error'; }
-    if (S.userKey !== owner || S.chat !== st) return; // 이전 계정의 결과를 새 계정에 저장·표시하지 않는다.
+    } catch (e) { if (S.userKey !== owner || S.chat !== st || st.seq !== runSeq) return; logError('chatSend', e.message); ai.text = '처리하지 못했습니다: ' + String(e.message || e).slice(0, 100); ai.state = 'error'; }
+    if (S.userKey !== owner || S.chat !== st || st.seq !== runSeq) return; // 이전 계정의 결과를 새 계정에 저장·표시하지 않는다.
     if (ai.state === 'pending') ai.state = 'done';
     if (!ai.text && !ai.cards.length) ai.text = '결과가 없습니다.';
-    if (st.seq === runSeq) { st.busy = false; st.abort = null; }
+    if (st.seq === runSeq) { st.busy = false; st.abort = null; st.activeReply = null; }
     chatSave(); chatRefresh(true); // 답이 끝나면 맨 아래(확인 카드 포함)가 보이게
   }

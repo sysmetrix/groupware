@@ -15,24 +15,30 @@
     const st = dfState();
     const k = String(kw ?? st.kw).trim();
     if (k.length < 2) { toast('검색어를 두 글자 이상 입력하세요.'); return; }
-    if (st.busy) return;
+    if (more && (st.busy || !st.query || st.done)) return;
+    const owner = typeof currentKey === 'undefined' ? S.userKey : currentKey;
+    const valid = () => S.docs === st && seq === st.seq && owner === (typeof currentKey === 'undefined' ? S.userKey : currentKey) && (typeof getUserKey !== 'function' || getUserKey() === owner);
+    if (typeof getUserKey === 'function' && getUserKey() !== owner) return;
+    const query = more ? st.query : Object.freeze({kw: k, from: periodFrom(st.period), dept: dfMyDept()});
     const page = more ? st.page + 1 : 1, seq = ++st.seq;
+    if (!more) st.query = query;
     st.kw = k; st.busy = true; st.err = '';
     if (!more) { st.items = []; st.total = 0; st.page = 0; st.searched = ''; st.done = false; st.widened = false; st.filter.form = ''; st.filter.q = ''; if (!['all', 'mine'].includes(st.filter.dept)) st.filter.dept = 'all'; }
     if (S.view !== 'docs') go('docs'); else renderMain();
     try {
-      const r = await GW.search(k, {types: ['doc'], pageSize: DF_PAGE, page, from: periodFrom(st.period)});
-      if (seq !== st.seq) return;
-      const g = (r.groups && r.groups.doc) || {items: [], total: 0};
-      if (g.error) throw new Error(g.message || '검색하지 못했습니다.');
-      st.items = R.dfPrepare([...st.items, ...g.items], dfMyDept());
-      st.total = Math.max(g.total || 0, st.items.length); st.page = page; st.searched = k;
+      const r = await GW.search(query.kw, {types: ['doc'], pageSize: DF_PAGE, page, from: query.from});
+      if (!valid()) return;
+      const g = r?.groups?.doc;
+      if (g?.error) throw new Error(g.message || '검색하지 못했습니다.');
+      if (!g || !Array.isArray(g.items)) throw new Error('문서 검색 응답을 확인하지 못했습니다.');
+      st.items = R.dfPrepare([...st.items, ...g.items], query.dept);
+      st.total = Math.max(g.total || 0, st.items.length); st.page = page; st.searched = query.kw;
       st.done = !g.items.length || st.items.length >= st.total;
       // 내 부서 문서가 한 건도 없으면 '내 부서' 필터 때문에 빈 화면이 되지 않게 전체로 넓힌다.
       if (!more && st.filter.dept === 'mine' && !st.items.some(d => d.mine)) { st.filter.dept = 'all'; st.widened = true; } else if (!more) st.widened = false;
-      store.set('dfRecent', R.dfKeywords([k, ...dfRecent()], 6));
-    } catch (e) { if (seq === st.seq) st.err = String(e.message || e).slice(0, 160); }
-    if (seq !== st.seq) return;
+      store.set('dfRecent', R.dfKeywords([query.kw, ...dfRecent()], 6));
+    } catch (e) { if (valid()) st.err = String(e.message || e).slice(0, 160); }
+    if (!valid()) return;
     st.busy = false;
     if (S.view === 'docs') renderMain();
   }
@@ -86,7 +92,7 @@
     const body = st.err ? `<div class="box errb">${esc(st.err)} <button class="btn sm" data-act="dfSearch">다시 시도</button></div>`
       : st.busy && !st.items.length ? `<div class="list">${'<div class="sk row"></div>'.repeat(6)}</div><p class="muted"><span class="spin"></span> “${esc(st.kw)}” 문서를 찾는 중입니다…</p>`
       : !st.searched ? `<div class="card2"><div class="ct">이렇게 씁니다</div><ul class="df-help"><li>검색어 하나로 <b>기안·접수·발송 문서를 한 번에</b> 찾습니다. 줄 앞의 색으로 구분합니다: <span class="bdg df-b df-draft">기안</span> <span class="bdg df-b df-recv">접수</span> <span class="bdg df-b df-send">발송</span></li><li>찾은 뒤 <b>구분·내 부서/재단 전체·양식</b>으로 거릅니다. 거를 때는 그룹웨어에 다시 묻지 않아 바로 바뀝니다.</li><li>줄을 누르면 오른쪽에 본문 미리보기가 열립니다. 검색과 미리보기는 열람 기록을 남기지 않습니다.</li><li>자주 찾는 말은 검색 뒤 <b>☆ 저장</b>을 눌러 두면 위에 버튼으로 남습니다.</li></ul></div>`
-      : `${st.widened ? `<p class="muted lean-note">조회한 상위 ${DF_PAGE}건 중 내 부서 문서가 없어 재단 전체 결과를 표시합니다.</p>` : ''}${dfFiltersHtml()}<div id="dfList">${dfListHtml()}</div>${!st.done ? `<div class="acts" style="justify-content:center;margin-top:12px"><button class="btn" data-act="dfMore" ${st.busy ? 'disabled' : ''}>${st.busy ? '<span class="spin"></span> 불러오는 중' : `${ic('down')}다음 ${Math.min(DF_PAGE, st.total - st.items.length)}건 더 불러오기`}</button></div>` : ''}<p class="muted df-foot">구분은 양식 이름과 본문의 수신자 줄로 추정합니다(수신자가 내부결재가 아니면 발송). 내가 볼 권한이 있는 문서만 나옵니다.</p>`;
+      : `${st.widened ? `<p class="muted lean-note">조회한 상위 ${DF_PAGE}건 중 내 부서 문서가 없어 재단 전체 결과를 표시합니다.</p>` : ''}${dfFiltersHtml()}<div id="dfList">${dfListHtml()}</div>${!st.done ? `<div class="acts" style="justify-content:center;margin-top:12px"><button class="btn" data-act="dfMore" ${st.busy ? 'disabled' : ''}>${st.busy ? '<span class="spin"></span> 불러오는 중' : `${ic('down')}다음 ${Math.min(DF_PAGE, st.total - st.items.length)}건 더 불러오기`}</button></div>` : ''}<p class="muted df-foot">구분은 양식 이름과 수신자 줄에 근거한 추정이며 실제 발송 완료를 뜻하지 않습니다. 근거가 없거나 상충하면 확인 불가로 표시합니다. 내가 볼 권한이 있는 문서만 나옵니다.</p>`;
     return `${pgh('문서 찾기', sub, st.searched && !st.busy ? `<button class="btn sm ${isSaved ? 'on' : ''}" data-act="${isSaved ? 'dfUnsave' : 'dfSave'}" data-v="${esc(st.searched)}" title="${isSaved ? '저장한 검색에서 빼기' : '이 검색어를 버튼으로 저장'}">${ic('star')}${isSaved ? '저장됨' : '저장'}</button>` : '')}
 <div class="bar"><input class="inp grow" id="dfq" placeholder="검색어 (예: 월간업무보고, 문서번호, 기안자 이름)" value="${esc(st.kw)}" aria-label="문서 검색어"><select class="f" id="dfPeriod" aria-label="기간">${[['1', '최근 1개월'], ['3', '최근 3개월'], ['12', '최근 1년'], ['', '전체 기간']].map(([v, n]) => `<option value="${v}" ${st.period === v ? 'selected' : ''}>${n}</option>`).join('')}</select><button class="btn primary" data-act="dfSearch" ${st.busy ? 'disabled' : ''}>${ic('search')}찾기</button></div>
 ${quick}

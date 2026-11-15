@@ -15,7 +15,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '0.67.0';
+  const VERSION = '0.68.0';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
@@ -390,8 +390,8 @@
     catch (e) {
       // 응답이 늦어도 서버에는 저장됐을 수 있다: 같은 시간·제목의 내 예약이 있는지 다시 조회해 확인한다(다시 눌러 중복 예약하지 않도록)
       if (e && e.code === 'TIMEOUT') {
-        const chk = await resourceBookings({from: start.slice(0, 8), to: start.slice(0, 8), resSeqs: [resSeq]}).catch(() => []);
-        if (chk.some(b => b.start === start && b.end === end && b.title === name)) return {ok: true, resSeq: String(resSeq), start, end, title: name, needsApproval: detail.apprYn === 'Y', verifiedAfterTimeout: true};
+        // 시간과 제목만 같은 예약은 다른 사람의 것일 수 있으므로 성공으로 판정하지 않는다.
+        // 예약자와 요청을 연결할 수 없는 경우 원본 화면에서 확인하도록 한다.
         throw new GwError('UNKNOWN', '응답이 늦어 저장 여부를 확인하지 못했습니다. 그룹웨어 자원 화면에서 확인한 뒤 다시 시도하세요');
       }
       throw e;

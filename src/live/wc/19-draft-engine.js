@@ -184,56 +184,82 @@
     return hit.checked;
   }
 
-  async function pickBinder(f, name) {
+  const guardStopped = () => ({ok: false, detail: '기안 화면 또는 계정이 변경되어 중단했습니다'});
+  const guardLive = guard => !guard || guard();
+
+  async function pickBinder(f, name, guard) {
     const d = f.contentDocument;
     const inp = d.querySelector('input[placeholder*="기록물철"]');
     const btn = inp?.parentElement?.querySelector('button');
     if (!inp || !btn) return {ok: false, detail: '기록물철 입력칸을 찾지 못했습니다'};
+    if (!guardLive(guard)) return guardStopped();
     btn.click();
     await wait(900);
+    if (!guardLive(guard)) return guardStopped();
     const dlg = dlgOf(d);
     if (!dlg) return {ok: false, detail: '기록물철 선택창이 열리지 않았습니다'};
     const leaf = [...dlg.querySelectorAll('*')].find(el => el.children.length === 0 && (el.innerText || '').trim() === name);
-    if (!leaf) { [...dlg.querySelectorAll('button')].find(b => /닫기|취소/.test(b.innerText))?.click(); return {ok: false, detail: `기록물철 “${name}”을(를) 목록에서 찾지 못했습니다`}; }
+    if (!leaf) { if (!guardLive(guard)) return guardStopped(); [...dlg.querySelectorAll('button')].find(b => /닫기|취소/.test(b.innerText))?.click(); return {ok: false, detail: `기록물철 “${name}”을(를) 목록에서 찾지 못했습니다`}; }
+    if (!guardLive(guard)) return guardStopped();
     leaf.dispatchEvent(new f.contentWindow.MouseEvent('dblclick', {bubbles: true}));
     await waitFor(() => !dlgOf(d), 3000);
+    if (!guardLive(guard)) return guardStopped();
     const val = (inp.value || '').trim();
     return {ok: val === name || val.replace(/\(\d+년\)$/, '') === name, detail: val || '(비어 있음)'};
   }
 
   // 내 결재라인 '기본'을 그대로 적용 (임의로 결재자를 고르지 않는다)
-  async function applyMyApprovalLine(f) {
+  async function applyMyApprovalLine(f, guard) {
     const d = f.contentDocument;
     const lineBtn = [...d.querySelectorAll('.topBtn, button')].find(b => b.innerText.trim() === '결재라인지정');
     if (!lineBtn) return {ok: false, detail: '결재라인지정 버튼을 찾지 못했습니다'};
+    if (!guardLive(guard)) return guardStopped();
     lineBtn.click();
     await wait(1200);
+    if (!guardLive(guard)) return guardStopped();
     let dlg = dlgOf(d);
     if (!dlg) return {ok: false, detail: '결재라인 창이 열리지 않았습니다'};
     const tab = [...dlg.querySelectorAll('*')].find(el => el.children.length === 0 && (el.innerText || '').trim() === '내결재라인');
-    if (tab) tab.click();
+    if (tab) { if (!guardLive(guard)) return guardStopped(); tab.click(); }
     await wait(700);
+    if (!guardLive(guard)) return guardStopped();
     const basic = [...dlg.querySelectorAll('*')].find(el => el.children.length === 0 && (el.innerText || '').trim() === '기본');
     if (!basic) return {ok: false, detail: '내결재라인에 “기본”이 없습니다'};
+    if (!guardLive(guard)) return guardStopped();
     basic.click();
+    if (!guardLive(guard)) return guardStopped();
     basic.dispatchEvent(new f.contentWindow.MouseEvent('dblclick', {bubbles: true}));
     await wait(700);
+    if (!guardLive(guard)) return guardStopped();
     const conf = await waitFor(() => allDlgs(d).find(x => x !== dlg && /결재자/.test(x.innerText || '')), 1500);
-    if (conf) btnIn(conf, /^확인$/)?.click();
+    if (!guardLive(guard)) return guardStopped();
+    if (conf) { if (!guardLive(guard)) return guardStopped(); btnIn(conf, /^확인$/)?.click(); }
     await wait(500);
+    if (!guardLive(guard)) return guardStopped();
     btnIn(dlg, /^반영$/)?.click();
     const closed = !!(await waitFor(() => !dlgOf(d), 5000));
-    if (!closed) allDlgs(d).forEach(x => btnIn(x, /^(취소|닫기)$/)?.click());
+    if (!guardLive(guard)) return guardStopped();
+    if (!closed) {
+      for (const x of allDlgs(d)) {
+        if (!guardLive(guard)) return guardStopped();
+        btnIn(x, /^(취소|닫기)$/)?.click();
+      }
+    }
     // 결재자 이름은 화면에서 다시 읽어 대조하지 않으므로, 이름까지 맞다고 말하지 않는다
     // 결재란(본문 서식의 approver1~8 칸)에 실제로 들어간 직위를 다시 읽어 보여 준다
     const readSeq = () => { const out = []; try { const H = d.querySelector('iframe[src*="hwpBuild"], #formCtrl_1').contentWindow.HwpCtrl; for (let i = 1; i <= 8; i++) { const v = String(H.GetFieldText('approver' + i) || '').trim(); if (v) out.push(v); } } catch {} return out; };
-    let seq = closed ? ((await waitFor(() => { const s = readSeq(); return s.length ? s : null; }, 2000)) || []) : [];
+    let seq = [];
+    if (closed) {
+      seq = (await waitFor(() => { if (!guardLive(guard)) return true; const s = readSeq(); return s.length ? s : null; }, 2000)) || [];
+      if (!guardLive(guard)) return guardStopped();
+      if (seq === true) seq = [];
+    }
     if (closed && !seq.length) return {ok: false, detail: '결재선을 불러왔으나 결재란을 다시 읽지 못했습니다(화면에서 직접 확인 필요)'};
     return {ok: closed, detail: closed ? `기본 결재선 반영: ${seq.join(' → ')} (결재란 다시 읽음)` : '결재라인 창을 닫지 못해 취소했습니다(직접 지정 필요)'};
   }
 
   // 참조문서: 계획서를 제목으로 검색해 선택한다 (합성 입력/마우스 이벤트)
-  async function pickRefDoc(f, planTitle, docNo) {
+  async function pickRefDoc(f, planTitle, docNo, guard) {
     const d = f.contentDocument, w = f.contentWindow;
     const findOpen = () => {
       const label = [...d.querySelectorAll('*')].filter(e => e.children.length === 0 && (e.textContent || '').trim().startsWith('참조문서') && e.getBoundingClientRect().width > 0).pop();
@@ -242,21 +268,23 @@
       return btn;
     };
     const open = await waitFor(findOpen, 10000);
+    if (!guardLive(guard)) return guardStopped();
     if (!open) return {ok: false, detail: '참조문서 선택 버튼을 찾지 못했습니다'};
     open.click();
     await wait(1800);
+    if (!guardLive(guard)) return guardStopped();
     const dlg = dlgOf(d);
     if (!dlg) return {ok: false, detail: '참조문서 창이 열리지 않았습니다'};
     // 화면 크기와 무관하게 찾는다: '제목' 글자와 같은 줄의 입력칸, 그 오른쪽 돋보기 버튼, 목록 아래의 '↓(선택 목록에 담기)' 버튼
     const R0 = el => el.getBoundingClientRect();
     const mid = q => q.top + q.height / 2;
     const lab = [...dlg.querySelectorAll('*')].find(el => el.children.length === 0 && (el.textContent || '').trim() === '제목' && R0(el).width > 0);
-    if (!lab) { btnIn(dlg, /취소/)?.click(); return {ok: false, detail: '참조문서 창에서 제목 칸을 찾지 못했습니다'}; }
+    if (!lab) { if (!guardLive(guard)) return guardStopped(); btnIn(dlg, /취소/)?.click(); return {ok: false, detail: '참조문서 창에서 제목 칸을 찾지 못했습니다'}; }
     const lr = R0(lab);
     const inp = [...dlg.querySelectorAll('input[type=text]')].filter(i => { const q = R0(i); return q.width > 0 && Math.abs(mid(q) - mid(lr)) < 14 && q.left > lr.left; }).sort((a, b) => R0(a).left - R0(b).left)[0];
     const ir = inp && R0(inp);
     const q = inp && [...dlg.querySelectorAll('button')].filter(b => { const r2 = R0(b); return r2.width > 0 && r2.width < 40 && Math.abs(mid(r2) - mid(ir)) < 14 && r2.left >= ir.right - 2; }).sort((a, b) => R0(a).left - R0(b).left)[0];
-    if (!inp || !q) { btnIn(dlg, /취소/)?.click(); return {ok: false, detail: '참조문서 검색칸·검색 버튼을 찾지 못했습니다(직접 선택)'}; }
+    if (!inp || !q) { if (!guardLive(guard)) return guardStopped(); btnIn(dlg, /취소/)?.click(); return {ok: false, detail: '참조문서 검색칸·검색 버튼을 찾지 못했습니다(직접 선택)'}; }
     const widen = async yearsBack => {
       const pl = [...dlg.querySelectorAll('*')].find(el => el.children.length === 0 && (el.textContent || '').trim() === '기간' && R0(el).width > 0);
       if (!pl) return false;
@@ -264,39 +292,59 @@
       const di = [...dlg.querySelectorAll('input')].filter(i => { const q2 = R0(i); return q2.width > 0 && Math.abs(mid(q2) - mid(pr)) < 14 && q2.left > pr.left; }).sort((a, b) => R0(a).left - R0(b).left)[0];
       if (!di) return false;
       const y = new Date().getFullYear() - yearsBack;
+      if (!guardLive(guard)) return false;
       di.focus(); di.select && di.select(); d.execCommand('insertText', false, `${y}0101`); await wait(150);
-      di.dispatchEvent(new w.KeyboardEvent('keydown', {key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true})); await wait(150); di.blur(); await wait(300);
-      return true;
+      if (!guardLive(guard)) return false;
+      di.dispatchEvent(new w.KeyboardEvent('keydown', {key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true})); await wait(150);
+      if (!guardLive(guard)) return false;
+      di.blur(); await wait(300);
+      return guardLive(guard);
     };
     await widen(0);
+    if (!guardLive(guard)) return guardStopped();
     const queries = [planTitle, docNo, planTitle.replace(/[『』「」]/g, ' ').trim().split(/\s+/).slice(-3).join(' ')].filter(Boolean);
     let found = 0;
     for (const qs of queries) {
+      if (!guardLive(guard)) return guardStopped();
       inp.focus(); setNative(w, inp, qs); q.click();
       await wait(3000);
+      if (!guardLive(guard)) return guardStopped();
       found = Number((dlg.innerText.match(/총(\d+)개/) || [])[1] || 0);
       if (found === 1) break;
     }
-    if (!found && await widen(1)) { for (const qs of queries) { inp.focus(); setNative(w, inp, qs); q.click(); await wait(3000); found = Number((dlg.innerText.match(/총(\d+)개/) || [])[1] || 0); if (found === 1) break; } }
-    if (found !== 1) { btnIn(dlg, /취소/)?.click(); return {ok: false, detail: found ? `검색 결과가 ${found}건이라 자동 선택하지 않았습니다(직접 선택)` : '참조문서 검색 결과가 없습니다'}; }
+    if (!found && await widen(1)) {
+      if (!guardLive(guard)) return guardStopped();
+      for (const qs of queries) {
+        if (!guardLive(guard)) return guardStopped();
+        inp.focus(); setNative(w, inp, qs); q.click(); await wait(3000);
+        if (!guardLive(guard)) return guardStopped();
+        found = Number((dlg.innerText.match(/총(\d+)개/) || [])[1] || 0); if (found === 1) break;
+      }
+    }
+    if (found !== 1) { if (!guardLive(guard)) return guardStopped(); btnIn(dlg, /취소/)?.click(); return {ok: false, detail: found ? `검색 결과가 ${found}건이라 자동 선택하지 않았습니다(직접 선택)` : '참조문서 검색 결과가 없습니다'}; }
     const cvs = [...dlg.querySelectorAll('canvas')].filter(x => R0(x).width > 100).sort((a, b) => R0(a).top - R0(b).top);
     const cv = cvs[0], cr = cv && R0(cv), c2 = cvs[1] && R0(cvs[1]);
-    if (!cv) { btnIn(dlg, /취소/)?.click(); return {ok: false, detail: '참조문서 목록을 찾지 못했습니다'}; }
+    if (!cv) { if (!guardLive(guard)) return guardStopped(); btnIn(dlg, /취소/)?.click(); return {ok: false, detail: '참조문서 목록을 찾지 못했습니다'}; }
     const fire = (type, x, y) => cv.dispatchEvent(new w.MouseEvent(type, {bubbles: true, cancelable: true, clientX: x, clientY: y, view: w, button: 0, buttons: type === 'mouseup' || type === 'click' ? 0 : 1}));
     const mover = [...dlg.querySelectorAll('button')].filter(b => { const r2 = R0(b); return r2.width >= 24 && r2.width <= 36 && r2.top > cr.bottom + 20 && (!c2 || r2.bottom < c2.top + 2); }).sort((a, b) => R0(a).top - R0(b).top || R0(a).left - R0(b).left)[0];
     let picked = false;
     for (const dy of [46, 40, 52, 34]) {
+      if (!guardLive(guard)) return guardStopped();
       const x = cr.left + 55, y = cr.top + dy;
       fire('mousemove', x, y); fire('mousedown', x, y); fire('mouseup', x, y); fire('click', x, y);
       await wait(400);
-      mover && mover.click();
+      if (!guardLive(guard)) return guardStopped();
+      if (mover) { if (!guardLive(guard)) return guardStopped(); mover.click(); }
       await wait(800);
+      if (!guardLive(guard)) return guardStopped();
       const m = dlg.innerText.match(/선택된 문서 목록\s*\(?\s*(\d+)/);
       if (m && Number(m[1]) > 0) { picked = true; break; }
     }
-    if (!picked) { [...dlg.querySelectorAll('button')].find(b => /취소/.test(b.innerText))?.click(); return {ok: false, detail: '참조문서 행 선택에 실패했습니다(직접 선택)'}; }
+    if (!picked) { if (!guardLive(guard)) return guardStopped(); [...dlg.querySelectorAll('button')].find(b => /취소/.test(b.innerText))?.click(); return {ok: false, detail: '참조문서 행 선택에 실패했습니다(직접 선택)'}; }
+    if (!guardLive(guard)) return guardStopped();
     [...dlg.querySelectorAll('button')].find(b => (b.innerText || '').trim() === '확인')?.click();
     await wait(1200);
+    if (!guardLive(guard)) return guardStopped();
     const txt = d.body.innerText;
     const ok = !dlgOf(d) && (!docNo || txt.slice(txt.lastIndexOf('참조문서')).includes(docNo));
     return {ok, detail: ok ? `${docNo || planTitle} 참조` : '참조문서가 반영되지 않았습니다'};
@@ -342,7 +390,7 @@
     let body = ''; try { body = String(ctrl.GetFieldText('_F_CONTENTS_') || '').trim(); } catch {}
     const want = String((spec.body && spec.body.text) || '').replace(/\r\n?/g, '\n').trim();
     // 본문이 이미 있으면 바꿔 넣을 본문이 있든 없든 묻는다(같은 본문을 다시 넣는 경우만 제외)
-    const typed = (t && t.value.trim() && t.value.trim() !== spec.title) || (body && body.replace(/\r\n?/g, '\n') !== want) || (f.contentWindow.__wcFilled && (t.value.trim() || body));
+    const typed = (t && t.value.trim() && t.value.trim() !== spec.title) || (body && body.replace(/\r\n?/g, '\n') !== want) || (f.contentWindow.__wcFilled && (t?.value?.trim() || body));
     if (typed && !confirm('이미 입력한 내용이 있습니다. 자동 기입으로 덮어쓸까요?')) return '사용자가 덮어쓰기를 취소했습니다.';
     return '';
   }
@@ -351,33 +399,48 @@
     const steps = [];
     const bad0 = preflight(f, spec);
     if (bad0) return [{name: '사전점검', ok: false, detail: bad0}];
+    const owner = currentKey, paneUrl = S.pane.url;
+    const m = spec.meta || {};
+    const classification = ['open', 'urgent', 'sec', 'docKind', 'binder'].filter(k => typeof m[k] === 'string' && m[k].trim());
+    const labels = {open: '공개여부', urgent: '긴급여부', sec: '보안여부', docKind: '문서구분', binder: '기록물철'};
+    const confirmed = classification.length > 0 && confirm('다음 값은 과거 문서에서 추정한 값이며 현재 문서의 분류 근거가 아닙니다.\n각 값을 현재 문서에 적용해도 되는지 직접 확인해 주세요. 확인하지 않으면 기존 값을 유지합니다.\n' + classification.map(k => labels[k] + ': ' + m[k]).join('\n') + '\n이 값들을 확인하고 적용할까요?');
+    const live = () => f.isConnected && f.contentDocument === d && f.contentWindow === w && owner === currentKey && owner === getUserKey() && paneUrl === S.pane.url;
+    if (!live()) return [{name: '사전점검', ok: false, detail: '기안 화면 또는 계정이 변경되어 중단했습니다'}];
     installGuard(w); AUTO.running = true; AUTO.blocked = []; const tok = AUTO.tok = {};
     window.addEventListener('beforeunload', () => { AUTO.running = false; }, {once: true});
     setTimeout(() => { if (AUTO.tok === tok) AUTO.running = false; }, 180000); // 어떤 이유로든 3분 뒤에는 반드시 풀린다(사람이 직접 상신·저장할 수 있어야 함)
     let halted = false;
     const run = async (name, fn) => {
       if (halted) { steps.push({name, ok: false, detail: '앞 단계의 팝업이 정리되지 않아 중단했습니다'}); return; }
-      try { const r = await fn(); steps.push({name, ok: !!r.ok, detail: r.detail || ''}); } catch (e) { steps.push({name, ok: false, detail: e.message}); }
+      if (!live()) { halted = true; steps.push({name, ok: false, detail: '기안 화면 또는 계정이 변경되어 중단했습니다'}); return; }
+      // Mark before mutation: partial failures must not leave an unprotected draft.
+      markPaneDirty(f, paneUrl);
+      try { const r = await fn(live); steps.push({name, ok: !!r.ok, detail: r.detail || ''}); } catch (e) { steps.push({name, ok: false, detail: e.message}); }
+      if (!live()) { halted = true; return; }
       if (allDlgs(d).length) { allDlgs(d).forEach(x => btnIn(x, /^(취소|닫기)$/)?.click()); await wait(500); if (allDlgs(d).length) halted = true; }
     };
+    try {
     await run('제목', async () => {
       const inp = d.querySelector('input[placeholder="제목을 입력해주세요"]');
       setNative(w, inp, spec.title);
       await wait(300);
+      if (!live()) return {ok: false, detail: '계정 또는 기안 화면이 변경되어 중단했습니다'};
       try { d.querySelector('iframe[src*="hwpBuild"], #formCtrl_1').contentWindow.HwpCtrl.PutFieldText('doc_name', spec.title); } catch {}
       return {ok: inp.value === spec.title, detail: spec.title};
     });
-    const m = spec.meta;
     await run('공개·긴급·보안·문서구분', async () => {
-      const r = [setRadioByLabel(d, m.open), setRadioByLabel(d, m.urgent), setRadioByLabel(d, m.sec), setRadioByLabel(d, m.docKind)];
-      return {ok: r.every(Boolean), detail: `${m.open} · ${m.urgent} · ${m.sec} · ${m.docKind}`};
+      const keys = ['open', 'urgent', 'sec', 'docKind'];
+      if (!confirmed) return {ok: false, detail: '분류 미확인: 기존 값을 유지했습니다. 공개·보안 등을 직접 확인하세요.'};
+      const r = keys.map(k => classification.includes(k) && setRadioByLabel(d, m[k]));
+      return {ok: r.every(Boolean), detail: keys.map(k => m[k] || '확인 불가').join(' · ')};
     });
-    if (m.binder) await run('기록물철', async () => { const r = await pickBinder(f, m.binder); return {ok: r.ok, detail: `${r.detail} — ${m.basis}`}; });
-    await run('결재라인', () => applyMyApprovalLine(f));
+    if (m.binder && !confirmed) steps.push({name: '기록물철', ok: false, detail: '추정 기록물철을 적용하지 않았습니다. 직접 확인하세요.'});
+    if (m.binder && confirmed) await run('기록물철', async guard => { const r = await pickBinder(f, m.binder, guard); return {ok: r.ok, detail: `${r.detail} — ${m.basis}`}; });
+    await run('결재라인', guard => applyMyApprovalLine(f, guard));
     if (spec.body) await run('본문', async () => putBody(f, spec.body));
-    if (spec.ref) await run('참조문서', () => pickRefDoc(f, spec.ref.title, spec.ref.docNo));
-    AUTO.running = false;
-    w.__wcFilled = Date.now();
+    if (spec.ref) await run('참조문서', guard => pickRefDoc(f, spec.ref.title, spec.ref.docNo, guard));
+    } finally { if (AUTO.tok === tok) AUTO.running = false; }
+    if (live()) w.__wcFilled = Date.now();
     steps.push({name: '안전장치', ok: AUTO.blocked.length === 0, detail: AUTO.blocked.length ? `자동 실행 중 ${AUTO.blocked.join(', ')} 버튼 클릭을 차단했습니다(상신·저장은 하지 않았습니다)` : '상신·결재·임시저장·삭제는 실행하지 않았습니다(상신 전에서 멈춤)'});
     return steps;
   }
@@ -405,6 +468,13 @@
       </div>`;
   }
 
+  function buildConfirmedResultBody(plan, facts) {
+    const names = ['실제 일시', '실제 장소', '실제 참여 인원', '실제 집행 금액', '주요 성과·특이사항'];
+    const lines = [plan.docNo ? '1. 관련: ' + plan.docNo : '1. 관련: [근거 문서번호 확인 필요]', '2. 실제 추진 결과'];
+    names.forEach((name, i) => lines.push('  - ' + name + ': ' + (String(facts[i] || '').trim() || '[실적 확인 필요]')));
+    return {lines, text: lines.join('\n'), hang: lines.map(() => false), notes: ['계획과 실적 충돌 방지를 위해 계획 본문의 일시·장소·인원·예산·붙임은 복사하지 않았습니다. 입력한 실제 실적만 반영했습니다.']};
+  }
+
   // ---------- 결과보고: 계획서를 이어받아 작성 ----------
   async function startResultFromPlan(planDocId) {
     if (gated('draftResult')) return;
@@ -416,7 +486,7 @@
     if (!src.body || !src.runday) { const r = await readDocPattern({id: plan.id, ti: 'mg_20160303185413307', title: plan.title, form: plan.form, docNo: plan.docNo, date: plan.date}); if (!r.err) { patSaveDoc(r); src = r; } }
     const facts = await askForm({
       title: '결과보고 사전 실적 입력',
-      desc: `계획서(${plan.docNo || plan.title.slice(0, 25)})의 실제 실적을 먼저 확인하세요. 비워 둔 칸은 계획서 문구를 그대로 둡니다.`,
+      desc: `계획서(${plan.docNo || plan.title.slice(0, 25)})의 실제 실적을 먼저 확인하세요. 비워 둔 칸은 실적 확인 필요로 표시합니다. 계획 수치는 실적으로 복사하지 않습니다.`,
       fields: [
         {label: '실제 추진 일시', placeholder: '예: 2026. 11. 12.(목) 14:00'},
         {label: '실제 장소', placeholder: '예: 재단 3층 대회의실'},
@@ -429,14 +499,11 @@
     if (!facts) return;
     const title = R.planToResultTitle(plan.title);
     const meta = R.predictDraftMeta(patModel(), {title, sourceDocNo: plan.docNo, sourceTitle: plan.title});
-    const body = R.buildResultBody(src.body || '', {runday: src.runday, docNo: plan.docNo, planTitle: plan.title});
-    const [fDate, fPlace, fPeople, fBudget, fPerf] = facts.map(x => String(x || '').trim());
-    const extra = [fDate ? `  - 실제 일시: ${fDate}` : '', fPlace ? `  - 실제 장소: ${fPlace}` : '', fPeople ? `  - 참여 인원: ${fPeople}` : '', fBudget ? `  - 집행 예산: ${fBudget}` : '', fPerf ? `  - 주요 성과: ${fPerf}` : ''].filter(Boolean);
-    if (extra.length) { const block = ['[실적 입력 요약]', ...extra]; body.lines = [...body.lines, ...block]; body.hang = [...body.hang, ...block.map(() => false)]; body.text = body.lines.join('\n'); }
+    const body = buildConfirmedResultBody(plan, facts);
     const f = await openDraftFrame('mg_20160303185413307', '일반기안문', `결과보고: ${plan.title}`);
     if (!f) { toast('기안 열기를 취소했거나 화면이 아직 준비되지 않았습니다. 기존 내용은 그대로 두었습니다.'); return; }
     const steps = await fillDraft(f, {title, meta, body, ref: {title: plan.title, docNo: plan.docNo}});
-    const notes = [...body.notes.map(n => `${n}: 계획서 값을 그대로 두었습니다. 실제 결과로 고쳐 주세요.`), '붙임 파일명·개수와 소요예산 문구는 실제 결과에 맞게 확인하세요.'];
+    const notes = [...body.notes, '붙임 파일명·개수와 소요예산 문구는 실제 결과에 맞게 확인하세요.'];
     showDraftReport(title, steps, notes);
   }
 

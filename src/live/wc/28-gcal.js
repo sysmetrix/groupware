@@ -50,14 +50,14 @@
     }
     const list = gcalList(c);
     const legend = list.filter(x => x.name || x.color).map(x => `<span style="display:inline-flex;align-items:center;gap:5px;margin:0 12px 4px 0"><i style="width:11px;height:11px;border-radius:3px;background:${gcalColorOk(x.color) ? x.color : '#9aa0a6'};display:inline-block"></i>${esc(x.name || x.id.replace(/@.*/, '').slice(0, 14))}</span>`).join('');
-    const tools = `<div class="seg">${GCAL_MODES.map(([k, n]) => `<button class="${(c.mode || 'WEEK') === k ? 'on' : ''}" data-act="gcalMode" data-v="${k}">${n}</button>`).join('')}</div>
+    const tools = `<div class="seg" role="group" aria-label="구글 일정 보기 방식">${GCAL_MODES.map(([k, n]) => `<button class="${(c.mode || 'WEEK') === k ? 'on' : ''}" aria-pressed="${(c.mode || 'WEEK') === k}" data-act="gcalMode" data-v="${k}">${n}</button>`).join('')}</div>
       <button class="btn sm primary" data-act="gcalNew">${ic('plus')}새 일정</button>
       <button class="btn sm" data-act="gcalOpen">구글 캘린더 열기</button>
       <button class="btn sm" data-act="gcalEdit">캘린더·색 설정</button>`;
     return `${pgh('구글 일정', esc(c.email) + (list.length > 1 ? ` 외 ${list.length - 1}개` : ''), tools)}
       ${legend ? `<div class="muted" style="font-size:13px;margin:2px 0 8px">${legend}</div>` : ''}
-      <iframe id="gcalFrame" title="구글 캘린더" src="${esc(gcalUrl(c))}" referrerpolicy="no-referrer" style="width:100%;height:calc(100vh - 270px);min-height:520px;border:1px solid var(--line, #d0d5dd);border-radius:12px;background:#fff"></iframe>
-      <div class="muted" style="font-size:12px;margin-top:6px">일정이 안 보이고 로그인 화면이 나오면 "구글 캘린더 열기"로 로그인한 뒤 다시 들어오세요. 일정을 고치려면 "구글 캘린더 열기"를 누르세요.</div>`;
+      <iframe id="gcalFrame" title="구글 캘린더, Google 계정 로그인 필요" aria-describedby="gcalHelp" src="${esc(gcalUrl(c))}" referrerpolicy="no-referrer" style="width:100%;height:calc(100vh - 270px);min-height:520px;border:1px solid var(--line, #d0d5dd);border-radius:12px;background:#fff"></iframe>
+      <div id="gcalHelp" class="muted" style="font-size:12px;margin-top:6px">일정이 안 보이고 로그인 화면이 나오면 "구글 캘린더 열기"로 로그인한 뒤 다시 들어오세요. 일정을 고치려면 "구글 캘린더 열기"를 누르세요.</div>`;
   }
   function gcalSave() {
     const email = ($('#gcalEmail') || {}).value ? $('#gcalEmail').value.trim() : '';

@@ -241,3 +241,9 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .budget-month-plot{display:flex;align-items:end;justify-content:center;height:105px;border-bottom:1px solid var(--line2)}.wc .budget-month-bar{width:65%;min-width:4px;background:var(--accent);border-radius:3px 3px 0 0}.wc .budget-month-value{display:none}
 .wc .budget-chart :is(button,summary):focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 @media(max-width:700px){.wc .budget-cards{grid-template-columns:minmax(0,1fr)}.wc .budget-months{grid-template-columns:repeat(6,minmax(0,1fr));row-gap:12px}.wc .budget-month-plot{height:75px}}
+
+/* Keyboard navigation and readable status contrast */
+.wc .skip-main{position:absolute;left:12px;top:8px;z-index:1000;transform:translateY(-180%);padding:10px 14px;border:2px solid var(--accent);border-radius:8px;background:var(--bg);color:var(--fg)}
+.wc .skip-main:focus-visible{transform:translateY(0)}
+.wc .bdg.new{background:#065f46;color:#fff}
+.wc main>.board{max-width:none}

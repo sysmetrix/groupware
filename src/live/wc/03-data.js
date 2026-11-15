@@ -4,18 +4,22 @@
   async function refresh({silent = false, announce = false} = {}) {
     if (S.loading) { if (announce) toast('이미 읽는 중입니다…'); return; }
     S.loading = true; S.error = '';
+    const refreshOwner = getUserKey();
+    let deferRender = false, discarded = false;
     if (!silent) renderHead();
     try {
       const raw = await GW.collect({budget: S.settings.budget, mailCount: S.settings.mailCount, days: S.settings.days});
-      ingest(raw);
-      loadForms();
+      const returnedOwner = raw?.principal && String(raw.principal.empSeq || raw.principal.loginId || '').replace(/[^0-9A-Za-z_-]/g, '');
+      if (getUserKey() !== refreshOwner || (returnedOwner && refreshOwner !== 'default' && returnedOwner !== refreshOwner)) { S.error = '계정이 변경되어 이전 조회 결과를 폐기했습니다. 다시 새로고침해 주세요.'; S.raw = null; S.a = null; discarded = true; }
+      else { deferRender = silent && isUserBusy(); ingest(raw, {deferBudgetInvalidation: deferRender}); loadForms(); }
     } catch (e) { S.error = e && e.message || String(e); logError('자료 읽기', S.error); }
     finally { S.loading = false; }
+    if (discarded) { render(); renderHead(); return; }
     if (announce) {
       const bad = S.raw && S.raw.status ? Object.entries(S.raw.status).filter(([, s]) => s && s.error).map(([k]) => k) : [];
       toast(S.error ? '새로 고치지 못했습니다: ' + S.error : `최신 자료로 새로 고쳤습니다 · 내 할 일 ${mineVisible().length}건${bad.length ? ` · 읽지 못한 영역: ${bad.join(', ')}` : ''}`);
     }
-    if (silent && isUserBusy()) { S.pendingRefresh = true; renderHead(); renderBand(); renderNav(); return; }
+    if (deferRender) { S.pendingRefresh = true; renderHead(); renderBand(); renderNav(); return; }
     render(); renderHead();
   }
   // 자주 쓰는 결재 양식(팔레트의 "새 기안: 양식")을 하루 한 번 읽는다.
@@ -26,15 +30,22 @@
     GW.frequentForms().then(l => { if (owner !== currentKey) return; const list = Array.isArray(l) ? l : (l && l.list) || []; S.forms = {list, at: Date.now()}; if (!store.set('forms', S.forms)) S.storageError = true; }).catch(() => {});
   }
   function logError(where, msg) { S.errors = [...(S.errors || []), {at: Date.now(), where, msg: String(msg).slice(0, 300)}].slice(-30); store.set('errors', S.errors); }
-  function ingest(raw) {
+  function ingest(raw, options = {}) {
     if (raw && raw.principal && (raw.principal.empSeq || raw.principal.loginId)) {
       const pKey = String(raw.principal.empSeq || raw.principal.loginId).replace(/[^0-9A-Za-z_-]/g, '');
       if (switchUserStorage(pKey)) {
         // user switched, clear current view state
         S.sel = null; S.pane.url = ''; S.pane.expanded = false; S.multi.clear();
-        NTF.seq++; NTF.items = null; NTF.at = ''; NTF.error = ''; NTF.loading = false;
+        NTF.seq++; NTF.items = null; NTF.at = ''; NTF.error = ''; NTF.loading = false; NTF.query = ''; NTF.search = ''; NTF.page = 1;
         PEOPLE.seq++; PEOPLE.orgSeq++; PEOPLE.items = null; PEOPLE.tree = null; PEOPLE.query = ''; PEOPLE.org = ''; PEOPLE.error = ''; PEOPLE.treeError = ''; PEOPLE.loading = false; PEOPLE.orgLoading = false;
       }
+    }
+    // A newly collected snapshot invalidates every independently loaded budget dataset.
+    // During a silent refresh, keep the currently rendered ledger intact until the deferred
+    // refresh is applied; otherwise its still-visible controls could dereference null.
+    if (S.budget) {
+      if (options.deferBudgetInvalidation) S.budget.refreshInvalidationPending = true;
+      else invalidateBudgetRefresh();
     }
     syncLocal();
     S.apMore = {}; S.apPages = {}; S.apBusy = {}; S.apEpoch++;
@@ -60,6 +71,17 @@
     if (raw.sessionExpired) S.error = 'SESSION';
     saveLocal();
     notifyNew(fresh.filter(x => x.priority === 'high'));
+  }
+  function invalidateBudgetRefresh() {
+    const b = S.budget;
+    if (!b) return;
+    b.refreshInvalidationPending = false;
+    b.generation = (b.generation || 0) + 1; b.seq++; b.mreq = (b.mreq || 0) + 1; b.allReq = (b.allReq || 0) + 1;
+    b.full = null; b.table = null; b.ledger = null; b.monthly = null; b.all = null; b.allRecs = null;
+    b.busy = false; b.monthlyBusy = false; b.allBusy = false; b.allErr = ''; b.forceAll = true;
+  }
+  function applyDeferredBudgetInvalidation() {
+    if (S.budget && S.budget.refreshInvalidationPending) invalidateBudgetRefresh();
   }
   // ----- 내 일 / 참고 구분 (user rules on top of the analyzer's defaults) -----
   const RULE_KIND = {deptWaiting: '부서 접수 대기', distWaiting: '배부 대기', sendWaiting: '발송 대기', viewing: '열람문서', notice: '공지', mailShared: '받은 자료 메일', mailUnread: '안 읽은 메일', mailReply: '답장 확인 메일', leave: '휴가 안내'};

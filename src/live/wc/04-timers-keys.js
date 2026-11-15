@@ -51,6 +51,10 @@
     if (typing && t.id === 'chInput') { chatKey(e, t); return; } // AI 채팅 입력창: Enter 전송, Shift+Enter 줄바꿈, 위 화살표로 직전 질문
     if (typing) {
       if (e.key !== 'Enter') return;
+      if (t.id === 'notificationsQuery') { e.preventDefault(); notificationsSearch(); return; }
+      if (t.id === 'peopleQuery') { e.preventDefault(); PEOPLE.query = t.value; peopleSearch(); return; }
+      if (t.id === 'bq') { e.preventDefault(); S.budget.q = t.value; budgetQuery(); return; }
+      if (t.id === 'ledgerQuery') { e.preventDefault(); S.budget.ledgerQuery = t.value; S.budget.ledgerPage = 1; renderMain(); return; }
       if (t.id === 'cmdPrompt') { e.preventDefault(); executeCommandWorkflow(t.value); return; }
       if (t.id === 'gsearch') { e.preventDefault(); const v = t.value.trim(); if (!v) return; if (R.looksLikeCommand(v) && allowed('aiConsole')) { t.blur(); t.value = ''; go('home'); setTimeout(() => chatSend(v), 60); } else { t.blur(); S.search.kw = v; runSearch(); } return; }
       if (t.id === 'aiQ') { e.preventDefault(); aiAsk(); return; }

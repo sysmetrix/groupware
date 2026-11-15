@@ -1,12 +1,23 @@
 // GW 비서 · detail pane
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
   // ---------- detail pane ----------
+  let paneOpener90 = null, paneOpenerKey90 = null, paneVisible90 = false;
   function renderPane() {
     const pane = $('#pane');
     const show = !!(S.sel || S.pane.url || S.focus);
     wcEl.classList.toggle('nopane', !show);
     wcEl.classList.toggle('expanded', show && S.pane.expanded);
-    if (!show) { pane.innerHTML = ''; S.pane.mounted = ''; return; }
+    if (!show) {
+      pane.innerHTML = ''; S.pane.mounted = '';
+      if (paneVisible90) {
+        const original = paneOpener90?.isConnected ? paneOpener90 : null;
+        const replacement = paneOpenerKey90 && [...root.querySelectorAll('#main [data-act]')].find(e => e.dataset.act === paneOpenerKey90.act && ['k','uid','box','id','kind'].every(k => (e.dataset[k] || '') === (paneOpenerKey90[k] || '')));
+        (original || replacement || $('#main'))?.focus();
+      }
+      paneVisible90 = false; paneOpener90 = null; paneOpenerKey90 = null; return;
+    }
+    const entering = !paneVisible90;
+    if (entering) { paneOpener90 = root.activeElement || document.activeElement; const d = paneOpener90?.dataset; paneOpenerKey90 = d?.act ? {act:d.act,k:d.k,uid:d.uid,box:d.box,id:d.id,kind:d.kind} : null; paneVisible90 = true; }
     if (!pane.querySelector('#ph')) pane.innerHTML = '<div class="ph" id="ph"></div><div id="autofill"></div><div class="frame" id="frame"></div><div id="fbar"></div>';
     const info = paneInfo();
     const ph = $('#ph');
@@ -19,6 +30,7 @@
 <div class="in"><div class="box warn" id="dirtyNote" style="display:${S.pane.dirty ? 'block' : 'none'};margin:0 0 10px">${ic('alert')} 원래 화면에 입력 중입니다. 보내기·저장·상신 전에 다른 곳으로 옮기면 먼저 여쭤봅니다.</div>
 ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.headline ? `<b class="${['overdue', 'urgent'].includes(st) ? 'err' : ''}">${esc(x.headline)}</b>` : ''}</div>` : ''}<div class="t">${esc(info.title || '')}</div>${info.body || ''}</div>`;
     ph.scrollTop = keepScroll;
+    if (entering) ph.querySelector('[data-act="closePane"]')?.focus();
     const frame = $('#frame');
     if (S.pane.url !== S.pane.mounted) {
       if (!S.pane.previewBack || !S.pane.previewBack.frame) frame.innerHTML = '';
@@ -35,26 +47,45 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
     $('#fbar').innerHTML = focusBar();
     const af = $('#autofill'); if (af) af.innerHTML = autoFillBar();
   }
-  // Mark the pane "dirty" as soon as the user types anything in the embedded groupware screen
-  // (답장 본문, 결재 의견, 기안 제목 ...), including nested editor iframes.
+  // Trusted edits and silent editor/autofill changes must both survive navigation.
+  function markPaneDirty(f, url = S.pane.url) {
+    if (!f || !f.isConnected || S.pane.url !== url) return;
+    S.pane.dirty = true;
+    const b = $('#dirtyNote'); if (b) b.style.display = 'block';
+  }
   function watchDirty(f, url) {
-    const seen = new WeakSet();
-    const mark = () => { if (S.pane.url === url && !S.pane.dirty) { S.pane.dirty = true; const b = $('#dirtyNote'); if (b) b.style.display = 'block'; } };
+    const seen = new WeakMap();
+    const valueOf = doc => {
+      const values = [...doc.querySelectorAll('input,textarea,select,[contenteditable="true"]')]
+        .filter(el => !['hidden', 'password', 'button', 'submit'].includes(el.type))
+        .map(el => [el.type, el.value, el.checked, el.isContentEditable ? el.innerHTML : null]);
+      try { const ctrl = doc.querySelector('iframe[src*="hwpBuild"], #formCtrl_1')?.contentWindow?.HwpCtrl;
+        if (ctrl) values.push(['hwp', String(ctrl.GetFieldText('_F_CONTENTS_') || '')]);
+      } catch {}
+      return JSON.stringify(values);
+    };
     const attach = doc => {
       if (!doc || seen.has(doc)) return;
-      seen.add(doc);
-      // ONLY listen to genuine user typing (trusted keydown with printable key, paste, drop)
-      // NEVER trigger on programmatic change/input events fired during form initialization!
-      ['keydown', 'paste', 'drop'].forEach(ev => doc.addEventListener(ev, e => {
+      seen.set(doc, valueOf(doc));
+      ['input', 'change', 'keydown', 'paste', 'drop'].forEach(ev => doc.addEventListener(ev, e => {
         if (!e.isTrusted) return;
-        if (ev === 'keydown') {
-          if (e.key && e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) mark();
-        } else {
-          mark();
-        }
+        if (ev === 'keydown' && !['Backspace', 'Delete', 'Enter'].includes(e.key) && !(e.key?.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey)) return;
+        const target = e.target;
+        if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || doc.designMode === 'on')) markPaneDirty(f, url);
       }, true));
     };
-    const scan = () => { if (!f.isConnected || S.pane.url !== url) return false; try { const walk = doc => { attach(doc); for (const i of doc.querySelectorAll('iframe')) { try { walk(i.contentDocument); } catch {} } }; walk(f.contentDocument); } catch {} return true; };
+    const scan = (compare = false) => {
+      if (!f.isConnected || S.pane.url !== url) return false;
+      try { const walk = doc => {
+        if (!doc) return;
+        attach(doc);
+        if (compare && seen.get(doc) !== valueOf(doc)) markPaneDirty(f, url);
+        for (const i of doc.querySelectorAll('iframe')) { try { walk(i.contentDocument); } catch {} }
+      }; walk(f.contentDocument); } catch {}
+      return true;
+    };
+    // Compare immediately before leaving too: a native value setter or HWP editor need not emit input.
+    f.__wcCheckDirty = () => scan(true);
     scan();
     const t = setInterval(() => { if (!scan()) clearInterval(t); }, 1500);
   }
@@ -100,6 +131,7 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
   // Ask before throwing away what the user typed in the pane.
   function leavePane() {
     const back = S.pane.previewBack;
+    try { $('#frame iframe')?.__wcCheckDirty?.(); back?.frame?.__wcCheckDirty?.(); } catch {}
     const dirty = S.pane.dirty || !!(back && back.dirty);
     if (!S.pane.url || !dirty) { delete S.pane.previewBack; return true; }
     const ok = confirm('처리 창에 입력하던 내용이 있습니다(답장·의견·기안 등).\n보내기·저장·상신을 하지 않았다면 이동할 때 사라집니다.\n(메일은 그룹웨어 설정에 따라 임시보관함에 자동 저장됐을 수 있습니다.)\n그래도 이동할까요?');
@@ -215,8 +247,8 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
     S.mailDet = S.mailDet || {}; S.mailDetBusy = S.mailDetBusy || {};
     if (S.mailDet[m.uid] && !S.mailDet[m.uid].error) return S.mailDet[m.uid];
     if (S.mailDetBusy[m.uid]) return S.mailDetBusy[m.uid];
-    const owner = currentKey, epoch = S.apEpoch;
-    S.mailDetBusy[m.uid] = (async () => {
+    const owner = currentKey, epoch = S.apEpoch, busy = S.mailDetBusy;
+    const request = Promise.resolve().then(async () => {
       try {
         const r = await GW.mailDetail({uid: m.uid, seen: m.seen === true, allowMarkRead});
         if (owner !== currentKey || epoch !== S.apEpoch) return r;
@@ -228,12 +260,12 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
         S.mailDet[m.uid] = {error: e.message};
         return S.mailDet[m.uid];
       } finally {
-        if (owner !== currentKey || epoch !== S.apEpoch) return;
-        delete S.mailDetBusy[m.uid];
-        if (S.sel && (S.sel.uid === m.uid || (S.sel.key || '').endsWith(':' + m.uid))) renderPane();
+        if (busy[m.uid] === request) delete busy[m.uid];
+        if (owner === currentKey && epoch === S.apEpoch && S.sel && (S.sel.uid === m.uid || (S.sel.key || '').endsWith(':' + m.uid))) renderPane();
       }
-    })();
-    return S.mailDetBusy[m.uid];
+    });
+    busy[m.uid] = request;
+    return request;
   }
   // The groupware's own document viewer (HWP·PDF·엑셀 등), same request the mail read view makes.
   const previewUrl = (c, uid, f) => '/#popup?' + new URLSearchParams({authKeyMap: JSON.stringify({email: `link@${(c.account || '').split('@')[1] || location.hostname.replace(/^gw\./, '')}`, muid: String(uid), empSeq: '-1'}), fileSn: f.sn, moduleGbn: 'MAIL', path: '/ecm/ecm001A07', pathSeq: '700', callComp: 'UAA0700', popupUUID: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()))}).toString();
@@ -381,6 +413,7 @@ ${mailFilesBox(m)}
     if (!url || S.pane.previewBack) return false;
     const frame = $('#frame');
     const original = frame && frame.querySelector('iframe');
+    original?.__wcCheckDirty?.();
     S.pane.previewBack = {url: S.pane.url, mounted: S.pane.mounted, expanded: S.pane.expanded, dirty: S.pane.dirty, frame: original};
     if (original) original.hidden = true;
     S.pane.url = url; S.pane.extract = null; S.pane.expanded = true;

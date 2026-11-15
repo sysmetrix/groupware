@@ -14,6 +14,10 @@ function fixture() {
   const ctx = {S,root:{querySelector:s=>inputs[s.slice(1)]},el:{dataset:{}},e:{stopPropagation:call('stop')},v:'',renderMain:call('render'),renderPane:call('pane'),loadBudget:call('loadBudget'),loadLedger:call('loadLedger'),loadLedgerAll:call('loadLedgerAll'),loadMonthly:call('loadMonthly'),loadBudgetAll:call('loadBudgetAll'),budgetQuery:call('budgetQuery'),toast:m=>messages.push(m),saveLocal:()=>{calls.push(['save']); return true;},findAndOpenDocNo:call('findDocNo'),closeOverlay:call('closeOverlay'),openUrl:call('openUrl'),leavePane:()=>true,download:call('download'),copyRich:call('copyRich'),today:()=> '20261114',esc:x=>String(x).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'),won:String,pct:x=>x+'%',ymd8:String,R:{toCsv:(data,columns)=>{calls.push(['csv',data,columns]);return 'CSV';}}};
   const helper = ui.slice(ui.indexOf('  function ledgerView('),ui.indexOf('  function vBudget()'));
   vm.createContext(ctx); vm.runInContext(helper,ctx);
+  ctx.root.querySelectorAll = () => ctx._budgetInputs || [];
+  ctx.$ = () => null; ctx.setTimeout = () => 1; ctx.clearTimeout = () => {};
+  const budgetHelpers = settings.slice(settings.indexOf('  function settingsSaveStatus('), settings.indexOf('  function resetDoneMarks()'));
+  vm.runInContext(budgetHelpers, ctx);
   function click(action, data={}, value='') {
     const start = events.indexOf("      case '"+action+"':");
     assert.notEqual(start,-1,'missing handler: '+action);
@@ -62,7 +66,7 @@ test('exports use selected budget and filtered ledger, not current page only', a
   const csv=f.calls.filter(x=>x[0]==='csv').at(-1); assert.equal(csv[1].length,1); assert.equal(csv[1][0].docNo,'D1'); assert.ok(csv[2].some(x=>x.label==='세목')); assert.match(f.calls.filter(x=>x[0]==='download').at(-1)[1],/결의내역___ALL_01월_/);
 });
 test('settings add and delete update the budget list and invalidate cache', async()=>{
-  const f=fixture(); await f.click('budgetRowAdd'); assert.equal(f.S.settings.budget.length,1); assert.equal(f.S.settings.budget[0].project,''); await f.click('budgetRowDel',{i:'0'}); assert.equal(f.S.settings.budget.length,0); assert.equal(f.S.budget.table,null); assert.ok(f.calls.some(x=>x[0]==='save'));
+  const f=fixture(); await f.click('budgetRowAdd'); assert.equal(f.S.settings.budget.length,0, 'unfinished row must not persist'); f.ctx._budgetInputs = ['project','filter','label'].map(b=>({dataset:{i:'0',b},value:''})); f.ctx.renderMain = () => { f.ctx._budgetInputs = []; }; await f.click('budgetRowDel',{i:'0'}); assert.equal(f.S.settings.budget.length,0); assert.equal(f.S.budget.table,null); assert.ok(f.calls.some(x=>x[0]==='save'));
 });
 test('all budget screen and budget settings actions have handlers',()=>{
   const start=ui.indexOf('  const bKey ='); const budgetUi=ui.slice(start); const actions=new Set([...budgetUi.matchAll(/data-act="([^"]+)"/g)].map(m=>m[1]));
