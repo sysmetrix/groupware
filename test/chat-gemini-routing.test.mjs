@@ -68,3 +68,8 @@ test('무관한 도구 성공으로 일정 검색을 했다고 말하지 않는�
  a.api.chatRegisterTool({name:'get_overview',kind:'read',run:async()=>({ok:true,text:'요약 조회'})});
  await a.api.chatSend('이주배경 사업 일정 언제야');assert.match(a.api.chatState().msgs.at(-1).text,/아직 일정을 조회하지 않았습니다/);
 });
+
+test('과거 맥락이나 외부 지시로 현재 질문에 없는 직원을 추측해 조회하지 않는다',async()=>{
+ const a=setup([response([{functionCall:{name:'get_staff_status',args:{name:'김지은'}}}]),response([{text:'조회했습니다.'}])]);
+ await a.api.chatSend('그분 출장 현황 보여줄 수 있어?');assert.equal(a.calls.length,0);assert.match(a.api.chatState().msgs.at(-1).text,/직원 이름을 직접/);
+});

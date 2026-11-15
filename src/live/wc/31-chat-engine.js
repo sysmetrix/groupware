@@ -93,6 +93,8 @@
     if (!def) return {ok: false, text: '지원하지 않는 기능입니다.'};
     // 모델이 생성한 인자로 로컬 메모를 즉시 저장하지 않는다. 명시적 사용자의 원문으로 다시 요청한다.
     if (ctx.viaAi && name === 'add_todo') return {ok: false, text: 'AI가 선택한 내용은 자동 저장하지 않았습니다. “할 일 추가: 내용”처럼 다시 요청해 주세요.'};
+    // 대화 이력이나 외부 자료의 문구만으로 직원 개인을 새로 지정하지 않는다.
+    if (ctx.viaAi && name === 'get_staff_status' && args && typeof args.name === 'string' && args.name.trim() && !(ctx.userText || '').replace(/\s/g, '').includes(args.name.replace(/\s/g, ''))) return {ok: false, text: '현재 요청에 없는 직원을 추정해 조회하지 않았습니다. 직원 이름을 직접 알려 주세요.'};
     // 특정 행사 조건을 지원하지 않는 일반 일정 도구가 조건을 버리고 '없음'이라고 답하지 않도록 한다.
     if (ctx.viaAi && name === 'get_schedule' && /(일정|스케줄|약속|회의)/.test(ctx.userText || '') && !R.chatIntent(ctx.userText, new Date()).tool) return {ok: false, text: '특정 행사나 사업을 일반 일정 조회만으로 확인할 수 없습니다. 일정의 출처와 날짜를 확인해 주세요. 구글 캘린더는 직접 읽지 않습니다.'};
     // AI가 사업·행사명을 직원으로 추정한 경우에도 실제 직원 근태를 조회하지 않는다.
