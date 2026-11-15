@@ -71,7 +71,7 @@ export const MOUNT_JS = `// GW 비서 확장 프로그램의 시작 스크립트
   // They are not the main app: no launcher, no data read there.
   if (/^#\\/?popup(?:[?/&]|$)/i.test(location.hash || '')) return;
   window.BWYFGW_EXT = 1;
-  var started = false;
+  var started = false, usedStored = false;
   function note(text) {
     var d = document.createElement('div');
     d.textContent = text;
@@ -86,6 +86,8 @@ export const MOUNT_JS = `// GW 비서 확장 프로그램의 시작 스크립트
     if (n < 40) { setTimeout(function () { wait(n + 1); }, 500); return; }
     // 그룹웨어 화면을 알아보지 못했어도 버튼은 띄운다(눌렀을 때 자료를 읽지 못하면 그 화면에서 이유를 알려 준다).
     var err = document.body ? mount() : '화면이 아직 준비되지 않았습니다';
+    // 받아 둔 묶음으로 시작했다가 실패했다면 그것을 잊는다. 새로고침하면 함께 설치된 묶음으로 돌아간다.
+    if (err && usedStored) forget();
     if (err) note('GW 비서를 불러오지 못했습니다(' + err.slice(0, 60) + '). 그룹웨어에 로그인한 뒤 새로고침(F5) 해 주세요.');
   }
   function newer(a, b) { var x = String(a).split('.'), y = String(b).split('.'); for (var i = 0; i < 3; i++) { if (+x[i] !== +y[i]) return +x[i] > +y[i]; } return false; }
@@ -107,7 +109,7 @@ export const MOUNT_JS = `// GW 비서 확장 프로그램의 시작 스크립트
         var h = Array.from(new Uint8Array(d), function (x) { return x.toString(16).padStart(2, '0'); }).join('');
         if (h !== m.sha256) { forget(); return; }
         var old = window.BWYFGW_WC;
-        try { (0, eval)(s); } catch (e) { forget(); if (!window.BWYFGW_WC) window.BWYFGW_WC = old; }
+        try { (0, eval)(s); usedStored = true; } catch (e) { forget(); if (!window.BWYFGW_WC) window.BWYFGW_WC = old; }
       });
     });
   }

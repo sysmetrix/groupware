@@ -130,19 +130,19 @@ test('autoUpdate stays off in the demo, under a blocking policy, when the user t
 });
 
 // ---------- 확장 프로그램의 시작 스크립트 ----------
-async function runExtMount({stored, metaVersion = '0.99.0', running = '0.71.0', policyOff = false, corrupt = false} = {}) {
-  const calls = [], ls = new Map(), caches = fakeCaches();
-  const src = 'window.BWYFGW_WC = {version: "0.99.0", mount: () => { calls.push("mount-new"); }};';
+async function runExtMount({stored, metaVersion = '0.99.0', running = '0.71.0', policyOff = false, corrupt = false, broken = false} = {}) {
+  const calls = [], timers = [], ls = new Map(), caches = fakeCaches();
+  const src = broken ? 'window.BWYFGW_WC = {version: "0.99.0", mount: () => { calls.push("mount-fail"); throw new Error("boom"); }};' : 'window.BWYFGW_WC = {version: "0.99.0", mount: () => { calls.push("mount-new"); }};';
   if (stored) { ls.set('bwyfgw:wc:auto', JSON.stringify({sha256: sha(src), version: metaVersion})); await (await caches.open()).put('/bwyfgw-wc/' + sha(src), new Response(corrupt ? src + ' ' : src)); }
   const window = {BWYFGW_WC: {version: running, mount: () => { calls.push('mount-bundled'); }}, webpackChunk_app: []};
   if (policyOff) window.BWYFGW_POLICY = {features: {updateCheck: false}};
   window.top = window;
   const document = {visibilityState: 'visible', body: {append() {}}, addEventListener() {}, removeEventListener() {}, createElement: () => ({style: {}, remove() {}})};
-  const ctx = vm.createContext({window, document, calls, location: {hash: ''}, setTimeout: () => 0, localStorage: {getItem: k => ls.get(k) ?? null, removeItem: k => ls.delete(k)}, caches, crypto: webcrypto, TextEncoder, Uint8Array, Array, JSON, String, Promise, Object});
+  const ctx = vm.createContext({window, document, calls, location: {hash: ''}, setTimeout: f => { timers.push(f); return 0; }, localStorage: {getItem: k => ls.get(k) ?? null, removeItem: k => ls.delete(k)}, caches, crypto: webcrypto, TextEncoder, Uint8Array, Array, JSON, String, Promise, Object});
   ctx.eval = code => vm.runInContext(code, ctx);
   vm.runInContext(MOUNT_JS, ctx);
   await new Promise(r => setTimeout(r, 30));
-  return {calls, ls, ext: window.BWYFGW_EXT};
+  return {calls, ls, timers, ext: window.BWYFGW_EXT};
 }
 
 test('extension start: uses a newer verified copy kept by auto-update, otherwise the bundled one', async () => {
@@ -155,6 +155,10 @@ test('extension start: uses a newer verified copy kept by auto-update, otherwise
   const bad = await runExtMount({stored: true, corrupt: true});
   assert.deepEqual(bad.calls, ['mount-bundled'], 'a copy that fails the hash check is never run');
   assert.equal(bad.ls.has('bwyfgw:wc:auto'), false, 'and is forgotten');
+  // 받아 둔 묶음이 실행은 되지만 버튼을 띄우지 못하면, 끝내 잊어서 다음 새로고침에는 함께 설치된 묶음으로 돌아간다
+  const broken = await runExtMount({stored: true, broken: true});
+  for (let i = 0; i < 40; i++) broken.timers[i]();
+  assert.equal(broken.ls.has('bwyfgw:wc:auto'), false);
 });
 
 test('extension start: the launcher still appears when the groupware app is not recognised in time', () => {
