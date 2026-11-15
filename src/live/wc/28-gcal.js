@@ -40,7 +40,7 @@
     const c = gcalCfg();
     const setup = !c.email || S.gcalEdit;
     if (setup) {
-      return `${pgh('구글 일정', '내 Google 캘린더를 GW 비서 안에서 봅니다')}
+      return `${pgh('구글 일정', '')}
       <div class="box" id="gcalSetup"><div style="display:flex;flex-direction:column;gap:10px;max-width:700px">
         <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)">내 구글 계정 이메일<input class="inp" id="gcalEmail" type="email" value="${esc(c.email || '')}" placeholder="예) name@gmail.com" style="height:36px"></label>
         <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)">캘린더 목록과 색 (한 줄에 하나: 캘린더ID 색상 이름)<textarea class="inp" id="gcalExtra" rows="9" style="font-family:inherit" placeholder="name@gmail.com #e7ba51 일상&#10;xxxx@group.calendar.google.com #489160 성장">${esc(gcalLines(c))}</textarea></label>
