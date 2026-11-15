@@ -57,6 +57,7 @@ const SETX_RULES = {
     }
     out.cals = out.cals.slice(0, 12);
     if (['WEEK', 'MONTH', 'AGENDA'].includes(v.mode)) out.mode = v.mode;
+    if (setxPlain(v.layers)) { const ids = new Set([out.email, ...out.cals.map(c => c.id)]); const ly = {}; for (const k of ['attend', 'personal']) if (typeof v.layers[k] === 'string' && ids.has(v.layers[k])) ly[k] = v.layers[k]; if (Object.keys(ly).length) out.layers = ly; }
     return out;
   },
 };

@@ -7,7 +7,7 @@
    ===================================================================== */
 .wc{--bg:#f2f3f5;--card:#fff;--fg:#191f28;--muted:#626d7a;--fg-secondary:#4e5968;--line:#e9ebee;--line2:#d3d7dd;--soft:#f4f5f7;--sel:#eef3ff;
  --accent:#1f5eda;--accent2:#1f5eda;--accent3:#1f5eda;--grad:#2a63e8;--accent-soft:#e8f0ff;--accent-text:#1f5eda;--pri:#191f28;--pri-h:#333d4b;--pri-fg:#fff;
- --hi:#d6303b;--hi-soft:#fdecee;--md:#8f5e00;--md-soft:#fff3d4;--ok:#0d7a4e;--ok-soft:#e2f5eb;--ok-text:#0d7a4e;--hl:#d5e3ff;
+ --hi:#c9252f;--hi-soft:#fdecee;--md:#8f5e00;--md-soft:#fff3d4;--ok:#0d7a4e;--ok-soft:#e2f5eb;--ok-text:#0d7a4e;--hl:#d5e3ff;
  --head:transparent;--r:12px;--navW:236px;--sh:none;--sh-sm:0 1px 2px rgba(25,31,40,.06);--sh-md:0 8px 24px -10px rgba(25,31,40,.18);--sh2:0 24px 56px -20px rgba(25,31,40,.32),0 0 0 1px rgba(25,31,40,.04);
  --card-hover:rgba(25,31,40,.03);--bg-subtle:rgba(25,31,40,.055);
  --e-out:cubic-bezier(.2,.8,.2,1);--e-pop:cubic-bezier(.3,1.5,.5,1);--t1:.12s;--t2:.22s;--t3:.42s;
@@ -186,8 +186,16 @@
 .wc .col{border:0;border-radius:var(--r);background:var(--soft)}
 .wc .card{border:1px solid var(--line);border-radius:10px;box-shadow:var(--sh-sm)}
 
+/* 구글 동기화: 올릴 캘린더 고르기 */
+.wc .gs-picks{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px}
+.wc .gs-picks .muted{flex-basis:100%}
+.wc .gs-pick{display:inline-flex;align-items:center;gap:8px;font-size:13px}
+.wc .gs-pick select{height:32px;max-width:240px}
 /* 처리 창 */
 .wc .ph .top{background:var(--card);border-radius:14px 0 0 0}
+.wc.expanded .ph .top{background:var(--card);color:var(--fg)}
+.wc.expanded .ph .top .btn{color:var(--fg);border-color:var(--line2)}
+.wc.expanded .ph .top .btn:hover{background:var(--soft)}
 .wc .ph .t{font-size:17px;font-weight:700;letter-spacing:-.025em}
 .wc .kv b{font-weight:500}
 .wc .body-text,.wc .file{border-radius:10px}

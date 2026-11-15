@@ -35,6 +35,7 @@
     "graph": "node scripts/graph.mjs",
     "graph:write": "node scripts/graph.mjs --write",
     "live:report": "node scripts/live-report.mjs",
+    "bump": "node scripts/bump.mjs",
     "test:attachments": "python -m unittest discover -s test -p \"*_test.py\""
   }
 }

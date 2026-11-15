@@ -5,11 +5,24 @@
 
   const gsyncState = () => (S.gsync = S.gsync || {open: '', status: '', layer: 'all'});
   const gsyncCfg = () => (S.settings.gcal = S.settings.gcal || {});
+  // 등록한 캘린더 전체(내 계정 포함)에 "어느 레이어에 쓸지" 고른 표시를 붙인다. 고른 것은 settings.gcal.layers = {attend: id, personal: id}.
+  function gsyncCals() {
+    const c = gsyncCfg(), m = c.layers || {};
+    return gcalList(c).map(x => ({...x, layer: Object.keys(m).find(k => m[k] === x.id) || ''}));
+  }
+  function gsyncPick(key, id) {
+    if (!['attend', 'personal'].includes(key)) return;
+    const c = gsyncCfg(), ok = id && gcalList(c).some(x => x.id === id);
+    c.layers = {...(c.layers || {})};
+    if (ok) c.layers[key] = id; else delete c.layers[key];
+    saveLocal(); renderMain();
+    toast(ok ? `${key === 'attend' ? '근태' : '기한'} 일정을 올릴 캘린더를 정했습니다.` : '캘린더 선택을 지웠습니다.');
+  }
   function gsyncGet() {
     const c = S.appsC && S.appsC.user === currentKey && S.appsC.data;
     if (!c) return null;
     const cfg = gsyncCfg();
-    return R.gsyncPlan({apps: c.apps, me: c.me, deadlines: gsyncDeadlines(), cals: cfg.cals || [], synced: cfg.synced || {}, existing: store.get('gsyncExisting', null), now: new Date()});
+    return R.gsyncPlan({apps: c.apps, me: c.me, deadlines: gsyncDeadlines(), cals: gsyncCals(), synced: cfg.synced || {}, existing: store.get('gsyncExisting', null), now: new Date()});
   }
   // 기한 후보는 내가 처리할 일(급함·할 일·확인)에 딸린 것만. 광고·뉴스레터는 제외하되 "홍보 실적 제출" 같은 업무는 남긴다.
   function gsyncDeadlines() {
@@ -32,8 +45,15 @@
     const cmpBanner = plan.compared ? `<div class="box tip" role="status" aria-live="polite">구글 캘린더 대조: <b>${esc(new Date(plan.comparedAt).toLocaleString('ko-KR', {month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'}))}</b> 기준 · 검증된 날짜 ${(plan.comparedDates || []).length}일${plan.unknownDates && plan.unknownDates.length ? ` · 파싱·조회 미확인 ${plan.unknownDates.length}일` : ''} · 구글 확인 ${googleCnt}${userCnt ? ` · 직접 표시 ${userCnt}` : ''} · 비슷한 일정 ${plan.counts.similar} · 구글에 없음 ${plan.counts.ready}${plan.counts.unverified ? ` · 대조 전 ${plan.counts.unverified}` : ''}<div class="muted" style="margin-top:4px">대조는 Aside가 구글 캘린더의 해당 날짜를 읽어 반영합니다. 새로 대조하려면 Aside에게 “구글 캘린더와 대조해줘”라고 말하세요.</div></div>` : `<div class="box warn"><b>아직 구글 캘린더와 대조하지 않았습니다.</b> 아래 후보는 “대조 전”이며 이미 구글에 있을 수 있습니다. Aside에게 <b>“구글 캘린더와 대조해줘”</b>라고 말하면 후보 날짜의 구글 일정을 읽어 이 화면에 반영합니다.</div>`;
     const staleBanner = stale ? '<div class="box warn"><b>오래된 대조 결과입니다.</b> 구글 일정은 변경됐을 수 있으니 새로 대조하기 전에는 아래 결과를 현재 상태로 판단하거나 중복 등록하지 마세요.</div>' : '';
     const diffBanner = plan.diffs && plan.diffs.length ? `<div class="box warn"><b>구글 캘린더 변경·취소 확인 필요 (${plan.diffs.length}건)</b>${plan.diffs.slice(0, 6).map(df => `<div class="trow"><span><span class="bdg ${df.action === 'cancel' ? 'urgent' : 'check'}">${df.action === 'cancel' ? '취소됨' : df.action === 'update' ? '변경 확인' : '미일치'}</span> ${esc(df.date.slice(4, 6) + '/' + df.date.slice(6))} <b>${esc(df.googleTitle || df.title)}</b> · <span class="muted">${esc(df.detail)}</span></span><a class="btn sm" href="${esc('https://calendar.google.com/calendar/u/0/r/search?q=' + encodeURIComponent(df.docNo || df.googleTitle || df.title))}" target="_blank" rel="noopener">구글에서 확인</a></div>`).join('')}</div>` : '';
-    const missing = [R.GSYNC_LAYERS.attend, ...(plan.items.some(i => i.source === 'deadline') ? [R.GSYNC_LAYERS.personal] : [])].filter(l => !R.gsyncCalendarId(gsyncCfg().cals || [], l));
-    const warn = missing.length ? `<div class="box warn">“${esc(missing.join(', '))}” 캘린더를 연결하지 않아 구글 작성 화면에서 캘린더를 직접 골라야 합니다. <button class="btn sm" data-act="view" data-v="gcal">구글 일정에서 캘린더 연결하기</button></div>` : '';
+    // 올릴 캘린더: 이름으로 찾지 못해도 여기서 직접 고르면 연결된다(이름을 정확히 맞춰 적을 필요가 없다).
+    const calsAll = gsyncCals();
+    const needKeys = ['attend', ...(plan.items.some(i => i.source === 'deadline') ? ['personal'] : [])];
+    const calName = x => x.name || x.id.replace(/@.*/, '').slice(0, 24);
+    const pickRow = k => { const cur = R.gsyncCalendarId(calsAll, R.GSYNC_LAYERS[k]); return `<label class="gs-pick"><span>${k === 'attend' ? '근태(출장·시간외·휴가)' : '기한'}</span><select class="f${cur ? '' : ' on'}" data-gsl="${k}" aria-label="${k === 'attend' ? '근태' : '기한'} 일정을 올릴 캘린더"><option value="">고르지 않음</option>${calsAll.map(x => `<option value="${esc(x.id)}"${x.id === cur ? ' selected' : ''}>${esc(calName(x))}</option>`).join('')}</select></label>`; };
+    const missing = needKeys.filter(k => !R.gsyncCalendarId(calsAll, R.GSYNC_LAYERS[k]));
+    const warn = !calsAll.length
+      ? `<div class="box warn">구글 일정에 등록한 캘린더가 없습니다. 먼저 내 구글 계정을 등록해 주세요. <button class="btn sm" data-act="view" data-v="gcal">구글 일정에서 등록하기</button></div>`
+      : `<div class="box${missing.length ? ' warn' : ''} gs-picks"><b>${missing.length ? '올릴 캘린더를 골라 주세요' : '올릴 캘린더'}</b>${needKeys.map(pickRow).join('')}${missing.length ? '<div class="muted">고르지 않으면 구글 작성 화면에서 캘린더를 직접 골라야 합니다. 등록한 캘린더는 그대로 연결되어 있습니다.</div>' : ''}</div>`;
     if (!st.status) st.status = plan.compared ? (plan.counts.ready ? 'todo' : plan.counts.similar || plan.counts.unverified ? 'check' : 'synced') : 'check';
     const stOk = i => st.status === 'all' || (st.status === 'todo' ? i.state === 'ready' : st.status === 'check' ? i.state === 'similar' || i.state === 'unverified' : st.status === 'hold' ? i.state === 'hold' : i.state === 'synced');
     const lyOk = i => st.layer === 'all' || (st.layer === 'attend' ? i.source === 'attend' : i.source === 'deadline');

@@ -77,7 +77,7 @@
     return `<div class="row lean ${ref ? 'ref' : ''} ${S.sel && S.sel.key === x.key ? 'sel' : ''} ${isHidden(x.key) || isSnoozed(x.key) ? 'hid' : ''} ${S.multi.has(x.key) ? 'multi' : ''}" role="listitem" tabindex="0" data-act="selAction" data-k="${k}" title="${esc(tip)}">
       ${ref ? `<span class="type-icon">${ic(typeIcon)}</span>` : `<input class="ck" type="checkbox" data-act="multi" data-k="${k}" ${S.multi.has(x.key) ? 'checked' : ''} aria-label="선택" title="여러 건 선택">`}
       <span class="bdg ${ref ? 'info' : st}">${ref ? '참고' : STATE_NAME[st]}</span>
-      <div class="mn"><span class="t">${S.newKeys.has(x.key) ? '<span class="bdg new" style="background:var(--fg);color:var(--bg)">새</span> ' : ''}${esc(x.title)}</span><span class="what ${ref ? '' : st}">${esc(head)}</span></div>
+      <div class="mn"><span class="t">${S.newKeys.has(x.key) ? '<span class="bdg new">새</span> ' : ''}${esc(x.title)}</span><span class="what ${ref ? '' : st}">${esc(head)}</span></div>
       ${dl}${note ? `<span class="bdg tag">${esc(note)}</span>` : ''}
       <span class="w">${esc(shortWhen(x.when))}</span>
       <span class="qa">${done ? `<button class="btn sm ghost icon" data-act="markDone" data-k="${k}" title="끝난 일이면 목록에서 완료 처리" aria-label="완료 처리">${ic('check')}</button>` : ''}<button class="btn sm ghost icon" data-act="rowMenu" data-k="${k}" title="미루기·숨기기·할 일에 추가" aria-label="더 보기">${ic('more')}</button></span>

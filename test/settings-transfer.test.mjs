@@ -117,3 +117,10 @@ test('relevance rules retain only supported fields and malformed lists are skipp
   }
   assert.deepEqual(setxParse(fileWith({rel: {}})).patch.rel, {mute: [], mine: []});
 });
+
+test('picked sync calendars travel with the settings only when they point at a registered calendar', () => {
+  const g = {email: 'me@gmail.com', cals: [{id: 'att@group.calendar.google.com', name: ''}], layers: {attend: 'att@group.calendar.google.com', personal: 'gone@group.calendar.google.com', other: 'me@gmail.com'}};
+  const doc = JSON.parse(setxBuild({gcal: g}, {version: '0.71.0'}));
+  assert.deepEqual(doc.settings.gcal.layers, {attend: 'att@group.calendar.google.com'});
+  assert.equal('layers' in JSON.parse(setxBuild({gcal: {email: 'me@gmail.com', cals: []}}, {version: '0.71.0'})).settings.gcal, false);
+});

@@ -32,7 +32,7 @@
     if (S.settings.verOf !== VERSION) { S.settings.verFrom = S.settings.verOf || (S.settings.seenVersion !== VERSION ? S.settings.seenVersion : '') || ''; S.settings.verOf = VERSION; S.settings.verAt = Date.now(); saveLocal(); renderHead(); renderNav(); if (S.settings.verFrom) toast(`GW 비서가 v${S.settings.verFrom} → v${VERSION} 으로 갱신되었습니다.`); }
     if (!noticed && S.settings.seenVersion !== VERSION) { const first = !S.settings.seenVersion; S.settings.seenVersion = VERSION; saveLocal(); if (!first) setTimeout(() => { if (S.open && !S.paletteOpen) openChangelog(); }, 1500); }
     if (!noticed && !S.settings.tourDone) setTimeout(() => startCoach(), 900);
-    checkUpdate(false).then(i => { renderHead(); renderNav(); if (i && i.latest && R.compareVersions(i.latest, VERSION) > 0 && !S.updToast) { S.updToast = true; toast(`새 버전 ${i.latest} 이 있습니다. 관리자에게 알려 주세요.`); } }).catch(() => {});
+    checkUpdate(false).then(i => { renderHead(); renderNav(); if (i && i.latest && R.compareVersions(i.latest, VERSION) > 0 && !S.updToast) { S.updToast = true; toast(`새 버전 v${i.latest} 이 있습니다. 왼쪽 아래 버전 표시를 누르면 바로 바꿀 수 있습니다.`); } }).catch(() => {});
   }
   function close() { if (backArmed) { backArmed = false; try { history.back(); } catch {} } S.open = false; host.style.display = 'none'; fab.style.display = 'block';
     if (!S.settings.fabTipShown || (S.settings.fabTipCount || 0) < 3) { S.settings.fabTipCount = (S.settings.fabTipCount || 0) + 1; S.settings.fabTipShown = true; saveLocal(); tipBubble.style.display = 'block'; clearTimeout(tipTimer); tipTimer = setTimeout(() => { tipBubble.style.display = 'none'; }, 6000); } document.title = prevTitle; hideBrandFavicon(); closeOverlay(); }

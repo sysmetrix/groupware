@@ -30,12 +30,55 @@
   const auditState = () => R.verifyAudit(store.get('actionHistory', []));
 
   // ---------- 업데이트 확인 ----------
+  const UPDATE_BASE = 'https://sysmetrix.github.io/groupware/';
+  /**
+   * 지금 바로 새 버전으로 바꾸기(사용자가 누를 때만). 북마크 "GW 비서 열기"와 같은 절차다:
+   * 배포 사이트의 버전 정보 → 실행 파일 → SHA-256 대조 → 실행. 새 묶음은 스스로 이전 화면을 정리하고 자리를 잡는다.
+   * 작성 중인 내용이 있으면 먼저 묻고, 실패하면 지금 화면은 그대로 둔다.
+   */
+  async function updateNow() {
+    if (!allowed('updateCheck')) { toast('업데이트 확인이 관리자 설정으로 꺼져 있습니다.'); return; }
+    if (window.BWYFGW_DEMO) { toast('둘러보기 화면에서는 버전을 바꾸지 않습니다. 실제 그룹웨어에서 눌러 주세요.'); return; }
+    if (S.updBusy || !leavePane()) return;
+    S.updBusy = true; toast('새 버전을 받는 중입니다…');
+    try {
+      const opt = {cache: 'no-store', credentials: 'omit', redirect: 'error'};
+      const r = await fetch(UPDATE_BASE + 'current.json', opt);
+      if (!r.ok) throw new Error('버전 정보 HTTP ' + r.status);
+      const m = await r.json();
+      if (!/^[a-f0-9]{64}$/.test(m.sha256 || '') || m.file !== 'gw-live-' + m.sha256 + '.js') throw new Error('버전 정보가 올바르지 않습니다');
+      const b = await fetch(UPDATE_BASE + m.file, opt);
+      if (!b.ok) throw new Error('실행 파일 HTTP ' + b.status);
+      const src = await b.text();
+      const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(src));
+      if (Array.from(new Uint8Array(d), x => x.toString(16).padStart(2, '0')).join('') !== m.sha256) throw new Error('실행 파일 무결성 확인 실패');
+      // 예전 "설치 북마크"로 이 브라우저에 저장해 둔 실행 파일이 있으면 그것도 새것으로 바꿔 둔다(다음에 열 때도 새 버전).
+      let stored = false; try { stored = !!localStorage.getItem('bwyfgw:wc:src'); } catch {}
+      (0, eval)(src);
+      if (stored) { try { window.BWYFGW_WC.install(src); } catch {} }
+      window.BWYFGW_WC.open();
+    } catch (e) {
+      S.updBusy = false; logError('update', String((e && e.message) || e));
+      const msg = `새 버전으로 바꾸지 못했습니다(${String((e && e.message) || e).slice(0, 60)}). 그룹웨어를 새로고침한 뒤 북마크 "GW 비서 열기"를 눌러 주세요.`;
+      toast(msg);
+      if (typeof root !== 'undefined' && root && root.host && !root.host.isConnected) window.alert(msg);
+    }
+  }
   async function checkUpdate(force) {
     if (!allowed('updateCheck')) return null;
     const cached = store.get('updateInfo', null);
     if (!force && cached && /^\d+\.\d+\.\d+$/.test(cached.latest || '') && Date.now() - cached.at < 3600e3 && R.compareVersions(cached.latest, VERSION) >= 0) return cached; // 1시간. 방금 갱신돼 설치본이 더 새것이면 다시 확인한다
     // 실패한 확인도 10분은 다시 요청하지 않는다(접속이 막힌 곳에서 열 때마다 기다리지 않게, 요청 한도도 아끼게).
     if (!force && cached && !cached.latest && cached.err && Date.now() - cached.at < 10 * 60e3) return cached;
+    // ① 배포 사이트(북마크 "GW 비서 열기"가 실제로 받아 오는 곳)의 버전이 기준이다. 릴리스를 따로 만들지 않아도 맞는다.
+    try {
+      const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 6000);
+      const r = await fetch(UPDATE_BASE + 'current.json', {signal: ctl.signal, cache: 'no-store', credentials: 'omit', redirect: 'error'});
+      clearTimeout(tm);
+      const m = r.ok ? await r.json() : null;
+      if (m && /^\d+\.\d+\.\d+$/.test(m.version || '') && /^[a-f0-9]{64}$/.test(m.sha256 || '')) { const info = {at: Date.now(), latest: m.version, err: '', url: UPDATE_BASE, src: 'pages'}; store.set('updateInfo', info); return info; }
+    } catch { /* ②로 넘어간다 */ }
+    // ② 배포 사이트를 읽지 못하면 GitHub 릴리스로 확인한다.
     try {
       const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 6000);
       const r = await fetch('https://api.github.com/repos/sysmetrix/groupware/releases/latest', {signal: ctl.signal, headers: {Accept: 'application/vnd.github+json'}});
@@ -153,7 +196,7 @@
     // 확인하지 못한 것을 "최신"이라고 말하지 않는다.
     if (!i) toast('업데이트 확인이 관리자 설정으로 꺼져 있어 확인하지 않았습니다.');
     else if (!i.latest) toast(`업데이트를 확인하지 못했습니다${i.err ? `(${i.err})` : ''}.`);
-    else if (R.compareVersions(i.latest, VERSION) > 0) toast(`새 버전 v${i.latest} 이 있습니다. 설치된 버전은 v${VERSION} 입니다.`);
+    else if (R.compareVersions(i.latest, VERSION) > 0) toast(`새 버전 v${i.latest} 이 있습니다. 업데이트 내역에서 \"지금 바꾸기\"를 누르면 바로 바뀝니다.`);
     else toast(`최신 버전입니다(v${VERSION}).`);
     if (fromLog) openChangelog(); else { closeOverlay(); S.paletteOpen = true; drawDiag(); }
   }
