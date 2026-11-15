@@ -35,7 +35,7 @@ test('Chrome에서 131개 행이 기본 숨김이고 펼침과 다시 접기가 
  if(!existsSync(chrome)){t.skip('Chrome을 찾지 못했습니다');return;}
  const dir=mkdtempSync(join(tmpdir(),'budget-subjects-'));
  try {
-  const css=readFileSync(new URL('../src/live/wc-theme.css',import.meta.url),'utf8');
+  const css=readFileSync(new URL('../src/live/wc.css',import.meta.url),'utf8');
   const script=`const d=document.querySelector('.budget-subjects');const rows=[...d.querySelectorAll('tr')].slice(1);const n=()=>rows.filter(r=>r.checkVisibility()).length;const a=n(), h1=d.getBoundingClientRect().height;d.querySelector('summary').click();const b=n(), h2=d.getBoundingClientRect().height;d.querySelector('summary').click();document.body.dataset.result=[a,b,n(),h2>h1].join(',');`;
   const html='<!doctype html><html><head><meta charset="utf-8"><style>'+css+'</style></head><body><main class="wc">'+render().html+'</main><script>'+script+'</'+'script></body></html>';
   const file=join(dir,'table.html');writeFileSync(file,html);

@@ -43,7 +43,10 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
       S.pane.mounted = S.pane.url;
     }
     frame.classList.toggle('idle', !S.pane.url);
-    if (!S.pane.url) frame.innerHTML = `<div class="fe">${info.url ? `<div>${ic('ext', 'style="width:30px;height:30px"')}</div><div>그룹웨어 원래 화면을 여기에 열어 그대로 처리할 수 있습니다.<br><span class="muted">원래 화면의 버튼(결재·접수·배부·발송·보내기)은 실제로 처리됩니다.</span></div><button class="btn primary" data-act="paneOpenMain">원래 화면 열기</button>` : '<div class="muted">이 항목은 열 화면이 없습니다.</div>'}</div>`;
+    // Keep the fallback opener only when the detail already has no equivalent opener.
+    // Do not mistake reply/forward buttons for the selected item's original screen.
+    const hasInlineOpen = !!ph.querySelector('[data-act="mailOpenItem"], .acts .primary[data-act="openUrl"], [data-act="openUrl"][data-title="예실대비현황"]');
+    if (!S.pane.url) frame.innerHTML = `<div class="fe">${info.url ? `<div>${ic('ext', 'style="width:30px;height:30px"')}</div><div>그룹웨어 원래 화면을 여기에 열어 그대로 처리할 수 있습니다.<br><span class="muted">원래 화면의 버튼(결재·접수·배부·발송·보내기)은 실제로 처리됩니다.</span></div>${hasInlineOpen ? '<div class="muted">위의 원문 열기 버튼을 이용하세요.</div>' : '<button class="btn primary" data-act="paneOpenMain">원래 화면 열기</button>'}` : '<div class="muted">이 항목은 열 화면이 없습니다.</div>'}</div>`;
     $('#fbar').innerHTML = focusBar();
     const af = $('#autofill'); if (af) af.innerHTML = autoFillBar();
   }

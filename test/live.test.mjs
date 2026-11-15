@@ -414,7 +414,7 @@ test('work center: every clickable data-act has a handler, CSS is a separate des
   const dir = new URL('../src/live/wc/', import.meta.url);
   const names = (await fs.readdir(dir)).filter(n => n.endsWith('.js')).sort();
   const src = (await fs.readFile(new URL('../src/live/workcenter.browser.js', import.meta.url), 'utf8')) + (await Promise.all(names.map(n => fs.readFile(new URL(n, dir), 'utf8')))).join('\n');
-  const css = (await fs.readFile(new URL('../src/live/wc-style.css', import.meta.url), 'utf8')) + (await fs.readFile(new URL('../src/live/wc-theme.css', import.meta.url), 'utf8'));
+  const css = await fs.readFile(new URL('../src/live/wc.css', import.meta.url), 'utf8');
   const acts = new Set([...src.matchAll(/data-act=\\?"([A-Za-z]+)\\?"/g)].map(m => m[1]));
   const handled = new Set([...src.matchAll(/case '([A-Za-z]+)'/g)].map(m => m[1]));
   const special = new Set(['closeOverlay', 'toastUndo']);

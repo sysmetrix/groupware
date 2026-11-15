@@ -45,9 +45,11 @@ test('homeDayRail clamps long events, marks the needle at the edges and tolerate
 });
 
 test('studio layer is bundled last, respects reduced motion and keeps text at 12px or more', async () => {
-  const css = await read('src/live/wc-studio.css');
   const {css: all} = await readSources(root);
-  assert.ok(all.trimEnd().endsWith(css.replace(/\r\n?/g, '\n').trimEnd()), 'wc-studio.css must be the last stylesheet so its tokens win');
+  const css = all.split('/* === Workcenter section: studio === */')[1];
+  assert.ok(css, 'the final studio section retains its original cascade position');
+  assert.equal(all, (await read('src/live/wc.css')).replace(/\r\n?/g, '\n'));
+  assert.equal(css.includes('/* === Workcenter section:'), false, 'no section follows studio');
   assert.match(css, /@media \(prefers-reduced-motion:reduce\)\{[^}]*animation:none!important;transition:none!important/);
   assert.match(css, /\.wc\.m-off \*/);
   for (const m of css.matchAll(/font-size:\s*(\d+(?:\.\d+)?)px/g)) assert.ok(+m[1] >= 12, `font-size ${m[1]}px`);

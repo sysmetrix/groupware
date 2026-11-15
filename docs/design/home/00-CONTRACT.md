@@ -25,7 +25,7 @@
 | I3 | 채팅 엔진 | `wc/31-chat-engine.js`, `chat.mjs` |
 | I4 | 읽기 도구 | `wc/32-chat-tools-read.js` |
 | I5 | 실행 도구 | `wc/33-chat-tools-act.js` |
-| I6 | 디자인 CSS | `wc-home.css`, `wc-chat.css` (다크/라이트, 반응형, 모션) |
+| I6 | 디자인 CSS | `wc.css`의 home·chat 구역 (다크/라이트, 반응형, 모션) |
 | I7 | 내비게이션·셸·단축키·도움말 | `wc/02-shell.js`, `wc/04-timers-keys.js`, `wc/05-views.js`(VIEWS/renderNav/아이콘; 이미 등록된 'home' 줄은 유지), `wc/15-overlays-palette-help-menus.js`, `wc/17-lifecycle.js` |
 | I8 | AI 연결·설정·온보딩 | `wc/23-ai.js`, `wc/12-report-settings.js` |
 | (메인) | 버전, CHANGELOG, 16-events.js, 빌드, 릴리스 | 그 외 전부 |

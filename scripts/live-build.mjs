@@ -138,7 +138,7 @@ export async function readSources(root = ROOT) {
   const partNames = (await fs.readdir(path.join(live, 'wc'))).filter(n => n.endsWith('.js')).sort();
   return {
     collector: await read('collector.browser.js'),
-    css: (await read('wc-style.css')) + '\n' + (await read('wc-theme.css')) + '\n' + (await read('wc-home.css').catch(() => '')) + '\n' + (await read('wc-chat.css').catch(() => '')) + '\n' + (await read('wc-premium.css').catch(() => '')) + '\n' + (await read('wc-lean.css').catch(() => '')) + '\n' + (await read('wc-studio.css').catch(() => '')),
+    css: await read('wc.css'),
     parts: await Promise.all(partNames.map(async file => ({file, src: await read(`wc/${file}`)}))),
     template: await read('workcenter.browser.js'),
     // 순수 로직 모듈: briefing.mjs 뒤에 이어 붙여 한 범위(R.*)로 내보낸다. 서로 import 하지 않고, 이름이 겹치지 않도록 home-model은 hm*, chat은 ch* 접두를 쓴다.
@@ -203,7 +203,7 @@ export function assemble({collector, css, parts, template, briefing: briefingSrc
   if (cssAt >= 0) wcSegs[cssAt] = {...wcSegs[cssAt], text: wcSegs[cssAt].text.replace(CSS_MARK, () => JSON.stringify(wcCss))};
   const workcenter = wcSegs.map(s => s.text).join('');
   if (workcenter.includes('/*@WC_PARTS@*/')) throw new Error('work center parts were not assembled');
-  if (!workcenter.includes(':host{all:initial}')) throw new Error('wc-style.css was not inlined');
+  if (!workcenter.includes(':host{all:initial}')) throw new Error('wc.css was not inlined');
   if (/^\s*import\s/m.test(briefingSrc)) throw new Error('briefing.mjs must stay dependency-free to be bundled.');
   const briefing = briefingSrc.replace(/^export\s+(?=(async\s+)?function|const|let|class)/gm, '');
   const exported = [...briefingSrc.matchAll(/^export\s+(?:async\s+)?(?:function|const|let|class)\s+([A-Za-z0-9_]+)/gm)].map(m => m[1]);
