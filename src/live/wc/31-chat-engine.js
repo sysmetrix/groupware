@@ -266,9 +266,10 @@
     const name = (S.raw && S.raw.principal && S.raw.principal.name) || '';
     const org = (S.raw && S.raw.principal && S.raw.principal.compName) || '';
     const contents = [];
-    for (const m of st.msgs.slice(-9, -2)) if (m.text && m.state === 'done' && chatHistoryCurrent(m.at) && (m.role === 'user' || m.role === 'ai' && m.historySafe === true)) contents.push({role: m.role === 'user' ? 'user' : 'model', parts: [{text: R.chatSanitizeText(m.text, 400)}]});
+    const rephrase = /(?:방금|직전|앞서|위에|그것|그거)/.test(text) && /(?:다시|문장|요약|정리|간결|설명|표현)/.test(text);
+    for (const m of (rephrase ? st.msgs.slice(-4, -2) : st.msgs.slice(-9, -2))) if (m.text && m.state === 'done' && chatHistoryCurrent(m.at) && (m.role === 'user' || m.role === 'ai' && m.historySafe === true)) contents.push({role: m.role === 'user' ? 'user' : 'model', parts: [{text: R.chatSanitizeText(m.text, 400)}]});
     contents.push({role: 'user', parts: [{text: R.chatSanitizeText(text, 600)}]});
-    const tools = R.chatToGeminiTools([...CHAT_TOOLS.values()]);
+    const tools = rephrase ? [] : R.chatToGeminiTools([...CHAT_TOOLS.values()]);
     const system = R.chatSystemPrompt(chatNowStr(), name, org);
     const texts = []; let anySuccess = false, scheduleVerified = false, relevantSuccess = false, privateResult = false;
     const expectedTool = R.chatIntent(text, new Date()).tool;
@@ -287,7 +288,8 @@
         if (ambiguousSchedule && !scheduleVerified) { ai.text = '일정 대상을 확인하지 못했습니다. 행사·사업명과 날짜, 그룹웨어 또는 구글 캘린더 중 확인할 곳을 알려 주세요. 아직 일정을 조회하지 않았습니다.'; return; }
         if (round === 0 && needTool && !texts.length) { ai.text = '그룹웨어 자료를 조회할 도구가 호출되지 않아 단정적으로 답할 수 없습니다. 구체적으로 다시 질문해 주세요.'; return; }
         if (texts.length && !anySuccess) { ai.text = texts.join('\n'); return; }
-        if (needTool && (!expectedTool || !relevantSuccess)) { ai.text = '요청에 맞는 자료를 확인하지 못했습니다. 해당 자료는 아직 조회하지 않았습니다.'; return; }
+        if (needTool && expectedTool && !relevantSuccess) { ai.text = '요청에 맞는 자료를 확인하지 못했습니다. 해당 자료는 아직 조회하지 않았습니다.'; return; }
+        if (needTool && !expectedTool && texts.length) { ai.text = texts.join('\n'); return; }
         ai.text = privateResult ? (texts.join('\n') || '조회 결과는 화면의 카드에서 확인해 주세요.') : (r.text || texts.join('\n')); ai.historySafe = !privateResult; return;
       }
       let fc = 0;
@@ -306,7 +308,7 @@
       }
       contents.push({role: 'user', parts: resp});
     }
-    if (!st.stopped && st.seq === runSeq) ai.text = ambiguousSchedule && !scheduleVerified ? '일정 대상을 확인하지 못했습니다. 아직 일정을 조회하지 않았습니다.' : needTool && (!expectedTool || !relevantSuccess) && anySuccess ? '요청에 맞는 자료를 확인하지 못했습니다. 해당 자료는 아직 조회하지 않았습니다.' : texts.join('\n') || '요청을 정리하지 못했습니다. 조금 더 구체적으로 말씀해 주세요.';
+    if (!st.stopped && st.seq === runSeq) ai.text = ambiguousSchedule && !scheduleVerified ? '일정 대상을 확인하지 못했습니다. 아직 일정을 조회하지 않았습니다.' : needTool && expectedTool && !relevantSuccess && anySuccess ? '요청에 맞는 자료를 확인하지 못했습니다. 해당 자료는 아직 조회하지 않았습니다.' : texts.join('\n') || '요청을 정리하지 못했습니다. 조금 더 구체적으로 말씀해 주세요.';
   }
 
   async function chatSend(text, opt = {}) {
@@ -347,8 +349,9 @@
         st.ctx.lastRead = res.ok && ['get_schedule', 'get_staff_status', 'get_resource_status'].includes(it.tool) ? {tool: it.tool, args: it.args} : null;
         if (S.chat !== st || st.stopped || st.seq !== runSeq) { ai.text = ai.text || '중지했습니다.'; }
         else {
-          if (proseCaps && res.ok) { ai.cards = []; ai.text = '저는 ' + String(res.llm || res.text || '').replace(/\.$/, '') + '. 실제 제출과 발송은 사용자가 확인한 뒤 직접 진행합니다.'; }
+          if (proseCaps && res.ok) { ai.cards = []; ai.text = res.text || res.llm || ''; }
           else ai.text = res.text || '';
+          if (it.tool === 'get_capabilities' && res.ok) ai.historySafe = true;
           ai.state = 'done'; chatRefresh();   // ① 로컬 답을 먼저 보여 준다
           const def = CHAT_TOOLS.get(it.tool);
           if (ready && res.ok && def.kind !== 'act' && CHAT_COMPOSE.has(it.tool) && !st.stopped && (res.cards || []).length + (res.text || '').length > 30 && chatAvailable(await chatModelList()).length && st.seq === runSeq) await chatCompose(text, res, ai, runSeq);

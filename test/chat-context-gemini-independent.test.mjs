@@ -15,7 +15,7 @@ function setup(replies=[],ready=true) {
 test('기능 안내 다음 문장 형식 요청은 버튼 대신 문장으로 답한다',async()=>{
  const a=setup();a.api.chatRegisterTool({name:'get_capabilities',kind:'read',run:async()=>({ok:true,text:'아래 예시를 누르세요',llm:'일정 조회와 신청 준비를 지원한다.',cards:[{type:'chips',items:['일정']} ]})});
  await a.api.chatSend('너가 할 수 있는 일을 말해봐');await a.api.chatSend('너가 할 수 있는 일을 문장으로 말해봐');
- const m=a.api.chatState().msgs.at(-1);assert.match(m.text,/일정 조회와 신청 준비/);assert.equal(m.cards.length,0);
+ const m=a.api.chatState().msgs.at(-1);assert.match(m.text,/아래 예시를 누르세요/);assert.equal(m.cards.length,0);
 });
 test('직전 대화의 형식 변경은 Gemini에 문맥을 포함해 전달한다',async()=>{
  const a=setup([reply([{text:'먼저 답합니다.'}]),reply([{text:'문장으로 답합니다.'}])]);
@@ -41,4 +41,18 @@ test('검토되지 않은 도구는 llm과 text도 보내지 않으며 로컬 �
  const a=setup([reply([{functionCall:{name:'get_schedule',args:{}}}]),reply([{text:'근거 없는 요약'}])]);
  a.api.chatRegisterTool({name:'get_schedule',kind:'read',run:async()=>({ok:true,text:'로컬일정비밀',llm:'민감요약',data:{title:'민감제목'}})});
  await a.api.chatSend('오늘 일정 자세히 설명해줘');const wire=JSON.stringify(a.requests);assert.doesNotMatch(wire,/로컬일정비밀|민감요약|민감제목/);assert.match(a.api.chatState().msgs.at(-1).text,/로컬일정비밀/);
+});
+
+test('로컬 규칙에 없는 업무 요청도 확인된 도구 결과를 그대로 표시한다',async()=>{
+ const a=setup([reply([{functionCall:{name:'get_overview',args:{}}}]),reply([{text:'요약입니다.'}])]);
+ a.api.chatRegisterTool({name:'get_overview',kind:'read',run:async()=>({ok:true,text:'수집된 업무 3건'})});
+ await a.api.chatSend('업무가 어떻게 돌아가는지 설명해줘');assert.match(a.api.chatState().msgs.at(-1).text,/수집된 업무 3건/);
+});
+
+test('직전 대답 재서술은 과거 주제와 무관한 도구를 호출하지 않는다',async()=>{
+ const a=setup([reply([{text:'두 문장으로 요약했습니다.'}])]);let runs=0;
+ a.api.chatRegisterTool({name:'get_capabilities',kind:'read',run:async()=>({ok:true,text:'일정과 메일을 조회할 수 있습니다.',llm:'일정과 메일을 조회할 수 있습니다.',cards:[]})});
+ a.api.chatRegisterTool({name:'get_budget',kind:'read',run:async()=>{runs++;return {ok:true,text:'예산'};}});
+ await a.api.chatSend('너가 할 수 있는 일을 문장으로 말해봐');await a.api.chatSend('방금 말한 내용을 두 문장으로 간결하게 다시 설명해줘');
+ assert.equal(runs,0);assert.ok(!a.requests[0].tools);assert.match(JSON.stringify(a.requests[0].contents),/일정과 메일/);
 });

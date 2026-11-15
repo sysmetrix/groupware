@@ -32,5 +32,6 @@ test('확인 결과는 메시지 카드로만 추가되고 AI의 과거 대화�
   assert.match(engine, /p\.card\.result = \(r && r\.text\)/);
   assert.match(engine, /p\.msg\.cards\.push\(c\)/);
   assert.match(engine, /text: R\.chatSanitizeText\(m\.text, 400\)/);
-  assert.match(engine, /text: res\.llm !== undefined \? res\.llm : res\.text, data: res\.data/);
+  assert.doesNotMatch(engine, /text: res\.llm !== undefined \? res\.llm : res\.text, data: res\.data/);
+  assert.match(engine, /CHAT_LLM_SUMMARY/);
 });

@@ -9,7 +9,7 @@ const deferred = () => { let resolve; const promise = new Promise(r => {resolve=
 function setup(ready = false) {
  const data = {chatHistV:3,chatModels:{at:Date.now(),list:['test-model']}};
  const S = {userKey:'A',settings:{},view:'home',a:{failed:[],approval:{lists:{}}},raw:{data:{schedule:{start:'20261101',end:'20261130',events:[]}},status:{}},team:{202611:{cal:{byDate:{},depts:[]}}},homeRes:{day:'20261115',items:[]}};
- const c = {S,Date,AbortController,TextDecoder,console,AI_HOST:'https://example.invalid',root:{addEventListener(){},activeElement:null},setTimeout(){return 0;},clearTimeout(){},setInterval(){},chatRefresh(){},logError(){},allowed:()=>true,aiReady:()=>ready,aiCfg:()=>({key:'fake'}),$:()=>null,esc:x=>String(x??''),ic:()=>'',mineVisible:()=>[],visibleActions:()=>[],fmtDays:String,isMine:()=>true,stateOf:x=>x.state,STATE_NAME:{},store:{get:(k,d)=>k in data?data[k]:d,set:(k,v)=>data[k]=v,del:k=>delete data[k]},R:{...model,kstNow:()=>({date:'2026-11-15'}),teamHomeSummary:()=>({leave:[],trip:[]}),chatIntent:()=>({tool:'list_tasks',args:{},confidence:1}),chatFollowupIntent:()=>null,chatScheduleFollowup:()=>null,chatSanitizeText:String,chatSanitizeForLlm:x=>x,chatSystemPrompt:()=>'',chatBuildRequest:x=>x,chatComposePrompt:()=>'',chatDowName:()=>''}};
+ const c = {S,Date,AbortController,TextDecoder,console,AI_HOST:'https://example.invalid',root:{addEventListener(){},activeElement:null},setTimeout(){return 0;},clearTimeout(){},setInterval(){},chatRefresh(){},logError(){},allowed:()=>true,aiReady:()=>ready,aiCfg:()=>({key:'fake'}),$:()=>null,esc:x=>String(x??''),ic:()=>'',mineVisible:()=>[],visibleActions:()=>[],fmtDays:String,isMine:()=>true,stateOf:x=>x.state,STATE_NAME:{},store:{get:(k,d)=>k in data?data[k]:d,set:(k,v)=>data[k]=v,del:k=>delete data[k]},R:{...model,kstNow:()=>({date:'2026-11-15'}),teamHomeSummary:()=>({leave:[],trip:[]}),chatIntent:()=>({tool:'list_tasks',args:{},confidence:1}),chatFollowupIntent:()=>null,chatScheduleFollowup:()=>null,chatPreferGemini:()=>false,chatSanitizeText:String,chatSanitizeForLlm:x=>x,chatSystemPrompt:()=>'',chatBuildRequest:x=>x,chatComposePrompt:()=>'',chatDowName:()=>''}};
  vm.createContext(c); vm.runInContext(home+'\n'+ui+'\n'+engine+'\nthis.register=chatRegisterTool;',c);
  c.chatRefresh=()=>{};
  return {c,S,data};
@@ -23,14 +23,14 @@ test('stop releases busy immediately; delayed local result cannot mutate new con
  d.resolve({ok:true,text:'old result',data:{items:[{itemId:'old'}]},cards:[{type:'confirm',onConfirm(){}}]}); await first;
  assert.equal(st.msgs.length,count); assert.equal(st.ctx.lastItems[0].itemId,'new'); assert.equal(old.cards.length,0); assert.equal(Object.keys(st.pending).length,0); assert.equal(st.msgs.at(-1).text,'new result'); assert.equal(st.busy,false);
 });
-test('stopping streaming composition aborts request and permits resend before old response settles',async()=>{
- const {c}=setup(true), stream=deferred(), started=deferred(); let signal;
- c.register({name:'list_tasks',kind:'read',run:async()=>({ok:true,text:'local answer with enough detail to trigger AI composition and preserve it'})});
- c.fetch=async(_url,opt)=>{signal=opt.signal;started.resolve();return {ok:true,body:{getReader:()=>({read:()=>stream.promise})}};};
- const first=c.chatSend('compose'); await started.promise; const st=c.chatState(), old=st.activeReply;
- c.chatStop(); assert.equal(signal.aborted,true); assert.equal(st.busy,false); assert.match(old.text,/local answer/);
- c.aiReady=()=>false; await c.chatSend('next'); stream.resolve({done:true}); await first;
- assert.equal(st.busy,false); assert.equal(st.activeReply,null); assert.equal(old.tools.some(t=>t.state==='run'),false);
+test('stopping an active Gemini request aborts and permits resend before old response settles',async()=>{
+ const {c}=setup(true), pending=deferred(), started=deferred(); let signal;
+ c.R.chatPreferGemini=()=>true; c.R.chatToGeminiTools=()=>[]; c.R.chatParseResponse=j=>({text:j.text||'',calls:[],parts:[],error:'',blocked:false});
+ c.fetch=async(_url,opt)=>{signal=opt.signal;started.resolve();return pending.promise;};
+ const first=c.chatSend('자세히 설명해줘'); await started.promise; const st=c.chatState(), old=st.activeReply;
+ c.chatStop();assert.equal(signal.aborted,true);assert.equal(st.busy,false);assert.match(old.text,/중지/);
+ c.aiReady=()=>false;c.register({name:'list_tasks',kind:'read',run:async()=>({ok:true,text:'fresh'})});await c.chatSend('next');
+ pending.resolve({ok:true,json:async()=>({text:'stale'})});await first;assert.equal(st.msgs.at(-1).text,'fresh');assert.equal(st.busy,false);
 });
 test('clear discards deferred local result and can immediately accept a new request',async()=>{
  const {c}=setup(), d=deferred(); let calls=0;c.register({name:'list_tasks',run:()=>++calls===1?d.promise:{ok:true,text:'fresh'}});
