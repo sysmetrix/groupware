@@ -37,7 +37,7 @@ test('Chrome 렌더: 닫힘 12개, 펼침 14개, 다시 닫힘 12개',t=>{
  if(!existsSync(chrome)){t.skip('Chrome이 없어 렌더 검사를 실행할 수 없습니다');return;}
  const dir=mkdtempSync(join(tmpdir(),'budget-render-'));
  try{
-  const css=readFileSync(new URL('../src/live/wc-theme.css',import.meta.url),'utf8');
+  const css=readFileSync(new URL('../src/live/wc.css',import.meta.url),'utf8');
   const script="const d=document.querySelector('details');const visible=()=>[...document.querySelectorAll('.budget-bar-row')].filter(e=>e.checkVisibility({visibilityProperty:true,contentVisibilityAuto:true})).length;const a=visible();d.open=true;const b=visible();d.open=false;document.body.setAttribute('data-result',[a,b,visible()].join(','));";
   const html='<!doctype html><html><head><meta charset="utf-8"><style>'+css+'</style></head><body><main class="wc">'+charts().barChart+'</main><script>'+script+'</'+'script></body></html>';
   const file=join(dir,'chart.html');writeFileSync(file,html);const run=spawnSync(chrome,['--headless','--disable-gpu','--no-sandbox','--user-data-dir='+join(dir,'profile'),'--dump-dom',pathToFileURL(file).href],{encoding:'utf8',timeout:30000});

@@ -162,8 +162,7 @@ async function fakeRoot(parts) {
   const live = path.join(dir, 'src', 'live');
   await fs.mkdir(path.join(live, 'wc'), {recursive: true});
   await fs.writeFile(path.join(live, 'collector.browser.js'), 'window.BWYFGW = {};\n');
-  await fs.writeFile(path.join(live, 'wc-style.css'), ':host{all:initial}\n');
-  await fs.writeFile(path.join(live, 'wc-theme.css'), '.a{color:red}\n');
+  await fs.writeFile(path.join(live, 'wc.css'), ':host{all:initial}\n.a{color:red}\n');
   await fs.writeFile(path.join(live, 'briefing.mjs'), 'export function x() { return 1; }\n');
   await fs.writeFile(path.join(live, 'workcenter.browser.js'), "(() => {\n  'use strict';\n  const VERSION = '9.9.9';\n  function boot() {\n  const WC_CSS = '/*@WC_CSS@*/';\n  /*@WC_PARTS@*/\n  return {};\n  }\n})();\n");
   for (const [name, src] of Object.entries(parts)) await fs.writeFile(path.join(live, 'wc', name), src);

@@ -15,6 +15,14 @@
   fab.setAttribute('aria-label', 'GW 비서 열기');
   fab.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
   fab.title = 'GW 비서 열기 (Alt+G)';
+  // Register in the document font set: the work center itself lives in Shadow DOM.
+  // The official OFL 1.1 font is optional; blocked networks retain system-font fallback.
+  try {
+    if (typeof FontFace === 'function' && document.fonts && ![...document.fonts].some(f => f.family.replace(/["']/g, '') === 'Pretendard Variable')) {
+      const face = new FontFace('Pretendard Variable', "url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/packages/pretendard/dist/web/variable/woff2/PretendardVariable.woff2')", {style:'normal', weight:'45 920', display:'swap'});
+      document.fonts.add(face); face.load().catch(() => { document.fonts.delete(face); });
+    }
+  } catch {}
   // 런처 스타일: 어두운 유리 질감의 상단 "아일랜드". 마우스를 올리면 오늘 요약이 펼쳐지고 커서를 따라 빛이 움직인다.
   function fabStyle() {
     if (document.getElementById('bwyfgw-wc-fab-style')) return;
