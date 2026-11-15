@@ -1,0 +1,12 @@
+import {readFile, writeFile, mkdir} from 'node:fs/promises';
+import path from 'node:path';
+const out = path.resolve(process.argv[2] || 'build/pages');
+const live = path.resolve(process.argv[3] || 'build/live');
+const bookmark = (await readFile(path.join(live, 'bookmarklet.txt'), 'utf8')).trim();
+const hash = (await readFile(path.join(live, 'gw-live.sha256'), 'utf8')).trim();
+if (!bookmark.startsWith('javascript:') || !/^[a-f0-9]{64}$/.test(hash)) throw Error('Invalid build');
+const safe = bookmark.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GW 비서 시작하기</title><style>body{font-family:system-ui,"Malgun Gothic",sans-serif;background:#f3f7f7;color:#17333c;max-width:760px;margin:0 auto;padding:32px 22px;line-height:1.75}main{background:#fff;border:1px solid #d8e6e4;border-radius:20px;padding:30px}h1{line-height:1.2}.action{display:inline-block;background:#176b70;color:white!important;text-decoration:none;border-radius:12px;padding:15px 24px;font-weight:700;cursor:grab}.note{background:#edf7f5;border-radius:10px;padding:14px}small{color:#53686a;overflow-wrap:anywhere}li{margin:12px 0}</style></head><body><main><h1>GW 비서, 간단하게 시작하기</h1><p>재단 그룹웨어에서 내 업무와 알림, 직원 정보를 확인합니다.</p><ol><li>북마크바가 보이지 않으면 <b>Ctrl + Shift + B</b>를 눌러 표시하세요.</li><li>아래 <b>GW 비서 열기</b>를 북마크바로 끌어다 놓습니다. 이 단계는 컴퓨터마다 한 번만 합니다.<br><a class="action" href="${safe}" onclick="event.preventDefault();alert('이 버튼은 누르는 대신 북마크바로 끌어다 놓아 주세요.')">GW 비서 열기</a></li><li><a href="https://gw.bwyf.or.kr/" target="_blank" rel="noopener">그룹웨어</a>에 로그인한 뒤, 북마크바에 추가한 <b>GW 비서 열기</b>를 누르세요.</li></ol><div class="note"><b>알아두세요</b><br>직원별 그룹웨어 로그인과 접근 권한이 그대로 적용됩니다. 이 페이지로 비밀번호나 업무자료를 보내지 않습니다. 비서가 하는 일은 사용 안내에서 확인해 주세요. 일부 기능은 사용자가 직접 확인한 뒤 실행됩니다.</div><p>그룹웨어를 새로고침하거나 다시 열었을 때는 북마크바의 버튼을 다시 누르면 됩니다. 새 버전 적용 시 이 페이지에서 버튼을 다시 끌어다 놓으세요.</p><small>설치 북마크에 포함된 코드 SHA-256: ${hash}<br>권장: 최신 Chrome 또는 Edge. 브라우저 정책에 따라 북마크 사용이 제한될 수 있습니다.</small></main></body></html>`;
+await mkdir(out,{recursive:true});
+await writeFile(path.join(out,'index.html'),html);
+console.log(JSON.stringify({page:path.join(out,'index.html'),hash,bookmarkBytes:bookmark.length}));
