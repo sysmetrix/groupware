@@ -52,3 +52,8 @@ test('행사명 일정 검색은 날짜 범위 안의 제목만 반환하고 범
  const r=await t.run({date:'2026-11-15',query:'이주 배경'});assert.match(r.text,/1건/);assert.match(r.text,/구글 캘린더/);assert.equal(r.cards[0].items.length,1);assert.equal(r.cards[0].items[0].label,'이주배경 행사');
  const missing=await t.run({date:'2026-11-25',query:'이주배경'});assert.equal(missing.ok,false);assert.match(missing.text,/전체 여부는 알 수 없습니다/);
 });
+
+test('제목 없는 일정이 있으면 검색 결과 없음으로 단정하지 않는다',async()=>{
+ const a=harness([], {S:{settings:{},a:{deadlines:[]},raw:{data:{schedule:{start:'20261114',end:'20261120',events:[{title:'',start:'202611151000',end:'202611151100'}]}}},team:{}}});
+ const r=await a.CHAT_TOOLS.get('get_schedule').run({date:'2026-11-15',query:'이주배경'}); assert.equal(r.ok,false);assert.match(r.text,/제목이 없는 일정/);assert.match(r.text,/전체 여부는 알 수 없습니다/);
+});

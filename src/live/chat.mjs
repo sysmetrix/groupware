@@ -238,7 +238,7 @@ export function chatAutoNext(rule, now = Date.now()) {
 // 직전의 일정 날짜를 이어 받아 사업·행사 제목을 찾는다. 직원 근태나 쓰기는 제외한다.
 export function chatScheduleFollowup(text, previous) {
   const t = String(text || '').trim();
-  if (!previous || previous.tool !== 'get_schedule' || !previous.args || /신청|예약|등록|보내|취소|삭제|직원|님|씨|출장|휴가|연차|근태|구글/.test(t)) return null;
+  if (!previous || previous.tool !== 'get_schedule' || !previous.args || chatParseDate(t) || /신청|예약|등록|보내|취소|삭제|작성|수정|변경|직원|님|씨|출장|휴가|연차|근태|구글/.test(t)) return null;
   const m = t.match(/^([가-힣A-Za-z0-9][가-힣A-Za-z0-9\s]{1,28}?)\s*(?:의\s*)?(?:일정|행사|회의)(?:\s*(?:있잖아|있지|말이야|알려줘|보여줘|찾아줘|있어|뭐야|확인해줘))?[?？!\s]*$/);
   if (!m) return null;
   const query = m[1].trim();

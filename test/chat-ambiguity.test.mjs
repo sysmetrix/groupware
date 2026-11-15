@@ -20,4 +20,6 @@ test('직전 일정의 날짜를 이용해 행사 제목만 검색한다', async
  assert.deepEqual(chatScheduleFollowup('이주배경 일정 있잖아',prev).args,{date:'2026-11-17',days:1,query:'이주배경'});
  assert.equal(chatScheduleFollowup('이주배경 일정 등록해줘',prev),null);
  assert.equal(chatScheduleFollowup('김지은 님 일정',prev),null);
+ assert.equal(chatScheduleFollowup('모레 이주배경 일정',prev),null);
+ assert.equal(chatScheduleFollowup('이주배경 일정 변경해줘',prev),null);
 });

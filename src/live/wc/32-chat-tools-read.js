@@ -129,10 +129,11 @@
       const gaps = [];
       if (!scheduleOk) gaps.push('그룹웨어 일정을 불러오지 못했습니다');
       else if (!inRange) gaps.push('요청 날짜가 그룹웨어 일정 수집 범위 밖이거나 범위가 확인되지 않습니다');
+      if (query && scheduleOk && sched.some(e => !String(e.title || '').trim())) gaps.push('제목이 없는 일정은 검색 결과에서 빠졌을 수 있습니다');
       if (!teamOk) gaps.push('근태 자료를 불러오지 못해 휴가·출장이 빠졌을 수 있습니다');
       const source = query ? '출처: 수집된 그룹웨어 일정 제목만 검색했습니다. 구글 캘린더·근태·기한·자원 예약은 포함되지 않습니다.' : '출처: 그룹웨어 일정·내 근태·기한. 구글 캘린더와 자원 예약은 포함되지 않습니다.';
       const warn = gaps.length ? `\n확인 제한: ${gaps.join('; ')}.` : '';
-      if (!total) return {ok: !gaps.length, text: `${lead}${gaps.length ? '은 확인된 항목이 없지만 전체 여부는 알 수 없습니다' : '은 없습니다'}.\n${source}${warn}`, data: {days: [], complete: !gaps.length}, cards: []};
+      if (!total) return {ok: !gaps.length, text: `${lead}${gaps.length ? '은 확인된 항목이 없지만 전체 여부는 알 수 없습니다' : query ? '은 수집된 제목에서 찾지 못했습니다. 다른 출처나 제목에 검색어가 없는 일정은 확인하지 못했습니다' : '은 없습니다'}.\n${source}${warn}`, data: {days: [], complete: !gaps.length}, cards: []};
       const text = `${lead}에서 확인된 항목 ${total}건입니다.\n${source}${warn}`;
       const cards = n === 1 ? [{type: 'timeline', title: chatMd(d0), items: days[0].rows}] : days.filter(d => d.rows.length).map(d => ({type: 'timeline', title: chatMd(d.iso), items: d.rows}));
       return {ok: true, text, data: {days: days.filter(d => d.rows.length).map(d => ({date: d.iso, items: d.rows.map(r => ({time: r.from, label: r.label}))}))}, cards};
