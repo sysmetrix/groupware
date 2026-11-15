@@ -56,3 +56,9 @@ test('차단된 도구 이후 Gemini의 허위 검색 주장을 차단한다',as
  const a=setup([response([{functionCall:{name:'get_staff_status',args:{name:'이주배경'}}}]),response([{text:'그룹웨어 일정에서 찾지 못했습니다.'}])]);
  await a.api.chatSend('이주배경 사업 일정 언제야');assert.match(a.api.chatState().msgs.at(-1).text,/아직 일정을 조회하지 않았습니다/);
 });
+
+test('모델이 임의의 할 일을 직접 저장하지 못한다',async()=>{
+ const a=setup([response([{functionCall:{name:'add_todo',args:{title:'임의 메모'}}}]),response([{text:'추가했습니다.'}])]);let writes=0;
+ a.api.chatRegisterTool({name:'add_todo',kind:'act',run:async()=>{writes++;return {ok:true,text:'저장됨'};}});
+ await a.api.chatSend('오늘 해야 할 것을 알려줘'); assert.equal(writes,0);assert.match(JSON.stringify(a.requests[1]),/자동 저장하지 않았습니다/);assert.match(a.api.chatState().msgs.at(-1).text,/자동 저장하지 않았습니다/);assert.doesNotMatch(a.api.chatState().msgs.at(-1).text,/추가했습니다/);
+});
