@@ -81,9 +81,10 @@
     const b = R.homeBriefing({urgent: d.urgent, total, wait: d.wait, events: d.scheduleUnknown || teamGap ? null : d.events.length, away: teamGap ? null : d.away.length, unread: d.unread, leave: d.leave, refN: d.refN, gaps: d.taskGaps, first: next ? next.title : ''});
     // 숫자와 '먼저 볼 일'은 홈의 카드와 숫자 줄에 이미 있다. 여기서는 되풀이하지 않고 무엇을 맡길 수 있는지만 건넨다.
     const say = next ? '위의 <b>지금 가장 먼저 할 일</b>부터 보시거나, 궁금한 것을 물어보세요.' : total ? '처리·확인할 일은 할 일 목록에 있습니다. 궁금한 것을 물어보세요.' : d.taskGaps ? '확인된 처리할 일이 없습니다. 궁금한 것을 물어보세요.' : '새로 도착한 처리할 일이 없습니다. 궁금한 것을 물어보세요.';
-    return wrap(`<div class="ch-bubble">${say}${b.note ? `<br><span class="ch-brief-note">${esc(b.note)}</span>` : ''}</div><div class="ch-actions"><button class="ch-btn ch-btn-ghost" data-act="chatChip" data-v="아침 브리핑 해줘">오늘 브리핑 듣기</button></div>`);
+    return wrap(`<div class="ch-bubble">${say}${b.note ? `<br><span class="ch-brief-note">${esc(b.note)}</span>` : ''}</div><div class="ch-actions"><button class="ch-btn ch-btn-ghost" data-act="chatChip" data-v="아침 브리핑 해줘">오늘 브리핑 듣기</button><button class="ch-btn ch-btn-ghost" data-act="chatChip" data-v="뭘 할 수 있어?">할 수 있는 일 보기</button></div>`);
   }
-  const chatWelcomeHtml = () => `<div class="ch-welcome">${chatBriefHtml()}<div class="ch-caps-k">이런 일을 맡길 수 있습니다</div><div class="ch-caps">${CHAT_CAPS_HOME.map(([i, t, s, q]) => `<button class="ch-cap" data-act="chatChip" data-v="${esc(q)}"><span class="ch-cap-i">${ic(i)}</span><span class="ch-cap-b"><b>${esc(t)}</b><span>${esc(s)}</span></span></button>`).join('')}</div><button class="ch-link ch-caps-more" data-act="chatChip" data-v="뭘 할 수 있어?">할 수 있는 일 전체 보기</button></div>`;
+  // 같은 모양 카드 여섯 장을 늘어놓지 않는다. 무엇을 맡길 수 있는지는 입력칸 위의 추천 질문과 '할 수 있는 일 전체 보기'로 충분하다.
+  const chatWelcomeHtml = () => `<div class="ch-welcome">${chatBriefHtml()}</div>`;
 
   function chatLogHtml() {
     chatRenderedDay = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
@@ -91,7 +92,7 @@
     const past = st.msgs.filter(m => m.restored), current = st.msgs.filter(m => !m.restored);
     return (past.length ? `<details class="ch-more ch-past" data-chat-history ${st.historyExpanded ? 'open' : ''}><summary>이전 대화 보기 (${past.length}개 메시지)</summary>${past.map(chatMsgHtml).join('')}</details>` : '') + (current.length ? current.map(chatMsgHtml).join('') : chatWelcomeHtml());
   }
-  const chatChipsHtml = () => { const st = chatState(); if (st.busy) return ''; const fresh = !st.msgs.some(m => !m.restored); if (fresh) return ''; return chatSuggestions().slice(0, 3).map(q => `<button class="ch-chip" data-act="chatChip" data-v="${esc(q)}">${esc(q)}</button>`).join(''); };
+  const chatChipsHtml = () => { const st = chatState(); if (st.busy) return ''; const fresh = !st.msgs.some(m => !m.restored); return chatSuggestions().slice(0, fresh ? 4 : 3).map(q => `<button class="ch-chip" data-act="chatChip" data-v="${esc(q)}">${esc(q)}</button>`).join(''); };
   function chatFootHtml() {
     const m = chatMode();
     return `${m.ready ? '<small class="ch-help">외부 전송: 질문·최근 대화 일부·조회 요약을 Google Gemini로 보냅니다. 자동 가림은 완전하지 않으므로 개인정보·비공개 문서를 입력하지 마세요.</small>' : ''}<span class="ch-mode ${m.ready && !m.limited ? 'ch-mode-ai' : ''}" ${m.ready && m.model ? `title="${esc(m.model)}"` : ''}><i class="ch-dot" aria-hidden="true"></i>${m.ready ? (m.limited ? 'AI 사용 한도에 도달해 기본 모드로 답합니다(잠시 뒤 자동 재시도)' : `AI 연결됨${m.model ? ' · ' + esc(m.model) : ''}`) : '기본 모드 · 정해진 질문을 이해합니다'}</span>`;
@@ -124,7 +125,7 @@
     const h = $('#chHeadA'); if (h) replace(h, chatHeadActsHtml());
     const last = st.msgs[st.msgs.length - 1];
     if (!hasCurrent) log.scrollTop = top; // 환영 화면은 읽던 위치를 지킨다
-    else if (force || near) log.scrollTop = log.scrollHeight;
+    else if (force || near) { log.scrollTop = log.scrollHeight; const col = log.closest('.hm-main'); if (col) col.scrollTop = col.scrollHeight; } // 홈에서는 대화가 보이도록 왼쪽 단도 끝까지 내린다
     else log.scrollTop = top;
     st.logTop = log.scrollTop;
     const fresh = log.querySelector('[data-autofocus]');
