@@ -19,13 +19,13 @@ test('Gemini가 모호한 일정에 확인 질문을 할 수 있다',async()=>{
  const a=setup([response([{text:'행사 일정인가요, 직원 근태 일정인가요?'}])]);
  await a.api.chatSend('이주배경 일정 있잖아');
  assert.equal(a.requests[0].toolConfig.functionCallingConfig.mode,'AUTO');
- assert.match(a.api.chatState().msgs.at(-1).text,/행사 일정/);assert.equal(a.calls.length,0);
+ assert.match(a.api.chatState().msgs.at(-1).text,/아직 일정을 조회하지 않았습니다/);assert.equal(a.calls.length,0);
 });
 test('Gemini의 잘못된 직원 조회 호출은 실행 경계에서 차단한다',async()=>{
  const a=setup([response([{functionCall:{name:'get_staff_status',args:{name:'이주배경'}}}]),response([{text:'행사 일정인지 직원 일정인지 알려 주세요.'}])]);
  await a.api.chatSend('이주배경 일정 있잖아');
  assert.equal(a.calls.length,0); assert.match(JSON.stringify(a.requests[1]),/조회하지 않았습니다/);
- assert.match(a.api.chatState().msgs.at(-1).text,/알려 주세요/);
+ assert.match(a.api.chatState().msgs.at(-1).text,/조회하지 않았습니다/);
 });
 test('직원 근태를 명시하면 정상 조회를 차단하지 않는다',async()=>{
  const a=setup([]); await a.api.chatSend('김지은 님 내일 출장 일정'); assert.equal(a.calls.length,1);assert.equal(a.calls[0].name,'김지은');
@@ -43,4 +43,16 @@ test('복합 사업·행사 표현은 직원 근태와 일반 일정으로 우�
   const a=setup([response([{functionCall:{name:'get_staff_status',args:{name:'리빙랩'}}}]),response([{text:'행사 일정을 말씀하시나요?'}])]);
   await a.api.chatSend(text); assert.equal(a.calls.length,0);assert.match(JSON.stringify(a.requests[1]),/조회하지 않았습니다/);
  }
+});
+
+test('도구 미호출 Gemini의 허위 조회 주장은 표시하지 않는다',async()=>{
+ const a=setup([response([{text:'그룹웨어를 검색했지만 일정을 찾지 못했습니다.'}])]);
+ await a.api.chatSend('이주배경 사업 일정 언제야');
+ assert.match(a.api.chatState().msgs.at(-1).text,/아직 일정을 조회하지 않았습니다/);
+ assert.doesNotMatch(a.api.chatState().msgs.at(-1).text,/검색했지만/);
+});
+
+test('차단된 도구 이후 Gemini의 허위 검색 주장을 차단한다',async()=>{
+ const a=setup([response([{functionCall:{name:'get_staff_status',args:{name:'이주배경'}}}]),response([{text:'그룹웨어 일정에서 찾지 못했습니다.'}])]);
+ await a.api.chatSend('이주배경 사업 일정 언제야');assert.match(a.api.chatState().msgs.at(-1).text,/아직 일정을 조회하지 않았습니다/);
 });

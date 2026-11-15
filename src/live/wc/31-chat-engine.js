@@ -262,7 +262,7 @@
     contents.push({role: 'user', parts: [{text: R.chatSanitizeText(text, 600)}]});
     const tools = R.chatToGeminiTools([...CHAT_TOOLS.values()]);
     const system = R.chatSystemPrompt(chatNowStr(), name, org);
-    const texts = [];
+    const texts = []; let anySuccess = false;
     const ambiguousSchedule = /(일정|스케줄|약속|회의)/.test(text) && !R.chatIntent(text, new Date()).tool;
     // 대상이 모호할 때는 도구 호출을 강제하지 않아 확인 질문을 할 수 있어야 한다.
     const needTool = !ambiguousSchedule && /일정|할\s*일|연차|근태|근무|출장|휴가|예산|결재|상신|메일|공지|알림|공문|차량|예약|지문|실적|기한|마감|신청|자동화|브리핑/.test(text);
@@ -275,6 +275,7 @@
       if (r.blocked) throw Object.assign(new Error('blocked'), {status: 200, kind: 'blocked'});
       if (r.error && !r.calls.length) throw Object.assign(new Error(r.error), {status: 200, kind: 'server'});
       if (!r.calls.length) {
+        if (ambiguousSchedule && !anySuccess) { ai.text = '일정 대상을 확인하지 못했습니다. 행사·사업명과 날짜, 그룹웨어 또는 구글 캘린더 중 확인할 곳을 알려 주세요. 아직 일정을 조회하지 않았습니다.'; return; }
         if (round === 0 && needTool && !texts.length) { ai.text = '그룹웨어 자료를 조회할 도구가 호출되지 않아 단정적으로 답할 수 없습니다. 구체적으로 다시 질문해 주세요.'; return; }
         ai.text = r.text || texts.join('\n'); return;
       }
@@ -286,6 +287,7 @@
         if (S.chat !== st || st.stopped || st.seq !== runSeq) return;
         const res = await chatExec(call.name, call.args, ai, {userText: text, viaAi: true});
         if (S.chat !== st || st.stopped || st.seq !== runSeq) return;
+        if (res.ok) anySuccess = true;
         if (res.text) texts.push(res.text);
         resp.push({functionResponse: {name: call.name, response: {result: R.chatSanitizeForLlm({ok: res.ok, text: res.llm !== undefined ? res.llm : res.text, data: res.data})}}});
       }
