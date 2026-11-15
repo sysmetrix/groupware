@@ -72,3 +72,16 @@ test('motion module only observes and flags: no data-act handlers, no network, s
   const {workcenter} = assemble(await readSources(root));
   assert.ok(workcenter.indexOf('function motionSync') > workcenter.indexOf('function vHome'));
 });
+
+test('design principles (docs/design/principles.md) hold in the stylesheet: no boxed lists, no one-sided colour borders, one brand colour', async () => {
+  const css = (await read('src/live/wc.css')).replace(/\r\n?/g, '\n').split('/* === Workcenter section: studio === */')[1];
+  assert.match(css, /\.wc \.list,\.wc table\{border:0;border-radius:0/, 'lists and tables are not boxed');
+  assert.match(css, /\.wc \.row::before\{content:none\}/, 'no accent bar on one side of a row');
+  assert.doesNotMatch(css, /border-left(?:-width)?:3px/, 'no thick one-sided colour border');
+  assert.match(css, /\.wc \.hm-card\{border:0/, 'home sections are not cards');
+  const light = css.slice(css.indexOf('.wc{'), css.indexOf('.wc.dark{'));
+  const tok = n => (light.match(new RegExp(`${n}:(#[0-9a-f]{6})`)) || [])[1];
+  assert.equal(tok('--accent2'), tok('--accent'));
+  assert.notEqual(tok('--pri'), '#191f28', 'primary is the brand colour, not neutral ink');
+  assert.match(await read('docs/design/principles.md'), /다섯 가지 원칙/);
+});

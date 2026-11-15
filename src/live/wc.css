@@ -928,24 +928,27 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .df-foot{margin-top:12px;font-size:12.5px}
 
 /* === Workcenter section: studio === *//* =====================================================================
-   GW 비서 · 차분한 작업 화면(v0.70). 회색 바탕 위에 흰 작업지 한 장.
-   - 바탕(--bg)은 머리글·왼쪽 메뉴가 함께 쓰고, 본문과 처리 창은 그 위에 놓인 흰 종이(--card)다.
-   - 색은 세 가지 역할만: 잉크(--pri) = 이 화면의 주된 버튼 / 파랑(--accent) = 고른 것·링크 / 빨강(--hi) = 급한 것.
-   - 마지막에 이어 붙어 앞 파일의 토큰과 규칙을 덮어쓴다. 색은 여기 토큰만 쓴다. 글자 12px 이상.
-   - 움직임은 두 가지뿐: 화면을 바꿨을 때 한 번의 등장, 사용자가 누른 것에 대한 응답. (wc/39-motion.js가 .m-* 클래스를 붙인다)
+   GW 비서 · 디자인(v0.76). 원칙 다섯 가지 — 자세한 근거는 docs/design/principles.md
+   1) 상자 대신 여백과 가는 선. 테두리 있는 상자는 떠 있는 것(창·메뉴)과 입력칸, 나란히 놓인 패널뿐. 카드 안에 카드는 없다.
+   2) 위계는 글자로. 크기·굵기 세 단계(제목 / 본문 / 보조). 색 배지는 예외를 알릴 때만.
+   3) 화면이 스스로를 설명하지 않는다. 안내문은 빈 화면·오류처럼 필요한 순간에만.
+   4) 색은 기관 표지의 짙은 청록 하나(--pri, --accent). 빨강(--hi)은 급한 것에만.
+   5) 한쪽만 색칠한 테두리, 큰 숫자 타일, 같은 모양 카드 격자를 쓰지 않는다.
+   이 구획이 마지막이라 앞 구획의 토큰과 규칙을 덮어쓴다. 색은 여기 토큰만 쓴다. 글자 12px 이상.
+   움직임은 두 가지뿐: 화면을 바꿨을 때 한 번의 등장, 사용자가 누른 것에 대한 응답. (wc/39-motion.js가 .m-* 클래스를 붙인다)
    ===================================================================== */
-.wc{--bg:#f2f3f5;--card:#fff;--fg:#191f28;--muted:#626d7a;--fg-secondary:#4e5968;--line:#e9ebee;--line2:#d3d7dd;--soft:#f4f5f7;--sel:#eef3ff;
- --accent:#1f5eda;--accent2:#1f5eda;--accent3:#1f5eda;--grad:#2a63e8;--accent-soft:#e8f0ff;--accent-text:#1f5eda;--pri:#191f28;--pri-h:#333d4b;--pri-fg:#fff;
- --hi:#c9252f;--hi-soft:#fdecee;--md:#8f5e00;--md-soft:#fff3d4;--ok:#0d7a4e;--ok-soft:#e2f5eb;--ok-text:#0d7a4e;--hl:#d5e3ff;
- --head:transparent;--r:12px;--navW:236px;--sh:none;--sh-sm:0 1px 2px rgba(25,31,40,.06);--sh-md:0 8px 24px -10px rgba(25,31,40,.18);--sh2:0 24px 56px -20px rgba(25,31,40,.32),0 0 0 1px rgba(25,31,40,.04);
- --card-hover:rgba(25,31,40,.03);--bg-subtle:rgba(25,31,40,.055);
+.wc{--bg:#f6f8f8;--card:#fff;--fg:#111b20;--muted:#5d6a71;--fg-secondary:#3c494f;--line:#e7ebed;--line2:#cbd4d8;--soft:#f2f5f6;--sel:#eaf4f6;
+ --accent:#16667c;--accent2:#16667c;--accent3:#16667c;--grad:#1b4b5f;--accent-soft:#e1f0f3;--accent-text:#16667c;--pri:#1b4b5f;--pri-h:#133a4a;--pri-fg:#fff;
+ --hi:#c9252f;--hi-soft:#fdecee;--md:#8f5e00;--md-soft:#fff3d4;--ok:#0d7a4e;--ok-soft:#e2f5eb;--ok-text:#0d7a4e;--hl:#cfe6ec;
+ --head:transparent;--r:10px;--navW:228px;--sh:none;--sh-sm:0 1px 2px rgba(17,27,32,.06);--sh-md:0 8px 24px -10px rgba(17,27,32,.18);--sh2:0 24px 56px -20px rgba(17,27,32,.32),0 0 0 1px rgba(17,27,32,.05);
+ --card-hover:rgba(17,27,32,.03);--bg-subtle:rgba(17,27,32,.055);
  --e-out:cubic-bezier(.2,.8,.2,1);--e-pop:cubic-bezier(.3,1.5,.5,1);--t1:.12s;--t2:.22s;--t3:.42s;
- background:var(--bg);font-family:"Pretendard Variable","Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;letter-spacing:-.01em;font-variant-numeric:tabular-nums;
- grid-template-columns:var(--navW) minmax(420px,1fr) 6px var(--paneW,560px);grid-template-rows:56px auto 1fr}
-.wc.dark{--bg:#0e0f11;--card:#17181b;--fg:#ededf0;--muted:#9da3ad;--fg-secondary:#c5c9d1;--line:#25272c;--line2:#3b3e46;--soft:#1e2024;--sel:#1a2540;
- --accent:#82adff;--accent2:#82adff;--accent3:#82adff;--grad:#3a66e0;--accent-soft:#1b2843;--accent-text:#a9c6ff;--pri:#ededf0;--pri-h:#fff;--pri-fg:#16181b;
- --hi:#ff8d8d;--hi-soft:#3d1d20;--md:#efc572;--md-soft:#3b3015;--ok:#7fd4a6;--ok-soft:#173326;--ok-text:#a5e6c4;--hl:#2c4a86;
- --sh-sm:0 1px 2px rgba(0,0,0,.4);--sh-md:0 8px 24px -10px rgba(0,0,0,.7);--sh2:0 24px 56px -20px rgba(0,0,0,.85),0 0 0 1px rgba(255,255,255,.05);--card-hover:rgba(255,255,255,.03);--bg-subtle:rgba(255,255,255,.06);background:var(--bg)}
+ background:var(--card);font-family:"Pretendard Variable","Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;letter-spacing:-.01em;font-variant-numeric:tabular-nums;
+ grid-template-columns:var(--navW) minmax(420px,1fr) 6px var(--paneW,560px);grid-template-rows:52px auto 1fr}
+.wc.dark{--bg:#0f1517;--card:#141b1e;--fg:#e8eef0;--muted:#97a5ab;--fg-secondary:#c0cbcf;--line:#222c30;--line2:#38464b;--soft:#1a2327;--sel:#15303a;
+ --accent:#7cc6da;--accent2:#7cc6da;--accent3:#7cc6da;--grad:#2a7f97;--accent-soft:#16323b;--accent-text:#a4dbea;--pri:#8fd0e0;--pri-h:#aadcea;--pri-fg:#0f1517;
+ --hi:#ff8d8d;--hi-soft:#3d1d20;--md:#efc572;--md-soft:#3b3015;--ok:#7fd4a6;--ok-soft:#173326;--ok-text:#a5e6c4;--hl:#1f4a58;
+ --sh-sm:0 1px 2px rgba(0,0,0,.4);--sh-md:0 8px 24px -10px rgba(0,0,0,.7);--sh2:0 24px 56px -20px rgba(0,0,0,.85),0 0 0 1px rgba(255,255,255,.05);--card-hover:rgba(255,255,255,.03);--bg-subtle:rgba(255,255,255,.06);background:var(--card)}
 .wc .hm,.wc.dark .hm{--hm-grad:var(--grad);--hm-sh:none}
 .wc.navmini{--navW:64px}
 .wc.nopane{grid-template-columns:var(--navW) minmax(0,1fr) 0 0}
@@ -958,8 +961,8 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .btn,.wc .hb,.wc .ch-btn,.wc .chip,.wc .ch-chip,.wc .ch-cap,.wc .ch-fact,.wc .hm-tile,.wc .hm-q,.wc nav a{transition:background var(--t1),border-color var(--t1),color var(--t1),box-shadow var(--t1),transform var(--t1) var(--e-out)}
 .wc .btn:active,.wc .hb:active,.wc .ch-btn:active,.wc .chip:active,.wc .ch-chip:active{transform:scale(.97)}
 
-/* ---------- 머리글: 바탕과 한 몸, 선 없이 ---------- */
-.wc header,.wc.dark header{background:var(--bg);border:0;padding:0 14px 0 0;gap:6px;position:relative;backdrop-filter:none;-webkit-backdrop-filter:none}
+/* ---------- 머리글: 흰 바탕, 아래 가는 선 하나 ---------- */
+.wc header,.wc.dark header{background:var(--card);border:0;border-bottom:1px solid var(--line);padding:0 14px 0 0;gap:6px;position:relative;backdrop-filter:none;-webkit-backdrop-filter:none}
 .wc header .home{width:auto;min-width:0;flex:0 0 calc(var(--navW) - 48px);padding:0 0 0 16px;gap:10px;border-radius:8px}
 .wc header .home .logo{width:28px;height:28px;flex:0 0 28px}
 .wc header .brand-name{overflow:hidden}
@@ -967,12 +970,12 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc header .brand-name small{font-size:12px;font-weight:500;color:var(--muted);overflow:hidden;text-overflow:ellipsis}
 .wc.navmini header .home{flex-basis:auto}
 .wc.navmini header .brand-name{display:none}
-.wc header .hb{height:34px;border:0;border-radius:9px;padding:0 11px;font-size:13px;font-weight:600;color:var(--fg-secondary);background:transparent}
+.wc header .hb{height:34px;border:0;border-radius:8px;padding:0 11px;font-size:13px;font-weight:600;color:var(--fg-secondary);background:transparent}
 .wc header .hb:hover{background:var(--bg-subtle);border:0;color:var(--fg)}
 .wc header .hb.icon{width:34px;flex:0 0 34px;padding:0}
 .wc header .navtg{margin-right:6px;color:var(--muted)}
 .wc header .navtg[aria-pressed="true"]{color:var(--accent)}
-.wc header .srch{flex:0 1 440px;max-width:440px;height:36px;padding:0 10px 0 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);box-shadow:var(--sh-sm);color:var(--muted)}
+.wc header .srch{flex:0 1 440px;max-width:440px;height:36px;padding:0 10px 0 12px;border:1px solid transparent;border-radius:8px;background:var(--soft);box-shadow:none;color:var(--muted)}
 .wc header .srch:hover{border-color:var(--line2)}
 .wc header .srch:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);background:var(--card);color:var(--fg)}
 .wc header .srch input{font-size:13.5px;color:var(--fg)}
@@ -987,7 +990,7 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc header .hb[data-act="menuNew"]:hover{background:var(--pri-h);color:var(--pri-fg)}
 .wc header .hb.back{background:transparent;border:0;color:var(--muted);font-weight:500;margin-left:2px;padding-left:9px;box-shadow:inset 1px 0 0 var(--line2);border-radius:0 9px 9px 0}
 .wc header .hb.back:hover{color:var(--fg);background:var(--bg-subtle)}
-.wc header .hb .dot{top:3px;right:3px;background:var(--hi);color:#fff;box-shadow:0 0 0 2px var(--bg)}
+.wc header .hb .dot{top:3px;right:3px;background:var(--hi);color:#fff;box-shadow:0 0 0 2px var(--card)}
 .wc.dark header .hb .dot{color:#16181b}
 /* 읽는 중: 머리글 아래를 지나가는 한 줄 */
 .wc header::after{content:'';position:absolute;left:0;right:0;bottom:0;height:2px;background:var(--accent);transform:scaleX(0);transform-origin:0 50%;opacity:0}
@@ -995,15 +998,15 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 @keyframes stLoad{0%{transform:scaleX(0);transform-origin:0 50%}55%{transform:scaleX(1);transform-origin:0 50%}56%{transform-origin:100% 50%}100%{transform:scaleX(0);transform-origin:100% 50%}}
 .wc .band .b{margin:0 10px 8px 0;border:0;border-radius:10px;padding:8px 14px;font-size:13.5px}
 
-/* ---------- 왼쪽 메뉴: 묶음 + 흰 알약 ---------- */
-.wc nav,.wc.dark nav{background:transparent;border:0;padding:6px 10px 10px;gap:0}
+/* ---------- 왼쪽 메뉴: 옅은 바탕, 지금 화면은 한 단계 짙게 ---------- */
+.wc nav,.wc.dark nav{background:var(--bg);border:0;border-right:1px solid var(--line);padding:12px 10px 10px;gap:0}
 .wc nav .nav-g{display:flex;flex-direction:column;gap:1px;margin-bottom:16px}
 .wc nav .nav-label{padding:0 10px 5px;font-size:12px;line-height:1.5;font-weight:600;color:var(--muted);letter-spacing:0}
 .wc nav a{min-height:34px;padding:0 10px;gap:10px;border:0;background:none;box-shadow:none;border-radius:8px;font-size:13.5px;font-weight:500;color:var(--fg-secondary)}
 .wc nav a .i{width:17px;height:17px;color:var(--muted);stroke-width:1.7}
 .wc nav a:hover{background:var(--bg-subtle);color:var(--fg);border:0}
 .wc nav a .lb,.wc.dark nav a.on .lb{flex:1 1 auto;min-width:0;background:none;padding:0;margin:0;border-radius:0;color:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.wc nav a.on{background:var(--card);border:0;box-shadow:var(--sh-sm),0 0 0 1px var(--line);color:var(--fg);font-weight:700}
+.wc nav a.on{background:var(--bg-subtle);border:0;box-shadow:none;color:var(--fg);font-weight:700}
 .wc nav a.on .i{color:var(--accent)}
 .wc nav a .n,.wc.dark nav a .n.mine{margin-left:auto;background:none;border:0;color:var(--muted);font-weight:600;min-width:0;padding:0 2px;font-size:12.5px}
 .wc nav a .n.mine,.wc.dark nav a .n.mine{color:var(--accent)}
@@ -1021,23 +1024,23 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc.wc.navmini nav a .n,.wc.wc.navmini nav a .n.hot{position:absolute;top:5px;right:5px;width:7px;height:7px;min-width:0;padding:0;border-radius:50%;font-size:0;background:var(--accent);box-shadow:0 0 0 2px var(--bg)}
 .wc.wc.navmini nav a .n.hot{background:var(--hi)}
 
-/* ---------- 본문: 바탕 위의 흰 작업지 ---------- */
-.wc main{background:var(--card);border:1px solid var(--line);border-bottom:0;border-radius:14px 14px 0 0;margin-right:10px;padding:28px 36px 64px}
+/* ---------- 본문: 흰 바탕 그대로. 떠 있는 종이도, 둥근 모서리도 없다 ---------- */
+.wc main{background:var(--card);border:0;border-radius:0;margin:0;padding:30px 40px 64px}
 .wc:not(.nopane) main{margin-right:0}
-.wc aside,.wc.expanded aside{background:var(--card);border:1px solid var(--line);border-width:1px 0 0 1px;border-radius:14px 0 0 0}
+.wc aside,.wc.expanded aside{background:var(--card);border:0;border-left:1px solid var(--line);border-radius:0}
 .wc .split{background:transparent}
 .wc .split:hover,.wc .split.drag{background:var(--accent);border-radius:3px}
 .wc .pgh{margin-bottom:20px;gap:10px 12px}
-.wc .pgh h1{font-size:22px;font-weight:700;letter-spacing:-.03em;line-height:1.35}
+.wc .pgh h1{font-size:24px;font-weight:700;letter-spacing:-.035em;line-height:1.3}
 .wc .pgh .sub{font-size:13.5px}
 .wc h2{font-size:15px;font-weight:700;letter-spacing:-.015em;margin:28px 0 12px}
 .wc h3{font-size:14px;font-weight:700}
-.wc .grp{margin:22px 0 8px;font-size:13px;font-weight:700;color:var(--fg-secondary);letter-spacing:0}
+.wc .grp{margin:26px 0 4px;padding-bottom:6px;border-bottom:1px solid var(--line2);font-size:13px;font-weight:700;color:var(--fg);letter-spacing:0}
 .wc .grp .c{font-weight:500}
 .wc .muted{color:var(--muted)}
 
 /* 버튼: 주된 것 하나만 잉크, 나머지는 조용하게 */
-.wc .btn{height:34px;border-radius:9px;border:1px solid var(--line2);background:var(--card);color:var(--fg);font-size:13.5px;font-weight:600;box-shadow:var(--sh-sm)}
+.wc .btn{height:34px;border-radius:8px;border:1px solid var(--line2);background:var(--card);color:var(--fg);font-size:13.5px;font-weight:600;box-shadow:var(--sh-sm)}
 .wc .btn:hover{border-color:var(--line2);color:var(--fg);background:var(--soft)}
 .wc .btn.sm{height:30px;border-radius:8px;font-size:13px}
 .wc .btn.primary,.wc .ch-btn-primary,.wc.dark .btn.primary,.wc.dark .ch-btn-primary,.wc.dark .ch-send{background:var(--pri);border-color:var(--pri);color:var(--pri-fg);font-weight:600;box-shadow:none;filter:none}
@@ -1065,8 +1068,11 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .chip:disabled{opacity:1;cursor:default;background:var(--soft);border-color:transparent;color:var(--fg-secondary)}
 .wc kbd{border:0;background:var(--soft);color:var(--muted);border-radius:5px}
 
-/* 면: 흰 종이 위에서는 가는 선 하나로 충분하다 */
-.wc .box,.wc .card2,.wc .hm-card,.wc .ch,.wc .list,.wc .hello,.wc table,.wc .cmd-preset,.wc .hist-card,.wc .runner-box{border:1px solid var(--line);border-radius:var(--r);box-shadow:none}
+/* 면: 목록과 표는 상자에 넣지 않는다. 나란히 놓인 패널(.card2)과 안내(.box)만 면을 가진다 */
+.wc .card2,.wc .hello,.wc .cmd-preset,.wc .hist-card,.wc .runner-box{border:1px solid var(--line);border-radius:var(--r);box-shadow:none}
+.wc .box{border:0;border-radius:var(--r);background:var(--soft);box-shadow:none}
+.wc .list,.wc table{border:0;border-radius:0;box-shadow:none;background:none}
+.wc th{border-bottom:1px solid var(--line2)}
 .wc .box.tip,.wc .box.warn,.wc .box.okb,.wc .box.errb{border-color:transparent}
 .wc .box.tip{background:var(--accent-soft)}
 .wc .cmd-preset:hover,.wc .stat:hover{transform:none;box-shadow:none;border-color:var(--line2);background:var(--soft)}
@@ -1082,15 +1088,26 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .bdg.date{background:var(--soft);border:0;color:var(--fg-secondary)}
 .wc .bdg.date.hot{background:var(--hi-soft);color:var(--hi);border:0}
 
-/* 목록: 고른 줄은 옅은 파랑과 왼쪽 선 */
+/* 상자 안의 상자를 없앤다: 안내 상자 안의 본문, 예산 요약의 숫자 칸 */
+.wc .box .body-text{border:0;background:var(--card)}
+.wc .box.budget-summary{background:none;padding:0;margin-top:16px}
+.wc .budget-metrics{gap:0 36px}
+.wc .budget-metrics>div{border:0;border-radius:0;background:none;padding:10px 0 6px}
+.wc .budget-metrics span{font-size:12.5px;color:var(--muted)}
+.wc .budget-metrics strong{font-size:20px;font-weight:700;letter-spacing:-.03em}
+/* 목록: 가는 선으로만 나눈다. 고른 줄은 옅은 청록 바탕(한쪽만 색칠한 선은 쓰지 않는다) */
 .wc .row{position:relative;border-bottom:1px solid var(--line);transition:background var(--t1)}
-.wc .row::before{content:'';position:absolute;left:0;top:9px;bottom:9px;width:3px;border-radius:0 2px 2px 0;background:var(--accent);transform:scaleY(0);transition:transform var(--t2) var(--e-out)}
+.wc .row::before{content:none}
 .wc .row:hover{background:var(--soft)}
 .wc .row.sel,.wc .row.sel:hover,.wc .row[aria-selected="true"]{background:var(--sel);box-shadow:none}
-.wc .row.sel::before{transform:scaleY(1)}
-.wc .row.lean.df-row::before{content:none}
-.wc .row .t,.wc .row.lean .t{letter-spacing:-.02em;font-weight:600;font-size:14px}
-.wc .row.lean{min-height:46px;padding:6px 10px 6px 16px}
+.wc .row .t,.wc .row.lean .t{letter-spacing:-.02em;font-weight:500;font-size:14.5px;color:var(--fg)}
+.wc .row.lean{min-height:44px;padding:6px 8px 6px 6px;gap:12px}
+/* 줄 맨 앞의 상태 배지는 점 하나로 줄인다: 묶음 제목("급한 일")이 이미 말해 주므로 줄마다 되풀이하지 않는다(글자는 낭독기용으로 남는다) */
+.wc .list .row.lean>.bdg:not(:is(.date,.tag,.df-b,.new)){flex:0 0 7px;width:7px;height:7px;min-width:0;padding:0;border-radius:50%;font-size:0;overflow:hidden;background:var(--line2);border:0;transform:none}
+.wc .list .row.lean>.bdg.urgent,.wc .list .row.lean>.bdg.overdue{background:var(--hi)}
+.wc .list .row.lean>.bdg.todo{background:var(--accent)}
+.wc .list .row.lean>.bdg.check{background:var(--md)}
+.wc .list .row.lean>.bdg.confirm{background:var(--ok)}
 .wc .row .ck{accent-color:var(--pri)}
 .wc table{font-size:13.5px}
 .wc th{background:transparent;color:var(--muted);font-size:12.5px;font-weight:600;letter-spacing:0;padding:10px 14px}
@@ -1131,8 +1148,9 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .col .col-h{font-size:13px;font-weight:700;color:var(--fg-secondary);padding:0 4px}
 .wc .col .hint{border-color:var(--line2);border-radius:10px;font-size:12.5px}
 .wc .card{padding:10px 11px;font-size:13.5px;line-height:1.5}
-.wc .card.todo,.wc .card.act{border-left-width:3px}
-.wc .card.todo{border-left-color:var(--md)}.wc .card.act{border-left-color:var(--accent)}.wc .card.act.high{border-left-color:var(--hi)}
+.wc .card,.wc .card.todo,.wc .card.act,.wc .card.act.high{position:relative;border:1px solid var(--line);border-left:1px solid var(--line)}
+.wc .card.act.high{padding-right:22px}
+.wc .card.act.high::after{content:'';position:absolute;top:14px;right:10px;width:7px;height:7px;border-radius:50%;background:var(--hi)}
 .wc .card .btn.sm{height:26px;margin-top:8px;padding:0 8px;font-size:12.5px;font-weight:500;box-shadow:none;border-color:var(--line);color:var(--fg-secondary)}
 .wc .card .btn.sm:hover{color:var(--fg);border-color:var(--line2)}
 /* 통합알림: 한 건이 한 장. 안의 버튼은 조용하게 */
@@ -1146,7 +1164,7 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .org-chart .chip .muted{font-weight:400;font-size:12px;margin-left:2px}
 .wc .legend i{border:1px solid var(--line2);border-radius:4px}
 /* 처리 창 */
-.wc .ph .top{background:var(--card);border-radius:14px 0 0 0}
+.wc .ph .top{background:var(--card);border-radius:0}
 .wc.expanded .ph .top{background:var(--card);color:var(--fg)}
 .wc.expanded .ph .top .btn{color:var(--fg);border-color:var(--line2)}
 .wc.expanded .ph .top .btn:hover{background:var(--soft)}
@@ -1155,49 +1173,54 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .body-text,.wc .file{border-radius:10px}
 .wc .sec>.sh{font-weight:700;font-size:13.5px}
 
-/* ---------- 홈 ---------- */
-.wc .hm-eyebrow{font-size:13px;font-weight:600;color:var(--muted);letter-spacing:0}
-.wc .hm-hello{font-size:clamp(24px,2.2vw,30px);font-weight:700;letter-spacing:-.04em;line-height:1.25}
-.wc .hm-sub{font-size:15px;font-weight:600}
-.wc .hm-sub.hm-tone-urgent{color:var(--hi)}
-.wc .hm-card{border:1px solid var(--line);background:var(--card);border-radius:14px}
-.wc .hm-card-k{font-size:13px;font-weight:600;color:var(--muted)}
-.wc .hm-tiles{border:0;border-radius:0;background:none;gap:8px}
-.wc .hm-tile,.wc #hmTop .hm-tile,.wc .hm-tile.hm-tile-urgent{background:var(--soft);border:0;border-radius:12px;box-shadow:none}
-.wc .hm-tile:hover{background:var(--bg-subtle);transform:none}
-.wc .hm-tile-l{font-size:13px;font-weight:600;color:var(--muted)}
-.wc .hm-tile-v{font-size:30px;font-weight:700;letter-spacing:-.04em;line-height:1.2;color:var(--fg)}
-.wc .hm-tile.hm-tone-urgent,.wc #hmTop .hm-tile.hm-tone-urgent{background:var(--hi-soft)}
-.wc .hm-tile.hm-tone-urgent .hm-tile-v,.wc .hm-tile.hm-tone-urgent .hm-tile-l{color:var(--hi)}
-.wc .hm-tile.hm-tone-todo .hm-tile-v{color:var(--accent)}
-.wc .hm-tile.hm-tone-ok .hm-tile-v{color:var(--ok)}
-.wc .hm-next-t{font-size:16px;font-weight:700;letter-spacing:-.03em;line-height:1.45}
-.wc .hm-q{border-radius:8px}
+/* ---------- 홈: 한 문장 → 먼저 할 일 → 한 줄 현황 → 묻기. 오른쪽은 오늘 ---------- */
+.wc .hm{grid-template-columns:minmax(0,1fr) clamp(300px,27%,380px);gap:0;max-width:1400px}
+.wc .hm-main{gap:0;padding-right:40px}
+.wc .hm-head{display:flex;flex-direction:column;padding:0}
+.wc .hm-eyebrow{order:0;font-size:13px;font-weight:500;color:var(--muted);letter-spacing:0;margin:0}
+.wc .hm-hello{order:1;margin:2px 0 0;font-size:13px;font-weight:500;color:var(--muted);letter-spacing:0;line-height:1.5}
+.wc .hm-sub,.wc .hm-sub.hm-tone-urgent{order:2;margin:10px 0 0;font-size:clamp(24px,2.3vw,30px);line-height:1.3;font-weight:700;letter-spacing:-.04em;color:var(--fg)}
+.wc .hm-sub.hm-tone-warn{font-size:17px;color:var(--md)}
+.wc .hm-pill{border-radius:5px}
+.wc #hmTop{flex:none;gap:0}
+.wc .hm-card{border:0;border-radius:0;background:none;box-shadow:none;padding:0}
+.wc .hm-card-h{margin-bottom:8px}
+.wc .hm-card-k{font-size:12.5px;font-weight:600;color:var(--muted);letter-spacing:0}
+.wc .hm-next{margin-top:26px;padding:0}
+.wc .hm-next .hm-card-h{justify-content:flex-start;gap:8px}
+.wc .hm-next-t{font-size:19px;font-weight:700;letter-spacing:-.03em;line-height:1.4}
+.wc .hm-next-s{font-size:13.5px}
+.wc .hm-next-a{margin-top:14px}
+.wc .hm-queue-k{margin:22px 0 0;padding-bottom:6px;border-bottom:1px solid var(--line2);font-size:12.5px;font-weight:600;color:var(--muted)}
+.wc .hm-queue{margin:0;padding:0;list-style:none}
+.wc .hm-queue li{border-bottom:1px solid var(--line)}
+.wc .hm-q{width:100%;min-height:42px;padding:0 4px;border-radius:0;font-size:14.5px}
 .wc .hm-q:hover{background:var(--soft)}
+.wc .hm-badge{border-radius:5px;font-size:12px;font-weight:600}
+/* 한 줄 현황: 숫자 타일이 아니라 읽히는 한 줄. 급한 것만 빨강 */
+.wc .hm-stats{margin-top:18px;padding:0}
+.wc .hm-tiles{display:flex;flex-wrap:wrap;gap:2px 6px;border:0;background:none}
+.wc .hm-tile,.wc #hmTop .hm-tile,.wc .hm-tile-urgent,.wc .hm-tile-todo,.wc .hm-tile.hm-tone-urgent,.wc #hmTop .hm-tile.hm-tone-urgent{flex-direction:row;align-items:baseline;gap:6px;grid-column:auto;min-height:32px;padding:4px 10px 4px 0;margin-right:8px;border:0;border-radius:6px;background:none;box-shadow:none}
+.wc .hm-tile:hover{background:none;transform:none}
+.wc .hm-tile:hover .hm-tile-l{color:var(--fg);text-decoration:underline;text-underline-offset:3px}
+.wc .hm-tile-l{font-size:13.5px;font-weight:500;color:var(--muted);white-space:nowrap}
+.wc .hm-tile-v,.wc .hm-tile-urgent .hm-tile-v,.wc .hm-tile-todo .hm-tile-v{font-size:15px;line-height:1.5;font-weight:700;letter-spacing:-.02em;color:var(--fg)}
+.wc .hm-tile.hm-tone-urgent .hm-tile-v,.wc .hm-tile.hm-tone-urgent .hm-tile-l{color:var(--hi)}
+.wc .hm-tile.hm-tone-todo .hm-tile-v,.wc .hm-tile.hm-tone-ok .hm-tile-v{color:var(--fg)}
+.wc .hm-tile-s{display:none}
 .wc .hm-link{color:var(--accent);font-weight:600}
-.wc .hm-tl-t{color:var(--muted);font-weight:600}
-/* 홈 배치(v0.71): 인사 → 지금 할 일 한 가지 → 숫자 한 줄 → 대화. 오른쪽은 오늘 일정과 참고만 */
-.wc .hm{grid-template-columns:minmax(0,1fr) clamp(320px,28%,400px);gap:28px}
-.wc .hm-main{gap:14px}
-.wc #hmTop{flex:none;gap:10px}
-.wc .hm-next{padding:18px 20px;border-color:var(--line2);box-shadow:var(--sh-md)}
-.wc .hm-next:has(.hm-queue){display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,38%);column-gap:24px;align-content:start}
-.wc .hm-next:has(.hm-queue)>*{grid-column:1}
-.wc .hm-next:has(.hm-queue)>.hm-queue-k{grid-column:2;grid-row:1;margin:0;padding-left:20px;border-left:1px solid var(--line);align-self:stretch}
-.wc .hm-next:has(.hm-queue)>.hm-queue{grid-column:2;grid-row:2/5;margin:0;padding-left:14px;border-left:1px solid var(--line);align-self:stretch}
-.wc .hm-next-t{font-size:18px;line-height:1.4}
-.wc .hm-next-a{margin-top:12px}
-.wc .hm-stats{padding:0;border:0;background:none}
-.wc .hm-tiles{grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
-.wc .hm-tile,.wc .hm-tile-urgent,.wc .hm-tile-todo{grid-column:auto;min-height:0;padding:10px 12px;gap:0}
-.wc .hm-tile-l{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-.wc .hm-tile-v,.wc .hm-tile-urgent .hm-tile-v,.wc .hm-tile-todo .hm-tile-v{font-size:22px;line-height:1.3}
-.wc .hm-tile-s{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+/* 오른쪽: 오늘. 상자 없이 세로 선 하나로 나누고, 묶음 사이는 가는 선 */
+.wc .hm-rail{gap:0;padding:0 0 0 32px;border-left:1px solid var(--line)}
+.wc #hmDash{gap:0}
+.wc #hmDash>.hm-card{padding:18px 0;border-bottom:1px solid var(--line)}
+.wc #hmDash>.hm-card:first-child{padding-top:0}
+.wc #hmDash>.hm-card:last-child{border-bottom:0}
+.wc .hm-tl-t{color:var(--muted);font-weight:500}
+.wc .hm-sig{border-radius:6px}
 .wc .hm-today .dr{margin:2px 0 0;padding:24px 0 20px}
 .wc .hm-today .dr-note{margin:4px 0 10px;font-size:12.5px}
 .wc .hm-today .dr-b{font-size:0;padding:0}
-@container (max-width:1000px){.wc #hmHead{order:1}.wc #hmTop{order:2}.wc .hm-chatcol{order:3;flex:none}.wc #hmDash{order:4}.wc .hm-next:has(.hm-queue){display:block}.wc .hm-next:has(.hm-queue)>.hm-queue-k,.wc .hm-next:has(.hm-queue)>.hm-queue{padding-left:0;border-left:0}.wc .hm-next:has(.hm-queue)>.hm-queue-k{margin-top:14px}}
-@container (max-width:640px){.wc .hm-tiles{grid-template-columns:repeat(3,minmax(0,1fr))}.wc .hm-tile-s{display:none}}
+@container (max-width:1000px){.wc .hm-main{padding-right:0}.wc .hm-rail{padding-left:0;border-left:0}.wc #hmHead{order:1}.wc #hmTop{order:2}.wc .hm-chatcol{order:3;flex:none}.wc #hmDash{order:4;margin-top:28px;padding-top:24px;border-top:1px solid var(--line)}.wc .ch-dock{position:static}.wc .ch-log{max-height:clamp(220px,calc(100vh - 420px),520px)}}
 
 /* 하루 띠: 08~19시 한 줄. 일정은 칸, 지금은 바늘. (그리는 곳: wc/29-home-view.js homeRailHtml) */
 .wc .dr{position:relative;margin:14px 0 2px;padding:26px 0 22px;user-select:none}
@@ -1225,16 +1248,29 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .dr-allday{display:inline-flex;align-items:center;gap:5px}
 .wc .dr-allday i{width:8px;height:8px;border-radius:2px;background:var(--accent)}
 
-/* ---------- 채팅 ---------- */
-.wc .ch{border:1px solid var(--line);background:var(--card);border-radius:14px}
-.wc .ch-mark,.wc .ch-av{background:var(--pri);color:var(--pri-fg);border-radius:9px}
-.wc .ch-fact,.wc .ch-cap,.wc .ch-chip{border-radius:10px;border-color:var(--line)}
-.wc .ch-chip{border-radius:999px}
-.wc .ch-cap:hover,.wc .ch-fact:hover,.wc .ch-chip:hover{border-color:var(--line2);background:var(--soft);transform:none}
-.wc .ch-user .ch-bubble{background:var(--pri);color:var(--pri-fg)}
-.wc .ch-composer{border-radius:14px;border-color:var(--line2);box-shadow:var(--sh-md)}
-.wc .ch-composer:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft),var(--sh-md)}
-.wc .ch-send{background:var(--pri);color:var(--pri-fg);border-radius:10px}
+/* ---------- 채팅: 상자도 머리띠도 없다. 입력칸만 면을 가진다 ---------- */
+.wc .hm-chatcol{margin-top:26px;padding-top:6px;border-top:1px solid var(--line)}
+.wc .ch{border:0;border-radius:0;background:none;box-shadow:none;overflow:visible}
+.wc .ch-head{padding:12px 0 0;border:0;background:none}
+.wc .ch-mark{display:none}
+.wc .ch-heading{font-size:12.5px;font-weight:600;color:var(--muted);letter-spacing:0}
+.wc .ch-av{background:var(--pri);color:var(--pri-fg);border-radius:8px}
+.wc .ch-log{padding:14px 2px;min-height:0}
+.wc .ch-dock{padding:8px 0 4px;border:0;background:var(--card);position:sticky;bottom:0;z-index:1}
+/* 대화가 시작되면 대화가 주인공이다: 대화 칸은 줄어들지 않고, 위쪽 요약은 왼쪽 단 안에서 밀려 올라간다. 입력칸은 아래에 붙어 있다 */
+.wc .hm-main{overflow-y:auto;scrollbar-width:none}
+.wc .hm-chatcol{flex:1 0 auto}
+.wc .ch-log{max-height:max(300px,calc(100vh - 380px))}
+.wc .ch-log:has(.ch-msg:not(.ch-brief)){min-height:300px}
+.wc .ch-ai .ch-bubble{background:none;border:0;padding:4px 0}
+.wc .ch-user .ch-bubble{background:var(--soft);color:var(--fg);border:0}
+.wc .ch-card{border-color:var(--line);border-radius:10px;box-shadow:none}
+.wc .ch-fact,.wc .ch-cap{border-radius:8px;border-color:var(--line)}
+.wc .ch-chip{border-radius:999px;border-color:var(--line2);background:none}
+.wc .ch-cap:hover,.wc .ch-fact:hover,.wc .ch-chip:hover{border-color:var(--muted);background:var(--soft);transform:none}
+.wc .ch-composer{border-radius:12px;border-color:var(--line2);box-shadow:var(--sh-sm);background:var(--card)}
+.wc .ch-composer:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.wc .ch-send{background:var(--pri);color:var(--pri-fg);border-radius:8px}
 .wc .ch-send:hover{background:var(--pri-h)}
 
 /* ---------- 겹쳐 뜨는 것: 창·명령·알림 ---------- */
