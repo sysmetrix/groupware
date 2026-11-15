@@ -63,7 +63,8 @@ test('calendar questions are not mistaken for employee names or groupware events
   }
   assert.equal(chatIntent('구글 캘린더에 올릴 거 있어?', NOW).tool, 'get_gcal_sync');
   assert.equal(chatIntent('내일 일정 알려줘', NOW).tool, 'get_schedule');
-  assert.equal(chatIntent('김지은 내일 일정', NOW).tool, 'get_staff_status');
+  assert.notEqual(chatIntent('김지은 내일 일정', NOW).tool, 'get_staff_status');
+  assert.equal(chatIntent('김지은 님 내일 일정', NOW).tool, 'get_staff_status');
 });
 
 test('approval queue navigation, deadlines and constrained follow-up routing', () => {

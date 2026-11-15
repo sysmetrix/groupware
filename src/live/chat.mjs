@@ -165,6 +165,9 @@ export function chatIntent(text, now = new Date()) {
   if (/(구글|캘린더)/.test(t) && /(동기화|올려|올릴|등록|연동|반영)/.test(t) && !/(신청|예약)/.test(t)) return make('get_gcal_sync', {});
   if (/(열어|이동|가줘|가 줘|보여|띄워|켜줘|화면)/.test(t) && !/(일정|스케줄|급한|할 ?일|누가|언제)/.test(t)) { for (const [re, view] of CH_VIEWS) if (re.test(t)) return make('open_view', {view}); }
   const name = chatExtractName(t);
+  // 행사·사업명도 한글 2~4자이므로 'OO 일정'만으로 직원이라고 단정하지 않는다.
+  // 직함/호칭이나 명시적인 근태 표현이 없으면 모델에 문맥 해석을 맡긴다.
+  if (/(일정|스케줄|약속|회의)/.test(t) && (/(사업|행사|프로그램|프로젝트)/.test(t) || (name && !/(님|씨|팀장|실장|과장|대리|주임|센터장|선생님|직원|출장|휴가|연차|교육|근태|자리|어디|계셔)/.test(t)))) return none;
   if (name && /(출장|휴가|연차|교육|언제|자리|어디|있어|있나|근태|일정)/.test(t) && !/내 /.test(t)) return make('get_staff_status', {name, date: dt ? dt.date : 'today', days: dt && dt.end ? 5 : 7});
   if (/누가/.test(t) && /(출장|휴가|연차|교육|자리|없|쉬|부재)/.test(t)) return make('get_staff_status', {date: dt ? dt.date : 'today', days: dt && dt.end ? 5 : 1});
   if (/(남은 연차|연차 ?잔여|잔여 ?연차|연차 몇|내 근태|출근|퇴근|지문|근태 확인|내 휴가)/.test(t)) return make('get_my_attendance', {month: dt ? dt.date.slice(0, 7) : ''});
@@ -230,6 +233,17 @@ export function chatAutoNext(rule, now = Date.now()) {
     return {date: iso, label: `${i === 0 ? '오늘' : `${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}(${CH_DOW_NAME[d.getUTCDay()]})`} ${rule.time}`};
   }
   return null;
+}
+
+// 직전의 일정 날짜를 이어 받아 사업·행사 제목을 찾는다. 직원 근태나 쓰기는 제외한다.
+export function chatScheduleFollowup(text, previous) {
+  const t = String(text || '').trim();
+  if (!previous || previous.tool !== 'get_schedule' || !previous.args || chatParseDate(t) || /신청|예약|등록|보내|취소|삭제|작성|수정|변경|직원|님|씨|출장|휴가|연차|근태|구글/.test(t)) return null;
+  const m = t.match(/^([가-힣A-Za-z0-9][가-힣A-Za-z0-9\s]{1,28}?)\s*(?:의\s*)?(?:일정|행사|회의)(?:\s*(?:있잖아|있지|말이야|알려줘|보여줘|찾아줘|있어|뭐야|확인해줘))?[?？!\s]*$/);
+  if (!m) return null;
+  const query = m[1].trim();
+  if (query.length < 2 || /^(내일|오늘|모레|이번|다음|우리|그|그거|해당)$/.test(query)) return null;
+  return {tool:'get_schedule', args:{...previous.args, query}, confidence:1};
 }
 
 // 직전 조회의 범위만 이어받는다. 실행·신청·발송이나 새로운 주제는 절대 이어받지 않는다.
@@ -330,7 +344,8 @@ export function chatSystemPrompt(nowKst = '', userName = '', orgName = '') {
 3. 신청·기안·예약·메일 같은 실행은 prepare_*, draft_*, reserve_* 도구로 "확인 카드"만 만듭니다. 실제 신청·기안·발송은 사용자가 신청서를 연 뒤 직접 하며, 차량 예약만 확인 카드의 확정 버튼을 누르면 바로 예약됩니다. 이미 완료됐다고 말하지 말고, 카드 버튼 이름은 도구 결과에 적힌 그대로만 안내하세요.
 4. 답은 한국어 존댓말로, 5줄 이내로 간결하게. 표나 긴 설명은 피하고, 숫자와 날짜는 정확히 쓰세요.
 5. 날짜가 모호하면 오늘 기준으로 해석하되, 해석한 날짜를 답에 함께 적으세요.
-6. 메일·문서 본문, 계좌번호, 다른 직원의 시간외·지문 정보는 다루지 않습니다.`;
+6. 메일·문서 본문, 계좌번호, 다른 직원의 시간외·지문 정보는 다루지 않습니다.
+7. 직전 대화의 날짜와 주제를 참고하되, 사업·행사명일 수도 있는 표현을 직원 이름이라고 단정하지 마세요. 일정의 출처나 대상이 모호하고 도구로 확인할 수 없다면 필요한 내용을 짧게 물어보세요. 그룹웨어 일정 조회에는 구글 캘린더가 포함되지 않습니다.`;
 }
 
 // ---------- 모델 선택·한도 (Gemini 무료 사용량은 모델마다 따로 센다) ----------

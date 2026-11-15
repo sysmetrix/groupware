@@ -91,6 +91,14 @@
   async function chatExec(name, args, msg, ctx) {
     const def = CHAT_TOOLS.get(name);
     if (!def) return {ok: false, text: '지원하지 않는 기능입니다.'};
+    // 모델이 생성한 인자로 로컬 메모를 즉시 저장하지 않는다. 명시적 사용자의 원문으로 다시 요청한다.
+    if (ctx.viaAi && name === 'add_todo') return {ok: false, text: 'AI가 선택한 내용은 자동 저장하지 않았습니다. “할 일 추가: 내용”처럼 다시 요청해 주세요.'};
+    // 대화 이력이나 외부 자료의 문구만으로 직원 개인을 새로 지정하지 않는다.
+    if (ctx.viaAi && name === 'get_staff_status' && args && typeof args.name === 'string' && args.name.trim() && !(ctx.userText || '').replace(/\s/g, '').includes(args.name.replace(/\s/g, ''))) return {ok: false, text: '현재 요청에 없는 직원을 추정해 조회하지 않았습니다. 직원 이름을 직접 알려 주세요.'};
+    // 특정 행사 조건을 지원하지 않는 일반 일정 도구가 조건을 버리고 '없음'이라고 답하지 않도록 한다.
+    if (ctx.viaAi && name === 'get_schedule' && /(일정|스케줄|약속|회의)/.test(ctx.userText || '') && !R.chatIntent(ctx.userText, new Date()).tool) return {ok: false, text: '특정 행사나 사업을 일반 일정 조회만으로 확인할 수 없습니다. 일정의 출처와 날짜를 확인해 주세요. 구글 캘린더는 직접 읽지 않습니다.'};
+    // AI가 사업·행사명을 직원으로 추정한 경우에도 실제 직원 근태를 조회하지 않는다.
+    if (ctx.viaAi && name === 'get_staff_status' && /(일정|스케줄|약속|회의)/.test(ctx.userText || '') && (/(사업|행사|프로그램|프로젝트)/.test(ctx.userText || '') || !/(님|씨|팀장|실장|과장|대리|주임|센터장|선생님|직원|출장|휴가|연차|교육|근태|자리|어디|계셔|누가)/.test(ctx.userText || ''))) return {ok: false, text: '행사·사업 일정인지 직원 근태 일정인지 명확하지 않아 직원 근태를 조회하지 않았습니다. 대상을 확인해 주세요.'};
     const chip = {name, label: def.label || name, state: 'run'};
     msg.tools.push(chip); chatRefresh();
     if (ctx.auto && (def.kind === 'act' || CHAT_AUTO_BLOCK.has(name))) { chip.state = 'err'; return {ok: false, text: '자동 실행에서는 조회만 합니다. 신청·예약·작성·화면 이동은 직접 요청해 주세요.'}; }
@@ -258,8 +266,10 @@
     contents.push({role: 'user', parts: [{text: R.chatSanitizeText(text, 600)}]});
     const tools = R.chatToGeminiTools([...CHAT_TOOLS.values()]);
     const system = R.chatSystemPrompt(chatNowStr(), name, org);
-    const texts = [];
-    const needTool = /일정|할\s*일|연차|근태|근무|출장|휴가|예산|결재|상신|메일|공지|알림|공문|차량|예약|지문|실적|기한|마감|신청|자동화|브리핑/.test(text);
+    const texts = []; let anySuccess = false, scheduleVerified = false;
+    const ambiguousSchedule = /(일정|스케줄|약속|회의)/.test(text) && !R.chatIntent(text, new Date()).tool;
+    // 대상이 모호할 때는 도구 호출을 강제하지 않아 확인 질문을 할 수 있어야 한다.
+    const needTool = !ambiguousSchedule && /일정|할\s*일|연차|근태|근무|출장|휴가|예산|결재|상신|메일|공지|알림|공문|차량|예약|지문|실적|기한|마감|신청|자동화|브리핑/.test(text);
     for (let round = 0; round < 3; round++) {
       if (S.chat !== st || st.stopped || st.seq !== runSeq) return;
       const mode = round === 0 && needTool ? 'ANY' : 'AUTO';
@@ -269,7 +279,9 @@
       if (r.blocked) throw Object.assign(new Error('blocked'), {status: 200, kind: 'blocked'});
       if (r.error && !r.calls.length) throw Object.assign(new Error(r.error), {status: 200, kind: 'server'});
       if (!r.calls.length) {
+        if (ambiguousSchedule && !scheduleVerified) { ai.text = '일정 대상을 확인하지 못했습니다. 행사·사업명과 날짜, 그룹웨어 또는 구글 캘린더 중 확인할 곳을 알려 주세요. 아직 일정을 조회하지 않았습니다.'; return; }
         if (round === 0 && needTool && !texts.length) { ai.text = '그룹웨어 자료를 조회할 도구가 호출되지 않아 단정적으로 답할 수 없습니다. 구체적으로 다시 질문해 주세요.'; return; }
+        if (texts.length && !anySuccess) { ai.text = texts.join('\n'); return; }
         ai.text = r.text || texts.join('\n'); return;
       }
       let fc = 0;
@@ -280,6 +292,7 @@
         if (S.chat !== st || st.stopped || st.seq !== runSeq) return;
         const res = await chatExec(call.name, call.args, ai, {userText: text, viaAi: true});
         if (S.chat !== st || st.stopped || st.seq !== runSeq) return;
+        if (res.ok) { anySuccess = true; if (call.name === 'get_schedule' && call.args && typeof call.args.query === 'string' && call.args.query.trim().length >= 2) scheduleVerified = true; }
         if (res.text) texts.push(res.text);
         resp.push({functionResponse: {name: call.name, response: {result: R.chatSanitizeForLlm({ok: res.ok, text: res.llm !== undefined ? res.llm : res.text, data: res.data})}}});
       }
@@ -303,7 +316,7 @@
     try {
       const ready = !auto && chatMode().ready && allowed('aiAssistant');
       const weekday = /^(?:(?:오늘|내일|모레|어제|그제|그저께|\d{4}[-./]\d{1,2}[-./]\d{1,2}|\d{1,2}\s*월\s*\d{1,2}\s*일|\d{1,2}[/.]\d{1,2})\s*)?(?:은|는|이|가)?\s*(?:무슨|몇)\s*요일(?:이야|인가요|이에요|입니까|인지|이니|이죠|일까|알려줘|인가)?[?？!\s]*$/.test(text);
-      let it = weekday ? {tool: 'get_weekday', args: {date: (R.chatParseDate(text, new Date()) || {}).date || (/\d/.test(text) ? 'invalid' : 'today')}, confidence: 1} : R.chatFollowupIntent(text, st.ctx.lastRead, new Date()) || R.chatIntent(text, new Date());
+      let it = weekday ? {tool: 'get_weekday', args: {date: (R.chatParseDate(text, new Date()) || {}).date || (/\d/.test(text) ? 'invalid' : 'today')}, confidence: 1} : R.chatScheduleFollowup(text, st.ctx.lastRead) || R.chatFollowupIntent(text, st.ctx.lastRead, new Date()) || R.chatIntent(text, new Date());
       // 우선순위 질문에만 표시 개수를 좁힌다. 목록 순서는 기존 홈 기준을 유지한다.
       if (it.tool === 'list_tasks' && /(?:제일|가장)\s*먼저|맨\s*먼저/.test(text) && !/(신청|등록|삭제|변경|보내|예약)/.test(text)) {
         const target = R.chatParseDate(text, new Date());
@@ -345,7 +358,7 @@
         ai.text = '이 자동화 문장은 정해진 조회로 알아듣지 못해 실행하지 않았습니다. 자동화를 지우고 다시 등록해 주세요.';
       } else {
         st.ctx.lastRead = null;
-        ai.text = CHAT_HELP;
+        ai.text = /(일정|스케줄|약속|회의)/.test(text) ? '어떤 일정인지 확인이 필요합니다. 행사·사업 일정인지 직원의 근태 일정인지, 그리고 그룹웨어 일정인지 구글 캘린더인지 알려 주세요.' : CHAT_HELP;
         if (!chatMode().ready) ai.cards.push({type: 'setup', reason: 'AI를 연결하면 이렇게 정해진 문장이 아니어도 자유롭게 시킬 수 있습니다.'});
       }
     } catch (e) { if (S.userKey !== owner || S.chat !== st || st.seq !== runSeq) return; logError('chatSend', e.message); ai.text = '처리하지 못했습니다: ' + String(e.message || e).slice(0, 100); ai.state = 'error'; }
