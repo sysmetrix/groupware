@@ -10,4 +10,3 @@ test('문장으로 설명해 달라고 하면 버튼 목록 없이 지원 및 �
 test('보통 기능 안내는 예시를 유지하고 모든 자료를 읽는다고 과장하지 않는다',async()=>{
  const r=await tools().get('get_capabilities').run({}, {userText:'뭘 할 수 있어?'});assert.ok(r.cards.length>0);assert.doesNotMatch(r.text,/자료는 모두/);
 });
-

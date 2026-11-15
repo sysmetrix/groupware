@@ -56,3 +56,9 @@ test('직전 대답 재서술은 과거 주제와 무관한 도구를 호출하�
  await a.api.chatSend('너가 할 수 있는 일을 문장으로 말해봐');await a.api.chatSend('방금 말한 내용을 두 문장으로 간결하게 다시 설명해줘');
  assert.equal(runs,0);assert.ok(!a.requests[0].tools);assert.match(JSON.stringify(a.requests[0].contents),/일정과 메일/);
 });
+
+test('민감한 근태 신청 상세는 AI 요청으로 전송하지 않는다',async()=>{
+ const a=setup([reply([{functionCall:{name:'list_my_requests',args:{}}}]),reply([{text:'확인했습니다'}])]);
+ a.api.chatRegisterTool({name:'list_my_requests',kind:'read',run:async()=>({ok:true,text:'내 휴가 3건',llm:'개인휴가비밀 3건',data:{name:'비밀이름'}})});
+ await a.api.chatSend('나의 신청 현황을 자세히 알려줘');assert.doesNotMatch(JSON.stringify(a.requests),/개인휴가비밀|비밀이름/);
+});

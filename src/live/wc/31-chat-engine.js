@@ -9,7 +9,7 @@
   const CHAT_TOOLS = new Map();
   function chatRegisterTool(def) { if (def && def.name && typeof def.run === 'function') CHAT_TOOLS.set(def.name, def); }
   // 외부 AI에 보낼 수 있다고 검토된 도구별 요약만 허용한다. 원본 data, 제목, 식별자, URL은 보내지 않는다.
-  const CHAT_LLM_SUMMARY = new Set(['list_mail', 'list_approvals', 'list_notices', 'list_deadlines', 'list_my_requests', 'get_capabilities']);
+  const CHAT_LLM_SUMMARY = new Set(['list_mail', 'list_approvals', 'list_notices', 'list_deadlines', 'get_capabilities']);
   const CHAT_COMPOSE = new Set(); // 검토되지 않은 원문·구조화 데이터는 정리에 보내지 않는다
   // 자동 실행(37번 조각)에서는 조회만 한다. 실행(act) 도구와 화면을 바꾸는 도구는 막는다.
   const CHAT_AUTO_BLOCK = new Set(['open_view', 'open_item', 'refresh_data']);
@@ -263,11 +263,11 @@
   async function chatRunAi(text, ai, runSeq) {
     const st = chatState(), ctl = new AbortController();
     st.abort = ctl;
-    const name = (S.raw && S.raw.principal && S.raw.principal.name) || '';
-    const org = (S.raw && S.raw.principal && S.raw.principal.compName) || '';
+    const name = ''; // 개인 이름·기관명은 외부 모델에 보내지 않는다
+    const org = '';
     const contents = [];
     const rephrase = /(?:방금|직전|앞서|위에|그것|그거)/.test(text) && /(?:다시|문장|요약|정리|간결|설명|표현)/.test(text);
-    for (const m of (rephrase ? st.msgs.slice(-4, -2) : st.msgs.slice(-9, -2))) if (m.text && m.state === 'done' && chatHistoryCurrent(m.at) && (m.role === 'user' || m.role === 'ai' && m.historySafe === true)) contents.push({role: m.role === 'user' ? 'user' : 'model', parts: [{text: R.chatSanitizeText(m.text, 400)}]});
+    for (const m of (rephrase ? st.msgs.slice(-4, -2) : st.msgs.slice(-9, -2))) if (m.text && m.state === 'done' && chatHistoryCurrent(m.at) && m.role === 'ai' && m.historySafe === true) contents.push({role: 'model', parts: [{text: R.chatSanitizeText(m.text, 400)}]});
     contents.push({role: 'user', parts: [{text: R.chatSanitizeText(text, 600)}]});
     const tools = rephrase ? [] : R.chatToGeminiTools([...CHAT_TOOLS.values()]);
     const system = R.chatSystemPrompt(chatNowStr(), name, org);
