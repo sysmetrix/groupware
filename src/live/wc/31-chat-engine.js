@@ -8,7 +8,9 @@
 
   const CHAT_TOOLS = new Map();
   function chatRegisterTool(def) { if (def && def.name && typeof def.run === 'function') CHAT_TOOLS.set(def.name, def); }
-  const CHAT_COMPOSE = new Set(['get_overview', 'list_tasks', 'get_my_attendance', 'search_documents', 'get_resource_status']); // 직원 실명(get_staff_status)과 연락처(lookup_person)는 외부 AI 정리로 보내지 않는다
+  // 외부 AI에 보낼 수 있다고 검토된 도구별 요약만 허용한다. 원본 data, 제목, 식별자, URL은 보내지 않는다.
+  const CHAT_LLM_SUMMARY = new Set(['list_mail', 'list_approvals', 'list_notices', 'list_deadlines', 'get_capabilities']);
+  const CHAT_COMPOSE = new Set(); // 검토되지 않은 원문·구조화 데이터는 정리에 보내지 않는다
   // 자동 실행(37번 조각)에서는 조회만 한다. 실행(act) 도구와 화면을 바꾸는 도구는 막는다.
   const CHAT_AUTO_BLOCK = new Set(['open_view', 'open_item', 'refresh_data']);
   const CHAT_HIST_VER = 3; // 올리면 예전 대화 기록을 한 번 비운다(형식이 바뀌었을 때)
@@ -93,6 +95,8 @@
     if (!def) return {ok: false, text: '지원하지 않는 기능입니다.'};
     // 모델이 생성한 인자로 로컬 메모를 즉시 저장하지 않는다. 명시적 사용자의 원문으로 다시 요청한다.
     if (ctx.viaAi && name === 'add_todo') return {ok: false, text: 'AI가 선택한 내용은 자동 저장하지 않았습니다. “할 일 추가: 내용”처럼 다시 요청해 주세요.'};
+    // 이전 대화나 도구 결과만으로 새 쓰기 작업을 준비하지 않는다. 현재 요청의 명시적 의도와 일치해야 한다.
+    if (ctx.viaAi && def.kind === 'act' && R.chatIntent(ctx.userText || '', new Date()).tool !== name) return {ok: false, text: '현재 요청에서 해당 작업을 확인하지 못해 실행하지 않았습니다. 원하는 작업을 직접 말씀해 주세요.'};
     // 대화 이력이나 외부 자료의 문구만으로 직원 개인을 새로 지정하지 않는다.
     if (ctx.viaAi && name === 'get_staff_status' && args && typeof args.name === 'string' && args.name.trim() && !(ctx.userText || '').replace(/\s/g, '').includes(args.name.replace(/\s/g, ''))) return {ok: false, text: '현재 요청에 없는 직원을 추정해 조회하지 않았습니다. 직원 이름을 직접 알려 주세요.'};
     // 특정 행사 조건을 지원하지 않는 일반 일정 도구가 조건을 버리고 '없음'이라고 답하지 않도록 한다.
@@ -209,7 +213,7 @@
       const org = (S.raw && S.raw.principal && S.raw.principal.compName) || '';
       const qSafe = R.chatSanitizeText(text, 300);
       const rSafe = R.chatSanitizeText(res.llm !== undefined ? res.llm : res.text, 1800);
-      const dSafe = JSON.stringify(R.chatSanitizeForLlm(res.data || {}));
+      const dSafe = ''; // 구조화 원본을 외부로 전달하지 않는다
       const body = R.chatBuildRequest({system: R.chatSystemPrompt(chatNowStr(), (S.raw && S.raw.principal && S.raw.principal.name) || '', org), contents: [{role: 'user', parts: [{text: R.chatComposePrompt(qSafe, rSafe, dSafe)}]}], maxTokens: 500});
       const c = aiCfg();
       const avail = chatAvailable(await chatModelList());
@@ -259,14 +263,17 @@
   async function chatRunAi(text, ai, runSeq) {
     const st = chatState(), ctl = new AbortController();
     st.abort = ctl;
-    const name = (S.raw && S.raw.principal && S.raw.principal.name) || '';
-    const org = (S.raw && S.raw.principal && S.raw.principal.compName) || '';
+    const name = ''; // 개인 이름·기관명은 외부 모델에 보내지 않는다
+    const org = '';
     const contents = [];
-    for (const m of st.msgs.slice(-9, -2)) if (m.text && m.state === 'done' && chatHistoryCurrent(m.at) && (m.role === 'user' || m.role === 'ai')) contents.push({role: m.role === 'user' ? 'user' : 'model', parts: [{text: R.chatSanitizeText(m.text, 400)}]});
+    const rephrase = /(?:방금|직전|앞서|위에|그것|그거)/.test(text) && /(?:다시|문장|요약|정리|간결|설명|표현)/.test(text);
+    for (const m of (rephrase ? st.msgs.slice(-4, -2) : st.msgs.slice(-9, -2))) if (m.text && m.state === 'done' && chatHistoryCurrent(m.at) && m.role === 'ai' && m.historySafe === true) contents.push({role: 'model', parts: [{text: R.chatSanitizeText(m.text, 400)}]});
+    if (rephrase && !contents.length) { ai.text = '직전 답변을 안전하게 이어받을 수 없습니다. 바꾸고 싶은 문장을 직접 알려 주세요.'; return; }
     contents.push({role: 'user', parts: [{text: R.chatSanitizeText(text, 600)}]});
-    const tools = R.chatToGeminiTools([...CHAT_TOOLS.values()]);
+    const tools = rephrase ? [] : R.chatToGeminiTools([...CHAT_TOOLS.values()]);
     const system = R.chatSystemPrompt(chatNowStr(), name, org);
-    const texts = []; let anySuccess = false, scheduleVerified = false;
+    const texts = []; let anySuccess = false, scheduleVerified = false, relevantSuccess = false, privateResult = false;
+    const expectedTool = R.chatIntent(text, new Date()).tool;
     const ambiguousSchedule = /(일정|스케줄|약속|회의)/.test(text) && !R.chatIntent(text, new Date()).tool;
     // 대상이 모호할 때는 도구 호출을 강제하지 않아 확인 질문을 할 수 있어야 한다.
     const needTool = !ambiguousSchedule && /일정|할\s*일|연차|근태|근무|출장|휴가|예산|결재|상신|메일|공지|알림|공문|차량|예약|지문|실적|기한|마감|신청|자동화|브리핑/.test(text);
@@ -282,7 +289,9 @@
         if (ambiguousSchedule && !scheduleVerified) { ai.text = '일정 대상을 확인하지 못했습니다. 행사·사업명과 날짜, 그룹웨어 또는 구글 캘린더 중 확인할 곳을 알려 주세요. 아직 일정을 조회하지 않았습니다.'; return; }
         if (round === 0 && needTool && !texts.length) { ai.text = '그룹웨어 자료를 조회할 도구가 호출되지 않아 단정적으로 답할 수 없습니다. 구체적으로 다시 질문해 주세요.'; return; }
         if (texts.length && !anySuccess) { ai.text = texts.join('\n'); return; }
-        ai.text = r.text || texts.join('\n'); return;
+        if (needTool && expectedTool && !relevantSuccess) { ai.text = '요청에 맞는 자료를 확인하지 못했습니다. 해당 자료는 아직 조회하지 않았습니다.'; return; }
+        if (needTool && !expectedTool && texts.length) { ai.text = texts.join('\n'); return; }
+        ai.text = privateResult ? (texts.join('\n') || '조회 결과는 화면의 카드에서 확인해 주세요.') : (r.text || texts.join('\n')); ai.historySafe = false; return;
       }
       let fc = 0;
       const keptParts = r.parts.filter(p => !p.functionCall || (++fc <= 4));
@@ -292,13 +301,15 @@
         if (S.chat !== st || st.stopped || st.seq !== runSeq) return;
         const res = await chatExec(call.name, call.args, ai, {userText: text, viaAi: true});
         if (S.chat !== st || st.stopped || st.seq !== runSeq) return;
-        if (res.ok) { anySuccess = true; if (call.name === 'get_schedule' && call.args && typeof call.args.query === 'string' && call.args.query.trim().length >= 2) scheduleVerified = true; }
+        if (res.ok) { anySuccess = true; if (call.name === expectedTool) relevantSuccess = true; if (call.name === 'get_schedule' && call.args && typeof call.args.query === 'string' && call.args.query.trim().length >= 2) scheduleVerified = true; }
         if (res.text) texts.push(res.text);
-        resp.push({functionResponse: {name: call.name, response: {result: R.chatSanitizeForLlm({ok: res.ok, text: res.llm !== undefined ? res.llm : res.text, data: res.data})}}});
+        if (res.ok && (!CHAT_LLM_SUMMARY.has(call.name) || typeof res.llm !== 'string')) privateResult = true;
+        const safeText = res.ok ? (CHAT_LLM_SUMMARY.has(call.name) && typeof res.llm === 'string' ? res.llm : '도구 실행 결과는 화면에 표시됩니다. 상세 자료는 외부 AI에 전달하지 않았습니다.') : (/자동 저장하지 않았습니다|현재 요청에 없는 직원을 추정|특정 행사나 사업|행사·사업 일정인지 직원 근태/.test(res.text || '') ? res.text : '도구 실행에 실패하거나 차단되었습니다.');
+        resp.push({functionResponse: {name: call.name, response: {result: {ok: !!res.ok, text: R.chatSanitizeText(safeText, 600)}}}});
       }
       contents.push({role: 'user', parts: resp});
     }
-    if (!st.stopped && st.seq === runSeq) ai.text = texts.join('\n') || '요청을 정리하지 못했습니다. 조금 더 구체적으로 말씀해 주세요.';
+    if (!st.stopped && st.seq === runSeq) ai.text = ambiguousSchedule && !scheduleVerified ? '일정 대상을 확인하지 못했습니다. 아직 일정을 조회하지 않았습니다.' : needTool && expectedTool && !relevantSuccess && anySuccess ? '요청에 맞는 자료를 확인하지 못했습니다. 해당 자료는 아직 조회하지 않았습니다.' : texts.join('\n') || '요청을 정리하지 못했습니다. 조금 더 구체적으로 말씀해 주세요.';
   }
 
   async function chatSend(text, opt = {}) {
@@ -329,14 +340,19 @@
           it = {tool: st.ctx.pendingSlot.tool, args: merged, confidence: 1};
         }
       }
-      const known = it.tool && it.confidence >= (ready ? 0.9 : 0.6) && CHAT_TOOLS.has(it.tool); // AI가 있으면 확신이 낮은 추측은 AI에게 맡긴다
+      // 기능 안내를 문장으로 요청한 경우에는 버튼 목록을 재출력하지 않는다. AI 연결 없이도 형식을 지킨다.
+      const proseCaps = it.tool === 'get_capabilities' && /(?:문장|서술)(?:으로|형태|식)?/.test(text);
+      const preferAi = ready && !auto && !weekday && !proseCaps && !(st.ctx && st.ctx.pendingSlot) && R.chatPreferGemini(text);
+      const known = !preferAi && it.tool && it.confidence >= (ready ? 0.9 : 0.6) && CHAT_TOOLS.has(it.tool);
       if (known) {
         const res = await chatExec(it.tool, it.args, ai, {userText: text, viaAi: false, auto: !!auto});
         if (S.userKey !== owner || S.chat !== st || st.seq !== runSeq) return;
         st.ctx.lastRead = res.ok && ['get_schedule', 'get_staff_status', 'get_resource_status'].includes(it.tool) ? {tool: it.tool, args: it.args} : null;
         if (S.chat !== st || st.stopped || st.seq !== runSeq) { ai.text = ai.text || '중지했습니다.'; }
         else {
-          ai.text = res.text || '';
+          if (proseCaps && res.ok) { ai.cards = []; ai.text = res.text || res.llm || ''; }
+          else ai.text = res.text || '';
+          if (it.tool === 'get_capabilities' && res.ok) ai.historySafe = true;
           ai.state = 'done'; chatRefresh();   // ① 로컬 답을 먼저 보여 준다
           const def = CHAT_TOOLS.get(it.tool);
           if (ready && res.ok && def.kind !== 'act' && CHAT_COMPOSE.has(it.tool) && !st.stopped && (res.cards || []).length + (res.text || '').length > 30 && chatAvailable(await chatModelList()).length && st.seq === runSeq) await chatCompose(text, res, ai, runSeq);
