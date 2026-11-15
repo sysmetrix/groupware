@@ -32,6 +32,8 @@
       if (switchUserStorage(pKey)) {
         // user switched, clear current view state
         S.sel = null; S.pane.url = ''; S.pane.expanded = false; S.multi.clear();
+        NTF.seq++; NTF.items = null; NTF.at = ''; NTF.error = ''; NTF.loading = false;
+        PEOPLE.seq++; PEOPLE.orgSeq++; PEOPLE.items = null; PEOPLE.tree = null; PEOPLE.query = ''; PEOPLE.org = ''; PEOPLE.error = ''; PEOPLE.treeError = ''; PEOPLE.loading = false; PEOPLE.orgLoading = false;
       }
     }
     syncLocal();

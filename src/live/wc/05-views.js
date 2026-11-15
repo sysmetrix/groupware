@@ -3,7 +3,7 @@
   // ---------- views ----------
   const VIEWS = [
     {id: 'home', label: '홈'}, {id: 'today', label: '할 일'}, {id: 'approval', label: '결재·문서유통'}, {id: 'mail', label: '메일'}, {id: 'calendar', label: '일정·예약'}, {id: 'attendance', label: '근태·연차'}, {id: 'search', label: '검색·문서'},
-    {id: 'budget', label: '예산 집행'}, {id: 'report', label: '보고·현황'}, {id: 'settings', label: '설정'},
+    {id: 'budget', label: '예산 집행'}, {id: 'report', label: '보고·현황'}, {id: 'notifications', label: '통합알림'}, {id: 'people', label: '조직·사람'}, {id: 'settings', label: '설정'},
     {id: 'board', label: '할 일 보드'}, {id: 'resource', label: '자원 예약'}, {id: 'gcal', label: '구글 일정'}, {id: 'gsync', label: '구글 동기화'}, {id: 'docs', label: '문서 찾기'}, {id: 'overview', label: '현황 차트'},
   ];
   // 메뉴에 따로 두지 않고 상위 화면 안의 탭으로 들어가는 화면(기능은 그대로, 메뉴만 합침).
@@ -75,7 +75,7 @@
     const total = S.a ? mineVisible().length : 0;
     { const st = !S.a ? 'idle' : urgent ? 'urgent' : total ? 'todo' : 'ok'; const sum = !S.a ? '불러오는 중' : urgent ? `급한 일 ${urgent}건 · 전체 ${total}건` : total ? `처리할 일 ${total}건` : '오늘 처리할 일 없음'; fab.dataset.st = st;
       const sig = `${VERSION}|${st}|${sum}|${urgent || total || 'ok'}`;
-      if (fab.dataset.sig !== sig) { fab.dataset.sig = sig; fab.innerHTML = `<span class="lg">${brandImage}</span><span class="t">GW 비서</span><span class="v" title="설치된 버전">v${esc(VERSION)}</span><span class="sm">${sum}</span>${S.a ? `<span class="b">${urgent || total || '✓'}</span>` : ''}<kbd>Alt G</kbd>`; } }
+      if (fab.dataset.sig !== sig) { fab.dataset.sig = sig; fab.innerHTML = `<span class="lg">${mascotImage}</span><span class="t">GW 비서</span><span class="v" title="설치된 버전">v${esc(VERSION)}</span><span class="sm">${sum}</span>${S.a ? `<span class="b">${urgent || total || '✓'}</span>` : ''}<kbd>Alt G</kbd>`; } }
   }
   // 설치된 버전과 갱신 상태(왼쪽 메뉴 아래 · 접힌 런처 버튼).
   function versionInfo() {
@@ -103,7 +103,7 @@
     b.innerHTML = parts.join('');
   }
   const MODNAME = {mail: '메일', approval: '전자결재', notice: '공지', schedule: '일정', attendance: '근태', leave: '연차', budget: '예산', alerts: '알림'};
-  const VIEW_ICON = {docs: 'search', home: 'home', today: 'inbox', overview: 'chart', approval: 'doc', mail: 'mail', search: 'expand', board: 'board', calendar: 'cal', gcal: 'gcal', gsync: 'gcal', budget: 'wallet', attendance: 'clock', resource: 'car', report: 'report', settings: 'gear'};
+  const VIEW_ICON = {notifications: 'bell', people: 'user', docs: 'search', home: 'home', today: 'inbox', overview: 'chart', approval: 'doc', mail: 'mail', search: 'expand', board: 'board', calendar: 'cal', gcal: 'gcal', gsync: 'gcal', budget: 'wallet', attendance: 'clock', resource: 'car', report: 'report', settings: 'gear'};
   function renderNav() {
     const u = S.a ? S.a.unknown : {};
     const mine = S.a ? mineVisible() : [];
@@ -127,9 +127,10 @@
     if (!S.a) { el.innerHTML = S.error && S.error !== 'SESSION' ? `<div class="empty"><div class="ill">${ic('alert')}</div><b>자료를 읽지 못했습니다</b>${esc(S.error)}<div class="acts" style="justify-content:center"><button class="btn primary" data-act="refresh">다시 시도</button></div></div>` : `<div class="pgh"><h1>그룹웨어 자료를 읽는 중입니다</h1><span class="spin"></span></div><div class="list">${'<div class="sk row"></div>'.repeat(6)}</div>`; return; }
     const scroll = el.scrollTop;
     if (S.view === 'home' && typeof homePartialRefresh === 'function' && homePartialRefresh()) return; // 홈이 이미 그려져 있으면 입력창을 건드리지 않고 요약만 갱신
-    const fn = {docs: vDocs, home: vHome, today: vToday, overview: vOverview, approval: vApproval, mail: vMail, search: vSearch, board: vBoard, calendar: vCalendar, gcal: vGcal, gsync: vGsync, budget: vBudget, attendance: vAttendance, resource: vResource, report: vReport, settings: vSettings}[S.view] || vToday;
+    const fn = {notifications: vNotifications, people: vPeople, docs: vDocs, home: vHome, today: vToday, overview: vOverview, approval: vApproval, mail: vMail, search: vSearch, board: vBoard, calendar: vCalendar, gcal: vGcal, gsync: vGsync, budget: vBudget, attendance: vAttendance, resource: vResource, report: vReport, settings: vSettings}[S.view] || vToday;
     el.innerHTML = viewTabs() + fn();
     el.scrollTop = scroll;
+    if (S.view === 'notifications' && NTF.items === null && !NTF.loading && !NTF.error) { loadNotifications(); return; }
     if (S.view === 'report') { const f = $('#briefFrame'); if (f) f.srcdoc = R.renderHtml(S.a); }
     if (S.view === 'budget' && !S.budget.table && !S.budget.busy) loadBudget();
     if (S.view === 'attendance' && !S.att.rows && !S.att.busy) loadAttendance();

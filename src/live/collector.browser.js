@@ -31,7 +31,7 @@
     '/personal/hpd0550/0hp00002', '/personal/hpd0550/0hp00003',
     '/nonprofit/NCC0610/0BN00002', '/nonprofit/popup/0BN00001', '/system/codepickers/CP0001A0001',
     '/event/event02A01',
-    '/gw/APIHandler/gw018A02',
+    '/gw/APIHandler/gw018A02', '/gw/APIHandler/gw102A01', '/gw/APIHandler/gw102A02',
     '/ea/ea059A02',
   ]);
 
@@ -492,6 +492,20 @@
     return {alerts};
   }
 
+  // The organization screen's own tree and department roster endpoints. No writes or profile changes.
+  async function organizationTree() {
+    context();
+    const data = await call('/gw/APIHandler/gw102A01', {popupType:'main', selectedType:'', isAllCompShow:false, compFilter:'', isTreeChecked:'', isTreeAllOpen:false, isPartYn:false, parentSeq:'0', deptPath:''});
+    if (!Array.isArray(data?.treeList)) throw new GwError('BAD_RESPONSE', '조직도 목록 형식을 확인할 수 없습니다.');
+    return data.treeList.map(x => ({key: str(x.keySeq || x.key, 40), parent: str(x.parentKeySeq || x.parentKey || x.parentSeq, 40), name: str(x.text || x.labelText || x.name || x.deptName || x.compName, 100), count: num(x.childUserCnt), orgGubun: str(x.orgGubun, 10)}));
+  }
+  async function organizationMembers(key) {
+    context(); const k=String(key || ''); if (!/^[dcb][0-9]+$/.test(k)) throw new GwError('BAD_ORG', '올바른 조직을 선택하세요.');
+    const data = await call('/gw/APIHandler/gw102A02', {orderText:'', selectedId:k.slice(1), orgGubun:k[0], popupType:'main', selectedType:'tree', isAllCompShow:false, searchDiv:'all', searchText:'', isBdayOption:'2', isJoinDayOption:'0', isOrganizationDisplayOption:'0|5|', isGridListDisplayOption:'0', isLoginIdOption:'0'});
+    if (!Array.isArray(data)) throw new GwError('BAD_RESPONSE', '구성원 목록 형식을 확인할 수 없습니다.');
+    return data.map(x => ({name:str(x.empName,40), dept:str(x.deptName,80), duty:str(x.dutyName,30), position:str(x.positionName,30), tel:str(x.telNum,30), extension:str(x.extNum,30), email:str(x.emailAddr,80), work:str(x.mainWork,300)}));
+  }
+
   // ---------- on-demand functions ----------
   async function search(keyword, {types = ['doc', 'mail', 'board', 'file', 'schedule', 'person', 'contact'], pageSize = 10, page = 1, from = '', to = ''} = {}) {
     const kw = String(keyword || '').trim();
@@ -890,7 +904,7 @@
   }
 
   window.BWYFGW = Object.freeze({
-    version: VERSION, collect, call, search, budgetCatalog, budgetProject, budgetAll, budgetLedger, budgetMonthly, attendanceDays, teamAttendance, teamPlanned, resourceList, resourceBookings, resourceDetail, resourceCheck, reserveResource, routingHistory, submittedRange, approvalPage, approvalFallback, docPreview, frequentForms, findReply, mailDetail, mailAttachment, mailAttachmentPreview, saveBlob,
+    version: VERSION, collect, call, search, organizationTree, organizationMembers, budgetCatalog, budgetProject, budgetAll, budgetLedger, budgetMonthly, attendanceDays, teamAttendance, teamPlanned, resourceList, resourceBookings, resourceDetail, resourceCheck, reserveResource, routingHistory, submittedRange, approvalPage, approvalFallback, docPreview, frequentForms, findReply, mailDetail, mailAttachment, mailAttachmentPreview, saveBlob,
     context: () => { const c = context(); return {name: c.name, deptName: c.deptName, compName: c.compName, duty: c.duty, position: c.position}; },
     readOnlyEndpoints: () => [...READ_ONLY], routes: ROUTES, links: LINKS, searchLabels: SEARCH_LABELS, defaults: DEFAULTS,
   });

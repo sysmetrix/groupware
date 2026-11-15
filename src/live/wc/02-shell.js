@@ -3,6 +3,8 @@
   // ---------- shell ----------
   const BRAND_ICON = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><defs><linearGradient id="a" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#447f91"/><stop offset=".53" stop-color="#24596d"/><stop offset="1" stop-color="#173e54"/></linearGradient><linearGradient id="b" x1=".1" y1="0" x2=".9" y2="1"><stop stop-color="#fff"/><stop offset="1" stop-color="#ccdee3"/></linearGradient></defs><rect x="7" y="10" width="114" height="112" rx="29" fill="#102d40" opacity=".2"/><rect x="7" y="5" width="114" height="114" rx="29" fill="url(#a)"/><path d="M20 36C20 22 29 15 43 15h42c12 0 20 6 24 16-18-10-70-11-89 5Z" fill="#fff" opacity=".12"/><rect x="28" y="26" width="72" height="71" rx="13" fill="#12384a" opacity=".36"/><rect x="28" y="23" width="72" height="71" rx="13" fill="url(#b)"/><path d="M44 44h39M44 57h26" fill="none" stroke="#477482" stroke-width="7" stroke-linecap="round"/><circle cx="79" cy="75" r="18" fill="#d8ae66"/><circle cx="79" cy="72" r="18" fill="#e9c98c"/><path d="m71 72 6 6 11-13" fill="none" stroke="#234d5a" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>');
   const brandImage = '<img src="' + BRAND_ICON + '" alt="" aria-hidden="true">';
+  // A friendly assistant character, kept separate from the established in-app brand.
+  const mascotImage = '<svg viewBox="0 0 64 64" width="36" height="36" aria-hidden="true" focusable="false"><circle cx="32" cy="32" r="30" fill="#d9f1ed"/><path d="M20 26c0-11 5-17 12-17s12 6 12 17" fill="#255c70"/><rect x="15" y="21" width="34" height="28" rx="13" fill="#fff" stroke="#255c70" stroke-width="2.5"/><circle cx="26" cy="32" r="2.5" fill="#255c70"/><circle cx="38" cy="32" r="2.5" fill="#255c70"/><path d="M27 39q5 4 10 0" fill="none" stroke="#255c70" stroke-width="2.5" stroke-linecap="round"/><circle cx="20" cy="38" r="2.5" fill="#f5b9a8"/><circle cx="44" cy="38" r="2.5" fill="#f5b9a8"/><path d="M30 12h4M32 9v6" stroke="#f0bd68" stroke-width="2.5" stroke-linecap="round"/></svg>';
   const host = document.createElement('div');
   host.id = 'bwyfgw-workcenter';
   host.style.cssText = 'position:fixed;inset:0;z-index:2147483600;display:none';
@@ -29,7 +31,8 @@
 #bwyfgw-wc-fab:hover{box-shadow:0 0 0 1px rgba(165,180,255,.5) inset,0 1px 2px rgba(0,0,0,.2),0 10px 28px -10px rgba(15,23,42,.6);padding-right:9px}
 #bwyfgw-wc-fab:active{transform:scale(.97)}
 #bwyfgw-wc-fab:focus-visible{outline:2px solid #a5b4ff;outline-offset:3px}
-#bwyfgw-wc-fab .lg{width:22px;height:22px;border-radius:7px;flex:0 0 auto;display:grid;place-items:center;background:transparent;box-shadow:none;position:relative}
+#bwyfgw-wc-fab .lg{width:36px;height:36px;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;background:transparent;box-shadow:none;position:relative}
+#bwyfgw-wc-fab .lg svg{width:36px;height:36px;display:block}
 #bwyfgw-wc-fab .lg img{width:100%;height:100%;display:block;border-radius:6px}
 #bwyfgw-wc-fab .t{position:relative;white-space:nowrap}
 #bwyfgw-wc-fab .v{position:relative;white-space:nowrap;font-size:12px;font-weight:600;color:#aab2e8;font-variant-numeric:tabular-nums}
@@ -59,7 +62,7 @@
   fab.addEventListener('dblclick', e => { if (!e.altKey) return; e.stopPropagation(); try { localStorage.removeItem('bwyfgw:fabpos'); } catch {} fab.style.top = ''; fab.style.left = ''; fab.style.right = ''; fab.style.bottom = ''; });
   window.addEventListener('resize', () => { const r = fab.getBoundingClientRect(); if (r.bottom > innerHeight - 4) fab.style.top = Math.max(4, innerHeight - r.height - 8) + 'px'; });
   fab.addEventListener('mousemove', e => { const r = fab.getBoundingClientRect(); fab.style.setProperty('--mx', (e.clientX - r.left) + 'px'); fab.style.setProperty('--my', (e.clientY - r.top) + 'px'); });
-  fab.innerHTML = '<span class="lg">' + brandImage + '</span><span class="t">GW 비서</span>';
+  fab.innerHTML = '<span class="lg">' + mascotImage + '</span><span class="t">GW 비서</span>';
   // One-time bubble after closing: tells where the work center went.
   const tipBubble = document.createElement('div');
   tipBubble.style.cssText = 'position:fixed;right:22px;bottom:70px;z-index:2147483500;background:#202124;color:#fff;font:13px "Malgun Gothic",sans-serif;padding:9px 13px;border-radius:9px;box-shadow:0 4px 14px rgba(0,0,0,.3);display:none;max-width:280px;line-height:1.5';
