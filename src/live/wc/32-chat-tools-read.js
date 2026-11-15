@@ -99,7 +99,7 @@
   chatRegisterTool({
     name: 'get_schedule', label: '일정 확인', kind: 'read',
     description: '내 일정(그룹웨어 일정, 내 휴가·출장·교육, 시간외 근무 신청, 기한). date는 YYYY-MM-DD 또는 today/tomorrow, days는 1~7.',
-    params: {type: 'object', properties: {date: {type: 'string'}, days: {type: 'number'}}},
+    params: {type: 'object', properties: {date: {type: 'string'}, days: {type: 'number'}, query: {type: 'string', description: '그룹웨어 일정 제목의 검색어. 구글 캘린더는 검색하지 않음'}}},
     run: async a => {
       if (!S.a || !S.raw) return chatNotReady();
       let d0 = chatDateArg(a.date);
@@ -107,7 +107,8 @@
       let n = Math.min(Math.max(Number(a.days) || 1, 1), 7);
       { const t = today(), endIso = chatAddDays(d0, n - 1); if (d0 < t && endIso >= t) { n = Math.round((Date.parse(endIso) - Date.parse(t)) / 86400000) + 1; d0 = t; } } // "이번 주"는 지난 요일을 빼고 오늘부터
       const isos = Array.from({length: n}, (_, i) => chatAddDays(d0, i));
-      const teamOk = await chatLoadTeam(isos);
+      const query = typeof a.query === 'string' ? a.query.trim().slice(0, 50) : '';
+      const teamOk = query ? true : await chatLoadTeam(isos);
       const scheduleData = S.raw.data && S.raw.data.schedule;
       const scheduleOk = !!(scheduleData && Array.isArray(scheduleData.events) && (!S.raw.status || !S.raw.status.schedule || S.raw.status.schedule.ok !== false));
       const from = String(scheduleData && scheduleData.start || '').replace(/-/g, '').slice(0, 8);
@@ -116,20 +117,20 @@
       const sched = scheduleOk ? scheduleData.events : [];
       const days = isos.map(iso => {
         const d8 = iso.replace(/-/g, ''), rows = [];
-        for (const e of sched) { const s = String(e.start || ''), z = String(e.end || e.start || ''); if (s.slice(0, 8) <= d8 && z.slice(0, 8) >= d8) rows.push({from: e.allDay ? '' : s.slice(8, 10) + ':' + s.slice(10, 12), to: e.allDay || z.length < 12 || z.slice(0, 8) !== d8 ? '' : z.slice(8, 10) + ':' + z.slice(10, 12), label: e.title}); }
+        for (const e of sched) { const s = String(e.start || ''), z = String(e.end || e.start || ''); if ((!query || String(e.title || '').replace(/\s/g, '').toLowerCase().includes(query.replace(/\s/g, '').toLowerCase())) && s.slice(0, 8) <= d8 && z.slice(0, 8) >= d8) rows.push({from: e.allDay ? '' : s.slice(8, 10) + ':' + s.slice(10, 12), to: e.allDay || z.length < 12 || z.slice(0, 8) !== d8 ? '' : z.slice(8, 10) + ':' + z.slice(10, 12), label: e.title}); }
         const tm = S.team && S.team[d8.slice(0, 6)];
-        for (const x of (tm && tm.cal && tm.cal.byDate[d8]) || []) if (x.mine) rows.push({from: x.time ? x.time.slice(0, 5) : '', to: x.time ? x.time.slice(6) : '', label: x.kind === 'ot' ? '시간외 근무 신청' : x.label + (x.place ? ' · ' + x.place : '')});
-        for (const dl of S.a.deadlines || []) if (dl.date === iso) rows.push({from: dl.time || '', to: '', label: '기한: ' + dl.title});
+        for (const x of (tm && tm.cal && tm.cal.byDate[d8]) || []) if (!query && x.mine) rows.push({from: x.time ? x.time.slice(0, 5) : '', to: x.time ? x.time.slice(6) : '', label: x.kind === 'ot' ? '시간외 근무 신청' : x.label + (x.place ? ' · ' + x.place : '')});
+        for (const dl of S.a.deadlines || []) if (!query && dl.date === iso) rows.push({from: dl.time || '', to: '', label: '기한: ' + dl.title});
         rows.sort((x, y) => (x.from || '').localeCompare(y.from || ''));
         return {iso, rows};
       });
       const total = days.reduce((s, d) => s + d.rows.length, 0);
-      const lead = n === 1 ? `${chatMd(d0)} 일정` : `${chatMd(d0)}부터 ${n}일간 일정`;
+      const lead = (n === 1 ? `${chatMd(d0)} 일정` : `${chatMd(d0)}부터 ${n}일간 일정`) + (query ? ` 중 제목에 “${query}”가 포함된 항목` : '');
       const gaps = [];
       if (!scheduleOk) gaps.push('그룹웨어 일정을 불러오지 못했습니다');
       else if (!inRange) gaps.push('요청 날짜가 그룹웨어 일정 수집 범위 밖이거나 범위가 확인되지 않습니다');
       if (!teamOk) gaps.push('근태 자료를 불러오지 못해 휴가·출장이 빠졌을 수 있습니다');
-      const source = '출처: 그룹웨어 일정·내 근태·기한. 구글 캘린더와 자원 예약은 포함되지 않습니다.';
+      const source = query ? '출처: 수집된 그룹웨어 일정 제목만 검색했습니다. 구글 캘린더·근태·기한·자원 예약은 포함되지 않습니다.' : '출처: 그룹웨어 일정·내 근태·기한. 구글 캘린더와 자원 예약은 포함되지 않습니다.';
       const warn = gaps.length ? `\n확인 제한: ${gaps.join('; ')}.` : '';
       if (!total) return {ok: !gaps.length, text: `${lead}${gaps.length ? '은 확인된 항목이 없지만 전체 여부는 알 수 없습니다' : '은 없습니다'}.\n${source}${warn}`, data: {days: [], complete: !gaps.length}, cards: []};
       const text = `${lead}에서 확인된 항목 ${total}건입니다.\n${source}${warn}`;

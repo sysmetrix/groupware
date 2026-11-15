@@ -45,3 +45,10 @@ test('미래 날짜의 첫 할 일은 현재 기준이라고 표시한다',async
  const a=harness(); const r=await a.CHAT_TOOLS.get('list_tasks').run({limit:1,requested_date:'2026-11-16'});
  assert.match(r.text,/현재 수집된 목록의 우선순위/); assert.match(r.text,/2026-11-16/); assert.equal(r.cards[0].items.length,1);
 });
+
+test('행사명 일정 검색은 날짜 범위 안의 제목만 반환하고 범위 제한을 명시한다', async()=>{
+ const a=harness([], {S:{settings:{}, a:{deadlines:[]},raw:{data:{schedule:{start:'20261114',end:'20261120',events:[{title:'이주배경 행사',start:'202611151000',end:'202611151100'},{title:'다른 일정',start:'202611151000',end:'202611151100'}]}}},team:{}}});
+ const t=a.CHAT_TOOLS.get('get_schedule');
+ const r=await t.run({date:'2026-11-15',query:'이주 배경'});assert.match(r.text,/1건/);assert.match(r.text,/구글 캘린더/);assert.equal(r.cards[0].items.length,1);assert.equal(r.cards[0].items[0].label,'이주배경 행사');
+ const missing=await t.run({date:'2026-11-25',query:'이주배경'});assert.equal(missing.ok,false);assert.match(missing.text,/전체 여부는 알 수 없습니다/);
+});

@@ -37,3 +37,10 @@ test('행사 조건을 무시하고 일반 일정 조회로 없다고 답하지 
  let n=0;a.api.chatRegisterTool({name:'get_schedule',kind:'read',params:{type:'object',properties:{date:{type:'string'}}},run:async()=>{n++;return {ok:true,text:'일정이 없습니다'};}});
  await a.api.chatSend('이주배경 일정 있잖아');assert.equal(n,0);assert.match(JSON.stringify(a.requests[1]),/특정 행사/);
 });
+
+test('복합 사업·행사 표현은 직원 근태와 일반 일정으로 우회하지 못한다',async()=>{
+ for(const text of ['리빙랩 행사 일정 알려줘','이주배경 사업 일정 언제야']) {
+  const a=setup([response([{functionCall:{name:'get_staff_status',args:{name:'리빙랩'}}}]),response([{text:'행사 일정을 말씀하시나요?'}])]);
+  await a.api.chatSend(text); assert.equal(a.calls.length,0);assert.match(JSON.stringify(a.requests[1]),/조회하지 않았습니다/);
+ }
+});

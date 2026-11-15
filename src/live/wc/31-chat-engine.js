@@ -94,7 +94,7 @@
     // 특정 행사 조건을 지원하지 않는 일반 일정 도구가 조건을 버리고 '없음'이라고 답하지 않도록 한다.
     if (ctx.viaAi && name === 'get_schedule' && /(일정|스케줄|약속|회의)/.test(ctx.userText || '') && !R.chatIntent(ctx.userText, new Date()).tool) return {ok: false, text: '특정 행사나 사업을 일반 일정 조회만으로 확인할 수 없습니다. 일정의 출처와 날짜를 확인해 주세요. 구글 캘린더는 직접 읽지 않습니다.'};
     // AI가 사업·행사명을 직원으로 추정한 경우에도 실제 직원 근태를 조회하지 않는다.
-    if (ctx.viaAi && name === 'get_staff_status' && /(일정|스케줄|약속|회의)/.test(ctx.userText || '') && !/(님|씨|팀장|실장|과장|대리|주임|센터장|선생님|직원|출장|휴가|연차|교육|근태|자리|어디|계셔|누가)/.test(ctx.userText || '')) return {ok: false, text: '행사·사업 일정인지 직원 근태 일정인지 명확하지 않아 직원 근태를 조회하지 않았습니다. 대상을 확인해 주세요.'};
+    if (ctx.viaAi && name === 'get_staff_status' && /(일정|스케줄|약속|회의)/.test(ctx.userText || '') && (/(사업|행사|프로그램|프로젝트)/.test(ctx.userText || '') || !/(님|씨|팀장|실장|과장|대리|주임|센터장|선생님|직원|출장|휴가|연차|교육|근태|자리|어디|계셔|누가)/.test(ctx.userText || ''))) return {ok: false, text: '행사·사업 일정인지 직원 근태 일정인지 명확하지 않아 직원 근태를 조회하지 않았습니다. 대상을 확인해 주세요.'};
     const chip = {name, label: def.label || name, state: 'run'};
     msg.tools.push(chip); chatRefresh();
     if (ctx.auto && (def.kind === 'act' || CHAT_AUTO_BLOCK.has(name))) { chip.state = 'err'; return {ok: false, text: '자동 실행에서는 조회만 합니다. 신청·예약·작성·화면 이동은 직접 요청해 주세요.'}; }
@@ -309,7 +309,7 @@
     try {
       const ready = !auto && chatMode().ready && allowed('aiAssistant');
       const weekday = /^(?:(?:오늘|내일|모레|어제|그제|그저께|\d{4}[-./]\d{1,2}[-./]\d{1,2}|\d{1,2}\s*월\s*\d{1,2}\s*일|\d{1,2}[/.]\d{1,2})\s*)?(?:은|는|이|가)?\s*(?:무슨|몇)\s*요일(?:이야|인가요|이에요|입니까|인지|이니|이죠|일까|알려줘|인가)?[?？!\s]*$/.test(text);
-      let it = weekday ? {tool: 'get_weekday', args: {date: (R.chatParseDate(text, new Date()) || {}).date || (/\d/.test(text) ? 'invalid' : 'today')}, confidence: 1} : R.chatFollowupIntent(text, st.ctx.lastRead, new Date()) || R.chatIntent(text, new Date());
+      let it = weekday ? {tool: 'get_weekday', args: {date: (R.chatParseDate(text, new Date()) || {}).date || (/\d/.test(text) ? 'invalid' : 'today')}, confidence: 1} : R.chatScheduleFollowup(text, st.ctx.lastRead) || R.chatFollowupIntent(text, st.ctx.lastRead, new Date()) || R.chatIntent(text, new Date());
       // 우선순위 질문에만 표시 개수를 좁힌다. 목록 순서는 기존 홈 기준을 유지한다.
       if (it.tool === 'list_tasks' && /(?:제일|가장)\s*먼저|맨\s*먼저/.test(text) && !/(신청|등록|삭제|변경|보내|예약)/.test(text)) {
         const target = R.chatParseDate(text, new Date());
