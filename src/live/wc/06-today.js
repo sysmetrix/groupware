@@ -30,8 +30,15 @@
 <div id="qlist">${queueRows()}</div>`;
   }
 
+  // 렌더링과 방향키·범위 선택이 같은 순서와 조건을 사용한다.
+  function todayQueue() {
+    const all = queue(), lvl = S.filter.level;
+    if ((S.todayTab || 'mine') === 'ref') return all.filter(x => !isMine(x));
+    const mine = all.filter(x => isMine(x) && stateOf(x) !== 'wait').filter(x => lvl === 'all' || (lvl === 'urgent' ? ['overdue', 'urgent'].includes(stateOf(x)) : stateOf(x) === lvl));
+    return ['urgent', 'todo', 'check', 'confirm'].flatMap(st => mine.filter(x => STATE_GROUP[stateOf(x)] === STATE_GROUP[st]));
+  }
   const queueRows = () => {
-    const all = queue();
+    const all = todayQueue();
     const lvl = S.filter.level;
     const tab = S.todayTab || 'mine';
 
@@ -43,7 +50,7 @@
       return `<p class="muted lean-note">부서 문서담당자가 처리하는 공문입니다. 내 업무라면 줄 끝의 ⋯에서 “내 일로 지정”을 누르세요.</p><div class="list" role="list">${refs.map(x => actionRow(x, true)).join('')}</div>`;
     }
 
-    const mine = all.filter(isMine).filter(x => lvl === 'all' || (lvl === 'urgent' ? ['overdue', 'urgent'].includes(stateOf(x)) : stateOf(x) === lvl));
+    const mine = all;
     const groups = [];
     for (const st of ['urgent', 'todo', 'check', 'confirm', 'wait']) {
       const xs = mine.filter(x => STATE_GROUP[stateOf(x)] === STATE_GROUP[st]);
@@ -70,7 +77,7 @@
     return `<div class="row lean ${ref ? 'ref' : ''} ${S.sel && S.sel.key === x.key ? 'sel' : ''} ${isHidden(x.key) || isSnoozed(x.key) ? 'hid' : ''} ${S.multi.has(x.key) ? 'multi' : ''}" role="listitem" tabindex="0" data-act="selAction" data-k="${k}" title="${esc(tip)}">
       ${ref ? `<span class="type-icon">${ic(typeIcon)}</span>` : `<input class="ck" type="checkbox" data-act="multi" data-k="${k}" ${S.multi.has(x.key) ? 'checked' : ''} aria-label="선택" title="여러 건 선택">`}
       <span class="bdg ${ref ? 'info' : st}">${ref ? '참고' : STATE_NAME[st]}</span>
-      <div class="mn"><span class="t">${S.newKeys.has(x.key) ? '<span class="bdg new">새</span> ' : ''}${esc(x.title)}</span><span class="what ${ref ? '' : st}">${esc(head)}</span></div>
+      <div class="mn"><span class="t">${S.newKeys.has(x.key) ? '<span class="bdg new" style="background:var(--fg);color:var(--bg)">새</span> ' : ''}${esc(x.title)}</span><span class="what ${ref ? '' : st}">${esc(head)}</span></div>
       ${dl}${note ? `<span class="bdg tag">${esc(note)}</span>` : ''}
       <span class="w">${esc(shortWhen(x.when))}</span>
       <span class="qa">${done ? `<button class="btn sm ghost icon" data-act="markDone" data-k="${k}" title="끝난 일이면 목록에서 완료 처리" aria-label="완료 처리">${ic('check')}</button>` : ''}<button class="btn sm ghost icon" data-act="rowMenu" data-k="${k}" title="미루기·숨기기·할 일에 추가" aria-label="더 보기">${ic('more')}</button></span>

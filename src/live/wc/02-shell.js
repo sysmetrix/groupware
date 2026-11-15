@@ -111,7 +111,7 @@
   };
   const ic = (n, extra = '') => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true" ${extra}>${ICONS[n] || ''}</svg>`;
   root.innerHTML = `<style>${WC_CSS}</style><div class="wc nopane" id="wc" role="region" aria-label="GW 비서"><header role="banner">
-<button class="home" data-act="home" title="처음 화면(오늘 할 일)으로 · H" aria-label="GW 비서 처음 화면"><span class="logo">${brandImage}</span><span class="brand-name"><b>GW 비서</b><small id="orgName">부천여성청소년재단</small></span></button>
+<button class="skip-main" data-act="skipMain">본문으로 건너뛰기</button><button class="home" data-act="home" title="처음 화면(오늘 할 일)으로 · H" aria-label="GW 비서 처음 화면"><span class="logo">${brandImage}</span><span class="brand-name"><b>GW 비서</b><small id="orgName">부천여성청소년재단</small></span></button>
 <label class="srch" title="통합검색 또는 명령 (Ctrl+K)">${ic('search')}<input id="gsearch" placeholder="메일·문서·사람 검색 또는 명령" autocomplete="off" aria-label="통합검색"><kbd>Ctrl K</kbd></label>
 <span class="sp"></span>${window.BWYFGW_DEMO ? '<span class="demo-pill" title="로그인 없이 살펴보는 화면입니다. 보이는 기관·사람·문서·금액은 모두 지어낸 것이며 그룹웨어에는 아무 요청도 보내지 않습니다.">둘러보기 · 지어낸 자료</span>' : ''}
 <button class="stat" id="meta" data-act="refresh" title="지금 다시 읽기 (R)"></button>

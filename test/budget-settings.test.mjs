@@ -4,16 +4,16 @@ import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 
 const source = readFileSync(new URL('../src/live/wc/12-report-settings.js', import.meta.url), 'utf8');
-const fn = source.slice(source.indexOf('  function saveBudgetRows()'), source.indexOf('\n  }', source.indexOf('  function saveBudgetRows()')) + 4);
+const fn = source.slice(source.indexOf('  function settingsSaveStatus('), source.indexOf('  function resetDoneMarks()'));
 function fixture(rows, result = true) {
   const inputs = rows.flatMap((row, i) => Object.entries(row).map(([b, value]) => ({dataset: {i: String(i), b}, value})));
   const original = [{project: 'OLD', label: '기존', filter: '1'}, {project: 'KEEP', label: '', filter: ''}];
   const S = {settings: {budget: original}, budget: {table: {cached: true}}};
   const messages = [], flags = new Set(['on']); let calls = 0;
   const saved = {classList: {add: v => flags.add(v), remove: v => flags.delete(v)}};
-  const context = {S, root: {querySelectorAll: () => inputs}, $: () => saved, toast: v => messages.push(v), saveLocal: () => { calls++; return result; }, setTimeout: () => 1};
+  const context = {S, root: {querySelectorAll: () => inputs}, $: () => saved, toast: v => messages.push(v), saveLocal: () => { calls++; return result; }, setTimeout: () => 1, clearTimeout: () => {}};
   const save = runInNewContext(`(function() { ${fn}; return saveBudgetRows; })()`, context);
-  return {save, S, original, inputs, messages, flags, get calls() { return calls; }};
+  return {save, S, original, inputs, messages, flags, saved, get calls() { return calls; }};
 }
 test('invalid or blank project preserves every existing row and input without saving', () => {
   for (const project of ['', '  ', 'bad-code', '코드!']) {
@@ -22,8 +22,7 @@ test('invalid or blank project preserves every existing row and input without sa
     assert.strictEqual(f.S.settings.budget, f.original);
     assert.deepEqual(f.S.budget.table, {cached: true});
     assert.equal(JSON.stringify(f.inputs), before);
-    assert.equal(f.calls, 0); assert.equal(f.flags.has('on'), false);
-    assert.match(f.messages[0], /사업 코드/);
+    assert.equal(f.calls, 0); assert.match(f.messages[0], /사업 코드/);
   }
 });
 test('valid rows save together and trim fields', () => {
@@ -34,7 +33,8 @@ test('valid rows save together and trim fields', () => {
 });
 test('storage failure is reported without a saved indicator or clearing input', () => {
   const f = fixture([{project: 'A201', label: '입력', filter: ''}], false); const before = JSON.stringify(f.inputs);
-  f.save(); assert.equal(f.calls, 1); assert.equal(f.flags.has('on'), false);
+  f.save(); assert.equal(f.calls, 1); assert.match(f.S.settings.budget[0].project, /OLD/);
+  assert.match(f.saved.textContent, /저장 실패/); assert.doesNotMatch(f.saved.textContent, /^저장됨$/);
   assert.match(f.messages[0], /저장하지 못/); assert.equal(JSON.stringify(f.inputs), before);
 });
 test('zero rows are deliberately saved as empty', () => {

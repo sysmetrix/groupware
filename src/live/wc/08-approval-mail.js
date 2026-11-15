@@ -54,6 +54,12 @@ ${docs.length < total ? `<div class="acts"><button class="btn" data-act="apMore"
   }
 
   // ----- 메일 -----
+  const mailRefKey = (box, uid) => JSON.stringify([String(box || ''), String(uid || '')]);
+  // The legacy event handler selects by uid only. Fail closed on conflicting boxes
+  // until the detail/event pipeline accepts a full MailRef.
+  function mailSearchSelectable(x, items) {
+    return !!x.uid && !items.some(y => y.uid === x.uid && mailRefKey(y.box, y.uid) !== mailRefKey(x.box, x.uid));
+  }
   const cleanPreview = p => String(p || '').replace(/대용량 파일첨부[\s\S]*?보관\)/, '').replace(/\s+/g, ' ').trim();
   function mailDateValue(value) {
     const s = String(value || '').trim();
@@ -84,27 +90,38 @@ ${docs.length < total ? `<div class="acts"><button class="btn" data-act="apMore"
   function vMail() {
     const m = S.a.mail;
     const all = sortMailNewest([...(S.raw.data.mail?.inbox.records || []), ...(S.raw.data.mail?.otherUnseen || [])]);
-    const actKeys = new Map(S.a.actions.filter(x => x.type === 'mail').map(x => [x.ref.box + x.ref.uid, x]));
+    const actKeys = new Map(S.a.actions.filter(x => x.type === 'mail').map(x => [mailRefKey(x.ref.box, x.ref.uid), x]));
     const f = S.mailFilter;
-    const rows = all.filter(x => f === 'all' || (f === 'unread' && !x.seen) || (f === 'todo' && actKeys.has(x.box + x.uid) && isMine(actKeys.get(x.box + x.uid))) || (f === 'attach' && (x.attach || /대용량 파일첨부/.test(x.preview))) || (f === 'other' && x.box !== 'INBOX'));
+    const rows = all.filter(x => f === 'all' || (f === 'unread' && !x.seen) || (f === 'todo' && actKeys.has(mailRefKey(x.box, x.uid)) && isMine(actKeys.get(mailRefKey(x.box, x.uid)))) || (f === 'attach' && (x.attach || /대용량 파일첨부/.test(x.preview))) || (f === 'other' && x.box !== 'INBOX'));
     const sr = S.mailSearch.res;
-    const rowHtml = x => { const a = actKeys.get(x.box + x.uid); const st = a ? stateOf(a) : ''; const att = x.attach || /대용량 파일첨부/.test(x.preview); return `<div class="row ${S.sel && S.sel.type === 'mail' && S.sel.box === x.box && S.sel.uid === x.uid ? 'sel' : ''}" role="listitem" tabindex="0" data-act="selMail" data-box="${esc(x.box)}" data-uid="${esc(x.uid)}" style="grid-template-columns:170px 1fr auto"><div style="${x.seen ? '' : 'font-weight:800'}">${x.seen ? '' : '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);margin-right:6px"></span>'}${esc(x.from)}</div><div class="mn"><div class="t" style="${x.seen ? 'font-weight:600' : ''}">${esc(x.subject || '(제목 없음)')}</div><div class="hl">${a && st !== 'info' ? `<span class="bdg ${st}">${STATE_NAME[st]}</span>` : ''}${att ? `<span class="bdg tag">${ic('clip')}첨부</span>` : ''}${x.box !== 'INBOX' ? `<span class="bdg tag">${esc(x.box)}</span>` : ''}<span class="muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:520px">${esc(cleanPreview(x.preview).slice(0, 90))}</span></div></div><div class="w">${esc(mailWhen(x.date))}</div></div>`; };
+    const rowHtml = x => { const a = actKeys.get(mailRefKey(x.box, x.uid)); const st = a ? stateOf(a) : ''; const att = x.attach || /대용량 파일첨부/.test(x.preview); return `<div class="row ${S.sel && S.sel.type === 'mail' && S.sel.box === x.box && S.sel.uid === x.uid ? 'sel' : ''}" role="listitem" tabindex="0" data-act="selMail" data-box="${esc(x.box)}" data-uid="${esc(x.uid)}" style="grid-template-columns:170px 1fr auto"><div style="${x.seen ? '' : 'font-weight:800'}">${x.seen ? '' : '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);margin-right:6px"></span>'}${esc(x.from)}</div><div class="mn"><div class="t" style="${x.seen ? 'font-weight:600' : ''}">${esc(x.subject || '(제목 없음)')}</div><div class="hl">${a && st !== 'info' ? `<span class="bdg ${st}">${STATE_NAME[st]}</span>` : ''}${att ? `<span class="bdg tag">${ic('clip')}첨부</span>` : ''}${x.box !== 'INBOX' ? `<span class="bdg tag">${esc(x.box)}</span>` : ''}<span class="muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:520px">${esc(cleanPreview(x.preview).slice(0, 90))}</span></div></div><div class="w">${esc(mailWhen(x.date))}</div></div>`; };
     const listHtml = rows.length ? `<div class="list" role="list">${rows.map(rowHtml).join('')}</div>` : `<div class="list"><div class="empty"><b>해당하는 메일이 없습니다</b></div></div>`;
     return `${pgh('메일', `처리할 메일 ${S.a.actions.filter(x => x.type === 'mail' && isMine(x)).length}통 · 안 읽음 ${all.filter(x => !x.seen).length}통 · 최근 ${all.length}통`, `<button class="btn sm" data-act="openUrl" data-url="${esc(m.url)}" data-title="받은메일함">${ic('ext')}받은메일함</button><button class="btn sm primary" data-act="openUrl" data-url="${esc(GW.links.compose('plain'))}" data-title="새 메일 쓰기">${ic('plus')}새 메일</button>`)}
 <div class="bar"><div class="seg" role="tablist">${[['all', '전체'], ['todo', '처리할 메일'], ['unread', '안 읽음'], ['attach', '첨부 있음'], ['other', '내 메일함']].map(([k, n]) => `<button role="tab" aria-selected="${f === k}" class="${f === k ? 'on' : ''}" data-act="mailFilter" data-v="${k}">${n}</button>`).join('')}</div>
-<input class="inp grow" id="mailq" placeholder="메일 본문까지 검색 후 Enter" value="${esc(S.mailSearch.kw)}" aria-label="메일 검색">${S.mailSearch.busy ? '<span class="spin"></span>' : ''}</div>
-${sr ? `<h2>"${esc(sr.keyword)}" 검색 결과 ${sr.groups.mail?.total ?? 0}건 <button class="btn sm ghost" data-act="clearMailSearch">${ic('x')}지우기</button></h2><div class="list">${(sr.groups.mail?.items || []).map(x => `<div class="row" tabindex="0" data-act="selMailSearch" data-uid="${esc(x.uid)}" style="grid-template-columns:170px 1fr auto"><div>${esc(x.from)}</div><div class="mn"><div class="t">${hl(x.subject || '(제목 없음)', sr.keyword)}</div><div class="fx">${hl(x.snippet, sr.keyword)}</div></div><div class="w">${esc(shortWhen(x.date))}</div></div>`).join('') || '<div class="empty"><b>결과가 없습니다</b>다른 단어로 찾아보세요.</div>'}</div>` : ''}
+<input class="inp grow" id="mailq" placeholder="메일 본문까지 검색 후 Enter" value="${esc(S.mailSearch.kw)}" aria-label="메일 검색">${S.mailSearch.busy ? '<span class="spin"></span><button class="btn sm" data-act="clearMailSearch">검색 취소</button>' : ''}</div>
+${S.mailSearch.err ? `<div class="box errb" role="alert">${esc(S.mailSearch.err)}</div>` : ''}
+${sr ? `<h2>"${esc(sr.keyword)}" 검색 결과 ${sr.groups.mail?.total ?? 0}건 · ${(sr.groups.mail?.items || []).length}건 표시 <button class="btn sm ghost" data-act="clearMailSearch">${ic('x')}지우기</button></h2><div class="list">${(sr.groups.mail?.items || []).map(x => `<div class="row" ${mailSearchSelectable(x, sr.groups.mail.items) ? 'tabindex="0" data-act="selMailSearch"' : 'aria-disabled="true" title="메일 식별자가 불명확합니다. 그룹웨어 메일함에서 확인하세요."'} data-uid="${esc(x.uid)}" style="grid-template-columns:170px 1fr auto"><div>${esc(x.from)}</div><div class="mn"><div class="t">${hl(x.subject || '(제목 없음)', sr.keyword)}${mailSearchSelectable(x, sr.groups.mail.items) ? '' : ' · 식별 확인 필요'}</div><div class="fx">${hl(x.snippet, sr.keyword)}</div></div><div class="w">${esc(shortWhen(x.date))}</div></div>`).join('') || '<div class="empty"><b>결과가 없습니다</b>다른 단어로 찾아보세요.</div>'}</div>` : ''}
 <h2>최근 메일 · 최신순 <span class="muted" style="font-size:12px">조회된 ${rows.length}건</span></h2>
 <div class="muted" style="margin:4px 0 10px">받은메일함 최근 ${S.raw.data.mail?.inbox?.fetched ?? 0}건과 다른 메일함의 조회된 안 읽은 메일을 합쳐 받은 시각이 최근인 순서로 표시합니다. 전체 보관 메일은 그룹웨어 메일함 또는 검색에서 확인하세요.</div>
 ${listHtml}
 <p class="muted" style="margin-top:12px">메일 목록을 보는 것만으로는 읽음 처리되지 않습니다.</p>`;
   }
   async function runMailSearch(kw) {
-    S.mailSearch.kw = kw;
-    if (kw.length < 2) { toast('검색어를 두 글자 이상 입력하세요.'); return; }
-    S.mailSearch.busy = true; if (S.view === 'mail') renderMain();
-    try { S.mailSearch.res = await GW.search(kw, {types: ['mail'], pageSize: 20}); } catch (e) { toast('메일을 검색하지 못했습니다: ' + e.message); }
-    S.mailSearch.busy = false;
-    if (S.view === 'mail') renderMain();
+    const st = S.mailSearch, owner = currentKey;
+    const seq = st.seq = (st.seq || 0) + 1;
+    const valid = () => owner === currentKey && S.mailSearch === st && st.seq === seq && (typeof getUserKey !== 'function' || getUserKey() === owner);
+    if (!valid()) return;
+    kw = String(kw ?? '').trim();
+    st.kw = kw; st.res = null; st.err = ''; st.busy = false;
+    if (kw.length < 2) { toast('검색어를 두 글자 이상 입력하세요.'); if (S.view === 'mail') renderMain(); return; }
+    st.busy = true; if (S.view === 'mail') renderMain();
+    try {
+      const r = await GW.search(kw, {types: ['mail'], pageSize: 20});
+      if (!valid()) return;
+      const g = r?.groups?.mail;
+      if (g?.error) throw new Error(g.message || '메일 검색에 실패했습니다.');
+      if (!g || !Array.isArray(g.items)) throw new Error('메일 검색 응답을 확인하지 못했습니다.');
+      st.res = {...r, keyword: kw};
+    } catch (e) { if (valid()) { st.err = String(e.message || e).slice(0, 160); toast('메일을 검색하지 못했습니다: ' + st.err); } }
+    finally { if (valid()) { st.busy = false; if (S.view === 'mail') renderMain(); } }
   }
-

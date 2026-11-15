@@ -24,7 +24,7 @@
     const body = s.err ? `<div class="box warn">자원 정보를 읽지 못했습니다: ${esc(s.err)} <button class="btn sm" data-act="resReload">다시 시도</button></div>`
       : !s.list ? '<div class="sk" style="height:120px"></div>'
       : !s.list.length ? '<div class="empty"><b>예약할 수 있는 자원이 없습니다</b></div>'
-      : `<div class="bar"><div class="seg">${s.list.map(r => `<button class="${r.resSeq === s.sel ? 'on' : ''}" data-act="resSel" data-v="${esc(r.resSeq)}">${esc(r.name)}</button>`).join('')}</div>
+      : `<div class="bar"><div class="seg">${s.list.map(r => `<button class="${r.resSeq === s.sel ? 'on' : ''}" data-act="resSel" aria-pressed="${r.resSeq === s.sel}" data-v="${esc(r.resSeq)}">${esc(r.name)}</button>`).join('')}</div>
           <button class="btn sm icon" data-act="resDay" data-v="-1" aria-label="이전 날">${ic('back')}</button>
           <input class="inp" type="date" id="resDate" value="${ymdDash(s.date)}" style="height:34px" aria-label="날짜">
           <button class="btn sm icon" data-act="resDay" data-v="1" aria-label="다음 날" style="transform:scaleX(-1)">${ic('back')}</button>
@@ -35,13 +35,13 @@
           <div class="card2"><div class="ct">비어 있는 시간 (09:00~18:00)</div>${!bookingsLoaded ? '<span class="muted">빈 시간을 조회하는 중입니다…</span>' : free.length ? free.map(f => `<button class="chip" data-act="resFree" data-s="${esc(f.start)}" data-e="${esc(f.end)}">${esc(f.start)}~${esc(f.end)}</button>`).join(' ') : '<span class="muted">이 날은 빈 시간이 없습니다</span>'}${bookingsLoaded && free.length ? '<div class="muted" style="font-size:12px;margin-top:6px">누르면 아래 예약 칸에 채워집니다</div>' : ''}</div>
         </div>
         <h2>예약하기</h2>
-        <div class="box" id="resForm"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+        <div class="box" id="resForm" aria-busy="${s.confirm || s.busy}"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
           <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted);flex:1;min-width:200px">예약명<input class="inp" id="resTitle" value="${esc(s.form.title)}" placeholder="예) 학교 방문, 교육 참석" style="height:36px"></label>
           <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)">시작<select class="inp" id="resStart" style="height:36px">${selOpt('s', s.form.start)}</select></label>
           <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)">종료<select class="inp" id="resEnd" style="height:36px">${selOpt('e', s.form.end)}</select></label>
           <button class="btn primary" data-act="resCheck" ${s.busy ? 'disabled' : ''}>예약 가능한지 확인</button></div>
-          ${s.check ? `<div class="box ${s.check.ok ? 'tip' : 'warn'}" style="margin-top:10px">${s.check.ok ? `<b>예약할 수 있습니다</b> ${esc(ymdDash(s.date))}(${wdName(s.date)}) ${esc(s.form.start)}~${esc(s.form.end)} · ${esc(s.form.title)}${sel && sel.apprYn === 'Y' ? '<div class="muted">예약을 올리면 관리자 승인 대기 상태가 됩니다.</div>' : ''}<div class="acts"><button class="btn primary" data-act="resBook">이 내용으로 예약 확정</button><button class="btn ghost" data-act="resCancelForm">취소</button></div>` : s.check.errors.map(x => `<div style="color:var(--hi)">✗ ${esc(x)}</div>`).join('')}</div>` : ''}
-          ${s.done ? `<div class="box tip" style="margin-top:10px"><b>예약을 올렸습니다.</b> ${esc(s.done)}<div class="muted">변경·취소는 그룹웨어 자원 화면의 “나의예약현황”에서 합니다.</div></div>` : ''}</div>
+          ${s.check ? `<div role="status" aria-live="polite" class="box ${s.check.ok ? 'tip' : 'warn'}" style="margin-top:10px">${s.check.ok ? `<b>예약할 수 있습니다</b> ${esc(ymdDash(s.date))}(${wdName(s.date)}) ${esc(s.form.start)}~${esc(s.form.end)} · ${esc(s.form.title)}${sel && sel.apprYn === 'Y' ? '<div class="muted">예약을 올리면 관리자 승인 대기 상태가 됩니다.</div>' : ''}<div class="acts"><button class="btn primary" data-act="resBook" ${s.confirm ? 'disabled' : ''}>이 내용으로 예약 확정</button><button class="btn ghost" data-act="resCancelForm">취소</button></div>` : s.check.errors.map(x => `<div style="color:var(--hi)">✗ ${esc(x)}</div>`).join('')}</div>` : ''}
+          ${s.done ? `<div role="status" aria-live="polite" class="box tip" style="margin-top:10px"><b>예약을 올렸습니다.</b> ${esc(s.done)}<div class="muted">변경·취소는 그룹웨어 자원 화면의 “나의예약현황”에서 합니다.</div></div>` : ''}</div>
         <h2>다가오는 예약 ${bookingsLoaded ? `<span class="muted">${upcoming.length}건</span>` : ''}</h2>
         ${!bookingsLoaded ? '<div class="list"><div class="empty">예약 현황을 조회하는 중입니다…</div></div>' : upcoming.length ? `<div class="list">${upcoming.map(b => `<div class="row" style="grid-template-columns:150px 1fr auto"><span class="muted">${esc(fmtB(b))}</span><div class="mn"><div class="t">${esc(b.title)}</div></div><div class="w">${esc(b.who)}${me && b.who === me ? ' (나)' : ''}</div></div>`).join('')}</div>` : '<div class="list"><div class="empty"><b>다가오는 예약이 없습니다</b></div></div>'}`;
     return `${pgh('자원 예약', '공용차량 현황과 바로 예약', `<button class="btn sm" data-act="openUrl" data-url="${esc(GW.links.route('#/UK/UKA/UKA0000?specialLnb=Y&moduleCode=UK&menuCode=UKA&pageCode=UKA0000'))}" data-title="그룹웨어 자원 화면">${ic('ext')}그룹웨어 자원 화면</button>`)}${body}`;
@@ -74,16 +74,18 @@
     if (z) s.form.end = z.value;
     const d = $('#resDate'); if (d && d.value) s.date = d.value.replace(/-/g, '');
   }
-  const resInvalidate = () => { const s = resState(); s.rev++; s.check = null; s.done = null; };
+  const resInvalidate = () => { const s = resState(); s.rev++; if (!s.confirm) s.busy = false; s.check = null; s.done = null; };
   function resDay(v) { resSyncForm(); const s = resState(); const n = Number(v); if (n === 0) s.date = resToday(); else { const d = new Date(Number(s.date.slice(0, 4)), Number(s.date.slice(4, 6)) - 1, Number(s.date.slice(6)) + n); s.date = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`; } resInvalidate(); s.bookings = null; renderMain(); resLoad(true); }
   function resSel(v) { resSyncForm(); const s = resState(); s.sel = v; resInvalidate(); s.bookings = null; renderMain(); resLoad(true); }
   function resFree(a, z) { resSyncForm(); const s = resState(); s.form.start = a; const cap = R.minToHm(Number(a.slice(0, 2)) * 60 + Number(a.slice(3)) + 240); s.form.end = z > cap ? cap : z; resInvalidate(); if (z > cap) toast('한 번에 최대 4시간으로 채웠습니다. 필요하면 종료 시간을 바꾸세요.'); renderMain(); }
   async function resCheck() {
     resSyncForm();
     const s = resState(), sel = (s.list || []).find(r => r.resSeq === s.sel);
+    if (s.confirm) return;
     if (!sel) return;
     // 확인하는 순간의 값을 고정해 두고, 응답이 오기 전에 입력이 바뀌면 그 응답은 버린다
-    const snap = {resSeq: sel.resSeq, date: s.date, title: s.form.title.trim(), start: s.form.start, end: s.form.end};
+    const snap = Object.freeze({resSeq: sel.resSeq, date: s.date, title: s.form.title.trim(), start: s.form.start, end: s.form.end});
+    const owner = typeof currentKey === 'undefined' ? '' : currentKey;
     const rev = ++s.rev;
     s.done = null;
     const v = R.validateBooking({title: snap.title, date: snap.date, start: snap.start, end: snap.end});
@@ -96,11 +98,12 @@
       if (!v2.ok) result = {ok: false, errors: v2.errors};
       else {
         const c = await GW.resourceCheck({resSeq: snap.resSeq, start: v2.start12, end: v2.end12});
-        result = c.conflict ? {ok: false, errors: ['같은 시간에 이미 예약이 있습니다. 빈 시간에서 다른 시간을 고르세요.']} : c.limit ? {ok: false, errors: ['예약 한도를 넘었습니다']} : {ok: true, errors: [], payload: {resSeq: snap.resSeq, title: snap.title, start12: v2.start12, end12: v2.end12}};
+        result = c.conflict ? {ok: false, errors: ['같은 시간에 이미 예약이 있습니다. 빈 시간에서 다른 시간을 고르세요.']} : c.limit ? {ok: false, errors: ['예약 한도를 넘었습니다']} : {ok: true, errors: [], payload: Object.freeze({resSeq: snap.resSeq, title: snap.title, start12: v2.start12, end12: v2.end12})};
       }
     } catch (e) { result = {ok: false, errors: ['확인하지 못했습니다: ' + String(e.message || e).slice(0, 80)]}; }
-    s.busy = false;
-    if (rev !== s.rev) return; // 그 사이 자원·날짜·시간이 바뀌었다
+    if (S.res !== s || (typeof currentKey !== 'undefined' && owner !== currentKey)) return;
+    if (rev !== s.rev) return;
+    s.busy = false; // 그 사이 자원·날짜·시간이 바뀌었다
     s.check = result; renderMain();
   }
   async function resBook(ev) {
@@ -109,24 +112,31 @@
     const s = resState();
     if (!s.check || !s.check.ok || !s.check.payload || s.confirm) return;
     resSyncForm();
-    // 예약명은 확인 뒤에 고쳐도 된다(겹침과 무관). 고친 이름도 같은 규칙으로 다시 검사한다.
-    const p = {...s.check.payload, title: s.form.title.trim()};
+    // The confirmed payload is immutable, including its title.
+    const p = Object.freeze({...s.check.payload});
+    const owner = typeof currentKey === 'undefined' ? '' : currentKey;
+    const submittedRev = s.rev;
     const vt = R.validateBooking({title: p.title, date: s.date, start: s.form.start, end: s.form.end});
     if (!vt.ok) { s.check = {ok: false, errors: vt.errors}; renderMain(); return; }
     // 확정 직전, 화면의 시간·자원이 확인한 값과 같은지 다시 비교한다
-    if (p.resSeq !== s.sel || p.start12 !== s.date + s.form.start.replace(':', '') || p.end12 !== s.date + s.form.end.replace(':', '')) { s.check = null; renderMain(); toast('내용이 바뀌어 다시 확인이 필요합니다.'); return; }
-    s.confirm = true;
+    if (p.title !== s.form.title.trim() || p.resSeq !== s.sel || p.start12 !== s.date + s.form.start.replace(':', '') || p.end12 !== s.date + s.form.end.replace(':', '')) { s.check = null; renderMain(); toast('내용이 바뀌어 다시 확인이 필요합니다.'); return; }
+    s.confirm = true; renderMain();
     const sel = (s.list || []).find(r => r.resSeq === p.resSeq);
     try {
       const out = await GW.reserveResource({resSeq: p.resSeq, title: p.title, start: p.start12, end: p.end12});
-      s.done = `${sel ? sel.name + ' ' : ''}${ymdDash(s.date)} ${s.form.start}~${s.form.end} “${p.title}”${out.needsApproval ? ' (승인 대기)' : ''}${out.verifiedAfterTimeout ? ' (응답이 늦었지만 저장된 것을 확인했습니다)' : ''}`;
-      logActionRecord({command: `자원 예약: ${sel ? sel.name : p.resSeq}`, type: '자원', target: p.title, summary: `${ymdDash(s.date)} ${s.form.start}~${s.form.end} 예약을 올렸습니다${out.needsApproval ? '(승인 대기)' : ''}.`, steps: [], verified: true});
-      s.check = null; s.form.title = ''; s.rev++;
+      if (!out || out.ok !== true || (out.verifiedAfterTimeout && out.identityVerified !== true)) throw Object.assign(new Error('저장 여부 미확인. 그룹웨어 나의예약현황에서 확인하기 전에는 다시 예약하지 마세요.'), {code: 'UNKNOWN'});
+      if (S.res !== s || (typeof currentKey !== 'undefined' && owner !== currentKey)) return;
+      const date = p.start12.slice(0, 8), start = p.start12.slice(8, 10) + ':' + p.start12.slice(10), end = p.end12.slice(8, 10) + ':' + p.end12.slice(10);
+      s.done = `${sel ? sel.name + ' ' : ''}${ymdDash(date)} ${start}~${end} “${p.title}”${out.needsApproval ? ' (승인 대기)' : ''}${out.verifiedAfterTimeout ? ' (응답이 늦었지만 저장된 것을 확인했습니다)' : ''}`;
+      logActionRecord({command: `자원 예약: ${sel ? sel.name : p.resSeq}`, type: '자원', target: p.title, summary: `${ymdDash(date)} ${start}~${end} 예약을 올렸습니다${out.needsApproval ? '(승인 대기)' : ''}.`, steps: [], verified: true});
+      if (s.rev === submittedRev) { s.check = null; s.form.title = ''; s.rev++; }
       toast('예약을 올렸습니다.');
       s.bookings = null; s.confirm = false; renderMain(); await resLoad(true);
     } catch (e) {
+      if (S.res !== s || (typeof currentKey !== 'undefined' && owner !== currentKey)) return;
       s.confirm = false;
-      s.check = {ok: false, errors: ['예약하지 못했습니다: ' + String(e.message || e).slice(0, 120)]};
+      if (s.rev !== submittedRev) { toast('예약 결과를 현재 입력과 구분해 확인하세요: ' + String(e.message || e)); renderMain(); return; }
+      s.check = {ok: false, errors: [(e.code === 'UNKNOWN' || e.code === 'TIMEOUT' ? '저장 여부 미확인. 중복 예약 방지를 위해 그룹웨어에서 먼저 확인하세요: ' : '예약하지 못했습니다: ') + String(e.message || e).slice(0, 120)]};
       logError('reserve', e.message);
       renderMain();
     }

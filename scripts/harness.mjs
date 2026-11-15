@@ -8,14 +8,14 @@ import os from 'node:os';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {graphReport} from './graph.mjs';
-import {checkLiveSyntax} from './live-build.mjs';
+import {checkLiveSyntax, MAX_SHIPPED_BUNDLE_BYTES} from './live-build.mjs';
 import {testEnv, verdict} from './lib/test-results.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = new Set(process.argv.slice(2));
 const FAST = args.has('--fast'), AS_JSON = args.has('--json');
 // v0.65.0: 대화 조회 도구와 자동화, 비서 중심 홈을 더해 약 1030KB. 여유를 조금 둔 상한이며 설치 북마클릿 1900KB 상한은 별도 유지한다.
-const BUDGET = {bundleKB: 1060, wcFileLines: 600, minFontPx: 12};
+const BUDGET = {bundleBytes: MAX_SHIPPED_BUNDLE_BYTES, wcFileLines: 600, minFontPx: 12};
 const node = process.execPath;
 const sh = (cmd, a, opt = {}) => spawnSync(cmd, a, {cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, ...opt});
 
@@ -41,7 +41,6 @@ await stage('구문 검사', async () => {
   for (const f of files) { const r = sh(node, ['--check', f]); if (r.status) fails.push(`${path.relative(root, f)}: ${(r.stderr || '').split('\n').find(l => /Error/.test(l)) || '구문 오류'}`); }
   const live = await checkLiveSyntax(root);
   for (const e of live.errors) fails.push(`${e.file}${e.line ? ':' + e.line : ''}: ${e.message}`);
-  if (FAST && live.bundleKB > BUDGET.bundleKB) fails.push(`번들 ${live.bundleKB}KB > 예산 ${BUDGET.bundleKB}KB`);
   return {fails, info: `${files.length}개 파일, 조각 ${live.fragments}개, 조립 번들 (${live.bundleKB}KB)`};
 });
 
@@ -109,8 +108,8 @@ if (!FAST) {
       const { createHash } = await import('node:crypto');
       const digest = createHash('sha256').update(bundle).digest('hex');
       if (digest !== createHash('sha256').update(await fs.readFile(path.join(outB, 'gw-live.js'))).digest('hex')) fails.push('같은 소스로 두 번 빌드한 번들의 해시가 다름(빌드 결과가 재현되지 않음)');
-      const kb = Math.round(bundle.length / 1024);
-      if (kb > BUDGET.bundleKB) fails.push(`번들 ${kb}KB > 예산 ${BUDGET.bundleKB}KB`);
+      const bytes = bundle.length;
+      if (bytes > BUDGET.bundleBytes) fails.push(`배포 번들 ${bytes} bytes > 예산 ${BUDGET.bundleBytes} bytes (1060KB)`);
       const bm = await fs.readFile(path.join(outA, 'bookmarklet.txt'));
       const bmKB = Math.round(bm.length / 1024);
       if (bmKB > 1900) fails.push(`설치 북마클릿 ${bmKB}KB > 한도 1900KB`);
@@ -127,7 +126,7 @@ if (!FAST) {
       if (new Set([vw, vc, manifest]).size !== 1) fails.push(`버전 불일치: 업무센터 ${vw}, 수집기 ${vc}, 확장 ${manifest}`);
       const sha = (await fs.readFile(path.join(outA, 'gw-live.sha256'), 'utf8')).trim().split(/\s+/)[0];
       if (sha !== digest) fails.push('gw-live.sha256 이 번들과 다름');
-      return {fails, warns, info: `번들 ${kb}KB, 버전 ${vw}, sha256 ${digest.slice(0, 12)} (격리 빌드 2회 동일)`};
+      return {fails, warns, info: `배포 번들 ${bytes} bytes, 버전 ${vw}, sha256 ${digest.slice(0, 12)} (격리 빌드 2회 동일)`};
     } finally { await fs.rm(tmp, {recursive: true, force: true}); }
   });
 }

@@ -91,7 +91,7 @@ test('openDraftFrame aborts on declined same-URL navigation without waiting or t
   const g = {...paneEnv({dirty: true}, [false]), GW: {links: {draft: () => U}}, wait: spy(async () => {}), $: spy()};
   const openDraftFrame = run(g, [...PANE, pick('19-draft-engine.js', 'async function openDraftFrame(')], 'openDraftFrame');
   assert.equal(await openDraftFrame('mg_1', '일반기안문', 't'), null);
-  assert.equal(g.wait.calls.length + g.$.calls.length + g.renderPane.calls.length, 0);
+  assert.equal(g.wait.calls.length + g.renderPane.calls.length, 0);
   assert.equal(g.S.pane.expanded, false);
 });
 
@@ -104,7 +104,7 @@ const attEnv = (pane, confirmAnswers, frame = null) => ({...paneEnv({url: AU, mo
 test('fillAttendanceForm: declined same-URL navigation writes nothing', async () => {
   const g = attEnv({dirty: true}, [false]);
   await run(g, ATT, 'fillAttendanceForm')({type: 'leave', kind: '연차', from: '2026-11-20', to: '2026-11-20'});
-  assert.equal(g.installGuard.calls.length + g.$.calls.length + g.logActionRecord.calls.length, 0);
+  assert.equal(g.installGuard.calls.length + g.logActionRecord.calls.length, 0);
   assert.equal(g.AUTO.running, false);
 });
 

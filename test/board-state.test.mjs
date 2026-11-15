@@ -6,7 +6,7 @@ import vm from 'node:vm';
 const source = readFileSync(new URL('../src/live/wc/09-search-board.js', import.meta.url), 'utf8');
 const code = source.match(/  function bucketOfAction\(x\) \{[\s\S]*?\n  \}/)?.[0];
 assert.ok(code, 'board classification exists');
-const context = {S: {plan: {}}, isHidden: k => k === 'hidden' || k === 'old', resurfaced: k => k === 'old', isSnoozed: () => false, stateOf: x => x.state, today: () => '2026-11-14'};
+const context = {BUCKET_NAME: {late:'밀린 일',today:'오늘',tomorrow:'내일',week:'이번 주',later:'나중에',wait:'결재 대기',done:'끝냄'}, S: {plan: {}}, isHidden: k => k === 'hidden' || k === 'old', resurfaced: k => k === 'old', isSnoozed: () => false, stateOf: x => x.state, today: () => '2026-11-14'};
 vm.createContext(context);
 const bucket = vm.runInContext(`(${code.trim()})`, context);
 test('linked active to-do suppresses only its duplicate action card', () => {

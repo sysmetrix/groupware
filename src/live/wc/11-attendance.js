@@ -18,7 +18,16 @@
     const startDow = new Date(y, mo - 1, 1).getDay(), last = new Date(y, mo, 0).getDate();
     const byDate = new Map(rows.map(r => [r.date, r]));
     const leaveDays = new Set();
-    for (const u of lv?.history || []) if (u.approved && u.days >= 1) leaveDays.add(u.start);
+    const addLeaveRange = u => {
+      if (!u?.approved || !(Number(u.days) >= 1)) return;
+      const start = String(u.start || '').replace(/\D/g, '').slice(0, 8);
+      const end = String(u.end || u.start || '').replace(/\D/g, '').slice(0, 8);
+      const parseDay = d8 => /^\d{8}$/.test(d8) ? new Date(Date.UTC(+d8.slice(0, 4), +d8.slice(4, 6) - 1, +d8.slice(6, 8))) : null;
+      const first = parseDay(start), last = parseDay(end);
+      if (!first || !last || first > last) return;
+      for (let day = first; day <= last; day = new Date(day.getTime() + 86400000)) leaveDays.add(`${day.getUTCFullYear()}${String(day.getUTCMonth() + 1).padStart(2, '0')}${String(day.getUTCDate()).padStart(2, '0')}`);
+    };
+    for (const u of lv?.history || []) addLeaveRange(u);
     const t8 = today().replace(/-/g, '');
     const cellInfo = d8 => R.appInfoLine((myAppInfos(d8) || [])[0] || null);
     const cellTime = d8 => ((myAppInfos(d8) || [])[0] || {}).time || '';
@@ -28,8 +37,8 @@
       const d8 = `${month}${String(dnum).padStart(2, '0')}`;
       const r = byDate.get(d8);
       const worked = r && (!!r.come || (/정상/.test(r.result) && !/휴일/.test(r.result)));
-      const cls = !r ? 'off' : bad.has(d8) ? 'bad' : leaveDays.has(d8) ? 'lv' : worked ? (/정상/.test(r.result) ? 'okd' : 'part') : r.holiday || /휴일/.test(r.result) ? 'off' : 'part';
-      const label = !r ? '' : bad.has(d8) ? '퇴근 지문 확인 필요' : leaveDays.has(d8) ? '휴가' : worked ? '근무' : r.holiday || /휴일/.test(r.result) ? '휴일' : '그룹웨어 기록';
+      const cls = leaveDays.has(d8) ? 'lv' : !r ? 'off' : bad.has(d8) ? 'bad' : worked ? (/정상/.test(r.result) ? 'okd' : 'part') : r.holiday || /휴일/.test(r.result) ? 'off' : 'part';
+      const label = leaveDays.has(d8) ? '휴가' : !r ? '' : bad.has(d8) ? '퇴근 지문 확인 필요' : worked ? '근무' : r.holiday || /휴일/.test(r.result) ? '휴일' : '그룹웨어 기록';
       cells.push(`<div class="c ${cls} ${st.day === d8 ? 'sel' : ''} ${d8 === t8 ? 'today' : ''}" role="button" tabindex="0" data-act="attDay" data-v="${d8}" title="${esc(r ? `그룹웨어 원본: ${r.result} ${r.item || ''} ${r.status || ''}${cellInfo(d8) ? ' · ' + cellInfo(d8) : ''}` : '')}"><b>${dnum}</b>${d8 === t8 ? ' <span class="muted">오늘</span>' : ''}<div class="muted" style="font-size:12px">${esc(label)}</div>${r && r.item ? `<div style="font-size:12px">${esc(r.item)}${cellTime(d8) ? ' <span class="muted">' + esc(cellTime(d8)) + '</span>' : ''}</div>` : ''}</div>`);
     }
     const selRow = st.day ? byDate.get(st.day) : null;
@@ -45,9 +54,9 @@ ${attActs.length ? `<h2>시간외 신청일 퇴근 지문 확인 ${attActs.lengt
 <div class="legend">${legend.map(([c, n]) => `<span><i style="background:${c}"></i>${n}</span>`).join('')}</div>
 ${month === thisM ? `<div class="muted">시간외 퇴근 지문 확인은 신청일 기준 최근 150일 내 신청과 어제까지의 자료 기준입니다.</div>` : ''}
 ${unavailable ? `<div class="box warn">시간외 신청 또는 퇴근 지문 자료를 확인할 수 없어 누락 여부를 판단할 수 없습니다.</div>` : ''}
-${st.error ? `<div class="box warn">근태 자료를 읽지 못해 확인할 수 없습니다. 다시 조회해 주세요.</div>` : st.busy ? `<div class="att">${'<div class="sk" style="height:72px;margin:0"></div>'.repeat(14)}</div>` : `<div class="att">${WD.map(w => `<div class="h">${w}</div>`).join('')}${cells.join('')}</div>`}
+${st.error ? `<div class="box warn">근태 자료를 읽지 못해 확인할 수 없습니다. <button class="btn sm" data-act="attMonth" data-v="${esc(month)}">다시 조회</button></div>` : st.busy ? `<div class="att">${'<div class="sk" style="height:72px;margin:0"></div>'.repeat(14)}</div>` : `<div class="att">${WD.map(w => `<div class="h">${w}</div>`).join('')}${cells.join('')}</div>`}
 ${selRow ? `<div class="box ${bad.has(st.day) ? 'warn' : ''}"><b>${esc(ymd8(st.day))}</b> · ${esc(selRow.workType || '')} · 근태 상태 ${esc(selRow.result)}${selRow.item ? ` · ${esc(selRow.item)}` : ''}${selRow.status ? ` · ${esc(selRow.status)}` : ''}<br>퇴근 ${esc(hm4(selRow.leave) || '-')} · 인정 ${selRow.recognizedMin === null ? '-' : mins(selRow.recognizedMin)}${(() => { const ai = myAppInfos(st.day); return ai && ai.length ? `<div style="margin-top:8px"><b>신청 내용</b>${appInfoHtml(ai)}</div>` : selRow.item ? `<div class="muted" style="margin-top:8px">${appsReady() ? '신청 내용을 찾지 못했습니다(신청일 기준 최근 150일 이내 신청만 읽습니다).' : '신청 내용을 불러오는 중…'}</div>` : ''; })()}<div class="acts"><button class="btn sm primary" data-act="openUrl" data-url="${esc(at?.requestUrl || '')}" data-title="근태신청 ${esc(ymd8(st.day))}">이 날짜 근태신청 하러 가기</button></div></div>` : ''}
-<h2>올해 연차·휴가 사용 내역 <span class="muted">${(lv?.history || []).length}건</span></h2><table><tr><th>날짜</th><th>구분</th><th class="num">기간</th><th>제목</th><th>시간·장소·사유</th><th>상태</th></tr>${(lv?.history || []).slice(0, 40).map(u => `<tr><td class="nowrap">${esc(ymd8(u.start))}${u.end !== u.start ? ' ~ ' + esc(ymd8(u.end).slice(5)) : ''}</td><td>${esc(u.kind)}</td><td class="num">${fmtDays(u.days)}</td><td>${esc(u.title)}</td><td>${esc(R.appInfoLine(((myAppInfos(u.start) || []).find(i => i.item === u.kind) || (myAppInfos(u.start) || [])[0]) || null).replace(/ \(결재 중\)$/, ''))}</td><td>${u.approved ? '완료' : '진행 중'}</td></tr>`).join('')}</table>`;
+<h2>올해 연차·휴가 사용 내역 <span class="muted">${(lv?.history || []).length}건</span></h2><table><tr><th>날짜</th><th>구분</th><th class="num">기간</th><th>제목</th><th>시간·장소·사유</th><th>상태</th></tr>${(lv?.history || []).map(u => `<tr><td class="nowrap">${esc(ymd8(u.start))}${u.end !== u.start ? ' ~ ' + esc(ymd8(u.end).slice(5)) : ''}</td><td>${esc(u.kind)}</td><td class="num">${fmtDays(u.days)}</td><td>${esc(u.title)}</td><td>${esc(R.appInfoLine(((myAppInfos(u.start) || []).find(i => i.item === u.kind) || (myAppInfos(u.start) || [])[0]) || null).replace(/ \(결재 중\)$/, ''))}</td><td>${u.approved ? '완료' : '진행 중'}</td></tr>`).join('')}</table>`;
   }
   async function loadAttendance(month) {
     const p = R.kstNow(new Date());

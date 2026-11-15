@@ -13,9 +13,11 @@ import vm from 'node:vm';
 import {fileURLToPath} from 'node:url';
 import crypto from 'node:crypto';
 import {gzipSync} from 'node:zlib';
+import {minifySafely, TERSER_VERSION} from './terser-minify.mjs';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const DEFAULT_OUT_DIR = path.join(ROOT, 'build', 'live');
+export const MAX_SHIPPED_BUNDLE_BYTES = 1060 * 1024;
 export const EXTRA_MODULES = ['home-model.mjs', 'chat.mjs', 'gcal-sync.mjs', 'settings-transfer.mjs', 'doc-find.mjs'];
 const PARTS_MARK = '  /*@WC_PARTS@*/';
 const CSS_MARK = "'/*@WC_CSS@*/'";
@@ -191,6 +193,7 @@ export async function checkLiveSyntax(root = ROOT) {
   try {
     const {bundle, lineMap} = assemble(src);
     bundleKB = Math.round(Buffer.byteLength(bundle, 'utf8') / 1024);
+    // Keep diagnostics against the readable assembled source. Minification deliberately has no source map.
     const e = syntaxError(bundle, 'gw-live.js (assembled)');
     if (e) {
       const seg = lineMap.find(s => e.line >= s.start && e.line <= s.end);
@@ -264,7 +267,19 @@ export function parseArgs(argv) {
 }
 
 export async function build({outDir = DEFAULT_OUT_DIR, copyTo = null, root = ROOT} = {}) {
-  const {bundle, workcenter, exported, version} = assemble(await readSources(root));
+  const {bundle: assembledBundle, workcenter, exported, version, lineMap} = assemble(await readSources(root));
+  // Parse before minifying so source errors retain deterministic, readable source-file line diagnostics.
+  const assembledSyntax = syntaxError(assembledBundle, 'gw-live.js (assembled)');
+  if (assembledSyntax) {
+    const seg = lineMap.find(s => assembledSyntax.line >= s.start && assembledSyntax.line <= s.end);
+    throw new Error(`조립 번들 문법 오류: ${assembledSyntax.message}${seg ? ` (${seg.label} ${assembledSyntax.line - seg.start + 1}행 근처)` : ''}`);
+  }
+  // Retain a stable banner for existing bundle inspectors; all executable code is Terser-minified below.
+  const bundle = `/*! BWYF groupware live bundle v${version} compatibility: window.BWYFGW = */\n${await minifySafely(assembledBundle)}`;
+  const shippedBytes = Buffer.byteLength(bundle, 'utf8');
+  if (shippedBytes > MAX_SHIPPED_BUNDLE_BYTES) throw new Error(`배포 번들 ${shippedBytes} bytes > 예산 ${MAX_SHIPPED_BUNDLE_BYTES} bytes (1060KB)`);
+  const minifiedSyntax = syntaxError(bundle, 'gw-live.js');
+  if (minifiedSyntax) throw new Error(`최소화 번들 문법 오류: ${minifiedSyntax.message}`);
   const extDir = path.join(outDir, 'extension');
   const policy = await resolvePolicy(extDir); // before any write: a broken admin policy stops the build with nothing changed
   const hash = sha256(bundle);
@@ -298,7 +313,7 @@ export async function build({outDir = DEFAULT_OUT_DIR, copyTo = null, root = ROO
   await fs.writeFile(path.join(outDir, 'install.html'), installPage({install, mini, version: wcVersion, hash}));
   if (copyTo) { await fs.mkdir(copyTo, {recursive: true}); await fs.writeFile(path.join(copyTo, 'gw-live.js'), bundle); }
   await fs.writeFile(path.join(outDir, 'gw-live.sha256'), hash);
-  return {bundle: path.join(outDir, 'gw-live.js'), bundleKB: Math.round(bundle.length / 1024), installKB: Math.round(install.length / 1024), miniKB: Math.round(mini.length / 1024), sha256: hash.slice(0, 12), version, policy: policy.action, exported};
+  return {bundle: path.join(outDir, 'gw-live.js'), bundleBytes: shippedBytes, bundleKB: Math.round(shippedBytes / 1024), installKB: Math.round(install.length / 1024), miniKB: Math.round(mini.length / 1024), sha256: hash.slice(0, 12), version, policy: policy.action, terser: TERSER_VERSION, exported};
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

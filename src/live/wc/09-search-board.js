@@ -89,7 +89,7 @@ ${res && !s.busy ? [
   const plusDays = n => { const d = new Date(); d.setDate(d.getDate() + n); return R.kstNow(d).date; };
   function bucketOfTodo(t) {
     if (t.status === 'done') return 'done';
-    if (S.plan[`todo:${t.id}`]) return S.plan[`todo:${t.id}`];
+    if (BUCKET_NAME[S.plan[`todo:${t.id}`]]) return S.plan[`todo:${t.id}`];
     if (!t.due) return 'later';
     const n = R.dday(t.due);
     return n < 0 ? 'late' : n === 0 ? 'today' : n === 1 ? 'tomorrow' : t.due <= endOfWeek() ? 'week' : 'later';
@@ -98,7 +98,7 @@ ${res && !s.busy ? [
     if (isHidden(x.key) && !resurfaced(x.key)) return 'done';
     const st = stateOf(x);
     if (st === 'wait') return 'wait';
-    if (S.plan[x.key]) return S.plan[x.key];
+    if (BUCKET_NAME[S.plan[x.key]]) return S.plan[x.key];
     if (isSnoozed(x.key)) return 'tomorrow';
     if (st === 'overdue') return 'late';
     if (st === 'urgent' || (x.deadline && x.deadline.dday <= 0)) return 'today';
@@ -110,24 +110,35 @@ ${res && !s.busy ? [
     const cards = [];
     for (const x of S.a.actions) if (onBoard(x) && !boardLinked(x)) cards.push({id: x.key, kind: 'act', b: bucketOfAction(x), title: x.title, sub: x.headline || x.kind, pri: x.priority});
     for (const t of S.todos) cards.push({id: `todo:${t.id}`, kind: 'todo', b: bucketOfTodo(t), title: t.title, sub: `${t.due ? `기한 ${t.due.slice(5).replace('-', '/')} (${ddayText(R.dday(t.due))})` : '기한 없음'}${t.source ? ' · ' + t.source : ''}`});
-    return `${pgh('할 일 보드', '카드를 끌어 다른 칸으로 옮기면 계획이 저장됩니다. 보드 건수에는 결재 대기와 직접 추가한 일도 포함됩니다.')}
+    return `${pgh('할 일 보드', '카드를 끌거나 “계획 이동” 버튼으로 옮기세요. 계획 칸만 바뀌며 실제 기한은 유지됩니다. 보드 건수에는 결재 대기와 직접 추가한 일도 포함됩니다.')}
 <div class="bar"><input class="inp grow" id="tdTitle" placeholder="새 할 일을 쓰고 Enter" aria-label="새 할 일"><input class="inp" id="tdDue" placeholder="기한 (예: 11/12)" style="width:140px" aria-label="기한"><button class="btn primary" data-act="addTodo">${ic('plus')}추가</button></div>
-<div class="board">${BUCKETS.map(([b, n]) => { const cs = cards.filter(c => c.b === b); return `<div class="col" ${b === 'wait' ? '' : `data-drop="${b}"`}><div class="col-h"><span>${n}</span><span class="muted">${cs.length}</span></div>${cs.map(c => `<div class="card ${c.kind} ${c.pri || ''}" draggable="${c.b !== 'wait'}" data-drag="${esc(c.id)}" data-act="boardCard" data-k="${esc(c.id)}" tabindex="0" title="끌어서 옮기기 · 누르면 내용 보기"><div>${esc(c.title)}</div><div class="d">${esc(c.sub)}</div>${c.kind === 'todo' ? `<div class="acts" style="margin-top:6px"><button class="btn sm" data-act="todoEdit" data-id="${esc(c.id.slice(5))}">고치기</button><button class="btn sm danger" data-act="todoDel" data-id="${esc(c.id.slice(5))}">지우기</button></div>` : ''}</div>`).join('') || `<div class="hint">${b === 'wait' ? '결재 대기 항목이 없습니다' : '여기로 끌어다 놓으세요'}</div>`}</div>`; }).join('')}</div>
+<div class="board">${BUCKETS.map(([b, n]) => { const cs = cards.filter(c => c.b === b); return `<div class="col" ${b === 'wait' ? '' : `data-drop="${b}"`}><div class="col-h"><span>${n}</span><span class="muted">${cs.length}</span></div>${cs.map(c => `<div class="card ${c.kind} ${c.pri || ''}" draggable="${c.b !== 'wait'}" data-drag="${esc(c.id)}" data-act="boardCard" data-k="${esc(c.id)}" tabindex="0" title="누르면 내용 보기 · 계획 이동 버튼으로 칸 변경"><div>${esc(c.title)}</div><div class="d">${esc(c.sub)}</div>${c.b !== 'wait' ? `<button class="btn sm" data-act="boardMove" data-k="${esc(c.id)}" aria-label="${esc(c.title)} 계획 이동">계획 이동</button>` : ''}${c.kind === 'todo' ? `<div class="acts" style="margin-top:6px"><button class="btn sm" data-act="todoEdit" data-id="${esc(c.id.slice(5))}">고치기</button><button class="btn sm danger" data-act="todoDel" data-id="${esc(c.id.slice(5))}">지우기</button></div>` : ''}</div>`).join('') || `<div class="hint">${b === 'wait' ? '결재 대기 항목이 없습니다' : '여기로 끌어다 놓으세요'}</div>`}</div>`; }).join('')}</div>
 <p class="muted" style="margin-top:12px">파란 줄 카드는 그룹웨어 업무라 그룹웨어에서 처리해야 사라집니다. 노란 줄 카드는 내가 적은 할 일이며 이 PC에만 저장됩니다.</p>`;
   }
+  function boardMove(id) {
+    const t = id.startsWith('todo:') ? S.todos.find(x => 'todo:' + x.id === id) : S.a.actions.find(x => x.key === id);
+    if (!t || (!id.startsWith('todo:') && bucketOfAction(t) === 'wait')) return;
+    S.menuOpen = 'boardMove'; S.paletteOpen = false; S.helpOpen = false;
+    $('#overlay').innerHTML = `<div class="modal" data-act="closeOverlay"><div class="dlg" data-stop="1" role="dialog" aria-label="계획 이동"><h2>계획 이동</h2><p>실제 기한은 바꾸지 않습니다.</p><div class="acts">${BUCKETS.filter(([b]) => b !== 'wait').map(([b, n]) => `<button class="btn" data-act="boardMoveTo" data-k="${esc(id)}" data-v="${b}">${n}</button>`).join('')}</div><button class="btn ghost" data-act="closeOverlay">취소</button></div></div>`;
+    $('#overlay button')?.focus();
+  }
   function dropTo(id, bucket) {
+    if (!BUCKET_NAME[bucket] || bucket === 'wait' || typeof id !== 'string') return;
+    const t = id.startsWith('todo:') ? S.todos.find(x => 'todo:' + x.id === id) : null;
+    const x = t ? null : S.a.actions.find(x => x.key === id);
+    if ((!t && !x) || (x && bucketOfAction(x) === 'wait')) return;
     pushUndo('보드 이동');
-    if (id.startsWith('todo:')) {
-      const t = S.todos.find(x => `todo:${x.id}` === id);
-      if (!t) return;
-      if (bucket === 'done') { t.status = 'done'; delete S.plan[id]; }
-      else { t.status = 'todo'; if (bucket === 'late') { S.plan[id] = 'late'; } else { t.due = bucket === 'today' ? today() : bucket === 'tomorrow' ? plusDays(1) : bucket === 'week' ? endOfWeek() : ''; delete S.plan[id]; } }
+    if (t) {
+      t.status = bucket === 'done' ? 'done' : 'todo';
+      if (bucket === 'done') delete S.plan[id]; else S.plan[id] = bucket;
     } else {
       if (bucket === 'done') { S.hidden[id] = Date.now(); delete S.plan[id]; }
-      else { delete S.hidden[id]; if (bucket === 'tomorrow') S.snooze[id] = tomorrow8(); else delete S.snooze[id]; S.plan[id] = bucket; }
+      else { delete S.hidden[id]; delete S.snooze[id]; S.plan[id] = bucket; }
     }
-    saveLocal(); render();
-    toastUndo(`"${BUCKET_NAME[bucket]}" 칸으로 옮겼습니다.`);
+    const saved = saveLocal(); render();
+    [...root.querySelectorAll('[data-act="boardMove"]')].find(el => el.dataset.k === id)?.focus();
+    if (!saved) { toast('계획을 저장하지 못했습니다. 현재 화면에만 반영되어 있습니다. 저장 공간을 확인하세요.'); return; }
+    toastUndo(`"${BUCKET_NAME[bucket]}" 칸으로 옮겼습니다. 실제 기한은 유지됩니다.`);
   }
   // 빈 값은 기한 없음, null은 잘못된 입력을 뜻한다.
   const parseDue = v => {

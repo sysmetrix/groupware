@@ -21,8 +21,9 @@
     if (act === 'closeOverlay' && hasStop && !actEl.closest('[data-stop]')) return;
     if (el.tagName === 'A' && el.getAttribute('href') === '#') e.preventDefault();
     switch (act) {
+      case 'skipMain': $('#main')?.focus(); break;
       case 'refresh': refresh({announce: true}); break;
-      case 'applyRefresh': S.pendingRefresh = false; render(); break;
+      case 'applyRefresh': applyDeferredBudgetInvalidation(); S.pendingRefresh = false; render(); break;
       case 'relogin': if (!S.pane.dirty || confirm('처리 창에 입력 중인 내용이 있습니다. 그룹웨어를 새로 고치면 사라집니다. 계속할까요?')) location.reload(); break;
       case 'close': if (leavePane()) close(); break;
       case 'home': goHome(); break;
@@ -154,8 +155,10 @@
       case 'menuNew': openMenu('new'); break;
       case 'menuBell': closeOverlay(); if (go('notifications')) loadNotifications(); break;
       case 'notificationsLoad': loadNotifications(); break;
-      case 'notificationsFilter': NTF.filter = v; renderMain(); break;
-      case 'notificationsType': NTF.type = v; renderMain(); break;
+      case 'notificationsFilter': NTF.filter = v; NTF.page = 1; renderMain(); break;
+      case 'notificationsType': NTF.type = v; NTF.page = 1; renderMain(); break;
+      case 'notificationsPage': notificationsPage(v); break;
+      case 'notificationsSearch': notificationsSearch(); break;
       case 'notificationOpen': openNotification(Number(el.dataset.i)); break;
       case 'peopleSearch': peopleSearch(); break;
       case 'peopleTree': peopleLoadTree(); break;
@@ -183,11 +186,13 @@
       case 'multi': {
         e.stopPropagation();
         const k = el.dataset.k;
-        if (e.shiftKey && S.lastClickKey) { const q = queue().map(x => x.key); const a = q.indexOf(S.lastClickKey), b = q.indexOf(k); if (a >= 0 && b >= 0) for (const kk of q.slice(Math.min(a, b), Math.max(a, b) + 1)) S.multi.add(kk); }
+        if (e.shiftKey && S.lastClickKey) { const q = todayQueue().map(x => x.key); const a = q.indexOf(S.lastClickKey), b = q.indexOf(k); if (a >= 0 && b >= 0) for (const kk of q.slice(Math.min(a, b), Math.max(a, b) + 1)) S.multi.add(kk); }
         else if (S.multi.has(k)) S.multi.delete(k); else S.multi.add(k);
         S.lastClickKey = k; refreshQueue(); return;
       }
       case 'selAction': if (path.some(n => n && n.tagName === 'INPUT')) return; selectAction(el.dataset.k); break;
+      case 'boardMove': boardMove(el.dataset.k); break;
+      case 'boardMoveTo': closeOverlay(); dropTo(el.dataset.k, v); break;
       case 'batchHide': hide([...S.multi]); break;
       case 'batchSnooze': snooze([...S.multi]); break;
       case 'batchTodo': { const keys = [...S.multi]; pushUndo(`${keys.length}건 할 일로`); for (const k of keys) { const x = S.a.actions.find(a => a.key === k); if (x) { if (!S.todos.some(t => t.key === k && t.status !== 'done')) S.todos.unshift({id: uid(), title: x.title, due: x.deadline && x.deadline.date || '', status: 'todo', source: x.kind, url: x.url, key: k, at: Date.now()}); S.plan[k] = S.plan[k] || 'today'; } } S.multi.clear(); saveLocal(); refreshQueue(); toastUndo(`${keys.length}건을 할 일에 넣었습니다.`); break; }
@@ -242,7 +247,7 @@
       case 'bPin': { e.stopPropagation(); const p = el.dataset.p, f = el.dataset.f || '', l = el.dataset.l || f || p; const list = S.settings.budget, before = list.slice(); const i = list.findIndex(x => x && x.project === p && (x.filter || '') === f); if (i >= 0) list.splice(i, 1); else list.push({project: p, filter: f, label: l}); if (!saveLocal()) { list.splice(0, list.length, ...before); toast('저장하지 못했습니다. 관심 사업 변경을 취소했습니다.'); } else toast(i >= 0 ? '내 관심 사업에서 뺐습니다.' : '내 관심 사업에 추가했습니다.'); renderMain(); break; }
       case 'bUnpin': { e.stopPropagation(); const list = S.settings.budget, i = Number(el.dataset.i); if (!Number.isInteger(i) || i < 0 || i >= list.length) break; const before = list.slice(); list.splice(i, 1); if (!saveLocal()) { list.splice(0, list.length, ...before); toast('저장하지 못했습니다. 관심 사업 변경을 취소했습니다.'); } else toast('내 관심 사업에서 뺐습니다.'); renderMain(); break; }
       case 'budgetTab': if (['subjects', 'ledger'].includes(v)) { S.budget.budgetTab = v; renderMain(); } break;
-      case 'ledger': loadLedger(el.dataset.code); break;
+      case 'ledger': { const b = S.budget, code = el.dataset.code; if (!b || b.busy || !b.table || b.table.error || !b.table.rows?.some(r => r.code === code)) { toast('예산 자료가 바뀌었습니다. 다시 조회해 주세요.'); break; } loadLedger(code); break; }
       case 'bSearchRetry': loadBudgetAll(true); break;
       case 'bSearch': { const input = root.querySelector('#bq'); if (input) S.budget.q = input.value; S.budget.pickOpen = false; budgetQuery(); break; }
       case 'bSearchClear': S.budget.q = ''; budgetQuery(); root.querySelector('#bq')?.focus(); break;
@@ -256,11 +261,11 @@
       case 'ledgerPage': S.budget.ledgerPage = Math.max(1, Number(v) || 1); renderMain(); break;
       case 'ledgerSearch': S.budget.ledgerQuery = root.querySelector('#ledgerQuery')?.value || ''; S.budget.ledgerPage = 1; renderMain(); break;
       case 'ledgerSearchClear': S.budget.ledgerQuery = ''; S.budget.ledgerPage = 1; renderMain(); root.querySelector('#ledgerQuery')?.focus(); break;
-      case 'ledgerRow': { if (!leavePane()) break; const r = S.budget.ledger.rows[Number(el.dataset.i)]; S.sel = {type: 'ledger', row: r}; S.pane.url = ''; renderPane(); break; }
+      case 'ledgerRow': { const r = S.budget?.ledger?.rows?.[Number(el.dataset.i)]; if (!r) { toast('결의 내역이 새로 고쳐졌습니다. 다시 조회해 주세요.'); break; } if (!leavePane()) break; S.sel = {type: 'ledger', row: r}; S.pane.url = ''; renderPane(); break; }
       case 'findDocNo': { const row = el.closest?.('tr[data-act="ledgerRow"]'); if (row) { if (!leavePane()) break; const r = S.budget.ledger?.rows?.[Number(row.dataset.i)]; if (!r) { toast('결의 내역을 찾지 못했습니다. 다시 조회하세요.'); break; } S.sel = {type: 'ledger', row: r}; S.pane.url = ''; renderPane(); } if ('date' in el.dataset) findAndOpenDocNo(el.dataset.no, el.dataset.t, el.dataset.date); else findAndOpenDocNo(el.dataset.no, el.dataset.t); break; }
       case 'csvBudget': { const t = S.budget.table; if (S.budget.busy || !t || t.error) break; download(`예산_${t.project}_${today()}.csv`, R.toCsv(t.rows, [{label: '구분', key: 'level'}, {label: '코드', key: 'code'}, {label: '과목', key: 'name'}, {label: '예산', key: 'budget'}, {label: '집행', key: 'executed'}, {label: '잔액', key: 'balance'}, {label: '집행률(%)', key: 'rate'}]), 'text/csv;charset=utf-8'); break; }
       case 'richBudget': { const t = S.budget.table; if (S.budget.busy || !t || t.error) break; const html = `<table border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse;font-size:10pt"><tr><th>과목</th><th>예산</th><th>집행</th><th>잔액</th><th>집행률</th></tr>${t.rows.map(r => `<tr><td>${esc(r.level)} ${esc(r.name)}</td><td align="right">${won(r.budget)}</td><td align="right">${won(r.executed)}</td><td align="right">${won(r.balance)}</td><td align="right">${pct(r.rate)}</td></tr>`).join('')}</table>`; copyRich(html, t.rows.map(r => `${r.level} ${r.name}\t${won(r.budget)}\t${won(r.executed)}\t${won(r.balance)}\t${pct(r.rate)}`).join('\n')); break; }
-      case 'csvLedger': { const l = S.budget.ledger, month = S.budget.month, rows = ledgerView(S.budget).map(({row}) => row); download(`결의내역_${l.bgtCd}${month ? '_' + month + '월' : ''}_${today()}.csv`, R.toCsv(rows, [{label: '결의일', value: r => ymd8(r.date)}, ...(l.bgtCd === '__ALL' ? [{label: '세목', key: 'name'}] : []), {label: '적요', key: 'desc'}, {label: '금액', key: 'amount'}, {label: '문서번호', key: 'docNo'}, {label: '작성', key: 'writer'}, {label: '전표', key: 'slip'}]), 'text/csv;charset=utf-8'); break; }
+      case 'csvLedger': { const b = S.budget, l = b?.ledger; if (!l || !Array.isArray(l.rows)) { toast('결의 내역이 새로 고쳐졌습니다. 다시 조회해 주세요.'); break; } const month = b.month, rows = ledgerView(S.budget).map(({row}) => row); download(`결의내역_${l.bgtCd}${month ? '_' + month + '월' : ''}_${today()}.csv`, R.toCsv(rows, [{label: '결의일', value: r => ymd8(r.date)}, ...(l.bgtCd === '__ALL' ? [{label: '세목', key: 'name'}] : []), {label: '적요', key: 'desc'}, {label: '금액', key: 'amount'}, {label: '문서번호', key: 'docNo'}, {label: '작성', key: 'writer'}, {label: '전표', key: 'slip'}]), 'text/csv;charset=utf-8'); break; }
       case 'attMonth': loadAttendance(v); break;
       case 'attDay': S.att.day = S.att.day === v ? '' : v; renderMain(); break;
       case 'csvAtt': download(`근태_${S.att.month}.csv`, R.toCsv(S.att.rows, [{label: '날짜', value: r => ymd8(r.date)}, {label: '근무유형', key: 'workType'}, {label: '출결', key: 'result'}, {label: '근태항목', key: 'item'}, {label: '상태', key: 'status'}, {label: '출근', value: r => hm4(r.come)}, {label: '퇴근', value: r => hm4(r.leave)}, {label: '인정(분)', key: 'recognizedMin'}]), 'text/csv;charset=utf-8'); break;
@@ -271,8 +276,8 @@
       case 'mkWeekly': makeWeekly(); break;
       case 'richWeekly': copyRich(weeklyHtml(S.weekly), S.weekly); break;
       case 'dlWeekly': download(`주간업무실적_${today()}.txt`, S.weekly); break;
-      case 'budgetRowAdd': S.settings.budget.push({project: '', filter: '', label: ''}); renderMain(); break;
-      case 'budgetRowDel': S.settings.budget.splice(Number(el.dataset.i), 1); S.budget.table = null; saveLocal(); renderMain(); break;
+      case 'budgetRowAdd': budgetRowAdd(); break;
+      case 'budgetRowDel': budgetRowDel(Number(el.dataset.i)); break;
       case 'cleanSynap': {
         const keys = Object.keys(localStorage).filter(k => k.startsWith('synap_'));
         if (!keys.length) { toast('정리할 그룹웨어 미리보기 캐시가 없습니다.'); break; }
@@ -282,7 +287,7 @@
         if ($('#overlay [aria-label="데이터 관리"]')) openDataCenter(); else if (S.view === 'settings') renderMain();
         break;
       }
-      case 'resetDone': pushUndo('표시 초기화'); S.hidden = {}; S.snooze = {}; S.plan = {}; saveLocal(); render(); toastUndo('숨기기·미루기·보드 계획을 지웠습니다.'); break;
+      case 'resetDone': resetDoneMarks(); break;
       case 'resetRouting': S.routing = null; store.del('routing'); toast('추천 이력을 지웠습니다.'); break;
       case 'resetAll': if (confirm('이 브라우저에 저장된 내 GW 비서 설정·할 일·표시를 모두 지울까요? (그룹웨어 자료는 바뀌지 않습니다)')) { const p = getPrefix(); for (const k of IDB_KEYS) store.del(k); try { sessionStorage.removeItem(aiSessKey()); } catch {} for (const k of Object.keys(localStorage)) if (k.startsWith(p)) localStorage.removeItem(k); for (const k of Object.keys(localStorage)) if (k.startsWith('bwyfgw:wc:migrated:') && localStorage.getItem(k) === currentKey) localStorage.removeItem('bwyfgw:wc:' + k.slice('bwyfgw:wc:migrated:'.length)); reloadUserState(); clearUserViews(); localBaseline = localValues(); schedule(); applyLook(); refresh(); } break;
       case 'toastUndo': undo(); root.querySelector('.toast')?.remove(); break;
@@ -330,6 +335,7 @@
     else if (t.id === 'bPickFilter') { const q = t.value.trim().toLowerCase(); root.querySelectorAll('[data-budget-picker-row]').forEach(row => { row.hidden = !!q && !row.dataset.search.includes(q); }); }
     else if (t.id === 'peopleFilter') { PEOPLE.localFilter = t.value; if (!e.isComposing) peopleFilterRows(); }
     else if (t.id === 'peopleQuery') { PEOPLE.query = t.value; }
+    else if (t.id === 'notificationsQuery') { NTF.query = t.value; }
     else if (t.id === 'sq') { S.search.kw = t.value; }
     else if (t.id === 'weekly') { const shown = t.dataset.prev ?? t.defaultValue; if (S.weekly && S.weekly !== shown) store.set('weeklyRecovery', {at: Date.now(), text: S.weekly}); /* 다른 탭에서 바뀐 초안을 덮기 전에 보관 */ S.weekly = t.value; t.dataset.prev = t.value; const saved = saveLocal(); const w = $('#wkSaved'); if (w) { w.classList.toggle('on', saved); w.textContent = saved ? '자동 저장됨' : '저장 실패 · 내용을 복사하세요'; } }
     else if (t.id === 'palq') palRender(t.value);
@@ -345,7 +351,7 @@
     if (t.id === 'budgetChartSort' && ['executed', 'rate', 'balance', 'name'].includes(t.value)) { S.budget.chartSort = t.value; renderMain(); root.querySelector('#budgetChartSort')?.focus(); }
     if (t.id === 'resDate') resGo();
     if (t.id === 'payPlan') payPlanChanged();
-    if (t.id === 'resTitle') resSyncForm(); // 예약명만 바꾸면 겹침 확인 결과는 그대로 둔다(다시 그리면 누르려던 버튼이 사라져 클릭이 씹힘)
+    if (t.id === 'resTitle') { resSyncForm(); const rs = resState(); if (rs.confirm) rs.rev++; } // 저장 중 새 입력은 이전 요청 완료로 지우지 않는다
     if (t.id === 'resStart' || t.id === 'resEnd') { resSyncForm(); const rs = resState(); if (rs.check) { rs.rev++; rs.check = null; renderMain(); } }
     if (t.id === 'setImportFile') settingsImport(t);
     if (t.classList && t.classList.contains('setc')) saveSettingField(t);

@@ -15,7 +15,7 @@
       const dow = (startDow + dnum - 1) % 7;
       const its = items.filter(x => x.date === iso);
       const d8 = iso.replace(/-/g, ''), tm = teamOf(d8);
-      cells.push(`<div class="c ${iso === t0 ? 'today' : ''} ${dow === 0 || its.some(x => x.cls === 'h') ? 'sun' : dow === 6 ? 'sat' : ''}" data-drop-date="${iso}" ${tm.length ? `data-act="calDay" data-v="${d8}"` : ''}><div class="dn">${dnum}${iso === t0 ? ' <span class="bdg todo" style="height:18px">오늘</span>' : ''}</div>${tm.slice(0, 4).map(teamChip).join('')}${tm.length > 4 ? `<span class="muted" style="font-size:12px">+${tm.length - 4}명</span>` : ''}${its.slice(0, tm.length ? 2 : 4).map(it => `<span class="ev ${it.cls}" ${it.todo ? `draggable="true" data-drag="todo:${esc(it.todo)}"` : ''} data-act="calItem" data-k="${esc(it.key || '')}" data-url="${esc(it.url || '')}" title="${esc(it.tag + ' · ' + it.text)}">${esc(it.text)}</span>`).join('')}${its.length > (tm.length ? 2 : 4) ? `<span class="muted">외 ${its.length - (tm.length ? 2 : 4)}건</span>` : ''}</div>`);
+      cells.push(`<div class="c ${iso === t0 ? 'today' : ''} ${dow === 0 || its.some(x => x.cls === 'h') ? 'sun' : dow === 6 ? 'sat' : ''}" data-drop-date="${iso}" ><div class="dn"><button type="button" class="btn sm ghost" data-cal-date="${iso}" data-act="calDay" data-v="${d8}" aria-label="${iso} 직원 근태 ${tm.length}건" ${iso === t0 ? 'aria-current="date"' : ''}>${dnum}</button>${iso === t0 ? ' <span class="bdg todo" style="height:18px">오늘</span>' : ''}</div>${tm.slice(0, 4).map(teamChip).join('')}${tm.length > 4 ? `<span class="muted" style="font-size:12px">+${tm.length - 4}명</span>` : ''}${its.slice(0, tm.length ? 2 : 4).map(it => `<button type="button" class="ev ${it.cls}" ${it.todo ? `draggable="true" data-drag="todo:${esc(it.todo)}"` : ''} data-act="calItem" data-k="${esc(it.key || '')}" data-url="${esc(it.url || '')}" title="${esc(it.tag + ' · ' + it.text)}">${esc(it.text)}</button>`).join('')}${its.length > (tm.length ? 2 : 4) ? `<span class="muted">외 ${its.length - (tm.length ? 2 : 4)}건</span>` : ''}</div>`);
     }
     const upcoming = items.filter(x => x.date >= t0 && x.cls !== 'h').sort((a, b) => a.date.localeCompare(b.date)).slice(0, 12);
     const legend = [['e', '일정'], ['l', '내 휴가'], ['d', '기한'], ['a', '근태 확인·출장'], ['t', '내 할 일(끌어서 날짜 변경)'], ['h', '휴일'], ['tl', '직원 휴가'], ['tt', '직원 출장·교육'], ['to', '내 시간외 퇴근 확인됨'], ['tw', '내 시간외 퇴근 지문 확인 필요'], ['n', '칩 기호: ✓ 퇴근 지문 확인 · ✗ 지문 없음 · … 확인 대기']];
@@ -24,7 +24,7 @@ ${teamBar(y, mo)}
 ${S.cal.opts ? `<div class="legend">${legend.map(([c, n]) => `<span><i class="ev ${c}" style="display:inline-block;margin:0;padding:0;width:12px;height:12px"></i>${n}</span>`).join('')}</div>` : ''}
 <div class="cal">${WD.map(w => `<div class="h">${w}</div>`).join('')}${cells.join('')}</div>
 ${teamDayPanel()}
-<h2>다가오는 일정·기한</h2>${upcoming.length ? `<div class="list" role="list">${upcoming.map(it => `<div class="row" role="listitem" tabindex="0" data-act="calItem" data-k="${esc(it.key || '')}" data-url="${esc(it.url || '')}" style="grid-template-columns:110px 1fr auto"><span class="bdg ${it.cls === 'd' && R.dday(it.date) <= 1 ? 'urgent' : it.cls === 'd' ? 'todo' : 'tag'}">${esc(it.tag.split(' · ')[0])}</span><div class="mn"><div class="t">${esc(it.text)}</div></div><div class="w">${esc(it.date.slice(5).replace('-', '/'))} · ${ddayText(R.dday(it.date))}</div></div>`).join('')}</div>` : '<div class="list"><div class="empty"><b>다가오는 일정이 없습니다</b></div></div>'}`;
+<h2>다가오는 일정·기한</h2>${upcoming.length ? `<div class="list" role="list">${upcoming.map(it => `<div class="row" role="button" tabindex="0" data-act="calItem" data-k="${esc(it.key || '')}" data-url="${esc(it.url || '')}" style="grid-template-columns:110px 1fr auto"><span class="bdg ${it.cls === 'd' && R.dday(it.date) <= 1 ? 'urgent' : it.cls === 'd' ? 'todo' : 'tag'}">${esc(it.tag.split(' · ')[0])}</span><div class="mn"><div class="t">${esc(it.text)}</div></div><div class="w">${esc(it.date.slice(5).replace('-', '/'))} · ${ddayText(R.dday(it.date))}</div></div>`).join('')}</div>` : '<div class="list"><div class="empty"><b>다가오는 일정이 없습니다</b></div></div>'}`;
   }
   function calendarItems() {
     const out = [];
@@ -156,9 +156,9 @@ ${teamDayPanel()}
     const monthly = b.filter && b.monthly && b.monthly.code === b.filter ? b.monthly : null;
     const monthChart = !b.filter ? '<div class="card2 budget-chart"><div class="ct">월별 집행</div><p class="budget-chart-note">사업 전체 월별 합계는 확인할 수 없어 조회하지 않습니다. 단위사업을 선택해 주세요.</p></div>' : monthly ? (() => {
       const vals = monthly.months.map(m => { if (m.error) return null; const r = (m.rows || []).find(x => x.code === monthly.code); return r && Number.isFinite(r.executed) ? r.executed : null; });
-      const max = Math.max(1, ...vals.filter(v => v !== null && Number.isFinite(v)));
+      const max = Math.max(1, ...vals.filter(v => v !== null && Number.isFinite(v)).map(Math.abs));
       const failed = vals.filter(v => v === null).length;
-      return `<div class="card2 budget-chart"><div class="ct"><span>월별 집행</span></div><p class="budget-chart-note">월별 집행액 · 가장 큰 월을 기준으로 막대 높이 표시. 선택하면 해당 월의 전체 결의 내역을 봅니다.${failed ? ` · ${failed}개월 조회 실패 또는 선택 사업 합계 확인 불가` : ''}</p><div class="budget-months">${vals.map((v, i) => { const month = String(i + 1).padStart(2, '0'); return v === null ? `<div class="budget-month failed" aria-label="${i + 1}월 조회 실패 또는 선택 사업 합계 확인 불가"><span class="budget-month-plot"><span>?</span></span><span>${i + 1}월</span></div>` : `<button type="button" class="budget-month" data-act="budgetMonth" data-v="${month}" aria-pressed="${b.month === month}" title="${i + 1}월 집행 ${won(v)}원" aria-label="${i + 1}월 집행 ${won(v)}원, 결의 내역 보기"><span class="budget-month-plot" aria-hidden="true"><span class="budget-month-bar" style="height:${Math.max(1, Math.min(100, (Number(v) || 0) / max * 100))}%"></span></span><span>${i + 1}월</span><span class="budget-month-value">${won(v)}원</span></button>`; }).join('')}</div></div>`;
+      return `<div class="card2 budget-chart"><div class="ct"><span>월별 집행</span></div><p class="budget-chart-note">월별 집행액 · 절댓값 기준 막대 높이, 음수는 환입·취소로 별도 표시. 선택하면 해당 월의 전체 결의 내역을 봅니다.${failed ? ` · ${failed}개월 조회 실패 또는 선택 사업 합계 확인 불가` : ''}</p><div class="budget-months">${vals.map((v, i) => { const month = String(i + 1).padStart(2, '0'); return v === null ? `<div class="budget-month failed" aria-label="${i + 1}월 조회 실패 또는 선택 사업 합계 확인 불가"><span class="budget-month-plot"><span>?</span></span><span>${i + 1}월</span></div>` : `<button type="button" class="budget-month" data-act="budgetMonth" data-v="${month}" aria-pressed="${b.month === month}" title="${i + 1}월 집행 ${won(v)}원" aria-label="${i + 1}월 집행 ${won(v)}원, 결의 내역 보기"><span class="budget-month-plot" aria-hidden="true"><span class="budget-month-bar" style="height:${Math.min(100, Math.abs(Number(v) || 0) / max * 100)}%;${v < 0 ? 'background:var(--hi);border:2px dashed currentColor' : ''}"></span></span><span>${i + 1}월</span><span class="budget-month-value">${won(v)}원${v < 0 ? ' (환입·취소)' : ''}</span></button>`; }).join('')}</div></div>`;
     })() : (b.monthlyBusy ? '<div class="card2 budget-chart"><div class="ct">월별 집행</div><p class="muted"><span class="spin"></span> 월별 집행을 읽는 중…</p></div>' : `<div class="card2 budget-chart"><div class="ct">월별 집행</div><p class="budget-chart-note">1~12월 집행액을 확인합니다.</p><div class="acts"><button class="btn sm" data-act="loadMonthly">${ic('chart')}월별 집행 불러오기</button></div></div>`);
     const barChart = leaves.length ? (() => {
       const sort = ['executed', 'rate', 'balance', 'name'].includes(b.chartSort) ? b.chartSort : 'executed';
@@ -183,20 +183,21 @@ ${teamDayPanel()}
 <button class="btn sm ${!b.filter ? 'primary' : ''}" data-act="bPick" data-p="${esc(b.project)}" data-f="">이 사업 전체 보기</button>
 ${isPinned(b.project, '') ? '' : `<button class="btn sm" data-act="bPin" data-p="${esc(b.project)}" data-f="" data-l="${esc((curCat && curCat.name) || b.project)}">${ic('plus')}사업 전체를 내 목록에 추가</button>`}</div>
 <div class="bar"><label for="bPickFilter">단위사업 찾기</label><input class="inp grow" id="bPickFilter" placeholder="사업명 또는 코드로 찾기" autocomplete="off"></div><div class="muted" style="margin-bottom:6px">단위사업 이름을 누르면 조회하고, 별 버튼으로 관심 사업에 저장합니다.</div>
-${subjs.length ? `<table><tr><th>단위사업</th><th class="num">예산</th><th class="num">집행</th><th class="num">잔액</th><th class="num">집행률</th><th></th></tr>${subjs.map(r => { const pin = isPinned(b.project, r.code); return `<tr data-budget-picker-row data-search="${esc((r.name + ' ' + r.code).toLowerCase())}" class="${r.level === '관' ? 'lv-관' : 'click'} ${b.filter === r.code ? 'sel' : ''}" ><td>${r.level === '항' ? `<button class="btn sm ghost" data-act="bPick" data-p="${esc(b.project)}" data-f="${esc(r.code)}">↳ ${esc(r.name)} <span class="muted">${esc(r.code)}</span></button>` : `${esc(r.name)} <span class="muted">${esc(r.code)}</span>`}</td><td class="num">${won(r.budget)}</td><td class="num">${won(r.executed)}</td><td class="num">${won(r.balance)}</td><td class="num">${pct(r.rate)}</td><td class="nowrap">${r.level === '항' ? `<button class="btn sm ${pin ? 'on' : 'ghost'}" data-act="bPin" data-p="${esc(b.project)}" data-f="${esc(r.code)}" data-l="${esc(r.name)}" aria-label="${esc(r.name)} ${pin ? '관심 사업에서 빼기' : '관심 사업에 추가'}">${ic('star')}${pin ? '저장됨' : '저장'}</button>` : ''}</td></tr>`; }).join('')}</table>` : '<p><span class="spin"></span> 과목 목록을 불러오는 중…</p>'}</div>` : '';
+${subjs.length ? `<table><caption>예산 사업 및 집행 현황</caption><tr><th scope="col">단위사업</th><th scope="col" class="num">예산</th><th scope="col" class="num">집행</th><th scope="col" class="num">잔액</th><th scope="col" class="num">집행률</th><th scope="col"></th></tr>${subjs.map(r => { const pin = isPinned(b.project, r.code); return `<tr data-budget-picker-row data-search="${esc((r.name + ' ' + r.code).toLowerCase())}" class="${r.level === '관' ? 'lv-관' : 'click'} ${b.filter === r.code ? 'sel' : ''}" ><td>${r.level === '항' ? `<button class="btn sm ghost" data-act="bPick" data-p="${esc(b.project)}" data-f="${esc(r.code)}">↳ ${esc(r.name)} <span class="muted">${esc(r.code)}</span></button>` : `${esc(r.name)} <span class="muted">${esc(r.code)}</span>`}</td><td class="num">${won(r.budget)}</td><td class="num">${won(r.executed)}</td><td class="num">${won(r.balance)}</td><td class="num">${pct(r.rate)}</td><td class="nowrap">${r.level === '항' ? `<button class="btn sm ${pin ? 'on' : 'ghost'}" data-act="bPin" data-p="${esc(b.project)}" data-f="${esc(r.code)}" data-l="${esc(r.name)}" aria-label="${esc(r.name)} ${pin ? '관심 사업에서 빼기' : '관심 사업에 추가'}">${ic('star')}${pin ? '저장됨' : '저장'}</button>` : ''}</td></tr>`; }).join('')}</table>` : '<p><span class="spin"></span> 과목 목록을 불러오는 중…</p>'}</div>` : '';
     return `${pgh('예산 집행', esc(curName), `<button class="btn sm ${b.pickOpen ? 'primary' : ''}" data-act="bTogglePick">${ic('gear')}사업 고르기·추가</button>${isPinned(b.project, b.filter) ? '' : `<button class="btn sm" data-act="bPin" data-p="${esc(b.project)}" data-f="${esc(b.filter || '')}" data-l="${esc(curName)}">${ic('star')}내 관심 사업에 저장</button>`}<button class="btn sm" data-act="openUrl" data-url="${esc(S.a.budget.url)}" data-title="예실대비현황">${ic('ext')}예실대비현황</button>${t && !t.error ? `<button class="btn sm" data-act="richBudget">한글용 복사</button><button class="btn sm" data-act="csvBudget">${ic('down')}엑셀(CSV)</button>` : ''}`)}
 <div class="bar"><span class="muted">내 관심 사업</span>${pinChips}<button class="chip" data-act="bTogglePick">${ic('plus')}다른 사업 선택…</button>${b.busy ? '<span class="spin"></span>' : ''}<label for="bq">전체 사업 과목 검색</label><input class="inp grow" id="bq" placeholder="예: 출장 여비, 시간외" value="${esc(b.q)}" aria-label="전체 사업 과목 검색"><button class="btn sm" data-act="bSearch">검색</button>${b.q ? '<button class="btn sm" data-act="bSearchClear" aria-label="과목 검색어 지우기">지우기</button>' : ''}</div>
 ${picker}
+<p class="muted" role="status">회계연도 ${esc(t && t.year || '확인 전')} · 예산 조회 ${esc(t && t.asOf || '아직 조회하지 않음')} · 자료 세대 ${esc(t && t.generation != null ? t.generation : b.generation || 0)} · 전체 새로고침 시 예산도 다시 조회합니다.</p>
 ${t && t.error ? `<div class="box errb">${esc(t.message)}</div>` : ''}
 ${!searching ? `<div class="bar" role="group" aria-label="예산 화면"><button class="btn sm ${b.budgetTab !== 'ledger' ? 'primary' : ''}" aria-pressed="${String(b.budgetTab !== 'ledger')}" data-act="budgetTab" data-v="subjects">예산 과목</button><button class="btn sm ${b.budgetTab === 'ledger' ? 'primary' : ''}" aria-pressed="${String(b.budgetTab === 'ledger')}" data-act="budgetTab" data-v="ledger">결의 내역</button></div>` : ''}
 ${searching ? budgetHitsHtml(b, flag) : ''}
 ${t && !t.error && !searching && b.budgetTab !== 'ledger' ? `${summary}${leaves.length || !b.filter ? `<div class="cards budget-cards" style="margin-top:12px">${barChart}${monthChart}</div>` : ''}
-<details class="budget-subjects"><summary>예산 과목표 전체 보기 / 접기 (${rows.length}개)</summary><table><tr><th>과목</th><th class="num">예산</th><th class="num">집행</th><th class="num">잔액</th><th class="num">집행률</th><th></th></tr>${rows.map(r => `<tr class="lv-${esc(r.level)} ${r.level === '세' || (!b.filter && r.level === '항') ? 'click' : ''} ${ledger && ledger.bgtCd === r.code ? 'sel' : ''}" ${r.level === '세' ? `tabindex="0" role="button" data-budget-key data-act="ledger" data-code="${esc(r.code)}"` : !b.filter && r.level === '항' ? `tabindex="0" role="button" data-budget-key data-act="bPick" data-p="${esc(b.project)}" data-f="${esc(r.code)}"` : ''}><td title="과목 코드 ${esc(r.code)}">${esc(String(r.name).replace(/^[○●·\s]+/, ''))} ${flag(r)}</td><td class="num">${won(r.budget)}</td><td class="num">${won(r.executed)}</td><td class="num">${won(r.balance)}</td><td class="num">${pct(r.rate)}<div class="rate"><i class="${r.balance < 0 ? 'over' : r.rate < el - 35 ? 'low' : ''}" style="width:${Math.min(100, Math.max(0, r.rate))}%"></i><b style="left:${el}%"></b></div></td><td class="nowrap">${!b.filter && r.level === '항' ? `<button class="btn sm ghost" data-act="bPin" data-p="${esc(b.project)}" data-f="${esc(r.code)}" data-l="${esc(r.name)}" title="내 관심 사업에 추가">${ic('star')}</button>` : ''}</td></tr>`).join('')}</table></details>
+<details class="budget-subjects"><summary>예산 과목표 전체 보기 / 접기 (${rows.length}개)</summary><table><tr><th scope="col">과목</th><th scope="col" class="num">예산</th><th scope="col" class="num">집행</th><th scope="col" class="num">잔액</th><th scope="col" class="num">집행률</th><th scope="col"></th></tr>${rows.map(r => `<tr class="lv-${esc(r.level)} ${r.level === '세' || (!b.filter && r.level === '항') ? 'click' : ''} ${ledger && ledger.bgtCd === r.code ? 'sel' : ''}" ${r.level === '세' ? `tabindex="0" role="button" data-budget-key data-act="ledger" data-code="${esc(r.code)}"` : !b.filter && r.level === '항' ? `tabindex="0" role="button" data-budget-key data-act="bPick" data-p="${esc(b.project)}" data-f="${esc(r.code)}"` : ''}><td title="과목 코드 ${esc(r.code)}">${esc(String(r.name).replace(/^[○●·\s]+/, ''))} ${flag(r)}</td><td class="num">${won(r.budget)}</td><td class="num">${won(r.executed)}</td><td class="num">${won(r.balance)}</td><td class="num">${pct(r.rate)}<div class="rate"><i class="${r.balance < 0 ? 'over' : r.rate < el - 35 ? 'low' : ''}" style="width:${Math.min(100, Math.max(0, r.rate))}%"></i><b style="left:${el}%"></b></div></td><td class="nowrap">${!b.filter && r.level === '항' ? `<button class="btn sm ghost" data-act="bPin" data-p="${esc(b.project)}" data-f="${esc(r.code)}" data-l="${esc(r.name)}" title="내 관심 사업에 추가">${ic('star')}</button>` : ''}</td></tr>`).join('')}</table></details>
 ${leaves.length > 1 ? `<p><button class="btn" data-act="ledgerAll">${esc(head ? head.name : '')} 전체 결의 내역 보기 (세목 ${leaves.length}개)</button></p>` : ''}
 ${t.total ? `<p class="muted">참고: ${esc((curCat && curCat.name) || t.project)} 전체(인건비 포함) 예산 ${won(t.total.budget)}원 · 집행 ${won(t.total.executed)}원 · ${pct(t.total.rate)}</p>` : ''}` : (b.busy ? `<div class="list">${'<div class="sk row"></div>'.repeat(5)}</div>` : '')}
 ${!searching && b.budgetTab === 'ledger' ? (ledger ? `<h3>결의 내역 · ${esc(ledger.name || ledger.bgtCd)} <span class="muted">${ledger.rows ? `${lrows.length}건 / 전체 ${ledger.rows.length}건` : ''}</span>${ledger.rows ? ` <button class="btn sm" data-act="csvLedger">${ic('down')}필터 결과 CSV</button>` : ''}</h3>${ledger.error ? `<p class="err">${esc(ledger.error)}</p>` : ledger.rows ? `<div class="bar" role="group" aria-label="결의 월 선택">${[['', '전체'], ...Array.from({length: 12}, (_, i) => [String(i + 1).padStart(2, '0'), `${i + 1}월`])].map(([value, label]) => `<button class="btn sm ${b.month === value || (!b.month && !value) ? 'primary' : ''}" data-act="ledgerMonth" data-v="${value}" aria-pressed="${String((b.month || '') === value)}">${label}</button>`).join('')}</div>
 <div class="bar"><label for="ledgerQuery">결의 검색</label><input class="inp grow" id="ledgerQuery" value="${esc(b.ledgerQuery || '')}" placeholder="적요, 세목, 문서번호, 작성자, 전표, 금액"><button class="btn sm" data-act="ledgerSearch">검색</button><button class="btn sm" data-act="ledgerSearchClear">지우기</button><span class="muted">정렬</span>${[['dateDesc', '최신순'], ['dateAsc', '오래된순'], ['amountDesc', '금액 높은순'], ['amountAsc', '금액 낮은순']].map(([value, label]) => `<button class="btn sm ${(b.ledgerSort || 'dateDesc') === value ? 'primary' : ''}" data-act="ledgerSort" data-v="${value}" aria-pressed="${String((b.ledgerSort || 'dateDesc') === value)}">${label}</button>`).join('')}</div>
-<table><tr><th>결의일</th>${multiLedger ? '<th>세목</th>' : ''}<th>적요</th><th class="num">금액</th><th>문서번호</th><th>작성</th><th>전표</th></tr>${lrows.slice((ledgerPage - 1) * 50, ledgerPage * 50).map(({row: r, index}) => `<tr><td class="nowrap">${esc(ymd8(r.date))}</td>${multiLedger ? `<td class="muted">${esc(String(r.name || '').replace(/^○\s*/, '').slice(0, 18))}</td>` : ''}<td><button class="btn sm ghost" data-act="ledgerRow" data-i="${index}" aria-label="${esc(r.desc || '결의')} 상세 보기">${esc(r.desc || '결의 상세 보기')}</button></td><td class="num">${won(r.amount)}</td><td class="nowrap">${r.docNo ? `<button class="btn sm ghost" data-act="findDocNo" data-no="${esc(r.docNo)}" data-t="${esc(r.desc || '')}" data-date="${esc(r.date || '')}" title="결재문서 바로 찾아 열기">${esc(r.docNo)}</button>` : ''}</td><td class="nowrap">${esc(r.writer)}</td><td class="nowrap muted">${esc(r.slip)}</td></tr>`).join('')}<tr class="lv-관"><td colspan="${multiLedger ? 3 : 2}">필터 결과 합계 <span class="muted">(연간 ${esc(ledger.check)})</span></td><td class="num">${won(lrows.reduce((s, {row}) => s + (Number(row.amount) || 0), 0))}</td><td colspan="3"></td></tr></table>${!lrows.length ? '<p class="muted">조건에 맞는 결의가 없습니다.</p>' : ''}<div class="bar" aria-label="결의 페이지"><button class="btn sm" data-act="ledgerPage" data-v="${ledgerPage - 1}" ${ledgerPage <= 1 ? 'disabled' : ''}>이전</button><span>${ledgerPage} / ${ledgerPages}쪽 · 페이지당 50건</span><button class="btn sm" data-act="ledgerPage" data-v="${ledgerPage + 1}" ${ledgerPage >= ledgerPages ? 'disabled' : ''}>다음</button></div>` : '<p><span class="spin"></span></p>'}` : '<p class="muted">예산 과목에서 세목을 선택하거나 전체 결의를 불러오세요.</p><button class="btn sm" data-act="ledgerAll">전체 결의 불러오기</button>') : ''}`;
+<table><tr><th scope="col">결의일</th>${multiLedger ? '<th scope="col">세목</th>' : ''}<th scope="col">적요</th><th scope="col" class="num">금액</th><th scope="col">문서번호</th><th scope="col">작성</th><th scope="col">전표</th></tr>${lrows.slice((ledgerPage - 1) * 50, ledgerPage * 50).map(({row: r, index}) => `<tr><td class="nowrap">${esc(ymd8(r.date))}</td>${multiLedger ? `<td class="muted">${esc(String(r.name || '').replace(/^○\s*/, '').slice(0, 18))}</td>` : ''}<td><button class="btn sm ghost" data-act="ledgerRow" data-i="${index}" aria-label="${esc(r.desc || '결의')} 상세 보기">${esc(r.desc || '결의 상세 보기')}</button></td><td class="num">${won(r.amount)}</td><td class="nowrap">${r.docNo ? `<button class="btn sm ghost" data-act="findDocNo" data-no="${esc(r.docNo)}" data-t="${esc(r.desc || '')}" data-date="${esc(r.date || '')}" title="결재문서 바로 찾아 열기">${esc(r.docNo)}</button>` : ''}</td><td class="nowrap">${esc(r.writer)}</td><td class="nowrap muted">${esc(r.slip)}</td></tr>`).join('')}<tr class="lv-관"><td colspan="${multiLedger ? 3 : 2}">필터 결과 합계 <span class="muted">(연간 ${esc(ledger.check)})</span></td><td class="num">${won(lrows.reduce((s, {row}) => s + (Number(row.amount) || 0), 0))}</td><td colspan="3"></td></tr></table>${!lrows.length ? '<p class="muted">조건에 맞는 결의가 없습니다.</p>' : ''}<div class="bar" aria-label="결의 페이지"><button class="btn sm" data-act="ledgerPage" data-v="${ledgerPage - 1}" ${ledgerPage <= 1 ? 'disabled' : ''}>이전</button><span>${ledgerPage} / ${ledgerPages}쪽 · 페이지당 50건</span><button class="btn sm" data-act="ledgerPage" data-v="${ledgerPage + 1}" ${ledgerPage >= ledgerPages ? 'disabled' : ''}>다음</button></div>` : '<p><span class="spin"></span></p>'}` : '<p class="muted">예산 과목에서 세목을 선택하거나 전체 결의를 불러오세요.</p><button class="btn sm" data-act="ledgerAll">전체 결의 불러오기</button>') : ''}`;
   }
   // 모든 사업에서 찾은 과목 결과(검색어가 있을 때 현재 사업 표 대신 보여 준다)
   function budgetHitsHtml(b, flag) {
@@ -209,7 +210,7 @@ ${!searching && b.budgetTab === 'ledger' ? (ledger ? `<h3>결의 내역 · ${esc
     const note = res.mode === 'any' ? '입력한 단어를 모두 가진 과목이 없어, 일부 단어만 맞는 과목을 보여 줍니다.' : res.literal < res.total ? '입력한 말과 비슷한 과목(예: 출장 → 여비)도 함께 찾았습니다.' : '';
     const live = res.rows.filter(r => !r.empty), idle = res.rows.filter(r => r.empty);
     const tr = r => '<tr class="click" tabindex="0" role="button" data-budget-key data-act="bHit" data-p="' + esc(r.project) + '" data-h="' + esc(r.hang) + '" data-code="' + esc(r.code) + '" data-lv="' + esc(r.level) + '" data-x="' + r.executed + '"' + (r.empty ? ' data-empty="1"' : '') + '><td>' + (r.projectName ? esc(r.projectName) : '<span class="muted">공통 과목표</span>') + '</td><td><div class="muted" style="font-size:12.5px">' + esc(r.trail.join(' › ')) + '</div>' + esc(r.name) + ' <span class="muted">' + esc(r.level) + ' ' + esc(r.code) + '</span> ' + (r.empty ? '' : flag(r)) + '</td><td class="num">' + (r.empty ? '-' : won(r.budget)) + '</td><td class="num">' + (r.empty ? '-' : won(r.executed)) + '</td><td class="num">' + (r.empty ? '-' : won(r.balance)) + '</td><td class="num">' + (r.empty ? '-' : pct(r.rate)) + '</td></tr>';
-    const head = '<tr><th>사업</th><th>과목</th><th class="num">예산</th><th class="num">집행</th><th class="num">잔액</th><th class="num">집행률</th></tr>';
+    const head = '<tr><th scope="col">사업</th><th scope="col">과목</th><th scope="col" class="num">예산</th><th scope="col" class="num">집행</th><th scope="col" class="num">잔액</th><th scope="col" class="num">집행률</th></tr>';
     return warn + '<h3>모든 사업에서 찾은 과목 <span class="muted">“' + esc(b.q) + '” ' + res.total + '건' + (res.total > res.rows.length ? ' (위 ' + res.rows.length + '건만 표시)' : '') + ' · 누르면 그 사업의 결의 내역으로 이동</span></h3>' + (note ? '<p class="muted">' + esc(note) + '</p>' : '')
       + (live.length ? '<table>' + head + live.map(tr).join('') + '</table>' : '<p class="muted">예산이나 집행이 있는 과목은 없습니다.</p>')
       + (idle.length ? '<h3>예산 배정 없음 <span class="muted">올해 예산·집행이 모두 0원인 과목 ' + idle.length + '건 (공통 과목표)</span></h3><table>' + head + idle.map(tr).join('') + '</table>' : '');
@@ -217,23 +218,30 @@ ${!searching && b.budgetTab === 'ledger' ? (ledger ? `<h3>결의 내역 · ${esc
   async function loadBudgetAll(force) {
     const b = S.budget;
     if (b.allBusy || (b.all && !force)) return;
+    force = !!force || !!b.forceAll;
+    const req = b.allReq = (b.allReq || 0) + 1, owner = typeof currentKey === 'undefined' ? '' : currentKey;
+    const valid = () => S.budget === b && req === b.allReq && (typeof currentKey === 'undefined' || owner === currentKey) && (typeof getUserKey !== 'function' || getUserKey() === owner);
+    if (!valid()) return;
     b.allBusy = true; b.allErr = ''; if (force) b.all = null;
     if (S.view === 'budget') renderMain();
-    try { const all = await GW.budgetAll({year: b.table && b.table.year, force: !!force}); b.all = all; b.allRecs = R.budgetRecords(all); }
-    catch (e) { b.allErr = e.message; }
+    try { const all = await GW.budgetAll({year: b.table && b.table.year, force: !!force}); if (!valid()) return; b.all = all; b.allRecs = R.budgetRecords(all); b.forceAll = false; b.allAsOf = new Date().toISOString(); }
+    catch (e) { if (!valid()) return; b.allErr = e.message; }
+    if (!valid()) return;
     b.allBusy = false; if (S.view === 'budget') renderMain();
   }
   function budgetQuery() { const b = S.budget; if ((b.q || '').trim() && !b.all && !b.allBusy && GW.budgetAll) loadBudgetAll(); renderMain(); }
   async function loadBudget() {
-    const b = S.budget, seq = ++b.seq;
+    const b = S.budget, seq = ++b.seq, owner = typeof currentKey === 'undefined' ? '' : currentKey;
+    const valid = () => S.budget === b && seq === b.seq && (typeof currentKey === 'undefined' || owner === currentKey) && (typeof getUserKey !== 'function' || getUserKey() === owner);
+    if (!valid()) return;
     b.busy = true; b.table = null;
     if (b.full && b.full.project !== b.project) b.full = null;
     b.q = ''; b.ledgerQuery = ''; b.ledgerPage = 1; b.budgetTab = 'subjects';
     b.ledger = null; b.monthly = null; b.month = ''; b.monthlyBusy = false; b.mreq = (b.mreq || 0) + 1;
     if (S.view === 'budget') renderMain();
     if (!b.catalog) {
-      try { b.catalog = await GW.budgetCatalog(); } catch {}
-      if (seq !== b.seq) return;
+      try { const catalog = await GW.budgetCatalog(); if (!valid()) return; b.catalog = catalog; } catch {}
+      if (!valid()) return;
     }
     if (!b.project) {
       const p = (S.settings.budget || []).find(x => x && typeof x.project === 'string' && x.project.trim());
@@ -251,8 +259,9 @@ ${!searching && b.budgetTab === 'ledger' ? (ledger ? `<h3>결의 내역 · ${esc
     }
     const requestedProject = b.project;
     let full = b.full && b.full.project === b.project ? b.full : null;
-    if (!full) { try { full = await GW.budgetProject({project: b.project, filter: ''}); } catch (e) { full = {error: true, message: e.message}; } }
-    if (seq !== b.seq || b.project !== requestedProject) return;
+    if (!full) { if (!valid()) return; try { full = await GW.budgetProject({project: b.project, filter: ''}); } catch (e) { full = {error: true, message: e.message}; } }
+    if (!valid() || b.project !== requestedProject) return;
+    if (!full.error) full = {...full, asOf: full.asOf || new Date().toISOString(), generation: b.generation || 0};
     b.full = full;
     if (full.error) b.table = full;
     else {
@@ -263,21 +272,25 @@ ${!searching && b.budgetTab === 'ledger' ? (ledger ? `<h3>결의 내역 · ${esc
     if (b.pendingLedger) { const pc = b.pendingLedger; b.pendingLedger = ''; if (b.table && !b.table.error) loadLedger(pc); }
   }
   async function loadLedger(code) {
-    const b = S.budget;
+    const b = S.budget, owner = typeof currentKey === 'undefined' ? '' : currentKey;
+    const valid = () => S.budget === b && (typeof currentKey === 'undefined' || owner === currentKey) && (typeof getUserKey !== 'function' || getUserKey() === owner);
+    if (!valid()) return;
     const row = b.table && b.table.rows.find(r => r.code === code);
     const seq = ++b.seq;
     b.ledger = {bgtCd: code, name: row ? row.name : code, rows: null}; b.month = ''; b.ledgerQuery = ''; b.ledgerPage = 1; b.budgetTab = 'ledger';
     renderMain();
     let res;
     try { res = await GW.budgetLedger({project: b.project, bgtCd: code, year: b.table && b.table.year, gisu: b.table && b.table.gisu}); } catch (e) { res = {error: e.message}; }
-    if (seq !== b.seq || !b.ledger || b.ledger.bgtCd !== code) return;
+    if (!valid() || seq !== b.seq || !b.ledger || b.ledger.bgtCd !== code) return;
     if (res.error) b.ledger.error = res.error;
     else { const ok = row ? res.checkSum === row.executed : null; Object.assign(b.ledger, {rows: res.rows, checkSum: res.checkSum, check: ok === null ? '합계' : ok ? `합계 ✓ 집행액 ${won(row.executed)}원과 일치` : `합계 ⚠ 집행액 ${won(row.executed)}원과 ${won(row.executed - res.checkSum)}원 차이`}); }
     if (S.view === 'budget') renderMain();
   }
   // All subjects under the selected 항 at once (예: 노121 → 26건), checked against the 항 total.
   async function loadLedgerAll() {
-    const b = S.budget;
+    const b = S.budget, owner = typeof currentKey === 'undefined' ? '' : currentKey;
+    const validOwner = () => S.budget === b && (typeof currentKey === 'undefined' || owner === currentKey) && (typeof getUserKey !== 'function' || getUserKey() === owner);
+    if (!validOwner()) return;
     const t = b.table;
     if (!t || t.error) return;
     const head = b.filter ? t.rows.find(r => r.code === b.filter) : t.total;
@@ -288,7 +301,7 @@ ${!searching && b.budgetTab === 'ledger' ? (ledger ? `<h3>결의 내역 · ${esc
     try {
       // 한 세목이 실패해도 나머지는 보여 주고, 실패한 세목은 따로 알린다
       const settled = await Promise.allSettled(leaves.map(async r => ({r, l: await GW.budgetLedger({project: b.project, bgtCd: r.code, year: t.year, gisu: t.gisu})})));
-      if (seq !== b.seq) return;
+      if (!validOwner() || seq !== b.seq) return;
       const valid = s => s.status === 'fulfilled' && s.value.l && !s.value.l.error && Array.isArray(s.value.l.rows) && Number.isFinite(s.value.l.checkSum);
       const parts = settled.filter(valid).map(s => s.value);
       const failed = leaves.filter((r, i) => !valid(settled[i])).map(r => r.code);
@@ -297,18 +310,20 @@ ${!searching && b.budgetTab === 'ledger' ? (ledger ? `<h3>결의 내역 · ${esc
       const bad = parts.filter(p => p.l.checkSum !== p.r.executed);
       const target = head && Number.isFinite(head.executed) ? head.executed : null;
       Object.assign(b.ledger, {rows, checkSum: sum, check: !leaves.length ? '⚠ 조회할 세목이 없어 대조할 수 없습니다' : failed.length ? `⚠ 일부만 읽음: 세목 ${failed.join(', ')} 조회 실패 · 읽은 합계 ${won(sum)}원${target === null ? ' (대조 기준 없음)' : ` (전체 ${won(target)}원)`}` : target === null ? `⚠ 대조 기준 없음 · 읽은 합계 ${won(sum)}원${bad.length ? ` · 확인 필요 세목 ${bad.map(p => p.r.code).join(', ')}` : ''}` : sum === target && !bad.length ? `합계 ✓ ${won(target)}원과 일치 (세목 ${parts.length}개, ${rows.length}건)` : `합계 ⚠ ${won(target)}원과 ${won(target - sum)}원 차이${bad.length ? ` · 확인 필요 세목 ${bad.map(p => p.r.code).join(', ')}` : ''}`});
-    } catch (e) { if (seq === b.seq) b.ledger.error = e.message; }
-    if (S.view === 'budget') renderMain();
+    } catch (e) { if (validOwner() && seq === b.seq) b.ledger.error = e.message; }
+    if (validOwner() && S.view === 'budget') renderMain();
   }
   async function loadMonthly() {
     const b = S.budget;
     if (!b.filter) { toast('사업 전체 월별 합계는 확인할 수 없어 조회하지 않습니다. 단위사업을 선택해 주세요.'); return; }
-    const code = b.filter;
+    const code = b.filter, owner = typeof currentKey === 'undefined' ? '' : currentKey;
+    const valid = () => S.budget === b && (typeof currentKey === 'undefined' || owner === currentKey) && (typeof getUserKey !== 'function' || getUserKey() === owner);
+    if (!valid()) return;
     const req = (b.mreq = (b.mreq || 0) + 1), project = b.project;
     b.monthlyBusy = true; renderMain();
     let res = null;
-    try { res = await GW.budgetMonthly({project, code, year: b.table && b.table.year, gisu: b.table && b.table.gisu}); res.code = code; } catch (e) { if (req === b.mreq) toast('월별 집행을 읽지 못했습니다: ' + e.message); }
-    if (req !== b.mreq) return; // 더 새 요청이 있으면 그쪽이 화면을 맡는다
+    try { res = await GW.budgetMonthly({project, code, year: b.table && b.table.year, gisu: b.table && b.table.gisu}); res.code = code; } catch (e) { if (valid() && req === b.mreq) toast('월별 집행을 읽지 못했습니다: ' + e.message); }
+    if (!valid() || req !== b.mreq) return; // 더 새 요청이 있으면 그쪽이 화면을 맡는다
     if (project !== b.project) { b.monthlyBusy = false; if (S.view === 'budget') renderMain(); return; } // 조회 중 사업을 바꾸면 이전 결과는 버린다
     if (res) b.monthly = res;
     b.monthlyBusy = false; if (S.view === 'budget') renderMain();

@@ -2,6 +2,7 @@
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
   // ---------- storage (per-user isolation) ----------
   function getUserKey() {
+    if (window.BWYFGW_DEMO) return 'D1001';
     try {
       const u = JSON.parse(sessionStorage.getItem('userInfo') || '{}');
       const uc = u && u.ucUserInfo ? (typeof u.ucUserInfo === 'string' ? JSON.parse(u.ucUserInfo) : u.ucUserInfo) : null;
@@ -81,7 +82,7 @@
         if (v === null && currentKey !== 'default') {
           const old = localStorage.getItem('bwyfgw:wc:' + k);
           const owner = localStorage.getItem('bwyfgw:wc:migrated:' + k); // 이미 다른 사용자가 가져간 자료는 넘겨받지 않는다
-          if (old !== null && (!owner || owner === currentKey)) {
+          if (old !== null && owner === currentKey) {
             v = old;
             localStorage.setItem(p + k, old);
             localStorage.setItem('bwyfgw:wc:migrated:' + k, currentKey);
@@ -146,11 +147,12 @@
         const old = localStorage.getItem(legacyKey);
         if (old === null) continue;
         const owner = localStorage.getItem('bwyfgw:wc:migrated:' + k);
-        if (localStorage.getItem(p + k) === null && (!owner || owner === currentKey)) {
+        if (localStorage.getItem(p + k) === null && owner === currentKey) {
           localStorage.setItem(p + k, old);
           localStorage.setItem('bwyfgw:wc:migrated:' + k, currentKey);
         }
-        if (localStorage.getItem(p + k) !== null || (owner && owner === currentKey)) localStorage.removeItem(legacyKey);
+        // 소유자가 확인되지 않은 이전 자료는 어떤 사용자에게도 넘기거나 삭제하지 않는다.
+        if (owner && owner === currentKey && localStorage.getItem(p + k) !== null) localStorage.removeItem(legacyKey);
       } catch {}
     }
     try { if (localStorage.getItem('bwyfgw:state') !== null) localStorage.removeItem('bwyfgw:state'); } catch {}
@@ -207,7 +209,8 @@
     S.focus = null; S.multi.clear(); S.undo = []; S.raw = null; S.a = null;
     previewCache.clear(); routingFailAt = 0; S.mailDet = {}; S.mailDetBusy = {}; S.bodyOpen = false;
     S.search = {kw: '', types: ['doc', 'mail', 'board', 'file', 'person'], period: '', res: null, busy: false, more: {}};
-    S.mailSearch = {kw: '', res: null}; S.team = {}; S.appsC = null; S.chat = null; S.res = null; S.expBar = null; S.aiHist = [];
+    S.docs = null; // Discard the state object as well as its pending request generation.
+    S.mailSearch = {kw: '', res: null, busy: false, seq: 0}; S.team = {}; S.appsC = null; S.chat = null; S.res = null; S.expBar = null; S.aiHist = [];
     S.att = {month: '', rows: null, busy: false, seq: (S.att?.seq || 0) + 1, day: ''};
     S.budget = {project: '', filter: '', table: null, ledger: null, monthly: null, month: '', busy: false, q: '', seq: (S.budget?.seq || 0) + 1};
     if (typeof $ === 'function') { const frame = $('#frame'); if (frame) frame.replaceChildren(); const overlay = $('#overlay'); if (overlay) overlay.replaceChildren(); }

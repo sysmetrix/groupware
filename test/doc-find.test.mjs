@@ -16,7 +16,7 @@ test('dfKind: received by form, sent by an outside recipient, otherwise draft', 
   assert.equal(dfKind(doc({text: '수신자 한빛시장 (경유) 제목 결과 통보'})), 'send');
   assert.equal(dfKind(doc()), 'draft');
   assert.equal(dfKind(doc({text: '수신자 내부 결재 제목 계획'})), 'draft');
-  assert.equal(dfKind(doc({text: ''})), 'draft'); assert.equal(dfKind(null), 'draft');
+  assert.equal(dfKind(doc({text: ''})), 'unknown'); assert.equal(dfKind(null), 'unknown');
 });
 
 test('dfSameDept matches exact and containing names, never empty ones', () => {
