@@ -25,7 +25,10 @@ test('입력값 보존, Enter 검색, blur 재렌더 방지',()=>{
  assert.match(ev,/e\.isComposing/);
 });
 test('행과 칩은 키보드 접근 가능하며 화면 전환은 버튼 그룹이다',()=>{
- for(const action of ['ledgerRow','bHit','ledger','bPick']) assert.match(ui,new RegExp('data-budget-key data-act="'+action+'"'));
+ for(const action of ['bHit','ledger','bPick']) assert.match(ui,new RegExp('data-budget-key data-act="'+action+'"'));
+ assert.match(ui, /<button class="btn sm ghost" data-act="ledgerRow"/);
+ assert.doesNotMatch(ui, /<tr class="click" tabindex="0" role="button" data-budget-key data-act="ledgerRow"/);
+ assert.match(ui, /<button class="btn sm ghost" data-act="bPick"/);
  assert.match(ev,/t\.hasAttribute\?\.\('data-budget-key'\)/); assert.match(ev,/t\.click\(\)/);
  assert.match(ui,/role="group" aria-label="예산 화면"/); assert.doesNotMatch(ui,/role="tablist" aria-label="예산 화면"/);
  assert.match(ui,/<button type="button" class="btn sm ghost" data-act="bPick"/);

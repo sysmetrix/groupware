@@ -8,10 +8,10 @@ import {spawnSync} from 'node:child_process';
 import vm from 'node:vm';
 const src=readFileSync(new URL('../src/live/wc/10-calendar-budget.js',import.meta.url),'utf8');
 const fragment=src.slice(src.indexOf('    const monthChart ='),src.indexOf('    const lrows ='));
-function charts(count=14){
+function charts(count=14, chartSort='executed', months=null){
  const leaves=Array.from({length:count},(_,i)=>({name:'같은 이름',code:'A',rate:i===0?150:i,executed:i*100,balance:100-i}));
- const monthly={code:'A',months:[{rows:[{code:'A',executed:120}]},{error:'fail'},{rows:[{code:'A',executed:0}]}]};
- const ctx={leaves,leafShort:leaves.map(()=>'같은 이름'),monthly,b:{month:'01',filter:'A'},el:50,esc:s=>String(s).replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;'),won:n=>String(n),pct:n=>n+'%',ic:()=>''};
+ const monthly={code:'A',months:months || [{rows:[{code:'A',executed:120}]},{error:'fail'},{rows:[{code:'A',executed:0}]}]};
+ const ctx={leaves,leafShort:leaves.map(()=>'같은 이름'),monthly,b:{month:'01',filter:'A',chartSort},el:50,esc:s=>String(s).replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;'),won:n=>String(n),pct:n=>n+'%',ic:()=>''};
  vm.createContext(ctx);vm.runInContext(fragment+'\nthis.result={barChart,monthChart}',ctx);return ctx.result;
 }
 test('상위 12개와 나머지를 제공하고 레이블을 구분한다',()=>{
@@ -19,8 +19,17 @@ test('상위 12개와 나머지를 제공하고 레이블을 구분한다',()=>{
  assert.equal((top.match(/data-act="ledger"/g)||[]).length,12);assert.match(top,/A · 14/);assert.doesNotMatch(top,/A · 1\)/);
  const labels=[...barChart.matchAll(/aria-label="([^"]+)"/g)].map(x=>x[1]);assert.equal(labels.length,14);assert.equal(new Set(labels).size,14);assert.match(barChart,/150%/);assert.match(barChart,/width:100%/);
 });
+test('정렬을 선택하면 세목 순서가 바뀌고 선택 상태를 표시한다',()=>{
+ const byRate=charts(14,'rate').barChart; assert.match(byRate, /value="rate" selected/); assert.match(byRate.split('<details')[0], /A · 1\)/);
+ const byName=charts(14,'name').barChart; assert.match(byName, /value="name" selected/); assert.match(byName.split('<details')[0], /A · 1\)/);
+ assert.match(byRate, /결의 내역 보기/); assert.match(byRate, /경과율과의 차이가 곧 지연을 뜻하지는 않습니다/);
+});
 test('월별 차트는 버튼과 선택 상태 및 실패를 구분한다',()=>{
  const {monthChart}=charts();assert.match(monthChart,/<button type="button" class="budget-month" data-act="budgetMonth" data-v="01" aria-pressed="true"/);assert.match(monthChart,/1월 집행 120원/);assert.match(monthChart,/2월 조회 실패/);assert.doesNotMatch(monthChart,/data-v="02"/);assert.match(monthChart,/3월 집행 0원/);
+});
+test('선택 코드 없는 자식 행이나 빈 응답은 0원이나 첫 행 값으로 표시하지 않는다',()=>{
+ const {monthChart}=charts(2,'executed',[{rows:[{code:'child',executed:99}]},{rows:[]},{rows:[{code:'A',executed:0}]}]);
+ assert.match(monthChart,/1월 조회 실패 또는 선택 사업 합계 확인 불가/); assert.match(monthChart,/2월 조회 실패 또는 선택 사업 합계 확인 불가/); assert.doesNotMatch(monthChart,/1월 집행 99원/); assert.match(monthChart,/3월 집행 0원/);
 });
 test('12개 이하는 전체만 표시한다',()=>{const {barChart}=charts(12);assert.doesNotMatch(barChart,/<details/);assert.match(barChart,/전체 12개/);});
 test('Chrome 렌더: 닫힘 12개, 펼침 14개, 다시 닫힘 12개',t=>{
