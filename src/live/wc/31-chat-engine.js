@@ -91,6 +91,10 @@
   async function chatExec(name, args, msg, ctx) {
     const def = CHAT_TOOLS.get(name);
     if (!def) return {ok: false, text: '지원하지 않는 기능입니다.'};
+    // 특정 행사 조건을 지원하지 않는 일반 일정 도구가 조건을 버리고 '없음'이라고 답하지 않도록 한다.
+    if (ctx.viaAi && name === 'get_schedule' && /(일정|스케줄|약속|회의)/.test(ctx.userText || '') && !R.chatIntent(ctx.userText, new Date()).tool) return {ok: false, text: '특정 행사나 사업을 일반 일정 조회만으로 확인할 수 없습니다. 일정의 출처와 날짜를 확인해 주세요. 구글 캘린더는 직접 읽지 않습니다.'};
+    // AI가 사업·행사명을 직원으로 추정한 경우에도 실제 직원 근태를 조회하지 않는다.
+    if (ctx.viaAi && name === 'get_staff_status' && /(일정|스케줄|약속|회의)/.test(ctx.userText || '') && !/(님|씨|팀장|실장|과장|대리|주임|센터장|선생님|직원|출장|휴가|연차|교육|근태|자리|어디|계셔|누가)/.test(ctx.userText || '')) return {ok: false, text: '행사·사업 일정인지 직원 근태 일정인지 명확하지 않아 직원 근태를 조회하지 않았습니다. 대상을 확인해 주세요.'};
     const chip = {name, label: def.label || name, state: 'run'};
     msg.tools.push(chip); chatRefresh();
     if (ctx.auto && (def.kind === 'act' || CHAT_AUTO_BLOCK.has(name))) { chip.state = 'err'; return {ok: false, text: '자동 실행에서는 조회만 합니다. 신청·예약·작성·화면 이동은 직접 요청해 주세요.'}; }
@@ -259,7 +263,9 @@
     const tools = R.chatToGeminiTools([...CHAT_TOOLS.values()]);
     const system = R.chatSystemPrompt(chatNowStr(), name, org);
     const texts = [];
-    const needTool = /일정|할\s*일|연차|근태|근무|출장|휴가|예산|결재|상신|메일|공지|알림|공문|차량|예약|지문|실적|기한|마감|신청|자동화|브리핑/.test(text);
+    const ambiguousSchedule = /(일정|스케줄|약속|회의)/.test(text) && !R.chatIntent(text, new Date()).tool;
+    // 대상이 모호할 때는 도구 호출을 강제하지 않아 확인 질문을 할 수 있어야 한다.
+    const needTool = !ambiguousSchedule && /일정|할\s*일|연차|근태|근무|출장|휴가|예산|결재|상신|메일|공지|알림|공문|차량|예약|지문|실적|기한|마감|신청|자동화|브리핑/.test(text);
     for (let round = 0; round < 3; round++) {
       if (S.chat !== st || st.stopped || st.seq !== runSeq) return;
       const mode = round === 0 && needTool ? 'ANY' : 'AUTO';
@@ -345,7 +351,7 @@
         ai.text = '이 자동화 문장은 정해진 조회로 알아듣지 못해 실행하지 않았습니다. 자동화를 지우고 다시 등록해 주세요.';
       } else {
         st.ctx.lastRead = null;
-        ai.text = CHAT_HELP;
+        ai.text = /(일정|스케줄|약속|회의)/.test(text) ? '어떤 일정인지 확인이 필요합니다. 행사·사업 일정인지 직원의 근태 일정인지, 그리고 그룹웨어 일정인지 구글 캘린더인지 알려 주세요.' : CHAT_HELP;
         if (!chatMode().ready) ai.cards.push({type: 'setup', reason: 'AI를 연결하면 이렇게 정해진 문장이 아니어도 자유롭게 시킬 수 있습니다.'});
       }
     } catch (e) { if (S.userKey !== owner || S.chat !== st || st.seq !== runSeq) return; logError('chatSend', e.message); ai.text = '처리하지 못했습니다: ' + String(e.message || e).slice(0, 100); ai.state = 'error'; }
