@@ -47,6 +47,38 @@ export function homeTimelineCompact(items = [], max = 5) {
   return {rows: all.slice(0, m), more: Math.max(0, all.length - m)};
 }
 
+const hmoMin = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || '')); return m && +m[1] < 24 && +m[2] < 60 ? +m[1] * 60 + +m[2] : null; };
+const hmoHm = n => String(Math.floor(n / 60)).padStart(2, '0') + ':' + String(n % 60).padStart(2, '0');
+/**
+ * 하루 띠: 근무 시간대(기본 08~19시)를 한 줄로 놓았을 때 일정 칸·점심·지금 바늘이 놓일 위치(%)를 계산한다.
+ * 시간이 정해진 일정만 칸이 되고, 종일 일정은 이름만 따로 돌려준다. 띠 밖(이른 아침·밤)의 일정은 개수만 센다.
+ */
+export function homeDayRail(items = [], {nowMin = 540, startH = 8, endH = 19, workEndH = 18} = {}) {
+  const s = hmoN(startH) * 60, e = Math.max(s + 60, hmoN(endH) * 60), span = e - s;
+  const pct = m => +(((Math.min(e, Math.max(s, m)) - s) / span) * 100).toFixed(2);
+  const now = Number.isFinite(Number(nowMin)) ? Math.trunc(Number(nowMin)) : s;
+  const blocks = [], allDay = [];
+  let outside = 0;
+  for (const it of (Array.isArray(items) ? items : []).filter(Boolean)) {
+    const f = hmoMin(it.from);
+    if (it.allDay || f === null) { allDay.push(hmoCut(it.label, 24)); continue; }
+    const t0 = hmoMin(it.to), t = t0 !== null && t0 > f ? t0 : f + 30;
+    if (t <= s || f >= e) { outside++; continue; }
+    blocks.push({left: pct(f), width: +(pct(t) - pct(f)).toFixed(2), label: hmoCut(it.label, 40), time: hmoHm(f) + '~' + hmoHm(t), kind: ['away', 'car'].includes(it.kind) ? it.kind : 'etc', done: t <= now, fromMin: f});
+  }
+  blocks.sort((a, b) => a.fromMin - b.fromMin || b.width - a.width);
+  const next = blocks.find(b => b.fromMin > now) || null;
+  const workEnd = hmoN(workEndH) * 60;
+  return {
+    blocks: blocks.map(({fromMin, ...b}) => b), allDay, outside,
+    ticks: Array.from({length: hmoN(endH) - hmoN(startH) + 1}, (_, i) => ({h: hmoN(startH) + i, left: pct(s + i * 60)})),
+    lunch: {left: pct(720), width: +(pct(780) - pct(720)).toFixed(2)},
+    now: {left: pct(now), label: hmoHm(((now % 1440) + 1440) % 1440), inRange: now >= s && now <= e, edge: now <= s + span * 0.04 ? 'l' : now >= e - span * 0.04 ? 'r' : ''},
+    next: next ? {label: next.label, inMin: next.fromMin - now} : null,
+    leftMin: now >= s && now < workEnd ? workEnd - now : 0,
+  };
+}
+
 /** 자리 비움 한 줄: '(이름) 출장 · (이름) 휴가 외 2명' */
 export function homeAwayLine(people = [], max = 3) {
   const p = (Array.isArray(people) ? people : []).filter(x => x && x.name);

@@ -64,7 +64,25 @@
     const g = R.homeGreeting({hour, name, urgent: d.urgent, total: d.urgent + d.todo + d.check, loading: !d.loaded, weekend: day.weekend, nextLabel: day.nextLabel});
     if (!d.loaded && S.error) g.sub = '그룹웨어 자료를 읽지 못했습니다';
     if (d.loaded && d.taskGaps) { g.sub = '일부 자료를 읽지 못해 할 일 현황이 불완전할 수 있습니다'; g.tone = 'warn'; }
-    return `<div class="hm-head">${day.label ? `<div class="hm-eyebrow"><span>${esc(day.label)}</span>${day.weekend ? '<span class="hm-pill">주말</span>' : ''}${day.holiday ? `<span class="hm-pill">${esc(day.holiday)}</span>` : ''}</div>` : ''}<h1 class="hm-hello">${esc(g.title)}</h1><p class="hm-sub hm-tone-${g.tone}">${esc(g.sub)}</p></div>`;
+    return `<div class="hm-head">${day.label ? `<div class="hm-eyebrow"><span>${esc(day.label)}</span>${day.weekend ? '<span class="hm-pill">주말</span>' : ''}${day.holiday ? `<span class="hm-pill">${esc(day.holiday)}</span>` : ''}</div>` : ''}<h1 class="hm-hello">${esc(g.title)}</h1><p class="hm-sub hm-tone-${g.tone}">${esc(g.sub)}</p>${homeRailHtml(d, day)}</div>`;
+  }
+
+  // 하루 띠: 08~19시를 한 줄로 놓고 오늘 일정과 내 부재를 칸으로, 지금 시각을 바늘로 보여 준다(계산은 R.homeDayRail).
+  // 칸을 누르면 일정 달력으로 간다. 바늘은 wc/39-motion.js가 1분마다 옮긴다.
+  const homeNowMin = () => { const k = new Date(Date.now() + 9 * 3600000); return k.getUTCHours() * 60 + k.getUTCMinutes(); };
+  const homeDur = m => (m >= 60 ? Math.floor(m / 60) + '시간' + (m % 60 ? ' ' + (m % 60) + '분' : '') : m + '분');
+  function homeRailHtml(d, day) {
+    if (!d.loaded || d.scheduleUnknown || typeof R.homeDayRail !== 'function') return '';
+    const r = R.homeDayRail(d.timeline, {nowMin: homeNowMin()});
+    const off = day && (day.weekend || day.holiday);
+    const blocks = r.blocks.map((b, i) => `<button class="dr-b dr-${b.kind}${b.done ? ' dr-done' : ''}" style="left:${b.left}%;width:${b.width}%;--i:${i}" data-act="homeTile" data-v="schedule" title="${esc(b.time + ' ' + b.label)}" aria-label="${esc(b.time + ' ' + b.label + (b.done ? ' (지남)' : ''))}">${esc(b.label)}</button>`).join('');
+    const notes = [];
+    if (r.allDay.length) notes.push(`<span class="dr-allday"><i aria-hidden="true"></i>종일 <b>${esc(r.allDay.slice(0, 2).join(', '))}</b>${r.allDay.length > 2 ? ` 외 ${r.allDay.length - 2}건` : ''}</span>`);
+    if (r.next) notes.push(`<span>다음 일정 <b>${esc(r.next.label)}</b> ${homeDur(r.next.inMin)} 뒤</span>`);
+    else if (!r.blocks.length && !r.allDay.length) notes.push('<span>오늘 시간이 정해진 일정이 없습니다</span>');
+    if (!off && r.leftMin) notes.push(`<span>퇴근까지 <b>${homeDur(r.leftMin)}</b></span>`);
+    if (r.outside) notes.push(`<span>이 시간대 밖 일정 ${r.outside}건</span>`);
+    return `<div class="dr" id="dayRail" role="group" aria-label="오늘 하루 시간표 (8시부터 19시)"><div class="dr-track"><i class="dr-past" id="drPast" style="width:${r.now.left}%"></i><i class="dr-lunch" style="left:${r.lunch.left}%;width:${r.lunch.width}%" title="점심"></i>${blocks}</div>${r.now.inRange ? `<div class="dr-now${r.now.edge ? ' dr-edge-' + r.now.edge : ''}" id="drNow" style="left:${r.now.left}%" aria-hidden="true"><b>${esc(r.now.label)}</b></div>` : ''}<div class="dr-ticks" aria-hidden="true">${r.ticks.map(t => `<span class="dr-tick" style="left:${t.left}%">${t.h}</span>`).join('')}</div></div>${notes.length ? `<div class="dr-note">${notes.join('')}</div>` : ''}`;
   }
 
   // 오른쪽 위: 핵심 숫자와 지금 가장 먼저 할 일(이어서 볼 일 2건까지).
