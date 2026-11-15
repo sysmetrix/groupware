@@ -119,7 +119,14 @@
     const item = (v) => { const i = VIEWS.indexOf(v); const c = counts[v.id]; return `<a data-act="view" data-v="${v.id}" class="${navView() === v.id ? 'on' : ''}" role="link" tabindex="0" aria-current="${navView() === v.id ? 'page' : 'false'}" title="${esc(v.label)}${i < 9 ? ` (Alt+${i + 1})` : ''}">${ic(VIEW_ICON[v.id])}<span class="lb">${esc(v.label)}</span>${c && c.n !== '' && c.n !== 0 ? `<span class="n ${c.cls || ''}" title="${esc(c.tip || v.label)}">${c.n}</span>` : ''}</a>`; };
     const topViews = VIEWS.filter(v => !VIEW_PARENT[v.id] && v.id !== 'settings');
     const settingsView = VIEWS.find(v => v.id === 'settings');
-    $('#nav').innerHTML = '<div class="nav-label">업무 메뉴</div>' + topViews.map(item).join('') + '<div class="sep"></div>' + (settingsView ? item(settingsView) : '') + (() => { const v = versionInfo(); return `<div class="foot"><a data-act="openChangelog" role="button" tabindex="0" class="navver ${v.state}" title="설치된 버전과 업데이트 내역"><span class="lb"><span><b>v${esc(VERSION)}</b>${v.label ? ' · ' + esc(v.label) : ''}</span>${v.applied ? `<small>${esc(v.applied)} 적용</small>` : ''}</span></a></div>`; })();
+    // 메뉴 묶음: 매일 보는 것 → 처리하는 업무 → 찾아보는 자료 → 사람. 어디에도 없는 화면은 마지막 묶음에 붙는다.
+    const NAV_GROUPS = [['', ['home', 'today']], ['업무', ['approval', 'mail', 'calendar', 'attendance']], ['자료', ['search', 'budget', 'report']], ['조직', ['notifications', 'people']]];
+    const grouped = new Set(NAV_GROUPS.flatMap(g => g[1]));
+    const navGroups = NAV_GROUPS.map(([label, ids], gi) => {
+      const vs = topViews.filter(v => ids.includes(v.id) || (gi === NAV_GROUPS.length - 1 && !grouped.has(v.id)));
+      return vs.length ? `<div class="nav-g" role="group"${label ? ` aria-label="${label}"` : ''}>${label ? `<div class="nav-label">${label}</div>` : ''}${vs.map(item).join('')}</div>` : '';
+    }).join('');
+    $('#nav').innerHTML = navGroups + '<div class="sep"></div>' + (settingsView ? item(settingsView) : '') + (() => { const v = versionInfo(); return `<div class="foot"><a data-act="openChangelog" role="button" tabindex="0" class="navver ${v.state}" title="설치된 버전과 업데이트 내역"><span class="lb"><span><b>v${esc(VERSION)}</b>${v.label ? ' · ' + esc(v.label) : ''}</span>${v.applied ? `<small>${esc(v.applied)} 적용</small>` : ''}</span></a></div>`; })();
   }
   function boardCount() { return (S.a ? S.a.actions.filter(x => onBoard(x) && !boardLinked(x) && bucketOfAction(x) !== 'done').length : 0) + S.todos.filter(t => bucketOfTodo(t) !== 'done').length; }
   function renderMain() {

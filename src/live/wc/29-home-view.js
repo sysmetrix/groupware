@@ -4,6 +4,8 @@
 
   // 홈·채팅 화면의 data-act 처리기 등록소. 16-events.js의 default 분기가 HOME_ACTS[act](el, v, e)를 부른다.
   const HOME_ACTS = {};
+  // 왼쪽 메뉴 접기·펴기(아이콘만 남긴다). 고른 상태는 이 브라우저에 남는다.
+  HOME_ACTS.navMini = () => { S.settings.navMini = !S.settings.navMini; saveLocal(); applyLook(); };
 
   function homeData() {
     const loaded = !!(S.a && S.raw);
