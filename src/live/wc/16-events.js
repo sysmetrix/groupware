@@ -152,7 +152,22 @@
       case 'help': toggleHelp(); break;
       case 'closeHelp': case 'closeOverlay': closeOverlay(); break;
       case 'menuNew': openMenu('new'); break;
-      case 'menuBell': openMenu('bell'); break;
+      case 'menuBell': closeOverlay(); if (go('notifications')) loadNotifications(); break;
+      case 'notificationsLoad': loadNotifications(); break;
+      case 'notificationsFilter': NTF.filter = v; renderMain(); break;
+      case 'notificationsType': NTF.type = v; renderMain(); break;
+      case 'notificationOpen': openNotification(Number(el.dataset.i)); break;
+      case 'peopleSearch': peopleSearch(); break;
+      case 'peopleTree': peopleLoadTree(); break;
+      case 'peopleDept': peopleDept(v); break;
+      case 'personMail': personMail(Number(el.dataset.i)); break;
+      case 'nativeNotifications':
+      case 'nativeOrganization': {
+        const target = document.querySelector(act === 'nativeNotifications' ? '#intergratedNotificationBtn .btn.alert' : '.newPortalHeader .btn.org');
+        if (!target) { toast('그룹웨어 메뉴를 찾을 수 없습니다. 그룹웨어 상단에서 직접 열어 주세요.'); break; }
+        if (!leavePane()) break;
+        closeOverlay(); close(); target.click(); break;
+      }
       case 'bellItem': closeOverlay(); if (go('today')) selectAction(el.dataset.k); break;
       case 'fsUp': fontStep(1); if (S.menuOpen === 'view') { S.menuOpen = ''; openMenu('view'); } break;
       case 'fsDown': fontStep(-1); if (S.menuOpen === 'view') { S.menuOpen = ''; openMenu('view'); } break;
@@ -313,11 +328,13 @@
     else if (t.id === 'bq') { S.budget.q = t.value; }
     else if (t.id === 'ledgerQuery') { S.budget.ledgerQuery = t.value; }
     else if (t.id === 'bPickFilter') { const q = t.value.trim().toLowerCase(); root.querySelectorAll('[data-budget-picker-row]').forEach(row => { row.hidden = !!q && !row.dataset.search.includes(q); }); }
+    else if (t.id === 'peopleFilter') { PEOPLE.localFilter = t.value; if (!e.isComposing) peopleFilterRows(); }
+    else if (t.id === 'peopleQuery') { PEOPLE.query = t.value; }
     else if (t.id === 'sq') { S.search.kw = t.value; }
     else if (t.id === 'weekly') { const shown = t.dataset.prev ?? t.defaultValue; if (S.weekly && S.weekly !== shown) store.set('weeklyRecovery', {at: Date.now(), text: S.weekly}); /* 다른 탭에서 바뀐 초안을 덮기 전에 보관 */ S.weekly = t.value; t.dataset.prev = t.value; const saved = saveLocal(); const w = $('#wkSaved'); if (w) { w.classList.toggle('on', saved); w.textContent = saved ? '자동 저장됨' : '저장 실패 · 내용을 복사하세요'; } }
     else if (t.id === 'palq') palRender(t.value);
   });
-  root.addEventListener('compositionend', e => { const t = e.composedPath()[0]; if (t.id === 'qfilter') { S.filter.q = t.value; refreshQueue(); } else if (t.id === 'dfIn') { dfState().filter.q = t.value; dfRefreshList(); } });
+  root.addEventListener('compositionend', e => { const t = e.composedPath()[0]; if (t.id === 'peopleFilter') { PEOPLE.localFilter = t.value; peopleFilterRows(); return; } if (t.id === 'qfilter') { S.filter.q = t.value; refreshQueue(); } else if (t.id === 'dfIn') { dfState().filter.q = t.value; dfRefreshList(); } });
   root.addEventListener('change', e => {
     const t = e.composedPath()[0];
     if (t.id && t.id.startsWith('df') && dfChange(t)) return;
@@ -336,6 +353,7 @@
   root.addEventListener('keydown', e => {
     const t = e.composedPath()[0];
     if (e.isComposing) return;
+    if (e.key === 'Enter' && t.id === 'peopleQuery') { e.preventDefault(); PEOPLE.query = t.value; peopleSearch(); return; }
     if (e.key === 'Enter' && t.id === 'bq') { e.preventDefault(); S.budget.q = t.value; budgetQuery(); return; }
     if (e.key === 'Enter' && t.id === 'ledgerQuery') { e.preventDefault(); S.budget.ledgerQuery = t.value; S.budget.ledgerPage = 1; renderMain(); return; }
     if ((e.key === 'Enter' || e.key === ' ') && t.hasAttribute?.('data-budget-key')) { e.preventDefault(); t.click(); }
