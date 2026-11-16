@@ -16,6 +16,24 @@ test('bumpSources changes both VERSION lines and puts the new entry on top of th
   assert.match(lines[2], /v: "0\.71\.0"/, 'the previous entry stays right below');
 });
 
+test('bumpSources raises the package.json version with the others and leaves the rest of the file alone', () => {
+  const pkg = '{\n  "name": "groupware-assistant",\n  "version": "0.2.0",\n  "engines": { "node": ">=24" }\n}\n';
+  const out = bumpSources({...SRC, pkg}, {version: '0.72.0', title: 't', items: ['x'], date: '2026-11-16'});
+  assert.equal(out.pkg, pkg.replace('"0.2.0"', '"0.72.0"'));
+  assert.equal('pkg' in bumpSources(SRC, {version: '0.72.0', title: 't', items: ['x'], date: '2026-11-16'}), false, 'no package.json given, none returned');
+  assert.throws(() => bumpSources({...SRC, pkg: '{"name": "x"}'}, {version: '0.72.0', title: 't', items: ['x'], date: '2026-11-16'}));
+});
+
+test('package.json carries the same version as the assistant', async () => {
+  const fs = await import('node:fs/promises');
+  const pkg = JSON.parse(await fs.readFile(new URL('../package.json', import.meta.url), 'utf8'));
+  const wc = await fs.readFile(new URL('../src/live/workcenter.browser.js', import.meta.url), 'utf8');
+  assert.equal(pkg.version, (wc.match(/const VERSION = '(\d+\.\d+\.\d+)';/) || [])[1]);
+  const lock = JSON.parse(await fs.readFile(new URL('../package-lock.json', import.meta.url), 'utf8'));
+  assert.equal(lock.version, pkg.version);
+  assert.equal(lock.packages[''].version, pkg.version);
+});
+
 test('bumpSources refuses a version that does not go up, and empty titles or items', () => {
   const ok = {version: '0.72.0', title: 't', items: ['x'], date: '2026-11-16'};
   for (const bad of [{version: '0.71.0'}, {version: '0.70.9'}, {version: 'v0.72'}, {title: ' '}, {items: []}, {items: ['  ']}, {date: '11/16'}]) assert.throws(() => bumpSources(SRC, {...ok, ...bad}));
