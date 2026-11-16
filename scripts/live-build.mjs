@@ -18,7 +18,7 @@ import {minifySafely, TERSER_VERSION} from './terser-minify.mjs';
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const DEFAULT_OUT_DIR = path.join(ROOT, 'build', 'live');
 export const MAX_SHIPPED_BUNDLE_BYTES = 1060 * 1024;
-export const EXTRA_MODULES = ['home-model.mjs', 'chat.mjs', 'gcal-sync.mjs', 'settings-transfer.mjs', 'doc-find.mjs'];
+export const EXTRA_MODULES = ['home-model.mjs', 'chat.mjs', 'gcal-sync.mjs', 'settings-transfer.mjs', 'doc-find.mjs', 'usage.mjs', 'contract.mjs', 'changelog.mjs'];
 const PARTS_MARK = '  /*@WC_PARTS@*/';
 const CSS_MARK = "'/*@WC_CSS@*/'";
 const lf = s => s.replace(/\r\n?/g, '\n');

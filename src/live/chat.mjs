@@ -70,10 +70,33 @@ export function chatParseRange(text) {
 const CH_STOP = new Set(['오늘', '내일', '모레', '어제', '이번', '다음', '다다음', '누가', '일정', '직원', '우리', '전체', '지금', '언제', '어디', '출장', '휴가', '연차', '교육', '자리', '부재', '내가', '제가', '남은', '잔여', '몇일', '쓴', '올해', '이번달', '나의', '저의', '그분', '이분', '담당', '부서', '구글', '캘린더', '스케줄', '그룹웨어', '회의', '일정도']);
 export function chatExtractName(text) {
   const t = String(text ?? '');
-  const re = /([가-힣]{2,4})\s*(?:님|씨|팀장|실장|과장|대리|주임|센터장|선생님)?\s*(?:은|는|이|가|의)?\s*(?:언제|출장|휴가|연차|교육|오늘|내일|모레|이번|다음|자리|어디|있어|있나|계셔|근태|일정)/g;
+  // 직함 뒤의 "님"까지 한 덩어리로 읽는다("한지우 팀장님 오늘 …"에서 "팀장님"을 이름으로 잡지 않게).
+  const re = /([가-힣]{2,4})\s*(?:(?:팀장|실장|과장|대리|주임|센터장|선생|주무관|부장|차장|국장)?님?|씨)?\s*(?:은|는|이|가|의)?\s*(?:언제|출장|휴가|연차|교육|오늘|내일|모레|이번|다음|자리|어디|있어|있나|계셔|근태|일정)/g;
   let m;
-  while ((m = re.exec(t))) { const n = m[1]; if (!CH_STOP.has(n) && !/^(무슨|어떤|무엇|누구|언제|이번|다음)/.test(n)) return n; }
+  while ((m = re.exec(t))) { const n = m[1]; if (!CH_STOP.has(n) && !/^(무슨|어떤|무엇|누구|언제|이번|다음)/.test(n) && !/요일$/.test(n) && !CH_TITLE_ONLY.test(n)) return n; }
   return '';
+}
+const CH_TITLE_ONLY = /^(?:팀장|실장|과장|대리|주임|센터장|선생|주무관|부장|차장|국장)님?$/;
+const CH_NOT_DOING_RE = /(상신|승인|반려|삭제|결재)\s*(까지|도|를|을)?\s*(해\s*줘|해\s*주|처리해|눌러|시켜)/;
+/**
+ * GW 비서가 대신 하지 않는 일을 시키는 말이면 그 사실을 알리는 안내문을, 아니면 빈 문자열을 돌려준다.
+ * "이해하지 못했습니다"나 목록 조회로 답하면 한 것처럼 보이거나 AI를 연결하면 될 것처럼 읽힌다.
+ */
+export function chatNotDoing(text) {
+  const t = String(text ?? '').replace(/\s+/g, ' ').trim();
+  const m = t.match(CH_NOT_DOING_RE);
+  if (m) {
+    if (m[1] === '상신') return '상신은 GW 비서가 대신 하지 않습니다. 초안까지 준비해 드리고, 상신은 초안 화면에서 직접 누르십니다. “결과보고 기안 작성해줘”처럼 시작할 수 있습니다.';
+    if (m[1] === '삭제') return '삭제는 GW 비서가 대신 하지 않습니다. 그룹웨어 화면에서 직접 지워 주세요.';
+    return '결재 승인·반려는 GW 비서가 대신 하지 않습니다. 문서를 열어 드리면 그룹웨어 화면에서 직접 누르십니다. “결재할 문서 있어?”라고 물어보세요.';
+  }
+  if (chatMentionsOther(t) && /(시간외|초과\s*근무|근무\s*시간|근로\s*시간|출근|퇴근|지문)/.test(t) && !/(휴가|연차|출장|교육|자리|어디)/.test(t)) return '다른 직원의 근무시간·시간외는 조회하지 않습니다. 내 기록은 “이번 달 시간외 얼마나 했지?”로 볼 수 있습니다.';
+  return '';
+}
+/** 문장에 "(이름) 팀장/대리/님"처럼 다른 사람을 가리키는 말이 있는지. 내 것만 조회하는 도구가 남의 것을 묻는 말에 답하지 않게 한다. */
+export function chatMentionsOther(text) {
+  const m = String(text ?? '').match(/([가-힣]{2,4})\s*(?:팀장|실장|과장|대리|주임|센터장|선생|주무관|부장|차장|국장|님|씨)(?![가-힣]*\s*(?:한테|에게|께))/);
+  return !!m && !CH_STOP.has(m[1]) && !/^(내|제|우리|담당|부서|직원)$/.test(m[1]);
 }
 /** "(이름) 전화번호", "(이름) 팀장 부서" 같은 말에서 이름만 뽑는다. */
 export function chatExtractPerson(text) {
@@ -104,6 +127,8 @@ export function chatIntent(text, now = new Date()) {
     const q = t.replace(/(업무|할\s*일|메일|문서|상세|자세히|확인해\s*줘|확인|열어\s*줘|열어|보여\s*줘|보기|좀)/g, ' ').replace(/\s+/g, ' ').trim();
     if (q.length >= 2) return make('prepare_task_screen', {query: q, ...(/메일/.test(t) ? {area: '메일'} : {})});
   }
+  // 비서가 하지 않는 일(상신·결재 승인·반려·삭제)을 시키는 말은 목록 조회로 바꿔 답하지 않는다. AI나 안내에 맡긴다.
+  if (chatNotDoing(t)) return none;
   // 보낸메일함 답장 여부 확인
   if (/(보냈는지|보냈나|답장했는지|회신했는지)/.test(t)) return make('check_sent_reply', {query: t.replace(/(보냈는지|보냈나|답장했는지|회신했는지|보낸메일함|확인|해줘|줘)/g, ' ').replace(/\s+/g, ' ').trim()});
   // ---------- v0.65: 자동화·브리핑·전 영역 조회 (실행 동사가 있으면 아래 실행 규칙에 맡긴다) ----------
@@ -115,15 +140,15 @@ export function chatIntent(text, now = new Date()) {
   }
   { const sc = chatParseSchedule(t); if (sc && sc.prompt && /(알려|보여|브리핑|요약|확인|점검|정리|체크|해\s*줘)/.test(sc.prompt)) return make('create_automation', {text: t}); }
   if (/(뭘|뭐|무엇|무슨|어떤)\s*(걸|것을?|일을?|기능을?)?\s*(할\s*수|해\s*줄\s*수|도와|시킬\s*수|물어볼\s*수)|도움말|사용법|기능\s*(목록|안내|소개)|할\s*수\s*있는\s*(일|것|게)/.test(t)) return make('get_capabilities', {});
-  if (/(퇴근\s*전?\s*(점검|정리|확인|체크|브리핑)|하루\s*(마무리|정리)|마무리\s*(점검|브리핑)|퇴근해도)/.test(t)) return make('run_briefing', {kind: 'evening'});
+  if (/(퇴근\s*(?:하기\s*)?(?:전에?)?\s*(점검|정리|확인|체크|브리핑)|하루\s*(마무리|정리)|마무리\s*(점검|브리핑)|퇴근해도)/.test(t)) return make('run_briefing', {kind: 'evening'});
   if (/(주간|이번\s*주|다음\s*주)\s*(브리핑|점검|미리\s*보기)/.test(t)) return make('run_briefing', {kind: 'week'});
   if (/(아침|출근|모닝|오늘)\s*브리핑|브리핑\s*(해\s*줘|시작|부탁)|하루\s*시작/.test(t)) return make('run_briefing', {kind: 'morning'});
   if (!/구글/.test(t) && /(새로\s*고침|다시\s*(읽어|불러|조회|가져)|최신\s*(으로|자료|상태)|갱신해)/.test(t)) return make('refresh_data', {});
   if (/(자료|데이터|수집|조회)\s*(상태|범위|기준)|(언제|몇\s*시)\s*기준|못\s*읽은\s*자료/.test(t)) return make('get_data_status', {});
   if (/신청\s*(현황|내역|상태|결과|목록|이력)|(내가|제가|내)\s*(올린|낸|신청한)\s*(휴가|연차|출장|시간외|근태|신청)|(휴가|연차|출장|시간외|근태)\s*신청.{0,8}(승인|결재|됐|되었|통과|상태|현황|났)/.test(t)) return make('list_my_requests', {});
   if (/(연차|휴가|반차)/.test(t) && /(현황|내역|사용|잔여|남은|남았|조회|얼마|몇|며칠|기록|이력|썼|쓴|예정)/.test(t) && !/(신청|내줘|내 줘|올려|쓸래|쓸게|쓰고|낼래|누가)/.test(t) && !chatExtractName(t)) return make('get_leave_status', {});
-  if (/(근무\s*시간|근로\s*시간|출근\s*(시간|시각|했|언제|기록)|퇴근\s*(시간|시각|했|언제|기록)|몇\s*시에\s*(출근|퇴근)|시간외\s*(시간|누계|얼마|현황|몇)|초과\s*근무\s*(시간|현황))/.test(t) && !doAct && !/보냈/.test(t) && !chatExtractName(t)) return make('get_work_hours', {});
-  if (/메일/.test(t) && !/(답장|회신|처리|해야|써|쓰기|작성|초안|검색|찾아|화면|열어)/.test(t) && /(안\s*읽|읽지\s*않|새\s*메일|새로\s*온|오늘\s*온|온\s*메일|최근|받은|목록|몇\s*(통|건|개)|뭐\s*왔|왔어|왔나|첨부|보낸\s*메일|한테서|에게서|현황)/.test(t)) {
+  if (/(근무\s*시간|근로\s*시간|출근\s*(시간|시각|했|언제|기록)|퇴근\s*(시간|시각|했|언제|기록)|몇\s*시에\s*(출근|퇴근)|시간외\s*(시간|누계|얼마|현황|몇)|초과\s*근무\s*(시간|현황))/.test(t) && !doAct && !/보냈/.test(t) && !chatExtractName(t) && !chatMentionsOther(t)) return make('get_work_hours', {});
+  if (/메일/.test(t) && !/(답장|회신|처리|해야|써|쓸|쓰기|작성|초안|검색|찾아|화면|열어)/.test(t) && /(안\s*읽|읽지\s*않|새\s*메일|새로\s*온|오늘\s*온|온\s*메일|최근|받은|목록|몇\s*(통|건|개)|뭐\s*왔|왔어|왔나|첨부|보낸\s*메일|한테서|에게서|현황)/.test(t)) {
     const fm = t.match(/([가-힣A-Za-z0-9]{2,15})\s*(?:님|씨|팀장|실장|과장|대리|주임|센터장|선생님)?\s*(?:이|가|에게서|한테서|로부터)\s*(?:보낸|온)/);
     const from = fm && !/^(내|제|내가|제가|오늘|어제|최근|새로)$/.test(fm[1]) ? fm[1] : '';
     return make('list_mail', {filter: /(안\s*읽|읽지\s*않|새\s*메일|새로\s*온)/.test(t) ? 'unread' : /첨부/.test(t) ? 'attach' : /오늘/.test(t) ? 'today' : 'recent', ...(from ? {from} : {})});
@@ -163,7 +188,8 @@ export function chatIntent(text, now = new Date()) {
   if (/(할 ?일|메모|리마인드|알려줘야)/.test(t) && /(추가|등록|넣어|적어|메모)/.test(t)) return make('add_todo', {title: t.replace(/(할 ?일|추가|등록|넣어줘|넣어 줘|해줘|해 줘|메모|적어줘|적어 줘)/g, ' ').replace(/\s+/g, ' ').trim(), due: dt ? dt.date : ''});
   // --- 읽기 ---
   if (/(구글|캘린더)/.test(t) && /(동기화|올려|올릴|등록|연동|반영)/.test(t) && !/(신청|예약)/.test(t)) return make('get_gcal_sync', {});
-  if (/(열어|이동|가줘|가 줘|보여|띄워|켜줘|화면)/.test(t) && !/(일정|스케줄|급한|할 ?일|누가|언제)/.test(t)) { for (const [re, view] of CH_VIEWS) if (re.test(t)) return make('open_view', {view}); }
+  if (/(열어|이동|가줘|가 줘|보여|띄워|켜줘|화면)/.test(t) && !/(일정|스케줄|급한|할 ?일|누가|언제)/.test(t) && !(/예산/.test(t) && /(집행|잔액|현황|얼마|남았|남은)/.test(t) && !/화면/.test(t))) { for (const [re, view] of CH_VIEWS) if (re.test(t)) return make('open_view', {view}); }
+  if (/(어디\s*있|어딨)/.test(t) && /(문서|건의|공문|보고|계획서|결의|파일|견적|자료|서류)/.test(t)) return make('search_documents', {query: t.replace(/(어디\s*있[가-힣]*|어딨[가-힣]*|\?)/g, ' ').replace(/\s+/g, ' ').trim(), scope: /메일/.test(t) ? 'mail' : 'all'});
   const name = chatExtractName(t);
   // 행사·사업명도 한글 2~4자이므로 'OO 일정'만으로 직원이라고 단정하지 않는다.
   // 직함/호칭이나 명시적인 근태 표현이 없으면 모델에 문맥 해석을 맡긴다.

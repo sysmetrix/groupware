@@ -35,6 +35,8 @@ npm run live:demo
 |---|---|
 | `npm run harness:fast` | 구문, 코드 그래프, 핵심 테스트 (약 2초) |
 | `npm run harness` | 전체 테스트, 빌드, 번들 크기, 안전 규칙, 비밀 점검. 푸시 전 훅이 자동으로 돌립니다 |
+| `npm run e2e` | 둘러보기를 설치된 Chrome·Edge에 띄워 핵심 여정 다섯 가지를 사람처럼 눌러 봅니다 |
+| `npm run eval:chat` | 대화 평가 문항(`eval/chat-questions.json`)으로 비서의 로컬 규칙을 채점합니다 |
 | `npm run live:build` | 배포 묶음과 확장 프로그램을 `build/live`에 만듭니다 |
 | `npm run bump -- <새 버전> "제목" "바뀐 점"` | 버전(GW 비서·수집기·`package.json`)과 업데이트 내역을 한 번에 올립니다 |
 

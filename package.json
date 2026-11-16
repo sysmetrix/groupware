@@ -1,6 +1,6 @@
 {
   "name": "groupware-assistant",
-  "version": "0.77.0",
+  "version": "0.78.0",
   "private": true,
   "type": "module",
   "description": "Local-first, evidence-grounded groupware assistant",
@@ -36,6 +36,8 @@
     "graph:write": "node scripts/graph.mjs --write",
     "live:report": "node scripts/live-report.mjs",
     "bump": "node scripts/bump.mjs",
+    "e2e": "node scripts/e2e.mjs",
+    "eval:chat": "node scripts/eval-chat.mjs",
     "test:attachments": "python -m unittest discover -s test -p \"*_test.py\""
   }
 }

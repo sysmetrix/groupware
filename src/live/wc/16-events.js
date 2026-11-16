@@ -17,6 +17,7 @@
       }
     }
     if (!actEl) return;
+    if (typeof usageNote === 'function') { usageNote('act', act); setTimeout(usageViewCheck, 0); } // 이름과 횟수만 센다(40-usage.js)
     const el = actEl;
     if (act === 'closeOverlay' && hasStop && !actEl.closest('[data-stop]')) return;
     if (el.tagName === 'A' && el.getAttribute('href') === '#') e.preventDefault();
@@ -321,6 +322,11 @@
       case 'gsyncFind':
       case 'gsyncMark':
       case 'navMini':
+      case 'openUsage':
+      case 'usageExport':
+      case 'usageCopy':
+      case 'usageToggle':
+      case 'usageClear':
         HOME_ACTS[act](actEl, v, e); break; // 홈·채팅 화면의 처리기 등록소(29~30번 조각)
       default: break;
     }
