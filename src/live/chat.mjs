@@ -76,8 +76,10 @@ export function chatExtractName(text) {
   while ((m = re.exec(t))) { const n = m[1]; if (!CH_STOP.has(n) && !/^(무슨|어떤|무엇|누구|언제|이번|다음)/.test(n) && !/요일$/.test(n) && !CH_TITLE_ONLY.test(n)) return n; }
   return '';
 }
-const CH_TITLE_ONLY = /^(?:팀장|실장|과장|대리|주임|센터장|선생|주무관|부장|차장|국장)님?$/;
-const CH_NOT_DOING_RE = /(상신|승인|반려|삭제|결재)\s*(까지|도|를|을)?\s*(해\s*줘|해\s*주|처리해|눌러|시켜)/;
+const CH_TITLE_ONLY = /^(?:팀장|실장|과장|대리|주임|센터장|선생|주무관|부장|차장|국장)님?$|^(?:문서|메일|결재|공문|보고서?|자료|파일|서류)$/;
+const CH_NOT_DOING_RE = /(상신|승인|반려|삭제|결재)\s*(까지|도|를|을)?\s*(해\s*줘(?!야)|해\s*주(?=세요|실래|시겠|라)|처리해(?!\s*줘야|야)|눌러(?!야)|시켜(?!야))/;
+// 비서 안의 것(자동화, 내 할 일, 대화, 사용 기록)을 지우는 말은 그룹웨어 문서 삭제가 아니다.
+const CH_OWN_THING_RE = /(자동화|자동\s*실행|예약\s*실행|반복\s*실행|할\s*일|메모|대화|기록|브리핑)/;
 /**
  * GW 비서가 대신 하지 않는 일을 시키는 말이면 그 사실을 알리는 안내문을, 아니면 빈 문자열을 돌려준다.
  * "이해하지 못했습니다"나 목록 조회로 답하면 한 것처럼 보이거나 AI를 연결하면 될 것처럼 읽힌다.
@@ -85,7 +87,7 @@ const CH_NOT_DOING_RE = /(상신|승인|반려|삭제|결재)\s*(까지|도|를|
 export function chatNotDoing(text) {
   const t = String(text ?? '').replace(/\s+/g, ' ').trim();
   const m = t.match(CH_NOT_DOING_RE);
-  if (m) {
+  if (m && !(m[1] === '삭제' && CH_OWN_THING_RE.test(t))) {
     if (m[1] === '상신') return '상신은 GW 비서가 대신 하지 않습니다. 초안까지 준비해 드리고, 상신은 초안 화면에서 직접 누르십니다. “결과보고 기안 작성해줘”처럼 시작할 수 있습니다.';
     if (m[1] === '삭제') return '삭제는 GW 비서가 대신 하지 않습니다. 그룹웨어 화면에서 직접 지워 주세요.';
     return '결재 승인·반려는 GW 비서가 대신 하지 않습니다. 문서를 열어 드리면 그룹웨어 화면에서 직접 누르십니다. “결재할 문서 있어?”라고 물어보세요.';
@@ -96,7 +98,7 @@ export function chatNotDoing(text) {
 /** 문장에 "(이름) 팀장/대리/님"처럼 다른 사람을 가리키는 말이 있는지. 내 것만 조회하는 도구가 남의 것을 묻는 말에 답하지 않게 한다. */
 export function chatMentionsOther(text) {
   const m = String(text ?? '').match(/([가-힣]{2,4})\s*(?:팀장|실장|과장|대리|주임|센터장|선생|주무관|부장|차장|국장|님|씨)(?![가-힣]*\s*(?:한테|에게|께))/);
-  return !!m && !CH_STOP.has(m[1]) && !/^(내|제|우리|담당|부서|직원)$/.test(m[1]);
+  return !!m && !CH_STOP.has(m[1]) && !/^(내|제|우리|담당|부서|직원|지난달|이번달|지난주|이번주|요즘|올해|작년|고객|사장|회원|선생|아저|아가)$/.test(m[1]);
 }
 /** "(이름) 전화번호", "(이름) 팀장 부서" 같은 말에서 이름만 뽑는다. */
 export function chatExtractPerson(text) {
@@ -153,7 +155,7 @@ export function chatIntent(text, now = new Date()) {
     const from = fm && !/^(내|제|내가|제가|오늘|어제|최근|새로)$/.test(fm[1]) ? fm[1] : '';
     return make('list_mail', {filter: /(안\s*읽|읽지\s*않|새\s*메일|새로\s*온)/.test(t) ? 'unread' : /첨부/.test(t) ? 'attach' : /오늘/.test(t) ? 'today' : 'recent', ...(from ? {from} : {})});
   }
-  if (/(결재할|결재\s*할|결재함|결재\s*문서|결재\s*대기\s*문서|결재\s*(뭐|몇|있어|있나|현황|목록)|배부|접수\s*대기|부서\s*접수|발송\s*대기|상신|올린\s*문서|열람\s*문서|열람문서|공람|반려)/.test(t) && !/(열어|이동|화면|들어가|검색|찾아|승인|반려해|처리해|발송해|접수해|배부해|결재해)/.test(t) && !doAct) {
+  if (/(결재할|결재\s*할|결재해\s*줘야|결재해야|결재함|결재\s*문서|결재\s*대기\s*문서|결재\s*(뭐|몇|있어|있나|현황|목록)|배부|접수\s*대기|부서\s*접수|발송\s*대기|상신|올린\s*문서|열람\s*문서|열람문서|공람|반려)/.test(t) && !/(열어|이동|화면|들어가|검색|찾아|승인|반려해|처리해|발송해|접수해|배부해|결재해(?!\s*줘야|야))/.test(t) && !doAct) {
     return make('list_approvals', {queue: /배부/.test(t) ? 'distWaiting' : /접수/.test(t) ? 'deptWaiting' : /발송/.test(t) ? 'sendWaiting' : /(상신|올린|진행|반려)/.test(t) ? 'submitted' : /(공람|열람)/.test(t) ? 'viewing' : /(전체|현황|요약)/.test(t) ? 'all' : 'pending'});
   }
   if (/(부서\s*참고|참고\s*(공문|문서)|부서\s*공문|접수\s*공문|공문\s*(뭐|목록|현황|왔|있))/.test(t) && !/(검색|찾아|화면|열어)/.test(t)) return make('list_reference', {});

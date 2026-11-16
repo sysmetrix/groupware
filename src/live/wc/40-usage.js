@@ -6,8 +6,9 @@
   /** 한 번 썼음을 적는다. 저장에 실패해도 조용히 넘어간다(기록 때문에 본래 일이 막히면 안 된다). */
   function usageNote(kind, key) {
     try {
-      if (!usageOn() || !key) return;
-      store.set('usage', R.usageBump(store.get('usage', null), kind, String(key)));
+      if (!usageOn() || !key || currentKey === 'default') return;
+      // store.set 은 공간이 모자라면 대화 기록 같은 다른 자료를 지워 자리를 만든다. 횟수 세기 때문에 그렇게 되면 안 되므로 직접 쓰고, 실패하면 이번 한 번을 버린다.
+      localStorage.setItem(getPrefix() + 'usage', JSON.stringify(R.usageBump(store.get('usage', null), kind, String(key))));
     } catch {}
   }
   /** 화면이 바뀌었으면 한 번 적는다. 화면은 버튼·단축키·비서 등 여러 길로 바뀌므로 바뀐 결과를 보고 센다. */
@@ -48,5 +49,5 @@
   HOME_ACTS.usageExport = () => { const {log, opt} = usageData(USAGE_EXPORT_DAYS); download(`GW 비서_사용기록_${R.usageDay()}.md`, R.usageReport(log, opt), 'text/markdown;charset=utf-8'); toast('사용 기록 파일을 만들었습니다.'); };
   HOME_ACTS.usageCopy = () => { const {log, opt} = usageData(USAGE_EXPORT_DAYS); copyText(R.usageReport(log, opt)); toast('사용 기록을 복사했습니다.'); };
   HOME_ACTS.usageToggle = () => { S.settings.usageLog = !usageOn(); saveLocal(); toast(usageOn() ? '사용 기록을 켰습니다.' : '사용 기록을 껐습니다. 이미 적힌 기록은 남아 있습니다.'); openUsage(); };
-  HOME_ACTS.usageClear = () => { store.set('usage', {v: 1, days: {}}); toast('사용 기록을 지웠습니다.'); openUsage(); };
+  HOME_ACTS.usageClear = () => { store.del('usage'); toast('사용 기록을 지웠습니다.'); openUsage(); };
   const USAGE_EXPORT_DAYS = 60;

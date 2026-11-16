@@ -38,7 +38,8 @@ async function launch(exe, userDir, headed) {
   if (process.platform === 'linux') args.push('--no-sandbox'); // CI 컨테이너에서는 샌드박스를 쓸 수 없다. 여는 주소는 127.0.0.1 의 둘러보기뿐이다.
   args.push('about:blank');
   const child = spawn(exe, args, {stdio: ['ignore', 'ignore', 'pipe']});
-  const ws = await new Promise((resolve, reject) => {
+  const ws = await new Promise((resolve, reject0) => {
+    const reject = e => { try { child.kill(); } catch {} reject0(e); }; // 준비에 실패한 브라우저를 남기지 않는다
     let buf = '';
     const timer = setTimeout(() => reject(new Error('브라우저가 20초 안에 준비되지 않았습니다')), 20000);
     child.stderr.on('data', d => { buf += d; const m = buf.match(/DevTools listening on (ws:\/\/\S+)/); if (m) { clearTimeout(timer); resolve(m[1]); } });
@@ -75,11 +76,11 @@ export async function runInDemo(script, {headed = false, timeoutMs = 120000, que
   if (!exe) { const e = new Error('Chrome·Edge·Chromium 을 찾지 못했습니다. BROWSER_PATH 로 경로를 알려 주세요.'); e.code = 'NO_BROWSER'; throw e; }
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'gw-e2e-'));
   const outDir = path.join(tmp, 'demo'), userDir = path.join(tmp, 'profile');
-  await buildDemo(outDir);
-  const server = await serveDemo({outDir, port: 0, rebuild: false});
-  const url = `http://127.0.0.1:${server.address().port}/${query}`;
-  let child, conn;
+  let child, conn, server;
   try {
+    await buildDemo(outDir);
+    server = await serveDemo({outDir, port: 0, rebuild: false});
+    const url = `http://127.0.0.1:${server.address().port}/${query}`;
     const l = await launch(exe, userDir, headed);
     child = l.child;
     conn = cdp(l.ws);
@@ -106,7 +107,7 @@ export async function runInDemo(script, {headed = false, timeoutMs = 120000, que
   } finally {
     if (conn) { try { await Promise.race([conn.send('Browser.close'), new Promise(r => setTimeout(r, 2000))]); } catch {} conn.close(); }
     if (child && child.exitCode === null) { await new Promise(r => { const t = setTimeout(() => { try { child.kill(); } catch {} r(); }, 3000); child.once('exit', () => { clearTimeout(t); r(); }); }); }
-    await new Promise(r => server.close(r));
+    if (server) await new Promise(r => server.close(r));
     for (let i = 0; i < 5; i++) { try { await fs.rm(tmp, {recursive: true, force: true}); break; } catch { await new Promise(r => setTimeout(r, 400)); } }
   }
 }

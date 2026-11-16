@@ -42,7 +42,7 @@ test('names with a title are read as the person, and weekdays or titles are not 
 
 test('questions about someone else are recognised so own-data tools do not answer them', () => {
   for (const q of ['한지우 팀장 시간외 얼마나 했어?', '서도윤 대리 근무시간 알려줘', '민서연 님 출근했어?']) assert.equal(chatMentionsOther(q), true, q);
-  for (const q of ['이번 달 시간외 얼마나 했지?', '오늘 몇 시에 출근했어?', '내 근무시간 알려줘', '우리 팀장 누구야', '']) assert.equal(chatMentionsOther(q), false, q);
+  for (const q of ['이번 달 시간외 얼마나 했지?', '오늘 몇 시에 출근했어?', '내 근무시간 알려줘', '우리 팀장 누구야', '지난달 팀장 근무시간 알려줘', '고객님 응대 시간외 신청', '']) assert.equal(chatMentionsOther(q), false, q);
 });
 
 test('things the assistant never does get a plain "not done here" answer instead of a list or "not understood"', () => {
@@ -51,6 +51,6 @@ test('things the assistant never does get a plain "not done here" answer instead
   assert.match(chatNotDoing('상신까지 해줘'), /^상신은 GW 비서가 대신 하지 않습니다/);
   assert.match(chatNotDoing('문서 삭제해줘'), /^삭제는 GW 비서가 대신 하지 않습니다/);
   assert.match(chatNotDoing('한지우 팀장 시간외 얼마나 했어?'), /다른 직원의 근무시간·시간외는 조회하지 않습니다/);
-  for (const q of ['결재할 문서 있어?', '반려된 문서 있나?', '내가 올린 문서 어떻게 됐어?', '이번 달 시간외 얼마나 했지?', '한지우 팀장님 오늘 자리에 계셔?', '서도윤 대리 내일 출장이야?', '내일 연차 신청해줘', '']) assert.equal(chatNotDoing(q), '', q);
+  for (const q of ['결재할 문서 있어?', '결재해 줘야 할 문서 있어?', '결재 처리해 줘야 할 문서', '반려 처리해야 하는 문서 보여줘', '승인 시켜야 하는 거 있어?', '결재 눌러야 할 문서', '자동화 삭제해줘', '할 일 삭제해줘', '반려된 문서 있나?', '내가 올린 문서 어떻게 됐어?', '이번 달 시간외 얼마나 했지?', '한지우 팀장님 오늘 자리에 계셔?', '서도윤 대리 내일 출장이야?', '내일 연차 신청해줘', '']) assert.equal(chatNotDoing(q), '', q);
   for (const q of ['결재 승인해줘', '상신까지 해줘', '문서 삭제해줘', '한지우 팀장 시간외 얼마나 했어?']) assert.equal(chatIntent(q, new Date('2026-11-16T01:00:00Z')).tool, '', q);
 });

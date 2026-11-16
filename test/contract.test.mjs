@@ -62,9 +62,11 @@ test('a few empty values are normal and do not raise an issue', () => {
 test('the server says there are items but none were read: the list key probably changed', () => {
   const raw = healthy();
   raw.data.approval.lists.pending.docs = [];
+  raw.data.budget.projects[0].rows = [];
   raw.data.notice.articles = [];
+  raw.data.mail.inbox.records = [];
   const r = contractCheck(raw);
-  assert.deepEqual(r.areas, ['approval', 'notice']);
+  assert.deepEqual(r.areas, ['mail', 'notice'], 'approval totals and budget row counts are not reliable counts, so they are not compared');
   assert.ok(r.issues.every(i => i.kind === 'empty-list'));
 });
 
@@ -76,7 +78,7 @@ test('areas whose query already failed are left to the existing failure notice',
   assert.equal(contractCheck(raw).ok, true);
 });
 
-test('numbers that turned into blanks or zeros are caught for leave, attendance and budget', () => {
+test('numbers that turned into blanks are caught for leave, attendance and schedule; legitimately empty months and unallocated budgets are not', () => {
   const raw = healthy();
   raw.data.leave.granted = NaN;
   raw.data.attendance.today.date = '';
@@ -84,8 +86,8 @@ test('numbers that turned into blanks or zeros are caught for leave, attendance 
   raw.data.budget.projects[0].rows = raw.data.budget.projects[0].rows.map(r => ({...r, budget: 0, executed: 0, balance: 0}));
   raw.data.schedule.events = raw.data.schedule.events.map(e => ({...e, start: '2026-11-16T10:00'}));
   const r = contractCheck(raw);
-  assert.deepEqual(r.areas.sort(), ['attendance', 'budget', 'leave', 'schedule']);
-  assert.equal(r.issues.filter(i => i.area === 'attendance').length, 2);
+  assert.deepEqual(r.areas.sort(), ['attendance', 'leave', 'schedule']);
+  assert.equal(r.issues.filter(i => i.area === 'attendance').length, 1, 'only the unreadable date; an empty month is normal on the 1st or for a new hire');
 });
 
 test('odd inputs never throw', () => {

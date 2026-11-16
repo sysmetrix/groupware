@@ -44,7 +44,7 @@ export function contractCheck(raw) {
     for (const [key, l] of Object.entries(lists)) {
       if (!l || l.error) continue;
       // 날짜는 목록 종류에 따라 원래 비어 있을 수 있어 보지 않는다.
-      issues.push(...ctList('approval', l.label || key, l.docs, ['docId', 'title'], l.total));
+      issues.push(...ctList('approval', l.label || key, l.docs, ['docId', 'title'])); // 건수는 서버가 시작 번호로 줄 때가 있어 비교하지 않는다
     }
     if (!Object.keys(lists).length) issues.push({area: 'approval', where: '결재함', kind: 'empty-list', detail: '결재함 목록을 하나도 읽지 못했습니다'});
   }
@@ -57,7 +57,6 @@ export function contractCheck(raw) {
   if (data.attendance && okArea('attendance')) {
     const a = data.attendance;
     if (!a.today || !/^\d{8}$/.test(String(a.today.date || ''))) issues.push({area: 'attendance', where: '오늘 출퇴근', kind: 'bad-format', field: 'date', detail: '오늘 날짜를 읽지 못했습니다'});
-    if (a.month && !a.month.error && a.month.recognizedMin === null && a.month.basicMin === null && a.month.overtimeMin === null) issues.push({area: 'attendance', where: '이번 달 근무시간', kind: 'missing-field', field: 'recognizedMin', detail: '이번 달 근무시간 값이 모두 비어 있습니다'});
   }
   if (data.leave && okArea('leave')) {
     const l = data.leave;
@@ -68,9 +67,8 @@ export function contractCheck(raw) {
   if (data.budget && okArea('budget') && !data.budget.skipped) {
     for (const p of ctArr(data.budget.projects)) {
       if (!p || p.error) continue;
-      issues.push(...ctList('budget', p.label || p.project || '예산', p.rows, ['code', 'name'], p.rowCount));
-      const rows = ctArr(p.rows);
-      if (rows.length >= CT_MIN_ROWS && rows.every(r => r && r.budget === 0 && r.executed === 0 && r.balance === 0)) issues.push({area: 'budget', where: p.label || p.project || '예산', kind: 'missing-field', field: 'budget', detail: '모든 과목의 예산·집행·잔액이 0입니다'});
+      // 줄 수(rowCount)는 관심 과목으로 거르기 전 값이고, 배정 전 사업은 금액이 모두 0일 수 있어 둘 다 보지 않는다.
+      issues.push(...ctList('budget', p.label || p.project || '예산', p.rows, ['code', 'name']));
     }
   }
   if (data.alerts && okArea('alerts')) issues.push(...ctList('alerts', '알림', data.alerts.alerts, ['title']));
