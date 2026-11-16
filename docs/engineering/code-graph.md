@@ -21,7 +21,7 @@ flowchart LR
   m13_detail_pane_js["13-detail-pane<br/>661줄"]
   m14_hide_snooze_undo_to_do_js["14-hide-snooze-undo-to-do<br/>129줄"]
   m15_overlays_palette_help_menus_js["15-overlays-palette-help-menus<br/>257줄"]
-  m16_events_js["16-events<br/>421줄"]
+  m16_events_js["16-events<br/>422줄"]
   m17_lifecycle_js["17-lifecycle<br/>42줄"]
   m18_command_console_js["18-command-console<br/>446줄"]
   m19_draft_engine_js["19-draft-engine<br/>653줄"]
@@ -39,13 +39,13 @@ flowchart LR
   m31_chat_engine_js["31-chat-engine<br/>392줄"]
   m32_chat_tools_read_js["32-chat-tools-read<br/>418줄"]
   m33_chat_tools_act_js["33-chat-tools-act<br/>221줄"]
-  m34_gsync_js["34-gsync<br/>107줄"]
+  m34_gsync_js["34-gsync<br/>180줄"]
   m35_docs_js["35-docs<br/>127줄"]
   m36_chat_tools_more_js["36-chat-tools-more<br/>329줄"]
   m37_automation_js["37-automation<br/>177줄"]
   m38_notifications_people_js["38-notifications-people<br/>159줄"]
   m39_motion_js["39-motion<br/>92줄"]
-  m40_usage_js["40-usage<br/>53줄"]
+  m40_usage_js["40-usage<br/>54줄"]
   m01_storage_js -->|2| m14_hide_snooze_undo_to_do_js
   m01_storage_js -->|3| m03_data_js
   m03_data_js -->|9| m01_storage_js
@@ -256,7 +256,7 @@ flowchart LR
   m38_notifications_people_js -->|2| m05_views_js
   m38_notifications_people_js -->|2| m02_shell_js
   m39_motion_js -->|3| m02_shell_js
-  m40_usage_js -->|6| m01_storage_js
+  m40_usage_js -->|8| m01_storage_js
   m40_usage_js -->|2| m02_shell_js
 ```
 
@@ -381,7 +381,7 @@ flowchart LR
 | 13-detail-pane.js | 661 | 39 |
 | 14-hide-snooze-undo-to-do.js | 129 | 16 |
 | 15-overlays-palette-help-menus.js | 257 | 23 |
-| 16-events.js | 421 | 6 |
+| 16-events.js | 422 | 6 |
 | 17-lifecycle.js | 42 | 10 |
 | 18-command-console.js | 446 | 20 |
 | 19-draft-engine.js | 653 | 45 |
@@ -399,10 +399,10 @@ flowchart LR
 | 31-chat-engine.js | 392 | 26 |
 | 32-chat-tools-read.js | 418 | 9 |
 | 33-chat-tools-act.js | 221 | 6 |
-| 34-gsync.js | 107 | 14 |
+| 34-gsync.js | 180 | 20 |
 | 35-docs.js | 127 | 13 |
 | 36-chat-tools-more.js | 329 | 12 |
 | 37-automation.js | 177 | 18 |
 | 38-notifications-people.js | 159 | 26 |
 | 39-motion.js | 92 | 16 |
-| 40-usage.js | 53 | 7 |
+| 40-usage.js | 54 | 7 |

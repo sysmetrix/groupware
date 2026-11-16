@@ -321,6 +321,7 @@
       case 'gsyncNext':
       case 'gsyncFind':
       case 'gsyncMark':
+      case 'gsyncCompare':
       case 'navMini':
       case 'openUsage':
       case 'usageExport':

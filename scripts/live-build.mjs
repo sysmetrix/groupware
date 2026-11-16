@@ -346,15 +346,28 @@ export async function build({outDir = DEFAULT_OUT_DIR, copyTo = null, root = ROO
   const verNum = (workcenter.match(/const VERSION = '([\d.]+)'/) || [])[1] || '4.0.0';
   await fs.writeFile(path.join(extDir, 'manifest.json'), JSON.stringify({
     manifest_version: 3, name: 'GW 비서', version: verNum, minimum_chrome_version: '111',
-    description: '부천여성청소년재단 그룹웨어 위에서 내 처리할 일을 한 화면에 모아 보여 줍니다(기본 읽기 전용 · 사용자 직접 확인 시 자원 예약 등록 및 AI 연결 지원).',
+    description: '부천여성청소년재단 그룹웨어 위에서 내 처리할 일을 한 화면에 모아 보여 줍니다(기본 읽기 전용 · 사용자 직접 확인 시 자원 예약 등록 및 AI 연결 지원 · 구글 캘린더 일 보기 읽기 대조).',
     icons: {16: 'icon16.png', 48: 'icon48.png', 128: 'icon128.png'},
-    // MAIN world: runs in the page itself (needs the page's own groupware client); no string injection.
-    content_scripts: [{matches: ['https://gw.bwyf.or.kr/*'], js: ['policy.js', 'gw-live.js', 'mount.js'], run_at: 'document_idle', world: 'MAIN', all_frames: false}],
+    // 구글 캘린더 대조: 서비스 워커가 보이지 않는 탭에서 calendar.google.com 일 보기를 읽는다(읽기 전용). bridge.js가 그룹웨어 화면의 요청만 전달한다.
+    permissions: ['scripting'],
+    host_permissions: ['https://calendar.google.com/*'],
+    background: {service_worker: 'background.js'},
+    content_scripts: [
+      // MAIN world: runs in the page itself (needs the page's own groupware client); no string injection.
+      {matches: ['https://gw.bwyf.or.kr/*'], js: ['policy.js', 'gw-live.js', 'mount.js'], run_at: 'document_idle', world: 'MAIN', all_frames: false},
+      {matches: ['https://gw.bwyf.or.kr/*'], js: ['bridge.js'], run_at: 'document_start', all_frames: false},
+    ],
   }, null, 2));
   if (policy.action !== 'preserved') await fs.writeFile(path.join(extDir, 'policy.js'), policy.text);
   await fs.writeFile(path.join(extDir, 'mount.js'), MOUNT_JS);
   await fs.rm(path.join(extDir, 'loader.js'), {force: true});
   for (const n of [16, 48, 128]) await fs.copyFile(path.join(root, 'src', 'live', 'ext', `icon${n}.png`), path.join(extDir, `icon${n}.png`));
+  for (const f of ['background.js', 'bridge.js']) {
+    const text = await fs.readFile(path.join(root, 'src', 'live', 'ext', f), 'utf8');
+    const err = syntaxError(text, f);
+    if (err) throw new Error(`${f} 문법 오류: ${err.message}`);
+    await fs.writeFile(path.join(extDir, f), text.replace(/\r\n/g, '\n'));
+  }
   await fs.writeFile(path.join(extDir, 'gw-live.js'), bundle);
 
   const guard = `if(location.origin!=='https://gw.bwyf.or.kr'){alert('그룹웨어(gw.bwyf.or.kr)에 로그인한 화면에서 눌러 주세요.');return;}`;
