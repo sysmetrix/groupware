@@ -34,7 +34,7 @@ test('two builds of identical sources are byte-identical (no build timestamp in 
     await new Promise(r => setTimeout(r, 20));
     const b = runBuild(`--out-dir=${path.join(dir, 'b')}`);
     assert.equal(b.status, 0, b.stderr);
-    for (const f of ['gw-live.js', 'gw-live.sha256', 'bookmarklet.txt', 'bookmarklet-mini.txt', 'install.html', 'extension/manifest.json', 'extension/mount.js', 'extension/policy.js', 'extension/gw-live.js']) {
+    for (const f of ['gw-live.js', 'gw-live.sha256', 'bookmarklet.txt', 'bookmarklet-mini.txt', 'install.html', 'extension/manifest.json', 'extension/background.js', 'extension/bridge.js', 'extension/mount.js', 'extension/policy.js', 'extension/gw-live.js']) {
       assert.equal(sha(await fs.readFile(path.join(dir, 'a', f))), sha(await fs.readFile(path.join(dir, 'b', f))), f);
     }
     const bundle = await fs.readFile(path.join(dir, 'a', 'gw-live.js'), 'utf8');

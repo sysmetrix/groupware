@@ -320,6 +320,7 @@
       case 'gsyncNext':
       case 'gsyncFind':
       case 'gsyncMark':
+      case 'gsyncCompare':
       case 'navMini':
         HOME_ACTS[act](actEl, v, e); break; // 홈·채팅 화면의 처리기 등록소(29~30번 조각)
       default: break;
