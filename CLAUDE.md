@@ -39,7 +39,8 @@ L4 파일(한 줄 수정이어도 L4): `src/live/wc/01-storage.js`, `19-draft-en
 ## 코드 규칙
 
 - 조각 파일(`src/live/wc/NN-*.js`)은 파일명 순으로 `boot()` 한 함수 안에 이어 붙는다. 최상위 이름이 겹치면 번들 구문 오류다. 최상위 `const`를 로드 시점에 정의보다 먼저 쓰면 TDZ 오류다.
-- 계산과 판정은 순수 함수로 `src/live/briefing.mjs`(또는 `home-model.mjs`, `chat.mjs`)에 두고 테스트를 붙인다. 이 파일들은 import, DOM, `localStorage`를 쓰지 않는다.
+- 계산과 판정은 순수 함수로 `src/live/briefing.mjs`나 그 뒤에 이어 붙는 모듈(`chat.mjs`, `home-model.mjs`, `usage.mjs`, `contract.mjs` 등)에 두고 테스트를 붙인다. 이 파일들은 import, DOM, `localStorage`를 쓰지 않는다. 새 모듈은 `docs/engineering/HARNESS.md`에 적힌 세 곳에 등록한다.
+- 다른 조각의 함수를 부르는 한 줄을 조각에 넣을 때는 `typeof 이름 === 'function'`으로 감싼다. 테스트가 조각을 따로 떼어 돌리기 때문에, 감싸지 않으면 그 조각의 테스트가 조용히 다른 답을 낸다.
 - 새 `data-act`에는 처리기를 함께 만든다. 하네스가 검사한다.
 - 글자는 12px 이상. 한국어 문구는 존댓말로 짧게, 전문용어 없이.
 - 새 외부 주소는 허용 목록에 이유와 함께 추가한다.
@@ -47,6 +48,8 @@ L4 파일(한 줄 수정이어도 L4): `src/live/wc/01-storage.js`, `19-draft-en
 ## 확인과 출시
 
 - 시작할 때 `npm run loop:once`로 기준선을 잡고, 고친 뒤 다시 돌려 새로 깨진 것만 고친다.
+- 대화 규칙(`chat.mjs`, `31-chat-engine.js`)을 고쳤으면 `npm run eval:chat`을 돌린다. 문항의 답을 규칙에 맞춰 바꾸지 않는다. 화면 흐름을 고쳤으면 `npm run e2e`를 돌린다.
 - 마무리 전 `npm run harness` 전체를 돌린다. Python이 없거나 데스크톱 실행 파일을 빌드하지 않은 환경에서는 로컬 서버 쪽 테스트(`desktop-runtime-config`, `library-http`, `runtime-control`)가 실패한다. 내 변경 때문인지는 기준선과 비교해 판단하고, 결과를 그대로 보고한다.
 - 화면을 고쳤으면 `npm run live:demo`에서 밝게·어둡게와 좁은 창(약 760px)을 본다. 둘러보기는 실제 그룹웨어 동작을 증명하지 않는다. 실화면에서 확인하지 못했으면 확인하지 못했다고 적는다.
+- 이 PC의 Git Bash는 heredoc 안의 역슬래시를 지운다. 정규식이 든 스크립트는 셸에 붙여 넣지 말고 파일로 써서 실행한다.
 - 버전은 `npm run bump -- <새 버전> "제목" "바뀐 점"`으로만 올린다. main에 합쳐지면 배포와 릴리스는 자동이다.

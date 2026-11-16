@@ -52,6 +52,11 @@
     const prev = store.get('state', null);
     const usablePrev = prev && prev.at && Date.parse(prev.at) < Date.parse(raw.collectedAt) ? prev : null;
     const a = R.analyze(raw, usablePrev, new Date(), {roles: S.settings.roles});
+    // 그룹웨어 응답 모양이 바뀐 흔적(조회는 성공인데 제목·날짜가 빈 줄)을 찾는다. 같은 내용은 한 번만 오류 기록에 남긴다.
+    { const prevSig = S.contract && !S.contract.ok ? S.contract.issues.map(i => i.area + '/' + i.where + '/' + (i.field || i.kind)).join('|') : '';
+      S.contract = R.contractCheck(raw);
+      const sig = S.contract.ok ? '' : S.contract.issues.map(i => i.area + '/' + i.where + '/' + (i.field || i.kind)).join('|');
+      if (sig && sig !== prevSig) logError('자료 모양', S.contract.issues.slice(0, 5).map(i => `${i.area} ${i.field || i.kind}: ${i.detail}`).join(' / ')); }
     applyUrgentWords(a);
     const fresh = a.actions.filter(x => x.isNew);
     for (const x of fresh) { S.newKeys.add(x.key); S.activity.push({at: Date.now(), key: x.key, title: x.title, kind: x.kind, area: x.area, priority: x.priority}); }

@@ -154,7 +154,7 @@
   }
 
   // ---------- 데이터 관리 ----------
-  const DATA_LABEL = {patterns: ['학습한 내 결재문서(기안 패턴)', '결재문서 본문·기록물철을 학습한 자료'], macros: ['기록기 기록', '내가 저장한 동작 기록'], actionHistory: ['자동 작업 감사 기록', '자동 기안·재생 결과(변조 감지 포함)'], errors: ['오류 기록', '최근 오류 30건'], settings: ['설정', '화면·예산·알림 설정'], todos: ['내 할 일', ''], hidden: ['숨기기 표시', ''], snooze: ['미루기 표시', ''], plan: ['오늘 계획', ''], history: ['처리 이력', ''], updateInfo: ['업데이트 확인 결과', ''], routing: ['배부 추천 이력', '문서 배부 추천용 캐시(12시간)'], state: ['처리 상태', '처리 완료·확인 표시'], forms: ['양식 목록 캐시', ''], activity: ['활동 기록', ''], weekly: ['주간 보고 캐시', ''], weeklyRecovery: ['주간 보고 복구본', '다른 탭과 동시 편집할 때 보관한 초안'], newKeys: ['새 항목 표시', ''], seenActivity: ['확인한 활동', '']};
+  const DATA_LABEL = {usage: ['사용 기록', '화면·버튼·비서 도구의 이름과 횟수(설정의 사용 기록에서 내보내기·지우기)'], patterns: ['학습한 내 결재문서(기안 패턴)', '결재문서 본문·기록물철을 학습한 자료'], macros: ['기록기 기록', '내가 저장한 동작 기록'], actionHistory: ['자동 작업 감사 기록', '자동 기안·재생 결과(변조 감지 포함)'], errors: ['오류 기록', '최근 오류 30건'], settings: ['설정', '화면·예산·알림 설정'], todos: ['내 할 일', ''], hidden: ['숨기기 표시', ''], snooze: ['미루기 표시', ''], plan: ['오늘 계획', ''], history: ['처리 이력', ''], updateInfo: ['업데이트 확인 결과', ''], routing: ['배부 추천 이력', '문서 배부 추천용 캐시(12시간)'], state: ['처리 상태', '처리 완료·확인 표시'], forms: ['양식 목록 캐시', ''], activity: ['활동 기록', ''], weekly: ['주간 보고 캐시', ''], weeklyRecovery: ['주간 보고 복구본', '다른 탭과 동시 편집할 때 보관한 초안'], newKeys: ['새 항목 표시', ''], seenActivity: ['확인한 활동', '']};
   function inventory() {
     const p = 'bwyfgw:wc:' + currentKey + ':';
     const rows = [];
@@ -217,6 +217,7 @@
     add('브라우저 저장소', w && !S.storageError && totalChars < 4700000, w ? `쓰기 ${S.storageError ? '부분 실패' : '가능'} · 내 자료 ${Math.round(inventory().reduce((a, r) => a + r.kb, 0))}KB · 브라우저 전체 ${Math.round(totalChars / 1024)}K자 (${Math.min(100, Math.round(totalChars / 52428.8))}%)` : '저장할 수 없습니다(저장 공간 부족 또는 차단)');
     const pat = store.get('patterns', null), n = pat && pat.docs ? Object.keys(pat.docs).length : 0;
     add('기안 패턴 학습', n > 0, n ? `${n}건 학습됨` : '아직 학습 전입니다(새로 만들기 → 결과보고를 열면 자동 학습)');
+    add('그룹웨어 자료 모양', !S.contract || S.contract.ok, !S.contract ? '아직 자료를 읽지 않았습니다' : S.contract.ok ? '읽은 자료의 제목·날짜·번호가 예전 모양 그대로입니다' : S.contract.issues.slice(0, 4).map(i => `${R.CONTRACT_AREA_LABEL[i.area] || i.area} ${i.where}: ${i.detail}`).join(' / '));
     const au = auditState();
     add('감사 기록 무결성', au.ok, au.ok ? `${au.checked}건 검증` : `이상 감지: ${au.reason}`);
     add('그룹웨어 연결', true, `읽기 전용 ${GW.readOnlyEndpoints().length}개 + 사용자 직접 확인 시 자원예약(/schres/rs121A06)`);

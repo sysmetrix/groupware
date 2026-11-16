@@ -123,6 +123,7 @@
     } catch (e) { logError('chatTool.' + name, e.message); res = {ok: false, text: '처리하지 못했습니다: ' + String(e.message || e).slice(0, 100)}; }
     if (S.userKey !== owner || S.chat !== st || st.seq !== seq || st.stopped) return {ok: false, text: '사용자가 바뀌어 이전 조회 결과를 버렸습니다.'};
     chip.state = res.ok ? 'ok' : 'err';
+    if (typeof usageNote === 'function') usageNote(ctx.viaAi ? 'toolAi' : 'tool', name + (res.ok ? '' : ':err')); // 도구 이름과 성공 여부만 센다(40-usage.js)
     if (res.ok && res.data && Array.isArray(res.data.items) && res.data.items.length) {
       st.ctx.lastItems = res.data.items.map(it => ({itemId: it.itemId || '', title: it.title || '', uid: it.uid || '', url: it.url || '', type: it.type || ''}));
       st.ctx.pendingSlot = null;
@@ -357,6 +358,10 @@
           const def = CHAT_TOOLS.get(it.tool);
           if (ready && res.ok && def.kind !== 'act' && CHAT_COMPOSE.has(it.tool) && !st.stopped && (res.cards || []).length + (res.text || '').length > 30 && chatAvailable(await chatModelList()).length && st.seq === runSeq) await chatCompose(text, res, ai, runSeq);
         }
+      } else if (!auto && R.chatNotDoing(text)) {
+        // 대신 하지 않는 일(상신·결재 승인·삭제, 남의 근무시간)은 AI에 넘기지 않고 그 자리에서 알린다.
+        st.ctx.lastRead = null;
+        ai.text = R.chatNotDoing(text);
       } else if (ready && chatAvailable(await chatModelList()).length && st.seq === runSeq) {
         st.ctx.lastRead = null;
         try { await chatRunAi(text, ai, runSeq); }

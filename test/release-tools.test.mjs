@@ -4,14 +4,14 @@ import assert from 'node:assert/strict';
 import {bumpSources} from '../scripts/bump.mjs';
 import {releaseNotes} from '../scripts/release-notes.mjs';
 
-const SRC = {workcenter: "  const VERSION = '0.71.0';\n", collector: "  const VERSION = '0.71.0';\n", briefing: 'export const CHANGELOG = [\n  {v: "0.71.0", date: "2026-11-15", old: "", title: "이전", items: ["a"]},\n];\n'};
+const SRC = {workcenter: "  const VERSION = '0.71.0';\n", collector: "  const VERSION = '0.71.0';\n", changelog: 'export const CHANGELOG = [\n  {v: "0.71.0", date: "2026-11-15", old: "", title: "이전", items: ["a"]},\n];\n'};
 
 test('bumpSources changes both VERSION lines and puts the new entry on top of the changelog', () => {
   const out = bumpSources(SRC, {version: '0.72.0', title: ' 새 제목 ', items: ['첫째 "따옴표"', '  ', '둘째'], date: '2026-11-16'});
   assert.equal(out.from, '0.71.0');
   assert.match(out.workcenter, /const VERSION = '0\.72\.0';/);
   assert.match(out.collector, /const VERSION = '0\.72\.0';/);
-  const lines = out.briefing.split('\n');
+  const lines = out.changelog.split('\n');
   assert.equal(lines[1], '  {v: "0.72.0", date: "2026-11-16", old: "", title: "새 제목", items: ["첫째 \\"따옴표\\"", "둘째"]},');
   assert.match(lines[2], /v: "0\.71\.0"/, 'the previous entry stays right below');
 });
@@ -58,7 +58,7 @@ test('trimChangelog keeps details only for the newest versions and leaves odd-lo
   assert.equal(trimChangelog(odd, 0), odd);
   assert.equal(trimChangelog('no changelog here'), 'no changelog here');
   // 실제 번들: 최근 것은 목록이 있고 오래된 것은 비어 있으며, 소스의 전체 내역은 그대로다
-  const {CHANGELOG} = await import('../src/live/briefing.mjs');
+  const {CHANGELOG} = await import('../src/live/changelog.mjs');
   assert.ok(CHANGELOG.length > CHANGELOG_DETAIL && CHANGELOG.every(c => c.items.length), 'source keeps every detail');
   const {bundle} = assemble(await readSources(new URL('..', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')));
   const old = CHANGELOG[CHANGELOG_DETAIL];

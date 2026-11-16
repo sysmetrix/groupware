@@ -30,7 +30,7 @@ async function stage(name, fn) {
 // Standalone files. The src/live/wc fragments are bodies of boot(), so checkLiveSyntax parses them in that shape
 // and also parses the assembled bundle.
 const liveFiles = async () => {
-  return [path.join(root, 'src', 'live', 'collector.browser.js'), path.join(root, 'src', 'live', 'workcenter.browser.js'), path.join(root, 'src', 'live', 'briefing.mjs'), path.join(root, 'src', 'live', 'home-model.mjs'), path.join(root, 'src', 'live', 'chat.mjs'), path.join(root, 'src', 'live', 'gcal-sync.mjs'), path.join(root, 'src', 'live', 'settings-transfer.mjs'), path.join(root, 'src', 'live', 'doc-find.mjs'),
+  return [path.join(root, 'src', 'live', 'collector.browser.js'), path.join(root, 'src', 'live', 'workcenter.browser.js'), path.join(root, 'src', 'live', 'briefing.mjs'), path.join(root, 'src', 'live', 'home-model.mjs'), path.join(root, 'src', 'live', 'chat.mjs'), path.join(root, 'src', 'live', 'gcal-sync.mjs'), path.join(root, 'src', 'live', 'settings-transfer.mjs'), path.join(root, 'src', 'live', 'doc-find.mjs'), path.join(root, 'src', 'live', 'usage.mjs'), path.join(root, 'src', 'live', 'contract.mjs'), path.join(root, 'src', 'live', 'changelog.mjs'),
     path.join(root, 'scripts', 'live-build.mjs'), path.join(root, 'scripts', 'harness.mjs'), path.join(root, 'scripts', 'graph.mjs'),
     path.join(root, 'scripts', 'check.mjs'), path.join(root, 'scripts', 'lib', 'test-results.mjs')];
 };
@@ -83,7 +83,7 @@ await stage('이벤트 데이터 계약', async () => {
   return {fails, warns, info: '처리기 데이터 요구 검사'};
 });
 await stage('단위 테스트', async () => {
-  const files = FAST ? ['test/live.test.mjs', 'test/harness.test.mjs'] : (await fs.readdir(path.join(root, 'test'))).filter(n => n.endsWith('.test.mjs')).map(n => 'test/' + n);
+  const files = FAST ? ['test/live.test.mjs', 'test/harness.test.mjs', 'test/chat-eval.test.mjs', 'test/contract.test.mjs', 'test/usage.test.mjs'] : (await fs.readdir(path.join(root, 'test'))).filter(n => n.endsWith('.test.mjs')).map(n => 'test/' + n);
   // Structured results (one JSON line per test), and a child environment without host interpreter overrides
   // (PYTHONHOME from the launching app breaks the project's own Python); only the test processes get it.
   const r = sh(node, ['--test', '--test-reporter=./scripts/lib/test-results.mjs', '--test-reporter-destination=stdout', ...files], {env: Object.fromEntries(Object.entries(testEnv()).filter(([k]) => k !== 'NODE_TEST_CONTEXT'))});
@@ -94,6 +94,17 @@ await stage('단위 테스트', async () => {
 });
 
 if (!FAST) {
+  await stage('핵심 여정', async () => {
+    // 둘러보기를 실제 브라우저(설치된 Chrome·Edge)에 띄워 다섯 여정을 사람처럼 눌러 본다. 브라우저가 없는 PC에서는 주의로만 남긴다(CI 에서는 실패).
+    const r = sh(node, ['scripts/e2e.mjs', '--json'], {timeout: 240000});
+    if (r.status === 2) return process.env.CI ? {fails: ['브라우저를 찾지 못해 핵심 여정을 검사하지 못함']} : {warns: ['브라우저를 찾지 못해 핵심 여정을 검사하지 못함(BROWSER_PATH 로 지정 가능)'], info: '건너뜀'};
+    let out = null; try { out = JSON.parse(r.stdout); } catch {}
+    if (!out) return {fails: ['핵심 여정 검사가 결과를 내지 못함: ' + ((r.stderr || r.stdout || '').split('\n').find(l => l.trim()) || `종료 코드 ${r.status}`).slice(0, 200)]};
+    const steps = (out.result && out.result.steps) || [];
+    const fails = [...steps.filter(s => !s.ok).map(s => `${s.journey} · ${s.name}${s.detail ? ': ' + s.detail : ''}`), ...(out.pageErrors || []).map(e => `페이지 오류: ${e}`)];
+    if (!steps.length) fails.push('검사 단계가 하나도 실행되지 않음');
+    return {fails, info: `${steps.filter(s => s.ok).length}/${steps.length} 단계 (${out.browser})`};
+  });
   await stage('빌드와 예산', async () => {
     // 격리된 임시 폴더에 두 번 빌드한다: build/live(배포본과 관리자 policy.js)는 건드리지 않고, 같은 소스에서 같은 해시가 나오는지도 확인한다.
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'gw-harness-build-'));
@@ -121,8 +132,8 @@ if (!FAST) {
       const [vw, vc] = [await ver('src/live/workcenter.browser.js'), await ver('src/live/collector.browser.js')];
       const manifest = JSON.parse(await fs.readFile(path.join(outA, 'extension', 'manifest.json'), 'utf8')).version;
       // 맨 위 항목은 {v: '…'} 또는 JSON 형태 {"v": "…"} 둘 다 허용
-      const clTop = ((await fs.readFile(path.join(root, 'src/live/briefing.mjs'), 'utf8')).match(/export const CHANGELOG = \[\s*\{\s*(?:v|"v"|'v')\s*:\s*['"]([\d.]+)['"]/) || [])[1];
-      if (clTop !== vw) fails.push(`업데이트 내역 맨 위 버전(${clTop})이 현재 버전(${vw})과 다름: briefing.mjs의 CHANGELOG에 새 항목을 추가하세요`);
+      const clTop = ((await fs.readFile(path.join(root, 'src/live/changelog.mjs'), 'utf8')).match(/export const CHANGELOG = \[\s*\{\s*(?:v|"v"|'v')\s*:\s*['"]([\d.]+)['"]/) || [])[1];
+      if (clTop !== vw) fails.push(`업데이트 내역 맨 위 버전(${clTop})이 현재 버전(${vw})과 다름: npm run bump 로 changelog.mjs 에 새 항목을 추가하세요`);
       if (new Set([vw, vc, manifest]).size !== 1) fails.push(`버전 불일치: 업무센터 ${vw}, 수집기 ${vc}, 확장 ${manifest}`);
       const sha = (await fs.readFile(path.join(outA, 'gw-live.sha256'), 'utf8')).trim().split(/\s+/)[0];
       if (sha !== digest) fails.push('gw-live.sha256 이 번들과 다름');
