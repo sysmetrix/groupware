@@ -142,6 +142,113 @@ export function mailHighlights(text = '') {
   return pieces.map((text, index) => ({text, index, score: rank(text)})).sort((a, b) => b.score - a.score || a.index - b.index).slice(0, 3).sort((a, b) => a.index - b.index).map(x => x.text.length > 260 ? x.text.slice(0, 260) + '…' : x.text);
 }
 
+// Mail body for on-screen reading: the sender's own HTML, shown the way the groupware read view shows it.
+// The safety boundary is the frame it is mounted in (sandbox without scripts or same-origin) plus the CSP written here.
+// The tag stripping below is a second layer, not the guarantee. Mail text is untrusted input and never leaves this document.
+export const MAIL_BODY_MAX = 800000;
+const MAIL_INLINE_PATH = '/mail/mail002A30';
+const MAIL_DROP_BLOCKS = ['script', 'iframe', 'frame', 'frameset', 'object', 'embed', 'applet', 'noscript', 'title', 'template', 'svg', 'math'];
+const MAIL_DROP_TAG = /<\/?(?:script|iframe|frame|frameset|object|embed|applet|link|meta|base|form|input|button|textarea|select|option|html|head|body|noscript|title|template|svg|math)\b[^<>]*>/gi;
+// 여는 표시부터 닫는 표시까지를 한 번 훑어 지운다. 닫는 표시가 더 없으면 거기서 멈춘다.
+// (짝 없는 여는 표시를 수만 개 넣은 메일이 정규식을 되풀이시켜 화면을 멈추지 못하게 길이에 비례하는 시간만 쓴다.)
+function mailCut(s, open, close) {
+  let out = '', pos = 0, m;
+  open.lastIndex = 0;
+  while ((m = open.exec(s))) {
+    close.lastIndex = m.index + m[0].length;
+    const c = close.exec(s);
+    if (!c) break;
+    out += s.slice(pos, m.index); pos = c.index + c[0].length; open.lastIndex = pos;
+  }
+  return pos ? out + s.slice(pos) : s;
+}
+const mailDropBlocks = s => MAIL_DROP_BLOCKS.reduce((t, name) => mailCut(t, new RegExp('<' + name + '\\b', 'gi'), new RegExp('<\\/' + name + '\\s*>', 'gi')), s);
+const MAIL_ATTR = '(?:"[^"]*"|\'[^\']*\'|[^\\s>]+)';
+// 따옴표 안의 < > 까지 한 태그로 읽는다(속성 값에 괄호를 넣어 검사를 비켜 가지 못하게).
+const MAIL_TAG = /<[a-zA-Z](?:[^<>"']|"[^"]*"|'[^']*')*>/g;
+// 주소는 막을 것을 고르지 않고 열어 둘 것만 정한다. 문자 참조(&#x73;)로 숨긴 javascript: 도 여기서 걸린다.
+const MAIL_URL_OK = /^(?:https?:\/\/|\/\/|mailto:|tel:|#|data:image\/(?:png|jpe?g|gif|webp|bmp)[;,])/i;
+const mailAttrUrl = s => String(s || '').replace(/&amp;/gi, '&').replace(/&#0*38;/g, '&').replace(/&#x0*26;/gi, '&').trim();
+// Pictures stored in the groupware (signatures, pasted images). Only these are fetched with the login; other hosts are left to the frame.
+export function mailInlineImageUrls(html = '', origin = '', limit = 20) {
+  const out = [];
+  if (!origin) return out;
+  for (const m of String(html || '').matchAll(/<img\b[^<>]*?\ssrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi)) {
+    const u = mailAttrUrl(m[1] ?? m[2] ?? m[3]);
+    if (!u.startsWith(origin + MAIL_INLINE_PATH + '?') || out.includes(u)) continue;
+    out.push(u);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+const MAIL_DOC_HEAD = '<!doctype html><html lang="ko"><head><meta charset="utf-8">'
+  + '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src data: https: http:; style-src \'unsafe-inline\'; form-action \'none\'">'
+  + '<base target="_blank"><style>html{background:#fff}body{margin:0;padding:18px 20px 32px;font:14px/1.65 "Pretendard Variable",Pretendard,"Malgun Gothic","맑은 고딕","Apple SD Gothic Neo",sans-serif;color:#1c2024;overflow-wrap:anywhere}'
+  + 'img{max-width:100%;height:auto}table{max-width:100%}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;margin:0}a{color:#1a5fb4}'
+  + 'blockquote{margin:8px 0 8px 2px;padding-left:12px;border-left:3px solid #d5dbe1}.gw-none{color:#6b7480}</style></head><body>';
+function mailCleanTag(tag, {inline, origin, count}) {
+  let t = tag
+    .replace(new RegExp('\\s+on[a-z0-9_-]+\\s*=\\s*' + MAIL_ATTR, 'gi'), '')
+    .replace(new RegExp('\\s+(?:srcdoc|srcset|formaction|ping|target|rel)\\s*=\\s*' + MAIL_ATTR, 'gi'), '')
+    .replace(new RegExp('(\\s(?:href|src|action|background|xlink:href|poster|data|lowsrc|dynsrc)\\s*=\\s*)(' + MAIL_ATTR + ')', 'gi'), (all, pre, val) => {
+      const v = /^["']/.test(val) ? val.slice(1, -1) : val;
+      const u = mailAttrUrl(v).replace(/[\u0000-\u0020\u00a0]+/g, '');
+      return !u || MAIL_URL_OK.test(u) ? all : pre + '"#"';
+    });
+  // 폭이 고정된 소식지(600px 표)는 창 폭에 맞춰 줄어들게 한다. 원래 최대 폭은 지키고 가로 스크롤만 없앤다.
+  // 칸(td·th)은 한 줄을 혼자 차지할 만큼 넓을 때만 건드린다(여러 칸짜리 표의 비율을 망가뜨리지 않게).
+  if (/^<(?:table|td|th|div|center|p)\b/i.test(t)) {
+    const least = /^<t[dh]\b/i.test(t) ? 560 : 400;
+    let px = 0;
+    t = t.replace(/(\swidth\s*=\s*)(["']?)(\d{3,4})(?:px)?\2(?=[\s>\/])/i, (all, pre, q, n) => { if (+n < least) return all; px = Math.max(px, +n); return pre + '"100%"'; })
+      .replace(/(\sstyle\s*=\s*")([^"]*)"/i, (all, pre, css) => pre + css.replace(/(^|;)\s*(min-width|width)\s*:\s*(\d{3,4})px\s*(?:!important)?/gi, (a, sep, prop, n) => { if (+n < least) return a; if (prop.toLowerCase() === 'min-width') return sep + 'min-width:0'; px = Math.max(px, +n); return sep + 'width:100%;max-width:' + n + 'px'; }) + '"');
+    if (px && !/max-width/i.test(t)) t = /\sstyle\s*=\s*"/i.test(t) ? t.replace(/(\sstyle\s*=\s*")/i, '$1max-width:' + px + 'px;') : t.replace(/\/?>$/, ' style="max-width:' + px + 'px">');
+  }
+  if (/^<img\b/i.test(t)) {
+    t = t.replace(new RegExp('(\\ssrc\\s*=\\s*)(' + MAIL_ATTR + ')', 'i'), (all, pre, val) => {
+      const u = mailAttrUrl(/^["']/.test(val) ? val.slice(1, -1) : val);
+      if (origin && u.startsWith(origin + MAIL_INLINE_PATH + '?')) {
+        const d = inline && inline[u];
+        if (typeof d === 'string' && /^data:image\/(?:png|jpe?g|gif|webp|bmp);base64,[A-Za-z0-9+/=]+$/.test(d)) return pre + '"' + d + '"';
+        count.missing++;
+        return pre + '"" alt="(그림을 불러오지 못했습니다)"';
+      }
+      if (/^https?:/i.test(u)) count.remote++;
+      return all;
+    });
+  }
+  if (/^<a\b/i.test(t)) t = t.replace(/\/?>$/, ' target="_blank" rel="noopener noreferrer">');
+  return t;
+}
+export function mailBodyDoc({html = '', plain = '', inline = {}, origin = ''} = {}) {
+  const raw = String(html || '');
+  const tooLong = raw.length > MAIL_BODY_MAX;
+  const count = {remote: 0, missing: 0};
+  let body = '', kind = 'empty';
+  if (raw.trim() && !tooLong) {
+    // 주석(<!-- -->)은 지우지 않는다. 워드·아웃룩 메일은 <style> 안 규칙을 주석으로 감싸므로 지우면 모양이 깨지고,
+    // 남겨 두면 주석 안팎을 가리지 않고 모든 태그를 검사하게 되어 더 엄격하다.
+    let s = raw.replace(/<!doctype[^<>]*>/gi, '');
+    // 지운 자리에서 다시 이어 붙어 되살아나는 표기(<scr<script>ipt>)가 없을 때까지 되풀이한다.
+    for (let i = 0, prev = ''; i < 6 && prev !== s; i++) { prev = s; s = mailDropBlocks(s).replace(MAIL_DROP_TAG, ''); }
+    if (!/<\s*\/?\s*(?:script|iframe|object|embed|base|meta|link|form)\b/i.test(s)) {
+      body = s.replace(MAIL_TAG, tag => mailCleanTag(tag, {inline, origin, count}));
+      // 따옴표가 어긋나 위에서 읽지 못한 태그에 처리기가 남았으면 모양을 포기하고 글자만 보인다.
+      const leftover = /<[a-zA-Z][^<>]*\son[a-z0-9_-]+\s*=/i.test(body) || /<[a-zA-Z][^<>]*(?:java|vb)script\s*:/i.test(body);
+      if (!leftover && (body.replace(/<[^<>]*>/g, '').replace(/&nbsp;/gi, ' ').trim() || /<img\b/i.test(body))) kind = 'html';
+    }
+  }
+  if (kind !== 'html') {
+    count.remote = 0; count.missing = 0;
+    const text = (String(plain || '') || (tooLong ? '' : raw.replace(/<(?:br|\/p|\/div|\/tr|\/li)\b[^<>]*>/gi, '\n').replace(/<[^<>]*>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&'))).replace(/\r\n?/g, '\n').split('\n').map(line => line.trimEnd()).join('\n').trim();
+    if (text) {
+      kind = 'plain';
+      body = '<pre>' + text.split(/(https?:\/\/[^\s<>"'\u3000]+)/).map((part, i) => i % 2 ? `<a href="${esc(part)}" target="_blank" rel="noopener noreferrer">${esc(part)}</a>` : esc(part)).join('') + '</pre>';
+    } else { kind = 'empty'; body = '<p class="gw-none">본문이 없는 메일입니다.</p>'; }
+  }
+  return {doc: MAIL_DOC_HEAD + body + '</body></html>', kind, tooLong, remote: count.remote, missing: count.missing};
+}
+
 // Suggest where an incoming document should go, from past distribution/receipt history.
 // Honest numbers: "비슷한 문서 n건 중 k건".
 const STOP = /^(20\d{2}년?|\d+월?|안내|요청|알림|관련|제출|협조|실시|결과|계획|참석|회신|보고|개최|운영|및|등|위한|대한|부천|부천시|경기도|경기|재단|여성청소년재단|부천여성청소년재단|협조요청|참여|프로그램|사업)$/;

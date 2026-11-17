@@ -1117,8 +1117,8 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .rate{height:6px;border:0;border-radius:3px;background:var(--soft)}
 .wc .rate i{border-radius:3px}
 .wc .empty{padding:44px 20px}
-/* 좁아진 본문(처리 창을 열었을 때): 메일은 보낸 사람을 제목 위로 올린다 */
-@container (max-width:680px){.wc .row[data-act="selMail"]{grid-template-columns:1fr auto!important}.wc .row[data-act="selMail"]>div:first-child{grid-column:1/-1;font-size:13px}}
+/* 좁아진 본문(처리 창을 열었을 때): 첫 줄에 보낸 사람과 받은 날, 둘째 줄에 제목, 셋째 줄에 표시와 미리보기를 한 줄로 둔다 */
+@container (max-width:680px){.wc .row[data-act="selMail"]{grid-template-columns:1fr auto!important;row-gap:2px}.wc .row[data-act="selMail"]>div:first-child{grid-column:1;grid-row:1;font-size:13px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.wc .row[data-act="selMail"]>.w{grid-column:2;grid-row:1}.wc .row[data-act="selMail"]>.mn{grid-column:1/-1;grid-row:2}.wc .row[data-act="selMail"] .hl{flex-wrap:nowrap}.wc .row[data-act="selMail"] .hl>.muted{flex:1 1 auto;min-width:0}.wc .row[data-act="selMail"] .hl>.bdg{flex:0 0 auto}}
 
 /* 달력·근태: 한 장의 표. 오늘은 옅은 파랑 */
 .wc .cal{border-radius:var(--r);box-shadow:none}
@@ -1312,3 +1312,27 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 @media (max-width:900px){.wc .dr-b{font-size:0;padding:0}.wc .dr-tick:nth-child(even){display:none}}
 @media (prefers-reduced-motion:reduce){.wc *,.wc *::before,.wc *::after{animation:none!important;transition:none!important}}
 .wc.m-off *,.wc.m-off *::before,.wc.m-off *::after{animation:none!important;transition:none!important}
+/* 메일 본문: 처리 창 아래쪽은 본문이 모두 쓰고, 위쪽 머리말은 필요한 만큼만 차지한다 */
+.wc .ph.mhead{flex:0 1 auto;max-height:56%}
+.wc .ph.mhead .in{padding-bottom:12px}
+.wc .ph.mhead .kv{margin:8px 0 0;gap:4px 12px}
+.wc .ph.mhead .acts{margin-top:10px;gap:6px}
+.wc .ph.mhead .sec{margin-top:12px}
+.wc .ph.mhead .sec>.sh{margin-bottom:6px}
+.wc .ph.mhead .files{gap:4px}
+.wc .ph.mhead .file{padding:4px 8px;gap:8px}
+.wc .ph.mhead .file .ext{height:24px;border-radius:6px}
+.wc .ph.mhead .file .nm{display:flex;align-items:baseline;gap:8px}
+.wc .ph.mhead .file .nm b{flex:0 1 auto;min-width:0}
+.wc .ph.mhead .file .nm span{flex:0 0 auto}
+/* 좁아진 본문(처리 창을 열었을 때): 결재 목록은 제목 칸이 글자 두세 자 폭으로 찌그러지지 않게 보낸 곳·상태를 제목 아래로 내린다(추천은 처리 창에 있다) */
+.wc .ap-narrow{display:none}
+@container (max-width:680px){.wc .bar .seg{flex-wrap:wrap}}
+@container (max-width:680px){.wc table.apt .ap-from,.wc table.apt .ap-st,.wc table.apt .ap-rec{display:none}.wc table.apt .ap-narrow{display:block}.wc table.apt td,.wc table.apt th{padding-left:10px;padding-right:10px}}
+/* 좁은 창(1050px 이하)에서 처리 창을 열면 목록이 숨는데, 남은 경계선이 그 자리를 차지해 처리 창이 아래 줄로 밀리고 위가 비었다 */
+@media (max-width:1050px){.wc:not(.nopane):not(.expanded) #split{display:none}}
+/* 네 글자 확장자(HWPX)가 두 줄로 꺾이지 않게 폭을 글자에 맞춘다 */
+.wc .file .ext{width:auto;min-width:34px;padding:0 5px;white-space:nowrap}
+.wc .mbody{flex:1 1 0;min-height:220px;position:relative;background:#fff}
+.wc .mbody[hidden]{display:none}
+.wc .mbody iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff}
