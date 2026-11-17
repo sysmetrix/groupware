@@ -15,14 +15,14 @@
  */
 (() => {
   'use strict';
-  const VERSION = '0.79.0';
+  const VERSION = '0.80.0';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
   const READ_ONLY = new Set([
   // 자원(회의실·차량) 조회: 목록, 예약 현황, 자원 상세, 중복·한도 확인(POST지만 읽기 전용), 속성/옵션
   '/schres/rs121A01', '/schres/rs121A04', '/schres/rs121A05', '/schres/rs121A42', '/schres/rs121A49', '/schres/rs121A24', '/schres/rs121A10',
-    '/mail/mail000A01', '/mail/mail000A03', '/mail/mail003A01', '/mail/mail002A01', '/mail/mail002A37', '/ecm/ecm001A07',
+    '/mail/mail000A01', '/mail/mail000A03', '/mail/mail003A01', '/mail/mail002A01', '/mail/mail002A37', '/mail/mail002A30', '/ecm/ecm001A07',
     '/ea/api/getMenuCountInfo', '/ea/ea036A02', '/ea/ea025A04', '/ea/ea023A02', '/ea/ea027A02',
     '/ea/ea038A09', '/ea/ea038A15',
     '/board/APIHandler/ViewBoardArtList', '/board/APIHandler/getBoardReadCnt',
@@ -175,7 +175,8 @@
   const lastDayOfMonth = (y, m) => new Date(Date.UTC(Number(y), Number(m), 0)).getUTCDate();
   const str = (v, max = 300) => (v === null || v === undefined) ? '' : String(v).replace(/\s+/g, ' ').trim().slice(0, max);
   const num = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
-  const SECRET = /((?:비밀\s*번호|비번|패스워드|password|passwd|pwd|pw|임시\s*번호|인증\s*번호|OTP)\s*[:：=]?\s*)(\S+)/gi;
+  // 영문 낱말은 앞뒤가 글자가 아닐 때만 본다("groupware" 안의 pw를 비밀번호로 잘못 가리지 않게).
+  const SECRET = /((?:비밀\s*번호|비번|패스워드|임시\s*번호|인증\s*번호|(?<![A-Za-z])(?:password|passwd|pwd|pw|OTP)(?![A-Za-z]))\s*[:：=]?\s*)(\S+)/gi;
   const mask = (s, max = 1000) => str(s, max).replace(SECRET, '$1[MASKED]');
   const arr = v => Array.isArray(v) ? v : [];
   const firstList = obj => {
@@ -630,7 +631,34 @@
       try { const p = new URL(rawReadUrl, ORIGIN); return (p.origin === ORIGIN || /^https:\/\/(?:[a-z0-9-]+\.)*amaranth10\.co\.kr$/i.test(p.origin)) ? p.href : ''; } catch { return ''; }
     })();
     return {uid: String(uid), subject: str(dm.subject, 300), from: dec(str(dm.from, 200)), to: dec(str(dm.to, 2000)), cc: dec(str(dm.cc, 2000)), date: str(dm.date, 20),
-      readUrl: safeReadUrl, account: str(dm.email, 120), files, bigFiles, bigUntil, text: mask(plain, 4000), wasUnread: seen !== true};
+      readUrl: safeReadUrl, account: str(dm.email, 120), files, bigFiles, bigUntil, text: mask(plain, 4000), wasUnread: seen !== true,
+      // 화면 표시 전용: 그룹웨어 메일 화면과 같은 원문. 스크립트가 막힌 틀에만 싣고, AI·저장소·기록에는 넘기지 않는다(그쪽은 가려진 text만 쓴다).
+      html: html.length <= 800000 ? html : '', htmlTooLong: html.length > 800000, plain: dec(String(mime.body?.plain || '').replace(/&nbsp;/g, ' ')).replace(/\r\n?/g, '\n').slice(0, 200000)};
+  }
+  // Pictures inside a mail body (signatures, pasted images): the same GET the groupware read view makes, no state change.
+  // Only this one groupware address is fetched, and only pictures come back, as data for the script-less body frame.
+  async function mailInlineImage(url) {
+    if (!READ_ONLY.has('/mail/mail002A30')) throw new GwError('NOT_ALLOWED', '허용되지 않은 API입니다.');
+    let u;
+    try { u = new URL(String(url || '')); } catch { throw new GwError('BAD_URL', '허용되지 않은 그림 주소입니다.'); }
+    if (u.origin !== ORIGIN || u.pathname !== '/mail/mail002A30' || u.username || u.password) throw new GwError('BAD_URL', '허용되지 않은 그림 주소입니다.');
+    const ac = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = setTimeout(() => { try { ac && ac.abort(); } catch {} }, 8000);
+    try {
+      // 다른 주소로 넘기는 응답은 따라가지 않는다(이 한 주소만 읽는다는 약속을 지키기 위해). 크기는 받기 전에 먼저 본다.
+      const res = await fetch(u.href, {credentials: 'same-origin', redirect: 'error', ...(ac ? {signal: ac.signal} : {})});
+      if (!res.ok) throw new GwError('API_ERROR', `그림을 받지 못했습니다(${res.status}).`);
+      if (Number(res.headers.get('content-length') || 0) > 4 * 1048576) { try { ac && ac.abort(); } catch {} throw new GwError('BAD_IMAGE', '표시할 수 없는 그림입니다.'); }
+      const blob = await res.blob();
+      if (!/^image\/(?:png|jpe?g|gif|webp|bmp)$/i.test(blob.type) || blob.size < 1 || blob.size > 4 * 1048576) throw new GwError('BAD_IMAGE', '표시할 수 없는 그림입니다.');
+      return await new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(String(fr.result || ''));
+        fr.onerror = () => reject(new GwError('API_ERROR', '그림을 읽지 못했습니다.'));
+        fr.readAsDataURL(blob);
+      });
+    } catch (e) { throw e instanceof GwError ? e : new GwError('API_ERROR', '그림을 받지 못했습니다.'); }
+    finally { clearTimeout(timer); }
   }
   // Download one normal mail attachment (the same request the groupware read view makes; no state change).
   // Convert one mail attachment into a Synap document-viewer URL (HWP, PDF, xlsx …; read-only).
@@ -904,7 +932,7 @@
   }
 
   window.BWYFGW = Object.freeze({
-    version: VERSION, collect, call, search, organizationTree, organizationMembers, budgetCatalog, budgetProject, budgetAll, budgetLedger, budgetMonthly, attendanceDays, teamAttendance, teamPlanned, resourceList, resourceBookings, resourceDetail, resourceCheck, reserveResource, routingHistory, submittedRange, approvalPage, approvalFallback, docPreview, frequentForms, findReply, mailDetail, mailAttachment, mailAttachmentPreview, saveBlob,
+    version: VERSION, collect, call, search, organizationTree, organizationMembers, budgetCatalog, budgetProject, budgetAll, budgetLedger, budgetMonthly, attendanceDays, teamAttendance, teamPlanned, resourceList, resourceBookings, resourceDetail, resourceCheck, reserveResource, routingHistory, submittedRange, approvalPage, approvalFallback, docPreview, frequentForms, findReply, mailDetail, mailInlineImage, mailAttachment, mailAttachmentPreview, saveBlob,
     context: () => { const c = context(); return {name: c.name, deptName: c.deptName, compName: c.compName, duty: c.duty, position: c.position}; },
     readOnlyEndpoints: () => [...READ_ONLY], routes: ROUTES, links: LINKS, searchLabels: SEARCH_LABELS, defaults: DEFAULTS,
   });

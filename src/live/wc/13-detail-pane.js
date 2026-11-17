@@ -18,12 +18,13 @@
     }
     const entering = !paneVisible90;
     if (entering) { paneOpener90 = root.activeElement || document.activeElement; const d = paneOpener90?.dataset; paneOpenerKey90 = d?.act ? {act:d.act,k:d.k,uid:d.uid,box:d.box,id:d.id,kind:d.kind} : null; paneVisible90 = true; }
-    if (!pane.querySelector('#ph')) pane.innerHTML = '<div class="ph" id="ph"></div><div id="autofill"></div><div class="frame" id="frame"></div><div id="fbar"></div>';
+    if (!pane.querySelector('#ph')) pane.innerHTML = '<div class="ph" id="ph"></div><div id="autofill"></div><div class="mbody" id="mbody" hidden></div><div class="frame" id="frame"></div><div id="fbar"></div>';
     const info = paneInfo();
     const ph = $('#ph');
     const keepScroll = ph.querySelector('.in') ? ph.scrollTop : 0;
     const isViewer = S.pane.url && /ecm001A07|SynapDocViewServer/.test(decodeURIComponent(S.pane.url));
-    ph.className = 'ph' + (S.pane.url ? (isViewer ? ' viewer' : '') : ' min');
+    const mailBody = !S.pane.url && info.mailBody ? info.mailBody : null;
+    ph.className = 'ph' + (S.pane.url ? (isViewer ? ' viewer' : '') : mailBody ? ' mhead' : ' min');
     const x = selectedAction();
     const st = x ? stateOf(x) : '';
     ph.innerHTML = `<div class="top" style="flex-wrap:wrap"><button class="btn sm ghost" data-act="closePane" title="상세 창 닫기 (Esc)">${ic('x')}<span class="pane-back-txt">닫기</span></button>${S.pane.url && !S.pane.previewBack ? `<button class="btn sm ghost" data-act="returnOriginalScreen" title="원본 화면을 닫고 이전 목록 또는 상세로 돌아가기">${ic('back')}이전으로</button>` : ''}${S.pane.previewBack ? `<button class="btn sm ghost" data-act="returnAttachmentPreview" title="첨부 미리보기 전의 메일 처리 화면으로 돌아가기">${ic('back')}이전 메일 처리 화면으로</button>` : ''}<span class="sp"></span>${isViewer ? '<span class="muted">문서 미리보기</span>' : ''}${S.pane.url ? `<button class="btn sm ghost" data-act="paneExpand" title="${S.pane.expanded ? '목록과 나란히 보기' : '원래 화면을 넓게 보기'}">${ic('expand')}${S.pane.expanded ? '나란히' : '넓게'}</button><a class="btn sm ghost" href="${esc(S.pane.url)}" target="_blank"${/^https:\/\/gw\.bwyf\.or\.kr\//i.test(S.pane.url) ? '' : ' rel="noopener"'} title="새 창으로 열기">${ic('ext')}새 창</a>` : ''}</div>
@@ -43,10 +44,21 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
       S.pane.mounted = S.pane.url;
     }
     frame.classList.toggle('idle', !S.pane.url);
+    // 메일 본문: 스크립트·같은 출처 권한이 없는 틀에 한 번만 싣는다(다시 그릴 때마다 새로 실으면 읽던 자리를 잃는다).
+    const mbody = $('#mbody');
+    if (mbody) {
+      if (info.mailBody && mbody.dataset.key !== info.mailBody.key) {
+        const bf = document.createElement('iframe');
+        bf.setAttribute('sandbox', 'allow-popups allow-popups-to-escape-sandbox'); bf.setAttribute('referrerpolicy', 'no-referrer');
+        bf.title = '메일 본문'; bf.srcdoc = info.mailBody.doc;
+        mbody.replaceChildren(bf); mbody.dataset.key = info.mailBody.key;
+      } else if (!info.mailBody && mbody.dataset.key) { mbody.replaceChildren(); mbody.dataset.key = ''; }
+      mbody.hidden = !mailBody;
+    }
     // Keep the fallback opener only when the detail already has no equivalent opener.
     // Do not mistake reply/forward buttons for the selected item's original screen.
     const hasInlineOpen = !!ph.querySelector('[data-act="mailOpenItem"], .acts .primary[data-act="openUrl"], [data-act="openUrl"][data-title="예실대비현황"]');
-    if (!S.pane.url) frame.innerHTML = `<div class="fe">${info.url ? `<div>${ic('ext', 'style="width:30px;height:30px"')}</div><div>그룹웨어 원래 화면을 여기에 열어 그대로 처리할 수 있습니다.<br><span class="muted">원래 화면의 버튼(결재·접수·배부·발송·보내기)은 실제로 처리됩니다.</span></div>${hasInlineOpen ? '<div class="muted">위의 원문 열기 버튼을 이용하세요.</div>' : '<button class="btn primary" data-act="paneOpenMain">원래 화면 열기</button>'}` : '<div class="muted">이 항목은 열 화면이 없습니다.</div>'}</div>`;
+    if (!S.pane.url) frame.innerHTML = mailBody ? '' : `<div class="fe">${info.url ? `<div>${ic('ext', 'style="width:30px;height:30px"')}</div><div>그룹웨어 원래 화면을 여기에 열어 그대로 처리할 수 있습니다.<br><span class="muted">원래 화면의 버튼(결재·접수·배부·발송·보내기)은 실제로 처리됩니다.</span></div>${hasInlineOpen ? '<div class="muted">위의 원문 열기 버튼을 이용하세요.</div>' : '<button class="btn primary" data-act="paneOpenMain">원래 화면 열기</button>'}` : '<div class="muted">이 항목은 열 화면이 없습니다.</div>'}</div>`;
     $('#fbar').innerHTML = focusBar();
     const af = $('#autofill'); if (af) af.innerHTML = autoFillBar();
   }
@@ -234,7 +246,7 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
     const key = previewKey(d);
     const pv = waiting ? {found: false, reason: 'waiting'} : S.pane.preview && S.pane.preview.key === key ? S.pane.preview.data : null;
     const retry = '<button class="btn sm" data-act="docPreviewRetry">다시 찾기</button>';
-    const pvBox = `<div class="box" id="pvbox">${pv === null ? '<span class="muted"><span class="spin"></span> 열람 기록 없이 색인 발췌를 찾는 중…</span>' : pv.found ? `<b>통합검색 색인 발췌</b> <span class="muted">평문 색인 · 열람 기록 없음. 원문 전체나 원래 서식과 다를 수 있습니다. 원본은 원래 화면에서 확인하세요.</span>${(() => { const dl = R.extractAllDeadlines(pv.text || '').filter(x => x.dday >= -1); return dl.length ? `<div>${dl.map(x => `<span class="pill ${x.dday <= 1 ? 'solid' : 'medium'}" title="${esc(x.context)}">${esc(x.date.slice(5))} ${ddayText(x.dday)}</span>`).join('')}</div>` : ''; })()}<div class="pv" style="white-space:pre-wrap;overflow-wrap:anywhere">${esc((pv.text || '').slice(0, 2500))}</div>${(pv.text || '').length > 2500 ? '<span class="muted">앞부분 2,500자만 표시</span>' : ''}${pv.files && pv.files.length ? `<div class="muted">색인상 첨부: ${pv.files.map(f => esc(f.name)).join(', ')}</div>` : ''}` : `<span class="muted">${pv.reason === 'waiting' ? '접수·배부 대기 문서의 색인 발췌는 조회하지 않습니다.' : pv.reason === 'error' ? '색인 검색 중 오류가 발생했습니다.' : pv.reason === 'ambiguous' ? '일치하는 문서를 확실히 구분할 수 없습니다.' : pv.reason === 'incomplete' ? '검색 결과가 불완전해 문서 일치를 확인할 수 없습니다.' : '통합검색 색인에서 일치하는 문서를 찾지 못했습니다.'}</span>${pv.reason !== 'waiting' ? ' ' + retry : ''}`}</div>`;
+    const pvBox = `<div class="box" id="pvbox">${pv === null ? '<span class="muted"><span class="spin"></span> 열람 기록 없이 색인 발췌를 찾는 중…</span>' : pv.found ? `<b>통합검색 색인 발췌</b> <span class="muted">평문 색인 · 열람 기록 없음. 원문 전체나 원래 서식과 다를 수 있습니다. 원본은 원래 화면에서 확인하세요.</span>${(() => { const dl = R.extractAllDeadlines(pv.text || '').filter(x => x.dday >= -1); return dl.length ? `<div>${dl.map(x => `<span class="pill ${x.dday <= 1 ? 'solid' : 'medium'}" title="${esc(x.context)}">${esc(x.date.slice(5))} ${ddayText(x.dday)}</span>`).join('')}</div>` : ''; })()}${(pv.text || '').trim() ? `<div class="pv" style="white-space:pre-wrap;overflow-wrap:anywhere">${esc((pv.text || '').slice(0, 2500))}</div>` : '<div class="muted" style="margin-top:6px">색인에 본문 글자가 없습니다. 내용은 원래 화면에서 확인하세요.</div>'}${(pv.text || '').length > 2500 ? '<span class="muted">앞부분 2,500자만 표시</span>' : ''}${pv.files && pv.files.length ? `<div class="muted">색인상 첨부: ${pv.files.map(f => esc(f.name)).join(', ')}</div>` : ''}` : `<span class="muted">${pv.reason === 'waiting' ? '접수·배부 대기 문서의 색인 발췌는 조회하지 않습니다.' : pv.reason === 'error' ? '색인 검색 중 오류가 발생했습니다.' : pv.reason === 'ambiguous' ? '일치하는 문서를 확실히 구분할 수 없습니다.' : pv.reason === 'incomplete' ? '검색 결과가 불완전해 문서 일치를 확인할 수 없습니다.' : '통합검색 색인에서 일치하는 문서를 찾지 못했습니다.'}</span>${pv.reason !== 'waiting' ? ' ' + retry : ''}`}</div>`;
     if (pv === null) { const owner = currentKey, selection = S.sel; loadPreview(d).then(p => { if (owner !== currentKey || selection !== S.sel) return; S.pane.preview = {key, data: p}; const b = $('#pvbox'); if (b && S.sel) renderPane(); }); }
     const warn = d.unread ? '<div class="box warn">아직 열람하지 않은 문서입니다. 처리 창에 열면 그룹웨어에 열람으로 기록됩니다.</div>' : '';
     const title = d.title || (action && action.title) || '';
@@ -245,6 +257,24 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
   }
   const kb = n => n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
   const extOf = name => (String(name).match(/\.([A-Za-z0-9]{1,5})$/) || [])[1]?.toLowerCase() || '';
+  // Pictures inside the body (signatures, pasted images) need the login, which the script-less body frame cannot send.
+  // Read them once here and hand them over as data. A failure only leaves that picture out.
+  async function loadMailInline(html) {
+    const urls = R.mailInlineImageUrls(html, location.origin);
+    const got = {};
+    if (!urls.length) return got;
+    let budget = 12 * 1048576, next = 0;
+    const until = Date.now() + 6000;
+    // 한 번에 네 개씩만 읽고, 정한 시간이나 용량을 넘기면 더 시작하지 않는다.
+    const worker = async () => {
+      while (next < urls.length && Date.now() < until && budget > 0) {
+        const u = urls[next++];
+        try { const d = await GW.mailInlineImage(u); if (d.length <= budget) { budget -= d.length; got[u] = d; } } catch {}
+      }
+    };
+    await Promise.race([Promise.all([worker(), worker(), worker(), worker()]), new Promise(done => setTimeout(done, 6500))]);
+    return {...got};
+  }
   // Attachments: read once for mails already read (no state change); unread mails need consent.
   async function loadMailDetail(m, allowMarkRead = false) {
     S.mailDet = S.mailDet || {}; S.mailDetBusy = S.mailDetBusy || {};
@@ -254,9 +284,12 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
     const request = Promise.resolve().then(async () => {
       try {
         const r = await GW.mailDetail({uid: m.uid, seen: m.seen === true, allowMarkRead});
+        if (r && r.html && typeof loadMailInline === 'function') r.inline = await loadMailInline(r.html);
         if (owner !== currentKey || epoch !== S.apEpoch) return r;
         S.mailDet[m.uid] = r;
-        if (allowMarkRead) m.seen = true;
+        // 본문과 그림을 들고 있으므로 오래된 것부터 비운다(다시 고르면 다시 읽는다. 이미 읽은 메일이라 상태는 바뀌지 않는다).
+        for (const old of Object.keys(S.mailDet).slice(0, -30)) if (old !== String(m.uid)) delete S.mailDet[old];
+        if (allowMarkRead) { m.seen = true; if (typeof renderMain === 'function') renderMain(); } // 목록의 안 읽음 표시와 개수도 바로 맞춘다
         return r;
       } catch (e) {
         if (owner !== currentKey || epoch !== S.apEpoch) return {error: e.message};
@@ -292,35 +325,52 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
     S.mailDet = S.mailDet || {};
     const c = S.mailDet[m.uid];
     if (!c) {
-      if (m.seen) { setTimeout(() => loadMailDetail(m), 0); return `<div class="sec"><div class="sh">${ic('clip')}첨부파일</div><div class="sk"></div><div class="sk" style="width:70%"></div></div>`; }
+      if (m.seen) { setTimeout(() => loadMailDetail(m), 0); return `<div class="sec"><div class="sh">${ic('mail')}본문·첨부파일</div><div class="sk"></div><div class="sk" style="width:70%"></div></div>`; }
       return `<div class="sec"><div class="sh">${ic('clip')}본문·첨부파일</div><div class="box warn" style="margin-top:0">아직 읽지 않은 메일입니다. 본문과 첨부를 불러오면 그룹웨어에 <b>읽음</b>으로 표시됩니다.<div class="acts"><button class="btn primary sm" data-act="mailDetail" data-uid="${esc(m.uid)}" data-box="${esc(m.box)}">본문·첨부 불러오기</button></div></div></div>`;
     }
-    if (c.error) return `<div class="sec"><div class="sh">${ic('clip')}첨부파일</div><div class="box errb" style="margin-top:0">첨부 정보를 불러오지 못했습니다(${esc(c.error)}). <button class="btn sm" data-act="mailDetailRetry" data-uid="${esc(m.uid)}" data-box="${esc(m.box)}">다시 시도</button></div></div>`;
+    if (c.error) return `<div class="sec"><div class="sh">${ic('clip')}첨부파일</div><div class="box errb" style="margin-top:0">본문과 첨부를 불러오지 못했습니다(${esc(c.error)}). <button class="btn sm" data-act="mailDetailRetry" data-uid="${esc(m.uid)}" data-box="${esc(m.box)}">다시 시도</button></div></div>`;
     const n = c.files.length + c.bigFiles.length;
     const fileRow = (name, size, btn) => `<div class="file"><span class="ext ${esc(extOf(name))}">${esc((extOf(name) || 'file').toUpperCase().slice(0, 4))}</span><div class="nm"><b title="${esc(name)}">${esc(name)}</b><span>${esc(size)}</span></div>${btn}</div>`;
     const rows = [
       ...c.files.map((f, i) => fileRow(f.name, kb(f.size), `${c.account ? `<button class="btn sm ghost" data-act="pvFile" data-uid="${esc(m.uid)}" data-i="${i}" title="내려받지 않고 바로 보기">${ic('eye')}미리보기</button>` : ''}<button class="btn sm" data-act="dlFile" data-uid="${esc(m.uid)}" data-i="${i}">${ic('down')}받기</button>`)),
       ...c.bigFiles.map(f => fileRow(f.name, `${f.size} · 대용량${c.bigUntil ? ` · ${c.bigUntil}까지 받을 수 있음` : ''}`, `<a class="btn sm" href="${esc(f.href)}" target="_blank" rel="noopener">${ic('down')}받기</a>`)),
     ];
-    const text = c.text ? c.text.replace(/대용량 파일첨부[\s\S]*?보관\)/, '').trim() : '';
-    const highlights = R.mailHighlights(text);
-    return `<div class="sec"><div class="sh">${ic('mail')}핵심 내용 <span class="muted">본문에서 발췌 · 외부 전송 없음</span></div>${highlights.length ? `<ul class="box" style="margin:0;padding:12px 14px 12px 30px;line-height:1.6">${highlights.map(s => `<li>${esc(s)}</li>`).join('')}</ul>` : '<div class="muted">발췌할 본문이 없습니다. 원문에서 확인해 주세요.</div>'}<div class="muted" style="margin-top:6px;font-size:12px">본문 앞부분(최대 4,000자)에서 자동 발췌하므로 중요한 내용이 빠질 수 있습니다. 전체 내용은 원문에서 확인하세요.</div></div>
-<div class="sec"><div class="sh">${ic('clip')}첨부파일 ${n}개${c.files.length > 1 ? `<button class="btn sm" data-act="dlAll" data-uid="${esc(m.uid)}" style="margin-left:auto">${ic('down')}모두 받기</button>` : ''}</div>${n ? `<div class="files">${rows.join('')}</div>` : '<div class="muted">첨부파일이 없습니다.</div>'}${c.readUrl ? `<div class="acts"><button class="btn sm ghost" data-act="openUrl" data-url="${esc(c.readUrl)}" data-title="메일 원문: ${esc(m.subject)}">${ic('ext')}그룹웨어에서 메일 원문 보기</button></div>` : ''}</div>`;
+    if (!n) return '';
+    return `<div class="sec"><div class="sh">${ic('clip')}첨부파일 ${n}개${c.files.length > 1 ? `<button class="btn sm" data-act="dlAll" data-uid="${esc(m.uid)}" style="margin-left:auto">${ic('down')}모두 받기</button>` : ''}</div><div class="files">${rows.join('')}</div></div>`;
   }
   function mailPane(m, action, why) {
     if (!m) return {title: action ? action.title : '메일', url: S.a.mail.url, body: actsFor(S.a.mail.url, {key: action && action.key, title: '받은메일함', primaryLabel: '받은메일함 열기'})};
     const ur = m.seen ? '' : 'data-unread="1" data-what="메일"';
     const c = S.mailDet && S.mailDet[m.uid];
-    const to = c && c.to ? c.to.replace(/<[^>]+>/g, '').replace(/\s*,\s*/g, ', ') : '';
+    const ready = !!(c && !c.error);
+    const people = s => String(s || '').replace(/<[^>]+>/g, '').replace(/\s*,\s*/g, ', ').trim();
+    const clip = s => s.length > 90 ? s.slice(0, 90) + '…' : s;
+    const to = ready ? people(c.to) : '', cc = ready ? people(c.cc) : '';
     const mailUrl = (c && c.readUrl) || (action && action.url) || S.a.mail.url;
-    const reply = `<button class="btn" data-act="openUrl" data-url="${esc(GW.links.compose('reall', m))}" data-title="전체 답장: ${esc(m.subject)}" ${ur}>전체 답장</button><button class="btn" data-act="openUrl" data-url="${esc(GW.links.compose('fw', m))}" data-title="전달: ${esc(m.subject)}" ${ur}>전달</button>`;
+    // 본문은 처리 창 아래쪽의 스크립트가 막힌 틀에 원래 모양대로 싣는다. 문서는 한 번만 만들어 둔다.
+    if (ready && !c.view) c.view = R.mailBodyDoc({html: c.html, plain: c.plain || c.text, inline: c.inline, origin: location.origin});
+    const view = ready ? c.view : null;
+    const notes = view ? [view.tooLong || c.htmlTooLong ? '본문이 너무 길어 글자만 보여 드립니다. 원래 모양은 원문 화면에서 확인하세요.' : '', view.missing ? `본문 그림 ${view.missing}개를 불러오지 못했습니다. 원문 화면에서 확인하세요.` : ''].filter(Boolean) : [];
+    const state = `${m.seen ? '읽음' : '안 읽음'}${m.answered ? ' · 답장함' : ''}${m.forwarded ? ' · 전달함' : ''}`;
+    const kv = `<div class="kv"><b>보낸 사람</b><span>${esc(m.from)} <span class="muted">${esc(m.fromEmail)}</span></span>${to ? `<b>받는 사람</b><span title="${esc(to)}">${esc(clip(to))}</span>` : ''}${cc ? `<b>참조</b><span title="${esc(cc)}">${esc(clip(cc))}</span>` : ''}<b>받은 시각</b><span>${esc(m.date.slice(0, 16))} · ${state}</span></div>`;
+    const sm = ready ? ' sm' : '';
+    const replyBtn = `<button class="btn${sm} ${ready ? 'primary' : ''}" data-act="openUrl" data-url="${esc(GW.links.compose('re', m))}" data-title="답장: ${esc(m.subject)}" ${ur} title="받는 사람·제목이 채워진 답장 창이 열립니다. 실제 발송은 그 창에서 보내기를 눌러야 처리됩니다.">${ic('mail')}답장 쓰기</button>`;
+    const reply = `<button class="btn${sm}" data-act="openUrl" data-url="${esc(GW.links.compose('reall', m))}" data-title="전체 답장: ${esc(m.subject)}" ${ur}>전체 답장</button><button class="btn${sm}" data-act="openUrl" data-url="${esc(GW.links.compose('fw', m))}" data-title="전달: ${esc(m.subject)}" ${ur}>전달</button>`;
+    const draftBtn = `<button class="btn${sm}" data-act="mailToDraft" data-uid="${esc(m.uid)}" title="메일 내용을 바탕으로 기안문 서식을 결재 직전 상태로 자동 완성합니다">${ic('doc')}${ready ? '메일로 기안' : '이 메일로 기안문 작성'}</button>`;
+    const flowBtn = relatedQ(m.subject) ? `<button class="btn${sm}" data-act="paneCaseFlow" data-q="${esc(relatedQ(m.subject))}" title="같은 사안의 문서·메일을 시간순으로 모아 봅니다">${ready ? '' : ic('doc')}사안 흐름</button>` : '';
+    const moreBtn = action ? `<button class="btn${sm} icon" data-act="rowMenu" data-k="${esc(action.key)}" aria-label="더 보기">${ic('more')}</button>` : '';
     const openOrigBtn = c && c.readUrl
-      ? `<button class="btn ${S.pane.url === c.readUrl ? '' : 'primary'}" data-act="openUrl" data-url="${esc(c.readUrl)}" data-title="메일 원문: ${esc(m.subject)}">${ic('ext')}원문 화면 열기</button>`
-      : `<button class="btn primary" data-act="mailOpenItem" data-box="${esc(m.box || '')}" data-uid="${esc(m.uid)}">${ic('ext')}원문 화면 열기</button>`;
-    return {title: m.subject || '(제목 없음)', url: mailUrl, body: `${why || ''}<div class="kv"><b>보낸 사람</b><span>${esc(m.from)} <span class="muted">${esc(m.fromEmail)}</span></span><b>받은 시각</b><span>${esc(m.date.slice(0, 16))}</span>${to ? `<b>받는 사람</b><span title="${esc(to)}">${esc(to.length > 90 ? to.slice(0, 90) + '…' : to)}</span>` : ''}<b>상태</b><span>${m.seen ? '읽음' : '안 읽음'}${m.answered ? ' · 답장함' : ''}${m.forwarded ? ' · 전달함' : ''}</span></div>
-${c && !c.error ? '' : `<div class="body-text open" style="max-height:120px">${esc((m.preview || '').replace(/대용량 파일첨부[\s\S]*?보관\)/, '').trim()) || '미리보기 없음'}</div>`}
+      ? `<button class="btn${sm} ${ready || S.pane.url === c.readUrl ? '' : 'primary'}" data-act="openUrl" data-url="${esc(c.readUrl)}" data-title="메일 원문: ${esc(m.subject)}" title="그룹웨어의 메일 화면을 이 창에 엽니다">${ic('ext')}${ready ? '원문 화면' : '원문 화면 열기'}</button>`
+      : `<button class="btn${sm} ${ready ? '' : 'primary'}" data-act="mailOpenItem" data-box="${esc(m.box || '')}" data-uid="${esc(m.uid)}">${ic('ext')}${ready ? '원문 화면' : '원문 화면 열기'}</button>`;
+    if (ready) return {title: m.subject || '(제목 없음)', url: mailUrl, mailBody: {key: `${m.uid}:${view.kind}:${view.doc.length}`, doc: view.doc}, body: `${why || ''}${kv}
+${notes.map(t => `<div class="muted" style="margin-top:6px;font-size:12.5px">${ic('alert')} ${esc(t)}</div>`).join('')}
+<div class="acts">${replyBtn}${reply}${draftBtn}${flowBtn}${openOrigBtn}${moreBtn}</div>
 ${mailFilesBox(m)}
-<div class="acts">${openOrigBtn}<button class="btn" data-act="openUrl" data-url="${esc(GW.links.compose('re', m))}" data-title="답장: ${esc(m.subject)}" ${ur}>${ic('mail')}답장 쓰기</button><button class="btn" data-act="mailToDraft" data-uid="${esc(m.uid)}" title="메일 내용을 바탕으로 기안문 서식을 결재 직전 상태로 자동 완성합니다">${ic('doc')}이 메일로 기안문 작성</button>${reply}${relatedQ(m.subject) ? `<button class="btn" data-act="paneCaseFlow" data-q="${esc(relatedQ(m.subject))}">${ic('doc')}사안 흐름</button>` : ''}${action ? `<button class="btn icon" data-act="rowMenu" data-k="${esc(action.key)}" aria-label="더 보기">${ic('more')}</button>` : ''}</div>
+<div id="caseFlow"></div>`};
+    return {title: m.subject || '(제목 없음)', url: mailUrl, body: `${why || ''}${kv}
+<div class="body-text open" style="max-height:120px">${esc((m.preview || '').replace(/대용량 파일첨부[\s\S]*?보관\)/, '').trim()) || '미리보기 없음'}</div>
+${mailFilesBox(m)}
+<div class="acts">${openOrigBtn}${replyBtn}${draftBtn}${reply}${flowBtn}${moreBtn}</div>
 <div id="caseFlow"></div>
 <p class="muted" style="margin-top:10px">답장 버튼을 누르면 받는 사람·제목이 채워진 채 열리고, 실제 발송은 그룹웨어 화면에서 "보내기"를 눌러야 처리됩니다.${m.seen ? '' : ' 안 읽은 메일은 답장 창을 열 때 읽음으로 바뀔 수 있어 먼저 묻습니다.'}</p>`};
   }
