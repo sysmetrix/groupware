@@ -84,7 +84,8 @@ test('v0.55 Phase 2: ordinal AI intents, sent-check/weekly-summary intents, Inde
   assert.match(storage, /BroadcastChannel/);
 
   const draft = await fs.readFile(path.join(root, 'src/live/wc/19-draft-engine.js'), 'utf8');
-  assert.match(draft, /결과보고 사전 실적 입력/);
+  assert.match(draft, /await reviewResultDraft\(plan,evidence,templates\[0\]\)/);
+  assert.match(draft, /if \(!reviewed \|\| owner !== currentKey/);
 });
 
 test('v0.56 Phase 3: bidirectional gcal diffs, policy aiEndpoint & session-only AI key', async () => {

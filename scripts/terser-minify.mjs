@@ -21,11 +21,11 @@ async function loadTerser() {
   return terserPromise;
 }
 
-/** Minifies formatting only: no AST compression or identifier/property mangling. */
+/** Compact equivalent expressions and declarations; keep identifier and property names intact. */
 export async function minifySafely(code) {
   const terser = await loadTerser();
   const result = await terser.minify(code, {
-    compress: false,
+    compress: {defaults: false, booleans: true, arrows: true, sequences: true, join_vars: true},
     mangle: false,
     format: {comments: false},
   });

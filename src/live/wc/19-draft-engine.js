@@ -356,7 +356,8 @@
     const d = f.contentDocument;
     const ctrl = d.querySelector('iframe[src*="hwpBuild"], #formCtrl_1')?.contentWindow?.HwpCtrl;
     if (!ctrl) return {ok: false, detail: '한글 에디터를 찾지 못했습니다'};
-    ctrl.PutFieldText('_F_CONTENTS_', body.text);
+    // HwpCtrl drops bare LF on input. Its CRLF readback is compared as logical paragraphs.
+    ctrl.PutFieldText('_F_CONTENTS_', String(body.text).replace(/\r\n?|\n/g, '\r\n'));
     ctrl.MoveToField('_F_CONTENTS_', true, true, true);
     const st = ctrl.GetPos();
     let shaped = 0;
@@ -426,8 +427,9 @@
       setNative(w, inp, spec.title);
       await wait(300);
       if (!live()) return {ok: false, detail: '계정 또는 기안 화면이 변경되어 중단했습니다'};
-      try { d.querySelector('iframe[src*="hwpBuild"], #formCtrl_1').contentWindow.HwpCtrl.PutFieldText('doc_name', spec.title); } catch {}
-      return {ok: inp.value === spec.title, detail: spec.title};
+      let hwpTitle = ''; try { const ctrl = d.querySelector('iframe[src*="hwpBuild"], #formCtrl_1').contentWindow.HwpCtrl; ctrl.PutFieldText('doc_name', spec.title); hwpTitle = String(ctrl.GetFieldText('doc_name') || '').trim(); } catch {}
+      const ok = inp.value === spec.title && hwpTitle === spec.title;
+      return {ok, detail: ok ? '화면 제목과 한글 제목 일치' : '화면 제목 또는 한글 제목 불일치 · 직접 확인 필요'};
     });
     await run('공개·긴급·보안·문서구분', async () => {
       const keys = ['open', 'urgent', 'sec', 'docKind'];
@@ -483,24 +485,18 @@
     const plan = patLoad().docs[planDocId];
     if (!plan) { toast('선택한 계획서 정보를 찾지 못했습니다.'); return; }
     toast(`“${plan.title.slice(0, 24)}…” 결과보고를 준비하는 중…`);
-    let src = plan;
-    if (!src.body || !src.runday) { const r = await readDocPattern({id: plan.id, ti: 'mg_20160303185413307', title: plan.title, form: plan.form, docNo: plan.docNo, date: plan.date}); if (!r.err) { patSaveDoc(r); src = r; } }
-    const facts = await askForm({
-      title: '결과보고 사전 실적 입력',
-      desc: `계획서(${plan.docNo || plan.title.slice(0, 25)})의 실제 실적을 먼저 확인하세요. 비워 둔 칸은 실적 확인 필요로 표시합니다. 계획 수치는 실적으로 복사하지 않습니다.`,
-      fields: [
-        {label: '실제 추진 일시', placeholder: '예: 2026. 11. 12.(목) 14:00'},
-        {label: '실제 장소', placeholder: '예: 재단 3층 대회의실'},
-        {label: '실제 참여 인원', placeholder: '예: 총 32명(청소년 28, 지도자 4)'},
-        {label: '실제 집행 금액', placeholder: '예: 450,000원'},
-        {label: '주요 성과·특이사항 (선택)', placeholder: '계획 대비 변동 사항 요약'},
-      ],
-      okLabel: '기안 화면 열고 채우기',
-    });
-    if (!facts) return;
-    const title = R.planToResultTitle(plan.title);
-    const meta = R.predictDraftMeta(patModel(), {title, sourceDocNo: plan.docNo, sourceTitle: plan.title});
-    const body = buildConfirmedResultBody(plan, facts);
+    const owner = currentKey, ov = $('#overlay');
+    S.paletteOpen = true;
+    ov.innerHTML = '<div class="modal" data-act="closeOverlay"><div class="dlg" data-stop="1" role="dialog" aria-label="관련 자료 조회"><h2>관련 자료 조회</h2><p>선택한 계획서와 연결된 자료를 찾습니다.</p><button class="btn" data-act="closeHelp">취소</button></div></div>';
+    const loading = ov.firstElementChild;
+    const evidence = await resultEvidence(plan).catch(() => ({scope:'관련 자료 조회 실패. 직접 확인한 실적만 입력하세요.',sources:[],suggestions:[]}));
+    if (owner !== currentKey || owner !== getUserKey() || ov.firstElementChild !== loading) return;
+    const templates = Object.values(patLoad().docs).filter(x => x.body && /결과보고/.test(x.title) && x.id !== plan.id);
+    templates.sort((a,b) => Number(b.binder === plan.binder) - Number(a.binder === plan.binder) || String(b.date).localeCompare(String(a.date)));
+    const reviewed = await reviewResultDraft(plan,evidence,templates[0]);
+    if (!reviewed || owner !== currentKey || owner !== getUserKey()) return;
+    const {title,body} = reviewed;
+    const meta = reviewed.useMeta ? R.predictDraftMeta(patModel(), {title, sourceDocNo: plan.docNo, sourceTitle: plan.title}) : {};
     const f = await openDraftFrame('mg_20160303185413307', '일반기안문', `결과보고: ${plan.title}`);
     if (!f) { toast('기안 열기를 취소했거나 화면이 아직 준비되지 않았습니다. 기존 내용은 그대로 두었습니다.'); return; }
     const steps = await fillDraft(f, {title, meta, body, ref: {title: plan.title, docNo: plan.docNo}});
