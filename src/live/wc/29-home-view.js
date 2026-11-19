@@ -66,7 +66,7 @@
     const g = R.homeGreeting({hour, name, urgent: d.urgent, total: d.urgent + d.todo + d.check, loading: !d.loaded, weekend: day.weekend, nextLabel: day.nextLabel});
     if (!d.loaded && S.error) g.sub = '그룹웨어 자료를 읽지 못했습니다';
     if (d.loaded && d.taskGaps) { g.sub = '일부 자료를 읽지 못해 할 일 현황이 불완전할 수 있습니다'; g.tone = 'warn'; }
-    return `<div class="hm-head">${day.label ? `<div class="hm-eyebrow"><span>${esc(day.label)}</span>${day.weekend ? '<span class="hm-pill">주말</span>' : ''}${day.holiday ? `<span class="hm-pill">${esc(day.holiday)}</span>` : ''}</div>` : ''}<h1 class="hm-hello">${esc(g.title)}</h1><p class="hm-sub hm-tone-${g.tone}">${esc(g.sub)}</p></div>`;
+    return `<div class="hm-head"><div class="hm-eyebrow">${esc(day.label)}${day.weekend ? ' · 주말' : ''}</div><h1 class="hm-hello">오늘의 업무</h1><p class="hm-sub hm-tone-${g.tone}">${esc(g.sub)}</p></div>`;
   }
 
   // 하루 띠: 08~19시를 한 줄로 놓고 오늘 일정과 내 부재를 칸으로, 지금 시각을 바늘로 보여 준다(계산은 R.homeDayRail).
@@ -105,9 +105,9 @@
     const picked = next && d.mine.find(x => x.key === next.key);
     const nextLabel = picked?.type === 'mail' ? '메일 내용 확인' : picked?.area === '결재' ? '결재 문서 확인' : picked?.area === '근태' ? '근태 기록 확인' : '업무 상세 보기';
     const queue = next ? d.mine.filter(x => x.key !== next.key).slice(0, 2) : [];
-    const queueHtml = queue.length ? `<div class="hm-queue-k">이어서 볼 일</div><ol class="hm-queue">${queue.map(x => `<li><button class="hm-q" data-act="homeNext" data-v="${esc(x.key)}"><span class="hm-q-t">${esc(x.title)}</span><span class="hm-badge hm-tone-${tone(stateOf(x))}">${esc(STATE_NAME[stateOf(x)] || x.area || '')}</span></button></li>`).join('')}</ol>` : '';
+    const queueHtml = queue.length ? `<div class="hm-queue-k">다음 순서</div><ol class="hm-queue">${queue.map((x,i) => `<li><button class="hm-q" data-act="homeNext" data-v="${esc(x.key)}"><span class="desk-num" aria-hidden="true">0${i+2}</span><span class="hm-q-t">${esc(x.title)}</span><span class="hm-badge hm-tone-${tone(stateOf(x))}">${esc(STATE_NAME[stateOf(x)] || x.area || '')}</span></button></li>`).join('')}</ol>` : '';
     const nextHtml = next
-      ? `<section class="hm-card hm-next" aria-label="지금 할 일 한 가지"><div class="hm-card-h"><h2 class="hm-card-k">지금 가장 먼저 할 일</h2><span class="hm-badge hm-tone-${tone(next.state)}">${esc(STATE_NAME[next.state] || '')}</span></div><div class="hm-next-b"><div class="hm-next-t">${esc(next.title)}</div>${next.sub || next.deadline ? `<div class="hm-next-s">${esc([next.sub, next.deadline ? '기한 ' + next.deadline : ''].filter(Boolean).join(' · '))}</div>` : ''}</div><div class="hm-next-a"><button class="ch-btn ch-btn-primary" data-act="homeNext" data-v="${esc(next.key)}">${nextLabel}</button><button class="ch-btn ch-btn-ghost" data-act="homeOpenToday">할 일 전체 ${total}건 보기</button></div><details class="hm-why"><summary>왜 먼저인가요?</summary><p>내가 처리할 일에서 상태 우선순위(기한 지남, 긴급, 할 일, 확인 필요)를 비교했습니다. 이 항목의 상태: ${esc(STATE_NAME[next.state] || next.state)}. 같은 순위에서는 목록 순서로 안내합니다.</p></details>${queueHtml}</section>`
+      ? `<section class="hm-card hm-next" aria-label="지금 할 일 한 가지"><div class="hm-card-h"><h2 class="hm-card-k"><span class="desk-index" aria-hidden="true">01</span> 지금 가장 먼저 할 일</h2><span class="hm-badge hm-tone-${tone(next.state)}">${esc(STATE_NAME[next.state] || '')}</span></div><div class="hm-next-b"><div class="hm-next-t">${esc(next.title)}</div>${next.sub || next.deadline ? `<div class="hm-next-s">${esc([next.sub, next.deadline ? '기한 ' + next.deadline : ''].filter(Boolean).join(' · '))}</div>` : ''}</div><div class="hm-next-a"><button class="ch-btn ch-btn-primary" data-act="homeNext" data-v="${esc(next.key)}">${nextLabel}</button><button class="ch-btn ch-btn-ghost" data-act="homeOpenToday">할 일 전체 ${total}건 보기</button></div><details class="hm-why"><summary>왜 먼저인가요?</summary><p>내가 처리할 일에서 상태 우선순위(기한 지남, 긴급, 할 일, 확인 필요)를 비교했습니다. 이 항목의 상태: ${esc(STATE_NAME[next.state] || next.state)}. 같은 순위에서는 목록 순서로 안내합니다.</p></details></section>${queueHtml}`
       : `<section class="hm-card hm-next hm-next-ok" aria-label="지금 할 일"><div class="hm-card-h"><h2 class="hm-card-k">${d.taskGaps ? '확인된 처리할 일이 없습니다' : '지금 처리할 일이 없습니다'}</h2></div><div class="hm-next-s">${d.taskGaps ? '일부 자료를 읽지 못해 전체 할 일을 확인할 수 없습니다.' : d.refN ? `부서 참고 공문 ${d.refN}건이 등록되어 있습니다.` : '새로 도착한 일이 없습니다.'}</div><div class="hm-next-a"><button class="ch-btn ch-btn-ghost" data-act="homeOpenToday">할 일 목록 열기</button></div></section>`;
     return `${nextHtml}<section class="hm-card hm-stats" aria-label="핵심 현황"><div class="hm-tiles">${tileHtml}</div></section>`;
   }
@@ -139,7 +139,7 @@
   // 넓은 화면: 왼쪽은 인사 → 지금 할 일 → 숫자 줄 → 대화, 오른쪽은 오늘 일정과 참고. 좁은 화면에서는 같은 순서로 한 줄로 쌓인다(순서는 CSS order).
   function vHome() {
     const d = homeData();
-    return `<div class="hm" id="hm"><div class="hm-main"><div id="hmHead">${homeHeadHtml(d)}</div><div id="hmTop">${homeTopHtml(d)}</div><div class="hm-chatcol">${typeof chatView === 'function' ? chatView() : ''}</div></div><aside class="hm-rail" aria-label="오늘 일정과 참고"><div id="hmDash">${homeDashHtml(d)}</div></aside></div>`;
+    return `<div class="hm desk" id="hm"><div id="hmHead">${homeHeadHtml(d)}</div><div class="desk-grid"><div class="hm-main"><div id="hmTop">${homeTopHtml(d)}</div><section class="desk-start" aria-label="바로 시작"><h2>바로 시작</h2><div class="desk-links"><button data-act="quickDraft" data-t="result"><b>결과보고 작성</b><small>내 계획서 선택</small></button><button data-act="quickAtt" data-t="leave"><b>휴가 신청 준비</b><small>종류와 기간 입력</small></button><button data-act="quickAtt" data-t="trip"><b>출장 신청 준비</b><small>출장지와 일시 입력</small></button></div></section></div><div class="hm-chatcol">${typeof chatView === 'function' ? chatView() : ''}</div></div><aside class="hm-rail" aria-label="오늘 일정과 참고"><h2 class="desk-ref">일정과 참고</h2><div id="hmDash">${homeDashHtml(d)}</div></aside></div>`;
   }
   // 홈이 이미 그려져 있으면 입력창을 건드리지 않고 머리말과 요약만 새로 그린다(비동기 자료가 도착할 때 입력 중 포커스를 잃지 않게). 그렸으면 true.
   // Replacing summary regions must not discard the keyboard user's current control.
@@ -150,7 +150,9 @@
     const controls = owned ? [...region.querySelectorAll('[data-act], summary, [tabindex]')] : [];
     const peers = owned ? controls.filter(el => el.tagName === active.tagName && el.dataset.act === active.dataset.act && el.dataset.v === active.dataset.v) : [];
     const occurrence = peers.indexOf(active);
+    const opened = [...region.querySelectorAll('details[open]')].map(el => el.className).filter(Boolean);
     region.innerHTML = html;
+    if (opened.length) region.querySelectorAll('details').forEach(el => { if (opened.includes(el.className)) el.open = true; });
     if (!owned) return;
     const candidates = [...region.querySelectorAll('[data-act], summary, [tabindex]')].filter(el => el.tagName === active.tagName && el.dataset.act === active.dataset.act && el.dataset.v === active.dataset.v);
     const target = candidates[occurrence] || $('#chInput');
@@ -175,5 +177,5 @@
     else if (v === 'leave') go('attendance');
     else if (v === 'ref') { S.filter = {...S.filter, level: 'all', area: 'all', q: '', onlyNew: false, showHidden: false}; S.todayTab = 'ref'; go('today'); }
   };
-  HOME_ACTS.homeNext = (el, v) => { if (!v) return; go('today'); if (S.view !== 'today') return; S.filter = {...S.filter, level: 'all', area: 'all', q: '', onlyNew: false, showHidden: false}; S.todayTab = 'mine'; renderMain(); selectAction(v); };
+  HOME_ACTS.homeNext = (el, v) => { if (!v) return; el.focus({preventScroll:true}); selectAction(v); };
   HOME_ACTS.homeOpenToday = () => { S.filter = {...S.filter, level: 'all', area: 'all', q: '', onlyNew: false, showHidden: false}; S.todayTab = 'mine'; go('today'); };
