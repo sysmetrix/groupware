@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import * as model from '../src/live/home-model.mjs';
 const read = n => readFileSync(new URL('../src/live/wc/' + n, import.meta.url), 'utf8');
-const home = read('29-home-view.js'), ui = read('30-chat-ui.js'), engine = read('31-chat-engine.js');
+const home = read('08-approval-mail.js') + '\n' + read('29-home-view.js'), ui = read('30-chat-ui.js'), engine = read('31-chat-engine.js');
 const deferred = () => { let resolve; const promise = new Promise(r => {resolve=r;}); return {promise,resolve}; };
 function setup(ready = false) {
  const data = {chatHistV:3,chatModels:{at:Date.now(),list:['test-model']}};

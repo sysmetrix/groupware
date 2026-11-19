@@ -57,10 +57,11 @@
     run: async a => {
       if (!S.raw) return chatNotReady();
       const md = S.raw.data && S.raw.data.mail, nav = {type: 'nav', label: '메일 화면 열기', view: 'mail'};
-      if (!chatModuleOk('mail') || !md.inbox || !Array.isArray(md.inbox.records)) return {ok: false, text: '메일 자료를 읽지 못해 목록을 확인할 수 없습니다.', cards: [nav]};
+      if (!chatModuleOk('mail') || !md?.inbox || !Array.isArray(md.inbox.records)) return {ok: false, text: '메일 자료를 읽지 못해 목록을 확인할 수 없습니다.', cards: [nav]};
       const filter = ['unread', 'today', 'attach', 'recent'].includes(a.filter) ? a.filter : 'recent', lim = chatLim(a.limit, 8, 15), t = today();
-      const seen = new Set();
-      let list = [...md.inbox.records, ...(Array.isArray(md.otherUnseen) ? md.otherUnseen : [])].filter(m => { const k = m.box + '|' + m.uid; if (seen.has(k)) return false; seen.add(k); return true; });
+      const snapshot = mailSnapshot();
+      if (filter !== 'recent' && snapshot.unread == null) return {ok: false, text: '메일함 일부를 확인할 수 없습니다. 새로 고침 후 다시 확인하세요.', cards: [nav]};
+      let list = snapshot.rows;
       if (filter === 'unread') list = list.filter(m => !m.seen);
       else if (filter === 'today') list = list.filter(m => String(m.date || '').startsWith(t));
       else if (filter === 'attach') list = list.filter(m => m.attach);

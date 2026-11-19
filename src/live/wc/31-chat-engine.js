@@ -80,7 +80,7 @@
     const urgent = S.a ? mineVisible().filter(x => ['overdue', 'urgent'].includes(stateOf(x))).length : 0;
     // 지금 상황에 맞는 것부터: 급한 일, 안 읽은 메일, 결재할 문서가 있으면 앞에 둔다.
     let unread = 0, pending = 0;
-    try { const m = S.raw && S.raw.data && S.raw.data.mail; unread = m && m.inbox && Array.isArray(m.inbox.records) ? m.inbox.records.filter(x => !x.seen).length : 0; pending = Number(S.a && S.a.summary && S.a.summary.pending) || 0; } catch {}
+    try { unread = mailSnapshot().unread ?? 0; pending = Number(S.a && S.a.summary && S.a.summary.pending) || 0; } catch {}
     if (urgent) out.push('급한 일 알려줘');
     if (unread) out.push('안 읽은 메일 보여줘');
     if (pending) out.push('결재할 문서 있어?');

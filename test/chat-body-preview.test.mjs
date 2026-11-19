@@ -5,12 +5,13 @@ import vm from 'node:vm';
 async function tools(file, extra = {}) {
   const src = await readFile(new URL('../src/live/wc/' + file, import.meta.url), 'utf8');
   const defs = new Map();
-  vm.runInNewContext(src, {chatRegisterTool: x => defs.set(x.name, x), ...extra});
+  const mail = await readFile(new URL('../src/live/wc/08-approval-mail.js', import.meta.url), 'utf8');
+  vm.runInNewContext(mail + '\n' + src, {chatRegisterTool: x => defs.set(x.name, x), ...extra});
   return defs;
 }
 test('메일 확인 전 상세 API를 호출하지 않고 본문은 결과 카드에만 담는다', async () => {
   let calls = 0;
-  const S = {raw: {data: {mail: {inbox: {records: [{uid: '1', box: 'INBOX', subject: '제목', from: '발신', seen: false, date: '2026-11-14'}], fetched: 1, unseen: 1}}}}, a: {actions: []}};
+  const S = {raw: {data: {mail: {otherUnseen: [], inbox: {records: [{uid: '1', box: 'INBOX', subject: '제목', from: '발신', seen: false, date: '2026-11-14'}], fetched: 1, unseen: 1}}}}, a: {actions: []}};
   const defs = await tools('36-chat-tools-more.js', {S, GW: {mailDetail: async a => {calls++; assert.equal(a.allowMarkRead, true); assert.equal(a.seen, false); return {text: 'SECRET_MAIL_BODY'};}}, chatModuleOk: () => true, chatLim: () => 8, today: () => '2026-11-14', R: {isNoiseMail: () => false}});
   const r = await defs.get('list_mail').run({});
   assert.equal(calls, 0); assert.doesNotMatch(JSON.stringify(r), /SECRET_MAIL_BODY/);

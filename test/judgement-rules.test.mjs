@@ -151,7 +151,7 @@ test('v0.58 exhaustive crawl fixes: same-origin GW buttons use openUrl, view clo
     assert.doesNotMatch(src, /target="_blank" rel="noopener">.*?(?:근무시간 현황|그룹웨어 목록|받은메일함|그룹웨어 일정|그룹웨어 자원 화면|예실대비현황)/);
   }
   const ev = await fs.readFile(path.join(root, 'src/live/wc/16-events.js'), 'utf8');
-  assert.match(ev, /case 'view':\s*closeOverlay\(\);\s*go\(v\);/);
+  assert.match(ev, /case 'view':\s*closeOverlay\(\);\s*if \(v === 'mail'\) openUnreadMail\(\); else go\(v\);/);
   const calBud = await fs.readFile(path.join(root, 'src/live/wc/10-calendar-budget.js'), 'utf8');
   assert.doesNotMatch(calBud, /#1d2330|#9aa4b2|#e7ebf2/);
 });

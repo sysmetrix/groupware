@@ -94,7 +94,8 @@
     }
     const pending = plans
       .filter(p => !/변경\s*(\(\d+차\))?\s*계획|계획\s*\(변경\)|계획\s*변경/.test(p.title))
-      .filter(p => !reportedNos.has(p.docNo) && !reportedCores.has(core(p.title)))
+      .filter(p => !reportedNos.has(p.docNo))
+      .map(p => ({...p, similarReport: !!core(p.title) && reportedCores.has(core(p.title))}))
       .sort((a, b) => String(b.date).localeCompare(String(a.date)));
     pending.learnedCount = allDocs.length;
     pending.learnErrors = (lr && lr.errors) || 0;
@@ -113,7 +114,7 @@
             <div class="cmd-logo">${ic('doc')}</div>
             <div>
               <h2 style="margin:0;font-size:18px">어떤 계획서의 결과보고를 작성할까요?</h2>
-              <div class="muted">내가 기안한 계획서 중 결과보고가 아직 없는 문서입니다. 선택하면 그 계획서의 기록물철·본문·참조문서를 그대로 이어받습니다.</div>
+              <div class="muted">조회한 문서 중 결과보고의 참조 문서번호가 일치한 계획서는 제외했습니다. 미연결 보고서가 있을 수 있으니 작성 전에 확인하세요. 선택하면 그 계획서의 기록물철·본문·참조문서를 그대로 이어받습니다.</div>
             </div>
           </div>
           <div id="planPickerList" style="max-height:380px;overflow:auto;display:flex;flex-direction:column;gap:8px">
@@ -128,10 +129,10 @@
     const el = $('#planPickerList');
     if (!el) return;
     if (!pending.length) { el.innerHTML = `<div class="empty"><div class="ill">${ic('check')}</div><b>미작성 계획서를 찾지 못했습니다</b>현재 학습한 ${pending.learnedCount || 0}건 기준입니다.${pending.learnErrors ? ` (일부 문서 ${pending.learnErrors}건은 읽지 못했습니다)` : ''}</div>`; return; }
-    el.innerHTML = pending.map(p => `
+    el.innerHTML = (pending.learnErrors ? `<p role="status">일부 문서를 조회하지 못했습니다. 결과보고 유무를 원문에서 확인하세요.</p>` : '') + pending.map(p => `
       <div class="cmd-preset" role="button" tabindex="0" data-act="selectPlanForResult" data-id="${esc(p.id)}" style="display:flex;align-items:flex-start;gap:12px">
         <div style="flex:1;min-width:0">
-          <div style="font-weight:700;font-size:14.5px;color:var(--fg)">${esc(p.title)}</div>
+          <div style="font-weight:700;font-size:14.5px;color:var(--fg)">${esc(p.title)}${p.similarReport ? ' · 유사한 결과보고 있음 (연결 확인 필요)' : ''}</div>
           <div class="muted" style="font-size:12px;margin-top:4px">${esc(p.docNo || '-')} · 시행 ${esc((p.runday || '').replace(/^.*\((.*)\)$/, '$1') || String(p.date || '').slice(0, 10))} · 기록물철 ${esc(p.binder || '-')}</div>
         </div>
         <button class="btn sm primary" style="flex:0 0 auto">결과보고 작성</button>

@@ -65,6 +65,16 @@
   check('GW 비서 안에 상신·결재·삭제 버튼이 없음', noDanger().length === 0, noDanger().map(text).join(','));
   await closeAll();
 
+  // 홈의 숫자는 실제로 열리는 목록과 일치해야 한다. 메일 본문은 열지 않는다.
+  journey = '메일 조회분 확인';
+  await nav('home');
+  const unreadSignal = await until(() => $('.hm-sigs [data-v="mail"]'));
+  const unreadCount = Number((text(unreadSignal).match(/(\d+)\s*건/) || [,'NaN'])[1]);
+  click(unreadSignal);
+  const unreadTab = await until(() => $('#main [data-act="mailFilter"][data-v="unread"][aria-selected="true"]'));
+  check('홈 메일 숫자를 누르면 안 읽음 필터가 열림', unreadTab, '안 읽음 필터가 선택되지 않았습니다');
+  check('홈 수치와 안 읽음 목록의 행 수가 일치', Number.isInteger(unreadCount) && unreadCount === $$('#main [data-act="selMail"]').length, `홈 ${unreadCount}건 / 목록 ${$$('#main [data-act="selMail"]').length}건`);
+
   // ---------- 5. 비서에게 묻기 (다른 여정이 비서를 쓰므로 먼저 확인) ----------
   journey = '5. 비서에게 묻기';
   await nav('home');

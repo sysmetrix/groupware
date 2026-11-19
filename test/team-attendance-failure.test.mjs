@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 
 const calendar = readFileSync(new URL('../src/live/wc/10-calendar-budget.js', import.meta.url), 'utf8');
-const home = readFileSync(new URL('../src/live/wc/29-home-view.js', import.meta.url), 'utf8');
+const home = readFileSync(new URL('../src/live/wc/08-approval-mail.js', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/live/wc/29-home-view.js', import.meta.url), 'utf8');
 const flush = () => new Promise(resolve => setImmediate(resolve));
 
 async function failedTeam({attendanceFails = false, plannedFails = false} = {}) {

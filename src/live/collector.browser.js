@@ -15,7 +15,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '0.80.0';
+  const VERSION = '0.81.0';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
@@ -237,13 +237,14 @@
     });
     const list = async (box, size, unseenOnly) => {
       const d = await call('/mail/mail003A01', {boxName: box.name, mainApiCode: 'mail003A01', mboxSeq: box.seq, page: 1, pageSize: size, sort: 'rfc822date', sortType: 'desc', listType: '', showType: '', seen: false});
-      const records = arr(d && d.Records).map(r => toMail(r, box.name));
+      if (!Array.isArray(d?.Records)) throw new Error('메일 목록을 확인할 수 없습니다.');
+      const records = d.Records.map(r => toMail(r, box.name));
       return {total: num(d && d.TotalRecordCount), unseen: num(d && d.TotalUnseenCount), records: unseenOnly ? records.filter(r => !r.seen) : records};
     };
     const inboxData = await list(inbox, Math.min(Math.max(opt.mailCount, 10), 200));
     const extra = boxes.filter(b => !['INBOX', 'SENT', 'DRAFTS', 'TRASH', 'SPAM'].includes(b.name) && b.unseen > 0);
-    const others = await Promise.all(extra.map(b => list(b, 30, true).then(x => x.records).catch(() => [])));
-    return {boxes, inbox: {total: inboxData.total, unseen: inboxData.unseen, fetched: inboxData.records.length, records: inboxData.records}, otherUnseen: others.flat(), url: LINKS.route(ROUTES.mail)};
+    const others = await Promise.all(extra.map(b => list(b, 30, true).then(x => x.records).catch(() => null)));
+    return {boxes, inbox: {total: inboxData.total, unseen: inboxData.unseen, fetched: inboxData.records.length, records: inboxData.records}, partial: others.includes(null), otherUnseen: others.filter(Boolean).flat(), url: LINKS.route(ROUTES.mail)};
   }
 
   async function collectApproval(ctx, opt) {
