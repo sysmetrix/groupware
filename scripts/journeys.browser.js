@@ -52,7 +52,14 @@
   const pane1 = await until(() => { const p = $('#pane'); return p && text(p).length > 20 ? p : null; }, 6000);
   check('열어서 처리를 누르면 처리 창이 열림', pane1, '처리 창이 열리지 않았습니다');
   check('처리 창이 같은 문서를 보여 줌', pane1 && text(pane1).includes(firstTitle.slice(0, 12)), `기대 "${firstTitle.slice(0, 20)}" / 실제 "${text(pane1).slice(0, 80)}"`);
+  check('추천 상세를 열어도 홈을 떠나지 않음', !!$('#hm') && !!pane1, '홈이 사라졌습니다');
   await closeAll();
+  check('상세를 닫으면 추천 버튼으로 포커스가 돌아옴', root.activeElement?.dataset.act === 'homeNext', root.activeElement?.outerHTML?.slice(0,80));
+  const leaveStart = $('.desk-start [data-act="quickAtt"][data-t="leave"]');
+  click(leaveStart); const prep = await until(() => $('[role="dialog"][aria-label="근태 신청 준비"]'));
+  check('홈에서 휴가 준비를 한 번에 시작', prep, '준비 창이 없습니다');
+  click(prep && [...prep.querySelectorAll('button')].find(b=>text(b)==='취소')); await wait(200);
+  check('취소 후 홈 유지', !!$('#hm') && !$('.modal'), '취소 후 홈으로 돌아오지 않았습니다');
   check('결재·문서유통 화면으로 이동', await nav('approval'), '메뉴가 선택되지 않았습니다');
   const rows = await until(() => { const r = $$('#main [data-act="selDoc"], #main [data-act="apOpen"], #main .row'); return r.length ? r : null; }, 5000);
   check('결재할 문서 목록이 보임', rows && rows.length > 0, text(main()).slice(0, 120));

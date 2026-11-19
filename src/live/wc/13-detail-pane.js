@@ -11,13 +11,13 @@
       pane.innerHTML = ''; S.pane.mounted = '';
       if (paneVisible90) {
         const original = paneOpener90?.isConnected ? paneOpener90 : null;
-        const replacement = paneOpenerKey90 && [...root.querySelectorAll('#main [data-act]')].find(e => e.dataset.act === paneOpenerKey90.act && ['k','uid','box','id','kind'].every(k => (e.dataset[k] || '') === (paneOpenerKey90[k] || '')));
+        const replacement = paneOpenerKey90 && [...root.querySelectorAll('#main [data-act]')].find(e => e.dataset.act === paneOpenerKey90.act && ['k','v','uid','box','id','kind'].every(k => (e.dataset[k] || '') === (paneOpenerKey90[k] || '')));
         (original || replacement || $('#main'))?.focus();
       }
       paneVisible90 = false; paneOpener90 = null; paneOpenerKey90 = null; return;
     }
     const entering = !paneVisible90;
-    if (entering) { paneOpener90 = root.activeElement || document.activeElement; const d = paneOpener90?.dataset; paneOpenerKey90 = d?.act ? {act:d.act,k:d.k,uid:d.uid,box:d.box,id:d.id,kind:d.kind} : null; paneVisible90 = true; }
+    if (entering) { paneOpener90 = root.activeElement || document.activeElement; const d = paneOpener90?.dataset; paneOpenerKey90 = d?.act ? {act:d.act,k:d.k,v:d.v,uid:d.uid,box:d.box,id:d.id,kind:d.kind} : null; paneVisible90 = true; }
     if (!pane.querySelector('#ph')) pane.innerHTML = '<div class="ph" id="ph"></div><div id="autofill"></div><div class="mbody" id="mbody" hidden></div><div class="frame" id="frame"></div><div id="fbar"></div>';
     const info = paneInfo();
     const ph = $('#ph');
@@ -414,7 +414,7 @@ ${mailFilesBox(m)}
     const x = selectedAction();
     if (x && x.type === 'doc' && ['distWaiting', 'deptWaiting'].includes(x.ref.kind) && !S.routing) loadRouting().then(() => renderPane());
     if (S.view === 'today') { root.querySelectorAll('.row.sel').forEach(r => r.classList.remove('sel')); const row = root.querySelector(`.row[data-k="${CSS.escape(key)}"]`); if (row) { row.classList.add('sel'); row.querySelector('.bdg.new')?.remove(); setTimeout(() => row.scrollIntoView({block: 'nearest'}), 50); } renderNav(); }
-    else renderMain();
+    else if (S.view !== 'home') renderMain();
     renderPane();
   }
   // 실제로 열었으면 true. 호출하는 쪽은 false면 화면에 아무것도 쓰지 말고 멈춘다.
