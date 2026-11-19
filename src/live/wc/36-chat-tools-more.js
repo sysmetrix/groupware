@@ -13,16 +13,16 @@
 
   chatRegisterTool({
     name: 'get_leave_status', label: '연차 현황 확인', kind: 'read',
-    description: '내 연차·휴가 현황: 올해 받은 일수, 쓴 일수, 남은 일수, 결재 중인 일수, 앞으로 예정된 휴가, 최근 사용 내역. 다른 직원의 연차는 다루지 않는다.',
+    description: '내 연차·휴가 현황: 올해 받은 일수, 쓴 일수, 유형별 잔여, 결재 중인 일수, 앞으로 예정된 휴가, 최근 사용 내역. 다른 직원의 연차는 다루지 않는다.',
     params: {type: 'object', properties: {history: {type: 'number'}}},
     run: async a => {
       if (!S.raw) return chatNotReady();
       const lv = S.raw.data && S.raw.data.leave, nav = {type: 'nav', label: '근태·연차 화면 열기', view: 'attendance'};
-      if (!chatModuleOk('leave') || !Number.isFinite(Number(lv.remaining))) return {ok: false, text: '연차 자료를 읽지 못해 현황을 확인할 수 없습니다. “새로 고침해줘”라고 한 뒤 다시 물어봐 주세요.', cards: [nav]};
+      if (!chatModuleOk('leave') || !Number.isFinite(lv.remaining)) return {ok: false, text: '연차 자료를 읽지 못해 현황을 확인할 수 없습니다. “새로 고침해줘”라고 한 뒤 다시 물어봐 주세요.', cards: [nav]};
       const b = lv.breakdown || {}, t8 = today().replace(/-/g, ''), n = chatLim(a.history, 5, 12);
       const row = u => ({title: `${chatSpan8(u.start, u.end)} ${u.kind || '휴가'}`, sub: [fmtDays(u.days), chatHm4(u.startTime) && chatHm4(u.endTime) ? `${chatHm4(u.startTime)}~${chatHm4(u.endTime)}` : ''].filter(Boolean).join(' · '), badge: u.approved ? '승인' : '결재 중', tone: u.approved ? 'ok' : 'todo'});
       const up = (Array.isArray(lv.upcoming) ? lv.upcoming : []), past = (Array.isArray(lv.history) ? lv.history : []).filter(u => String(u.end || '') < t8).slice(0, n);
-      const text = `${lv.year || ''}년 남은 연차는 ${fmtDays(lv.remaining)}입니다. 받은 ${fmtDays(lv.granted)} 가운데 ${fmtDays(lv.used)}을 썼습니다${Number(b.inApproval) > 0 ? `(결재 중 ${fmtDays(b.inApproval)} 포함)` : ''}.\n${up.length ? `앞으로 예정된 휴가는 ${up.length}건입니다.` : '앞으로 예정된 휴가 신청은 없습니다.'}`;
+      const text = `${lv.year || ''}년 남은 연차는 ${fmtDays(lv.remaining)}입니다. 받은 ${fmtDays(lv.granted)} 가운데 ${fmtDays(lv.used)}을 썼습니다${Number(b.inApproval) > 0 ? `(결재 중 ${fmtDays(b.inApproval)} 포함)` : ''}.\n${leaveTypesText(lv)}\n${up.length ? `앞으로 예정된 휴가는 ${up.length}건입니다.` : '앞으로 예정된 휴가 신청은 없습니다.'}`;
       return {ok: true, text, data: {year: lv.year, remaining: fmtDays(lv.remaining), granted: fmtDays(lv.granted), used: fmtDays(lv.used), in_approval: fmtDays(b.inApproval || 0), upcoming: up.length, used_count: lv.usedCount || 0},
         cards: [{type: 'kpi', items: [{label: '남은 연차', value: fmtDays(lv.remaining), tone: 'todo'}, {label: '받은 연차', value: fmtDays(lv.granted), tone: 'info'}, {label: '쓴 연차', value: fmtDays(lv.used), tone: 'info'}]},
           ...(up.length ? [{type: 'list', title: '예정된 휴가', items: up.slice(0, 8).map(row), more: Math.max(0, up.length - 8)}] : []),

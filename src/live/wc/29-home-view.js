@@ -18,10 +18,11 @@
     out.wait = visibleActions().filter(x => isMine(x) && stateOf(x) === 'wait').length;
     out.taskGaps = !!(S.error || S.raw.sessionExpired || (S.a.failed && S.a.failed.some(x => ['approval', 'mail', 'attendance', 'leave', '시간외 지문 확인'].includes(x.name))) || Object.entries(S.raw.status || {}).some(([k, v]) => ['approval', 'mail', 'attendance', 'leave'].includes(k) && v && (v.ok === false || v.error)) || Object.values((S.a.approval && S.a.approval.lists) || {}).some(x => x && x.error));
     out.refN = visibleActions().filter(x => !isMine(x)).length;
-    const leaveStatus = S.raw.status && S.raw.status.leave;
-    const lv = S.raw.data && S.raw.data.leave;
+    const status = S.raw.status?.leave;
+    const lv = !S.error && !S.raw.sessionExpired && status?.ok !== false && !status?.error && S.raw.data?.leave;
     out.unread = mailSnapshot().unread;
-    out.leave = !S.error && !S.raw.sessionExpired && !(leaveStatus && (leaveStatus.ok === false || leaveStatus.error)) && lv && lv.remaining != null && Number.isFinite(Number(lv.remaining)) ? fmtDays(lv.remaining) : '';
+    out.leave = Number.isFinite(lv?.remaining) ? fmtDays(lv.remaining) : '';
+    out.leaveTypes = lv?.balances ? leaveTypesText(lv) : '유형별 잔여 확인 불가';
     const p = R.kstNow(new Date()), t8 = p.date.replace(/-/g, ''), mk = t8.slice(0, 6);
     // 오늘 일정은 그룹웨어 일정과 내 휴가·출장만 포함한다. 자원 예약은 별도 섹션이다.
     const schedule = S.raw.data && S.raw.data.schedule;
@@ -132,7 +133,7 @@
     const resourceHtml = `<section class="hm-card hm-today hm-res" aria-label="오늘 자원 예약"><div class="hm-card-h"><h2 class="hm-card-k hm-today-k">오늘 자원 예약 (직원 전체)</h2></div>${resources.rows.length ? `<ul class="hm-tl">${resources.rows.map(r => `<li class="hm-tl-car"><span class="hm-tl-t">${esc(r.from)}${r.to ? '~' + esc(r.to) : ''}</span><span class="hm-tl-l">${esc(r.label)}</span></li>`).join('')}</ul>${resources.more ? `<div class="hm-more">외 ${resources.more}건</div>` : ''}` : resourceGaps.length ? '' : '<div class="hm-empty">조회된 자원 예약이 없습니다.</div>'}${resourceGaps.map(x => `<div class="hm-empty">${esc(x)}</div>`).join('')}</section>`;
     const sum = (S.a && S.a.summary) || {};
     const sig = (id, icon, k, v) => `<button class="hm-sig" data-act="homeTile" data-v="${id}" aria-label="${esc(k + ' ' + v)}">${typeof ic === 'function' ? ic(icon) : ''}<span class="hm-sig-k">${esc(k)}</span><b class="hm-sig-v">${esc(v)}</b></button>`;
-    const signals = `<section class="hm-card hm-sigs" aria-label="업무 참고 현황"><div class="hm-card-h"><h2 class="hm-card-k hm-today-k">챙겨 둘 것</h2></div><div class="hm-sig-l">${sig('mail', 'mail', '안 읽은 메일', d.unread == null ? '확인 불가' : '조회분 ' + d.unread + '건')}${sum.pending !== undefined ? sig('approval', 'doc', '내가 결재할 문서', sum.pending == null ? '확인 불가' : sum.pending + '건') : ''}${sig('ref', 'inbox', '부서 참고', (d.taskGaps ? '확인된 ' : '') + d.refN + '건')}${sig('leave', 'clock', '남은 연차', d.leave ? d.leave : '확인 불가')}</div></section>`;
+    const signals = `<section class="hm-card hm-sigs" aria-label="업무 참고 현황"><div class="hm-card-h"><h2 class="hm-card-k hm-today-k">챙겨 둘 것</h2></div><div class="hm-sig-l">${sig('mail', 'mail', '안 읽은 메일', d.unread == null ? '확인 불가' : '조회분 ' + d.unread + '건')}${sum.pending !== undefined ? sig('approval', 'doc', '내가 결재할 문서', sum.pending == null ? '확인 불가' : sum.pending + '건') : ''}${sig('ref', 'inbox', '부서 참고', (d.taskGaps ? '확인된 ' : '') + d.refN + '건')}<button class="hm-sig" data-act="homeTile" data-v="leave" aria-label="남은 연차 합계 ${esc(d.leave || '확인 불가')} · ${esc(d.leaveTypes)}"><span class="hm-sig-k">남은 연차 합계 <b>${esc(d.leave || '확인 불가')}</b><br><small>${esc(d.leaveTypes)}${S.raw.collectedAt ? '<br>' + leaveStamp() : ''}</small></span></button></div></section>`;
     return tlHtml + signals + (typeof autoCardHtml === 'function' ? autoCardHtml() : '') + resourceHtml;
   }
 

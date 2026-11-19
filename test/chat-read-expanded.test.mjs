@@ -44,3 +44,16 @@ test('자료 미준비와 빈 결과를 구분하고 기간 및 표시 수의 �
   const defaults = await setup({actions: [], deadlines: []}).run({days: -1});
   assert.equal(defaults.data.days, 14);
 });
+
+test('연차와 근태 답변은 같은 유형별 잔여·잠정·미확인 문구를 표시한다', async () => {
+  const parts = await Promise.all(['11-attendance.js', '36-chat-tools-more.js'].map(f => readFile(new URL('../src/live/wc/' + f, import.meta.url), 'utf8')));
+  const tools = {}, lv = {remaining: 3.5, granted: 5, used: 1.5, balances: {basic: 0, reward: 1, change: 3}, breakdown: {inApproval: 0.5}};
+  vm.runInNewContext([source, ...parts].join('\n'), {S: {a: {}, raw: {data: {leave: lv, attendance: {overtime: {me: '1', days: [], apps: []}}}}},
+    chatRegisterTool: t => { tools[t.name] = t; }, R: {kstNow: () => ({date: '2026-11-16'}), attendanceAnomalies: () => []},
+    GW: {attendanceDays: async () => []}, today: () => '2026-11-16', fmtDays: n => n + '일'});
+  for (const tool of [tools.get_leave_status, tools.get_my_attendance]) {
+    const balances = lv.balances, read = async () => (await tool.run({})).text;
+    assert.match(await read(), /기본연차 0일.*보상휴가 1일.*대체휴가 3일.*차감 전/);
+    lv.balances = null; assert.match(await read(), /유형별 잔여 확인 불가/); lv.balances = balances;
+  }
+});

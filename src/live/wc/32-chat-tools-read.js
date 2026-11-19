@@ -220,13 +220,13 @@
       const to = `${mm}${String(last).padStart(2, '0')}`;
       let rows = [];
       try { rows = await GW.attendanceDays({from: mm + '01', to: to > t8 ? t8 : to}); } catch (e) { return {ok: false, text: '근태 자료를 읽지 못했습니다: ' + String(e.message || e).slice(0, 80)}; }
-      const lv = S.raw.data && S.raw.data.leave, at = S.raw.data && S.raw.data.attendance;
+      const lv = S.raw.data?.leave && chatModuleOk('leave') && S.raw.data.leave, at = S.raw.data?.attendance;
       const ot = at && at.overtime;
       const cutoff = new Date(Date.UTC(+p.date.slice(0, 4), +p.date.slice(5, 7) - 1, +p.date.slice(8, 10) - 150)).toISOString().slice(0, 10).replace(/-/g, '');
       if (!ot || !ot.me || !Array.isArray(ot.apps) || ot.appsError || (m === thisM && (!Array.isArray(ot.days) || ot.daysError)) || mm + '01' < cutoff || m > thisM) return {ok: false, text: '시간외 신청 또는 퇴근 지문 자료를 확인할 수 없어 누락 여부를 판단할 수 없습니다.'};
       const an = R.attendanceAnomalies(m === thisM ? ot.days : rows, {apps: ot.apps, me: ot.me, daysError: m === thisM ? ot.daysError : '', appsError: ot.appsError}).filter(x => x.date.startsWith(mm));
       const bits = [];
-      if (lv) bits.push(`남은 연차는 ${fmtDays(lv.remaining)}입니다(받은 ${fmtDays(lv.granted)}, 쓴 ${fmtDays(lv.used)})`);
+      if (lv) bits.push(`남은 연차는 ${fmtDays(lv.remaining)}입니다(받은 ${fmtDays(lv.granted)}, 쓴 ${fmtDays(lv.used)}) · ${leaveTypesText(lv)}`);
       bits.push(m === thisM ? '시간외 퇴근 지문 확인은 신청일 기준 최근 150일 내 신청과 어제까지의 자료 기준입니다' : '시간외 신청은 신청일 기준 최근 150일 이내 자료입니다');
       bits.push(an.length ? `${Number(m.slice(5))}월에 시간외 신청일 중 퇴근 지문 확인이 필요한 날이 ${an.length}일 있습니다` : `${Number(m.slice(5))}월에 조회된 시간외 신청일 중 퇴근 지문 확인이 필요한 날은 없습니다`);
       return {ok: true, text: bits.join('. ') + '.', data: {remaining_leave: lv ? fmtDays(lv.remaining) : '', anomalies: an.length},

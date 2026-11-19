@@ -303,7 +303,11 @@
   const dtm12 = s => (s && /^\d{12}/.test(s)) ? `${ymd8(s)} ${s.slice(8, 10)}:${s.slice(10, 12)}` : ymd8(s);
   const mins = m => m === null || m === undefined ? '-' : `${Math.floor(m / 60)}시간${m % 60 ? ` ${m % 60}분` : ''}`;
   // 6.59375일 -> "6일 4시간 45분" (1일 = 8시간)
-  const fmtDays = v => { if (v === null || v === undefined || v === '') return '-'; const n = Number(v); const d = Math.trunc(n); const m = Math.round((n - d) * 8 * 60); return `${d}일${m ? ` ${Math.floor(m / 60) ? Math.floor(m / 60) + '시간' : ''}${m % 60 ? ` ${m % 60}분` : ''}` : ''}`.replace(/\s+/g, ' ').trim(); };
+  const fmtDays = v => {
+    if (!(typeof v === 'number' || typeof v === 'string' && v.trim()) || !Number.isFinite(+v)) return '-';
+    const m = Math.round(Math.abs(v) * 480), d = Math.floor(m / 480), h = Math.floor(m % 480 / 60);
+    return (v < 0 && m ? '-' : '') + ([d && d + '일', h && h + '시간', m % 60 && m % 60 + '분'].filter(Boolean).join(' ') || '0일');
+  };
   const WD = ['일', '월', '화', '수', '목', '금', '토'];
   const today = () => R.kstNow(new Date()).date;
   const hhmm = d => { const k = R.kstNow(d); return `${String(k.hh).padStart(2, '0')}:${String(k.mm).padStart(2, '0')}`; };

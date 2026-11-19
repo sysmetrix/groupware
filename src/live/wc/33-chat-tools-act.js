@@ -34,7 +34,11 @@
       const warn = chatDateWarn(iso, end);
       if (end && end < iso) return {ok: false, text: '종료일이 시작일보다 빠릅니다. 날짜를 다시 알려 주세요.'};
       const lv = S.raw && S.raw.data && S.raw.data.leave;
-      if (lv && kind === '연차' && Number.isFinite(Number(lv.remaining))) { const need = chatBizDays(iso, end || iso); if (need > Number(lv.remaining)) warn.push(`남은 연차(${fmtDays(lv.remaining)})보다 많이 쓰는 신청입니다.`); }
+      if (kind === '연차') {
+        const basic = lv && chatModuleOk('leave') && lv.balances?.basic;
+        if (!Number.isFinite(basic) || lv.breakdown?.inApproval !== 0) warn.push('기본연차 잔여를 확정할 수 없어 신청서에서 확인해 주세요.');
+        else if (chatBizDays(iso, end || iso) > basic) warn.push(`남은 기본연차(${fmtDays(basic)})보다 많이 쓰는 신청입니다.`);
+      }
       const reason = String(a.reason || '').slice(0, 100);
       return {ok: true, text: `${chatSpan(iso, end)} ${kind} 신청을 준비했습니다. 아직 아무것도 제출하지 않았습니다. 확인 카드의 [신청서 열고 채우기]를 누르면 신청서가 열리고, [신청완료]는 직접 눌러야 합니다.`, cards: [{type: 'confirm', title: '휴가 신청서 준비', risk: 'low', rows: [['종류', kind], ['기간', chatSpan(iso, end)], ['사유', reason || '신청서에서 입력']], warn: warn.join(' '), confirmLabel: '신청서 열고 채우기', cancelLabel: '취소',
         onConfirm: async () => { const outcome = await quickAttendanceApplication('leave', {date: iso, to: end, kind, reason}); return chatAttResult('휴가 신청서', outcome); }}]};

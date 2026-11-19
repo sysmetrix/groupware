@@ -15,7 +15,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '0.83.0';
+  const VERSION = '0.84.0';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
@@ -448,14 +448,19 @@
       call('/personal/hpd0550/0hp00002', {ycYy: year}),
       call('/personal/hpd0550/0hp00003', {ycYy: year, applyStDt: `${year}0101`, applyEdDt: `${year}1231`}).catch(() => []),
     ]);
-    const s = (Array.isArray(sumRaw) ? sumRaw[0] : null) || {};
+    const s = Array.isArray(sumRaw) && sumRaw.length === 1 && sumRaw[0];
+    // One ledger row for this year. Never turn an absent/changed ledger into zero leave.
+    const keys = 'basicDy belowBasicDy basicAdjustDy addDy etcDy rewDy changeDy boBasicDy boRewDy boChangeDy useDy useRewDy useChangeDy appProcessDy'.split(' ');
+    if (!s || !keys.every(k => typeof s[k] === 'number' && Number.isFinite(s[k]) || typeof s[k] === 'string' && s[k].trim() && Number.isFinite(+s[k]))) throw new Error('개인연차현황 원장 확인 불가');
     // Same formula as the 개인연차현황 screen (checked 2026-11-08: 38.15625 - 31.5625 = 6.59375).
-    const granted = num(s.basicDy) + num(s.belowBasicDy) + num(s.basicAdjustDy) + num(s.addDy) + num(s.etcDy) + num(s.rewDy) + num(s.changeDy) + num(s.boBasicDy) + num(s.boRewDy) + num(s.boChangeDy);
-    const used = num(s.useDy) + num(s.useRewDy) + num(s.useChangeDy) + num(s.appProcessDy);
+    const basic = +s.basicDy + +s.belowBasicDy + +s.basicAdjustDy + +s.addDy + +s.etcDy + +s.boBasicDy, reward = +s.rewDy + +s.boRewDy, change = +s.changeDy + +s.boChangeDy;
+    const granted = basic + reward + change, used = +s.useDy + +s.useRewDy + +s.useChangeDy + +s.appProcessDy;
     const today = ymd();
     const uses = arr(usesRaw).map(u => ({start: str(u.startDt, 8), end: str(u.endDt, 8), startTime: str(u.startTm, 4), endTime: str(u.endTm, 4), kind: str(u.atNm, 30), days: num(u.ycUseCnt), title: mask(u.titleDc, 120), approved: String(u.approState) === '1', applied: str(u.appDt, 8)}));
     return {
       year, granted: +granted.toFixed(5), used: +used.toFixed(5), remaining: +(granted - used).toFixed(5),
+      // The ledger contains a single unallocated pending deduction; never spread it across types.
+      balances: {basic: basic - s.useDy, reward: reward - s.useRewDy, change: change - s.useChangeDy},
       breakdown: {basic: num(s.basicDy), add: num(s.addDy), reward: num(s.rewDy), change: num(s.changeDy), etc: num(s.etcDy), usedBasic: num(s.useDy), usedReward: num(s.useRewDy), usedChange: num(s.useChangeDy), inApproval: num(s.appProcessDy)},
       upcoming: uses.filter(u => u.end >= today).sort((a, b) => a.start.localeCompare(b.start)), usedCount: uses.length,
       history: uses.sort((a, b) => b.start.localeCompare(a.start)).slice(0, 120),

@@ -1,0 +1,11 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+const src=fs.readFileSync(new URL('../src/live/collector.browser.js',import.meta.url),'utf8');
+const code=src.slice(src.indexOf('  async function collectLeave'),src.indexOf('  const budgetRow'));
+const fixture={basicDy:10,belowBasicDy:1,basicAdjustDy:-0.5,addDy:2,etcDy:1,boBasicDy:1,rewDy:'2.125',boRewDy:1,changeDy:4,boChangeDy:2,useDy:8,useRewDy:2,useChangeDy:5,appProcessDy:0.5};
+const collect=rows=>vm.runInNewContext(code+'; collectLeave()', {call:p=>Promise.resolve(p.endsWith('02')?rows:[]),kstParts:()=>({y:2026}),ymd:()=>'20260102',arr:a=>a,num:Number,LINKS:{route:v=>v},ROUTES:{leave:'leave'}});
+test('세 유형별 이월·조정·사용을 각각 반영하고 결재중은 합계에서 한 번만 차감한다',async()=>{const lv=await collect([fixture]);assert.deepEqual({...lv.balances},{basic:6.5,reward:1.125,change:1});assert.equal(lv.remaining,8.125);assert.equal(lv.breakdown.inApproval,0.5)});
+test('누락·다중 원장행 및 잘못된 수치를 0으로 표시하지 않는다',async()=>{for(const rows of [[],[{}],[fixture,fixture],...[undefined,null,'','NaN',false].map(v=>[{...fixture,rewDy:v}])]) await assert.rejects(collect(rows),/확인 불가/)});
+test('유효한 0 잔여와 분 단위 잔액을 구분한다',async()=>{const lv=await collect([{...fixture,useChangeDy:6,rewDy:'1.03125',appProcessDy:0}]);assert.equal(lv.balances.change,0);assert.equal(lv.balances.reward,0.03125)});

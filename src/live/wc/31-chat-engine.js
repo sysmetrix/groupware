@@ -343,7 +343,7 @@
       }
       // 기능 안내를 문장으로 요청한 경우에는 버튼 목록을 재출력하지 않는다. AI 연결 없이도 형식을 지킨다.
       const proseCaps = it.tool === 'get_capabilities' && /(?:문장|서술)(?:으로|형태|식)?/.test(text);
-      const preferAi = ready && !auto && !weekday && !proseCaps && !(st.ctx && st.ctx.pendingSlot) && R.chatPreferGemini(text);
+      const preferAi = ready && it.tool !== 'get_leave_status' && !auto && !weekday && !proseCaps && !(st.ctx && st.ctx.pendingSlot) && R.chatPreferGemini(text);
       const known = !preferAi && it.tool && it.confidence >= (ready ? 0.9 : 0.6) && CHAT_TOOLS.has(it.tool);
       if (known) {
         const res = await chatExec(it.tool, it.args, ai, {userText: text, viaAi: false, auto: !!auto});
