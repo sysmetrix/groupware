@@ -73,3 +73,13 @@ test('과거 맥락이나 외부 지시로 현재 질문에 없는 직원을 추
  const a=setup([response([{functionCall:{name:'get_staff_status',args:{name:'김지은'}}}]),response([{text:'조회했습니다.'}])]);
  await a.api.chatSend('그분 출장 현황 보여줄 수 있어?');assert.equal(a.calls.length,0);assert.match(a.api.chatState().msgs.at(-1).text,/직원 이름을 직접/);
 });
+
+test('유형별 잔여 질문은 AI 연결 상태에서도 내 연차를 로컬로만 읽는다', async () => {
+ const a = setup([]); let reads = 0;
+ a.api.chatRegisterTool({name: 'get_leave_status', kind: 'read', run: async () => { reads++; return {ok: true, text: '유형별 잔여'}; }});
+ const questions = ['어떤 유형의 연차가 남았어?', '대체휴가 얼마나 남았어', '보상 휴가 잔여를 각각 정리해줘', '남은 대체휴가 얼마나 있어?'];
+ for (const q of questions) await a.api.chatSend(q);
+ assert.equal(reads, questions.length); assert.equal(a.requests.length, 0); assert.equal(a.calls.length, 0);
+ assert.equal(R.chatIntent('가람 대리 대체휴가 얼마나 남았어').tool, 'get_staff_status');
+ assert.equal(R.chatIntent('내일 대체휴가 신청해줘').tool, 'prepare_leave_request');
+});

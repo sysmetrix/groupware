@@ -167,7 +167,8 @@ test('collector only calls allow-listed read endpoints', async () => {
 });
 
 test('collector maps session expiry and isolates module failures', async () => {
-  const {api} = await loadCollector({respond: p => p.startsWith('/mail/') ? Promise.reject(JSON.stringify({errors: {code: 'E002', message: 'Token is not exists'}})) : Promise.resolve({resultCode: 0, resultData: {}})});
+  const ledger = {basicDy:10, belowBasicDy:0, basicAdjustDy:0, addDy:0, etcDy:0, rewDy:0, changeDy:0, boBasicDy:0, boRewDy:0, boChangeDy:0, useDy:0, useRewDy:0, useChangeDy:0, appProcessDy:0};
+  const {api} = await loadCollector({respond: p => p.startsWith('/mail/') ? Promise.reject(JSON.stringify({errors: {code: 'E002', message: 'Token is not exists'}})) : Promise.resolve({resultCode: 0, resultData: p.endsWith('00002') ? [ledger] : []})});
   const raw = await api.collect({modules: ['mail', 'leave']});
   assert.equal(raw.status.mail.ok, false);
   assert.equal(raw.status.mail.error, 'SESSION_EXPIRED');

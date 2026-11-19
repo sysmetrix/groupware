@@ -74,3 +74,15 @@ test('attendance callbacks distinguish successful, partial, failed and cancelled
     }
   }
 });
+
+test('연차 신청은 기본연차만 비교하며 결재 중이거나 잔여 미상일 때는 확정하지 않는다', async () => {
+  const {tools, S, c} = setup();
+  Object.assign(c, {chatDateArg: x => x, today: () => '2026-11-16', fmtDays: n => n + '일', chatModuleOk: () => true});
+  const lv = {remaining: 6, balances: {basic: 0, reward: 4, change: 2}, breakdown: {inApproval: 0}};
+  S.raw = {data: {leave: lv}};
+  const warning = async () => (await tools.get('prepare_leave_request').run({date: '2026-11-16'})).cards[0].warn;
+  assert.match(await warning(), /기본연차\(0일\)/);
+  lv.balances.basic = 1; assert.equal(await warning(), '');
+  lv.breakdown.inApproval = 0.5; assert.match(await warning(), /확정할 수 없어/);
+  lv.breakdown.inApproval = 0; lv.balances = null; assert.match(await warning(), /확정할 수 없어/);
+});
