@@ -113,7 +113,7 @@
     const counts = {
       today: S.a ? {n: mine.length, cls: urgent ? 'hot' : mine.length ? 'mine' : '', tip: '내 전체 처리할 일'} : null,
       approval: S.a ? (u.approval ? {n: '?'} : (() => { const n = S.a.approval?.lists?.pending?.total ?? byArea('결재'); return {n, cls: n ? 'mine' : '', tip: '결재·문서 대기'}; })()) : null,
-      mail: S.a ? (u.mail ? {n: '?'} : (() => { const ur = S.a.mail?.unread; const n = Array.isArray(ur) ? ur.length : Number.isFinite(ur) ? ur : byArea('메일'); return {n, cls: n ? 'mine' : '', tip: '안 읽은 메일'}; })()) : null,
+      mail: S.a ? (() => { const n = mailSnapshot().unread; return {n: n ?? '?', cls: n ? 'mine' : '', tip: n == null ? '안 읽은 메일 확인 불가' : '안 읽은 메일 조회분 ' + n + '건'}; })() : null,
       attendance: S.a ? {n: byArea('근태'), cls: byArea('근태') ? 'mine' : '', tip: '퇴근 지문 확인'} : null,
       calendar: S.a ? (() => { const n = mine.filter(x => x.deadline && x.deadline.dday >= 0 && x.deadline.dday <= 7).length; return {n, cls: n ? 'mine' : '', tip: '7일 내 기한'}; })() : null,
     };

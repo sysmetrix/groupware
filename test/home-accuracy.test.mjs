@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import * as model from '../src/live/home-model.mjs';
-const home = readFileSync(new URL('../src/live/wc/29-home-view.js', import.meta.url), 'utf8');
+const home = readFileSync(new URL('../src/live/wc/08-approval-mail.js', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../src/live/wc/29-home-view.js', import.meta.url), 'utf8');
 function setup(overrides = {}) {
-  const S = {a: {failed: [], approval: {lists: {submitted: {docs: []}}, inProgress: [{}, {}]}}, raw: {data: {schedule: {start: '20261114', end: '20261130', events: [], holidays: []}}, status: {}}, team: {202611: {busy: false, cal: {byDate: {}, depts: []}}}, homeRes: {day: '20261114', items: [], busy: false, partial: false}, ...overrides};
+  const S = {mailSearch:{seq:0}, a: {failed: [], approval: {lists: {submitted: {docs: []}}, inProgress: [{}, {}]}}, raw: {data: {schedule: {start: '20261114', end: '20261130', events: [], holidays: []}}, status: {}}, team: {202611: {busy: false, cal: {byDate: {}, depts: []}}}, homeRes: {day: '20261114', items: [], busy: false, partial: false}, ...overrides};
   const c = {S, Date, fmtDays: x => String(x) + '일', ensureTeam() {}, homeResEnsure() {}, logError() {}, mineVisible: () => [], visibleActions: () => [], isMine: () => true, stateOf: x => x.state, esc: x => String(x), STATE_NAME: {}, R: {...model, kstNow: () => ({date:'2026-11-14'}), teamHomeSummary: () => ({leave: [], trip: []})}, go: v => {S.view = v;}};
   vm.runInNewContext(home + '\nthis.acts = HOME_ACTS;', c); return c;
 }
@@ -28,6 +28,13 @@ test('다른 직원 자원 예약은 개인 일정 건수에서 제외하고 별
 test('홈 메일·연차 신호는 조회 범위와 실패를 구분하고 대상 화면으로 이동한다', () => {
  const c=setup(); c.S.raw.data.mail={inbox:{records:[{seen:false},{seen:true}]},otherUnseen:[{seen:false}]}; c.S.raw.data.leave={remaining:6};
  let d=c.homeData(); assert.equal(d.unread,2); assert.equal(d.leave,'6일'); assert.match(c.homeDashHtml(d),/안 읽은 메일<\/span><b class="hm-sig-v">조회분 2건/);
- c.acts.homeTile(null,'mail'); assert.equal(c.S.view,'mail'); c.acts.homeTile(null,'leave'); assert.equal(c.S.view,'attendance'); c.S.filter={}; c.acts.homeTile(null,'ref'); assert.equal(c.S.todayTab,'ref'); assert.equal(c.S.view,'today');
+ c.acts.homeTile(null,'mail'); assert.equal(c.S.view,'mail'); assert.equal(c.S.mailFilter,'unread'); c.acts.homeTile(null,'leave'); assert.equal(c.S.view,'attendance'); c.S.filter={}; c.acts.homeTile(null,'ref'); assert.equal(c.S.todayTab,'ref'); assert.equal(c.S.view,'today');
  c.S.raw.status.mail={ok:false}; c.S.raw.status.leave={error:'failed'}; d=c.homeData(); assert.equal(d.unread,null); assert.equal(d.leave,''); assert.match(c.homeDashHtml(d),/안 읽은 메일<\/span><b class="hm-sig-v">확인 불가/);
+});
+
+test('메일 조회분은 같은 함·UID만 중복 제거하고 부분 실패는 알 수 없음이다', () => {
+  const c=setup(), row={box:'INBOX',uid:'1',seen:false};
+  const m=c.S.raw.data.mail={inbox:{records:[row]},otherUnseen:[row,{...row,box:'other'}]};
+  assert.equal(c.mailSnapshot().unread,2); m.partial=true; assert.equal(c.mailSnapshot().unread,null);
+  assert.equal(c.mailSnapshot().rows.length,2);
 });
