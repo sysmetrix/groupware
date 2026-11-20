@@ -16,7 +16,7 @@ export const chatDowName = iso => CH_DOW_NAME[new Date(iso + 'T00:00:00Z').getUT
 /** 한국어 날짜 표현 → {date:'YYYY-MM-DD', end?:'YYYY-MM-DD', label}. 못 알아보면 null. */
 /** v0.99.0: 줄임말·구어를 표준 낱말로("낼"→내일, "담주"→다음 주, "어케"→어떻게, "머야"→뭐야). 날짜·의도 해석 앞에서 쓴다. */
 export function chatNormalize(text) {
-  return String(text ?? '').replace(/\s+/g, ' ').trim()
+  return String(text ?? '').replace(/[ㅋㅎㅠㅜ]{2,}|\^\^|~+(?=\s|$)/g, ' ').replace(/\s+/g, ' ').trim()
     .replace(/낼\s*모레/g, '모레').replace(/(?<![가-힣])낼(?=\s|$|은|도|까지|부터|이랑|하고|[?!.])/g, '내일')
     .replace(/(?<![가-힣])담(?=\s*(?:주|달))/g, '다음').replace(/(?<![가-힣])(이번|다음|지난|다다음|저번)(주|달)(?![가-힣])/g, '$1 $2').replace(/(?<![가-힣])(이번|다음|지난|다다음|저번)(주|달)(?=[에은는도의까부])/g, '$1 $2').replace(/저번 (주|달)/g, '지난 $1')
     .replace(/어케|어캐/g, '어떻게').replace(/(?<![가-힣])(머|모)(?=야|임|있|\s*있|지|냐)/g, '뭐').replace(/(?<![가-힣])젤(?=\s|[가-힣])/g, '제일')
@@ -206,6 +206,12 @@ export function chatIntent(text, now = new Date(), _nested = false) {
   // v0.97.0: 업무 문장 쓰기 — 상급자 보고 문장, 부서 공유 메일(앞에서 다룬 메일 기준)
   if (/(보고\s*(?:할|드릴|용|하는)?\s*(?:문장|내용|글|메모|요약|문구)|보고\s*(?:문장|글)으로|(?:팀장|실장|과장|부장|국장|상급자|윗분)\S*\s*(?:께|에게|한테)\s*보고)/.test(t) && /(써|작성|정리|만들|뽑아)/.test(t) && !/(결과\s*보고|주간|실적|기안)/.test(t)) return make('write_text', {kind: 'report'});
   if (/(공유|전달|알리|안내)\S*\s*(?:하는|할|하기|용)?\s*(?:메일|문구|글|공지)/.test(t) && /(써|작성|만들|보내|초안)/.test(t) && !/(답장|회신)/.test(t)) return make('write_text', {kind: 'share'});
+  // v1.3.0: 대화 습관 — 감사, 짧은 대답, 되돌리기, "○○한테 …라고 메일 보내줘"
+  if (/^(고마워|고맙|감사|땡큐|thx|thanks|thank you|수고)/i.test(t) && t.length <= 20) return make('small_talk', {kind: 'thanks'});
+  if (/^(응|어|네|넹|넵|예|ㅇㅇ|ㅇㅋ|오케이|ok|okay|그래|알겠어|알았어|좋아)[.!?\s]*$/i.test(t)) return make('small_talk', {kind: 'ack'});
+  if (/(방금|아까)\s*(?:거|것|한\s*거|건)?\s*(?:취소|되돌려|없던\s*일|무르)/.test(t)) return make('small_talk', {kind: 'undo'});
+  { const mm = t.match(/^([가-힣]{2,4}?)\s*(?:팀장|과장|차장|부장|실장|주임|주무관|선생|대리|사원|님)*\s*(?:한테|에게|께)\s+(.{3,80}?)(?:다고|라고|이라고|고)\s*메일\s*(?:좀\s*)?(?:보내|써|작성)/);
+    if (mm && !CH_STOP.has(mm[1])) { const r = chatMailFromPoint(mm[2], now); return make('compose_mail', {to: mm[1], subject: r.subject, body: r.body}); } }
   // v1.2.0: 찾고 확인하기 — 보낸 메일, ○○한테 온 메일, 메일 언제 왔어, 문서 찾기, 신청 결과, 명단, 담당자, 퇴근 시각
   if (/(내가|제가|내)?\s*보낸\s*(메일|편지)|보낸\s*메일함/.test(t) && !/(답장|회신)\s*(했|보냈)|보냈는지|보냈나/.test(t) && !/[가-힣]{2,4}\s*(?:팀장|과장|차장|부장|실장|주임|주무관|선생|대리|사원|님)*\s*(?:이|가|께서|에서)\s*보낸/.test(t.replace(/(내가|제가)\s*보낸/, ''))) { const q = t.replace(/(다다음|다음|이번|지난)\s*주|오늘|어제|그제|\d{1,2}\s*월\s*\d{1,2}\s*일|\d{1,2}[/.]\d{1,2}|내가|제가|내|보낸\s*메일함?|보낸\s*편지|메일|중에|중|보여\s*줘|알려\s*줘|목록|있어|뭐야|들어간|들어있는|포함된|있는|거|것|[?.!]/g, ' ').replace(/\s+/g, ' ').trim(); return make('list_sent_mail', {...(dt ? {date: dt.date, end: dt.end || dt.date} : {}), ...(q.length >= 2 ? {query: q} : {})}); }
   { const fm = t.match(/([가-힣]{2,4}?)\s*(?:팀장|과장|차장|부장|실장|주임|주무관|선생|대리|사원|님)*\s*(?:한테서|한테|에게서|께서|이|가)\s*(?:온|보낸|준)\s*(?:메일|편지)/); if (fm && !/^(내가|제가|누가|어디|오늘|어제)$/.test(fm[1]) && !CH_STOP.has(fm[1])) return make('list_mail', {filter: 'recent', from: fm[1], ...(dt && !dt.end ? {date: dt.date} : {})}); }
@@ -629,5 +635,20 @@ export function chatScheduleRequest(text, now = new Date()) {
   for (const n of who) title = title.replace(new RegExp(n + '[가-힣\\s]*?(?:이랑|랑|하고|와|과)(?=\\s)'), ' ');
   title = title.replace(/(일정|으로|로|을|를|에|좀|하나|새로)?\s*(잡아|등록|추가|넣어|만들어|예약|올려)\S*/g, ' ').replace(/\s*일정\s*/g, ' ').replace(/[?.!]/g, ' ').replace(/\s+/g, ' ').trim().replace(/^(?:에서|에는|에|은|는|을|를)\s+/, '');
   return {date: dt && !dt.end ? dt.date : '', start, end, title: title.slice(0, 60) || '일정', memo: who.length ? '함께: ' + who.join(', ') : ''};
+}
+
+/** v1.3.0: "내일 회의 취소됐" → {subject:'[안내] 11/22 회의 취소', body:'11/22 회의가 취소되었습니다.'}. 상대 날짜는 실제 날짜로 바꾼다. */
+export function chatMailFromPoint(point, now = new Date()) {
+  let x = chatNormalize(point).replace(/[.!?]+$/, '');
+  const dt = chatParseDate(x, now);
+  if (dt && !dt.end && /(오늘|내일|모레|어제)/.test(dt.label)) { const [, mo, d] = dt.date.split('-').map(Number); x = x.replace(dt.label, `${mo}/${d}`); }
+  const stem = x.replace(/\s*(됐|되었|됩니|된다|했|합니|한다|한|하는|이었|였|이다|이에요|예요)$/, '').trim();
+  const josa = w => /[가은는을를]$|[가-힣]이$/.test(w) && w.length > 2 ? w : w + ((w.charCodeAt(w.length - 1) - 0xac00) % 28 ? '이' : '가');
+  let body;
+  if (/(부탁|요청)\s*한$|(부탁|요청)\s*하는$/.test(x)) body = stem.replace(/\s*(부탁|요청)$/, '') + ' 부탁드립니다.';
+  else if (/(됐|되었)$/.test(x)) body = stem.replace(/(\S+)\s+(\S+)$/, (m, n, v) => josa(n) + ' ' + v) + (/\s/.test(stem) ? '' : '') + '되었습니다.';
+  else if (/(했|한)$/.test(x)) body = stem + '했습니다.';
+  else body = /(니다|요)$/.test(x) ? x + '.' : x + '는 점 알려드립니다.';
+  return {subject: '[안내] ' + stem.replace(/\s*(부탁|요청)$/, '').slice(0, 40), body: body.replace(/\s+/g, ' ')};
 }
 

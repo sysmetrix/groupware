@@ -627,9 +627,10 @@
     },
     {
       "id": "m03",
-      "cat": "넘겨짚지 않기",
+      "cat": "조회",
       "q": "고마워",
-      "tool": ""
+      "tool": "small_talk",
+      "why": "v1.3.0: 인사는 외부로 보내지 않고 바로 답한다"
     },
     {
       "id": "m04",
@@ -1601,6 +1602,53 @@
       "tool": "get_work_hours",
       "args": {
         "leave_time": true
+      }
+    },
+    {
+      "id": "h1",
+      "cat": "조회",
+      "q": "응",
+      "tool": "small_talk",
+      "args": {
+        "kind": "ack"
+      },
+      "why": "실사용: 외부 AI가 인사말을 다시 함(2.5초)"
+    },
+    {
+      "id": "h2",
+      "cat": "조회",
+      "q": "방금 거 취소해",
+      "tool": "small_talk",
+      "args": {
+        "kind": "undo"
+      },
+      "why": "실사용: 외부 AI가 내부 도구 이름(mark_task)을 노출"
+    },
+    {
+      "id": "h3",
+      "cat": "실행",
+      "q": "한도윤한테 내일 회의 취소됐다고 메일 보내줘",
+      "tool": "compose_mail",
+      "args": {
+        "to": "한도윤"
+      },
+      "why": "실사용: 직원 찾기와 일정 오류로 답함"
+    },
+    {
+      "id": "h4",
+      "cat": "조회",
+      "q": "메일 요약 좀 ㅋㅋ",
+      "tool": "read_mail",
+      "args": {},
+      "why": "실사용: \"ㅋㅋ\"를 메일 제목으로 찾음"
+    },
+    {
+      "id": "h5",
+      "cat": "조회",
+      "q": "내일 일정 알려줘~",
+      "tool": "get_schedule",
+      "args": {
+        "days": 1
       }
     }
   ]

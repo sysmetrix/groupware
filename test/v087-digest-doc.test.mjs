@@ -460,3 +460,18 @@ test('v1.2.0: 찾고 확인하기 라우팅, 덮어쓴 CSS 덜어 내기', async
   const col = fs.readFileSync(new URL('../src/live/collector.browser.js', import.meta.url), 'utf8');
   assert.match(col, /async function sentMail[\s\S]{0,400}mail003A01/, '보낸 메일은 기존 읽기 전용 목록 주소만 쓴다');
 });
+
+test('v1.3.0: 대화 습관 — 감사·짧은 대답·되돌리기는 로컬, "…라고 메일 보내줘", 웃음 자모 무시, 도구 이름 숨기기', async () => {
+  const C9 = await import('../src/live/chat.mjs');
+  const now = new Date('2026-11-20T18:30:00Z');
+  assert.equal(C9.chatIntent('넵!', now).args.kind, 'ack');
+  assert.equal(C9.chatIntent('고마워', now).args.kind, 'thanks');
+  assert.equal(C9.chatNormalize('메일 요약 좀 ㅋㅋ'), '메일 요약 좀');
+  assert.deepEqual(C9.chatMailFromPoint('자료 금요일까지 제출 부탁한', now), {subject: '[안내] 자료 금요일까지 제출', body: '자료 금요일까지 제출 부탁드립니다.'});
+  assert.equal(C9.chatMailFromPoint('12월 행사 장소가 변경됐', now).body, '12월 행사 장소가 변경되었습니다.');
+  const h = fs.readFileSync(new URL('../src/live/wc/49-chat-habits.js', import.meta.url), 'utf8');
+  assert.match(h, /말로 대답하는 것만으로는 실행하지 않습니다/, '"응"으로 확인 카드를 실행하지 않는다');
+  assert.doesNotMatch(h, /받는사람을 입력/, '받는 사람 칸은 채우지 않는다(자동완성·주소 선택은 사용자)');
+  const eng = fs.readFileSync(new URL('../src/live/wc/31-chat-engine.js', import.meta.url), 'utf8');
+  assert.match(eng, /CHAT_TOOLS\.has\(n\) \? '“' \+ CHAT_TOOLS\.get\(n\)\.label/, '답에 드러난 내부 도구 이름은 이름표로 바꾼다');
+});
