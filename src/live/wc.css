@@ -1420,3 +1420,15 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .set .si .muted{display:block;margin-top:4px}
 .wc .set .danger-zone{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line2)}
 .wc .cal-more{display:block;margin-top:3px;font-size:12px}
+
+/* 날짜를 누르면 그 날의 상세 내역을 달력 옆에, 좁은 화면에서는 아래에 표시 */
+.cal-layout.has-day{display:grid;grid-template-columns:minmax(0,1fr) minmax(250px,320px);gap:12px;align-items:start}
+.cal-day{padding:16px;max-height:720px;overflow:auto;min-width:0}
+.cal-day-head{display:flex;justify-content:space-between;gap:8px;align-items:start}
+.cal-day h2{font-size:16px;margin:0}.cal-day h3{font-size:14px;margin:16px 0 5px}.cal-day p{font-size:12px}
+.cal-day-item{padding:8px 0;border-top:1px solid var(--line);overflow-wrap:anywhere;line-height:1.6}
+.cal-day-item.me{box-shadow:inset 3px 0 0 var(--accent);padding-left:8px}
+.cal-day-link{border:0;background:none;color:var(--accent);font:inherit;font-weight:600;text-align:left;cursor:pointer;text-decoration:underline;overflow-wrap:anywhere;padding:0}
+.cal .c.picked{box-shadow:inset 0 0 0 2px var(--accent)}
+.cal .c.picked.today{box-shadow:inset 0 2px 0 var(--accent),inset 0 0 0 2px var(--accent)}
+@media(max-width:1050px){.cal-layout.has-day{grid-template-columns:1fr}.cal-day{max-height:none}}

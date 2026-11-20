@@ -120,7 +120,7 @@ if (!FAST) {
       const digest = createHash('sha256').update(bundle).digest('hex');
       if (digest !== createHash('sha256').update(await fs.readFile(path.join(outB, 'gw-live.js'))).digest('hex')) fails.push('같은 소스로 두 번 빌드한 번들의 해시가 다름(빌드 결과가 재현되지 않음)');
       const bytes = bundle.length;
-      if (bytes > BUDGET.bundleBytes) fails.push(`배포 번들 ${bytes} bytes > 예산 ${BUDGET.bundleBytes} bytes (1060KB)`);
+      if (bytes > BUDGET.bundleBytes) fails.push(`배포 번들 ${bytes} bytes > 예산 ${BUDGET.bundleBytes} bytes (${BUDGET.bundleBytes / 1024}KB)`);
       const bm = await fs.readFile(path.join(outA, 'bookmarklet.txt'));
       const bmKB = Math.round(bm.length / 1024);
       if (bmKB > 1900) fails.push(`설치 북마클릿 ${bmKB}KB > 한도 1900KB`);
