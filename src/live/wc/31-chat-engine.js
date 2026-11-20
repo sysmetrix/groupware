@@ -111,7 +111,10 @@
     const st = chatState(), owner = S.userKey, seq = st.seq;
     const runArgs = args && typeof args === 'object' ? {...args} : {};
     if (runArgs.index && !runArgs.itemId && !runArgs.key && st.ctx && Array.isArray(st.ctx.lastItems)) {
-      const hit = st.ctx.lastItems[Number(runArgs.index) - 1];
+      // v1.4.0: 메일 도구는 메일 목록, 문서 도구는 문서 목록의 순번을 쓴다(방금 본 목록이 다른 종류여도)
+      const want = {read_mail: 'mail', draft_mail_reply: 'mail', check_sent_reply: 'mail', read_doc: 'doc'}[name], by = st.ctx.byType || {};
+      const src = !want || st.ctx.lastItems.every(i => !i.type || i.type === want) ? st.ctx.lastItems : by[want] || [];
+      const hit = src[Number(runArgs.index) - 1];
       if (hit) {
         if (hit.itemId) runArgs.itemId = hit.itemId;
         if (hit.title && !runArgs.query) runArgs.query = hit.title;
@@ -128,7 +131,8 @@
     chip.state = res.ok ? 'ok' : 'err';
     if (typeof usageNote === 'function') usageNote(ctx.viaAi ? 'toolAi' : 'tool', name + (res.ok ? '' : ':err')); // 도구 이름과 성공 여부만 센다(40-usage.js)
     if (res.ok && res.data && Array.isArray(res.data.items) && res.data.items.length) {
-      st.ctx.lastItems = res.data.items.map(it => ({itemId: it.itemId || '', title: it.title || '', uid: it.uid || '', url: it.url || '', type: it.type || ''}));
+      st.ctx.lastItems = res.data.items.map(it => ({itemId: it.itemId || '', title: it.title || '', uid: it.uid || '', url: it.url || '', type: it.type || (it.uid ? 'mail' : '')}));
+      { const ty = st.ctx.lastItems[0].type; if (ty && st.ctx.lastItems.every(i => i.type === ty)) st.ctx.byType = {...(st.ctx.byType || {}), [ty]: st.ctx.lastItems}; }
       st.ctx.pendingSlot = null;
     } else if (!res.ok && /^prepare_|^reserve_/.test(name) && /날짜|시간/.test(res.text || '')) {
       st.ctx.pendingSlot = {tool: name, args: runArgs};

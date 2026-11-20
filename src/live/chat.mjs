@@ -76,7 +76,7 @@ export function chatParseRange(text) {
 }
 
 // ---------- 의도 분류 (키 없이도 동작하는 로컬 라우터) ----------
-const CH_STOP = new Set(['짧게', '간단히', '자세히', '요점만', '마감', '기한', '공문', '요청', '메일', '결재', '발송', '제출', '처리', '회신', '답장', '오늘', '내일', '모레', '어제', '이번', '다음', '다다음', '누가', '일정', '직원', '우리', '전체', '지금', '언제', '어디', '출장', '휴가', '연차', '교육', '자리', '부재', '내가', '제가', '남은', '남아', '있는', '얼마나', '잔여', '몇일', '쓴', '올해', '이번달', '나의', '저의', '그분', '이분', '담당', '부서', '구글', '캘린더', '스케줄', '그룹웨어', '회의', '일정도']);
+const CH_STOP = new Set(['선생님', '선생님들', '직원들', '팀원들', '부서원', '부서원들', '다들', '모두', '사람들', '짧게', '간단히', '자세히', '요점만', '마감', '기한', '공문', '요청', '메일', '결재', '발송', '제출', '처리', '회신', '답장', '오늘', '내일', '모레', '어제', '이번', '다음', '다다음', '누가', '일정', '직원', '우리', '전체', '지금', '언제', '어디', '출장', '휴가', '연차', '교육', '자리', '부재', '내가', '제가', '남은', '남아', '있는', '얼마나', '잔여', '몇일', '쓴', '올해', '이번달', '나의', '저의', '그분', '이분', '담당', '부서', '구글', '캘린더', '스케줄', '그룹웨어', '회의', '일정도']);
 export function chatExtractName(text) {
   const t = String(text ?? '').replace(/(?<![가-힣])(?:기본|보상|대체|포상|(?:유형|종류)(?:의|별)?)\s*(?=연차|휴가)/g, '');
   // 직함 뒤의 "님"까지 한 덩어리로 읽는다("한지우 팀장님 오늘 …"에서 "팀장님"을 이름으로 잡지 않게).
@@ -206,6 +206,8 @@ export function chatIntent(text, now = new Date(), _nested = false) {
   // v0.97.0: 업무 문장 쓰기 — 상급자 보고 문장, 부서 공유 메일(앞에서 다룬 메일 기준)
   if (/(보고\s*(?:할|드릴|용|하는)?\s*(?:문장|내용|글|메모|요약|문구)|보고\s*(?:문장|글)으로|(?:팀장|실장|과장|부장|국장|상급자|윗분)\S*\s*(?:께|에게|한테)\s*보고)/.test(t) && /(써|작성|정리|만들|뽑아)/.test(t) && !/(결과\s*보고|주간|실적|기안)/.test(t)) return make('write_text', {kind: 'report'});
   if (/(공유|전달|알리|안내)\S*\s*(?:하는|할|하기|용)?\s*(?:메일|문구|글|공지)/.test(t) && /(써|작성|만들|보내|초안)/.test(t) && !/(답장|회신)/.test(t)) return make('write_text', {kind: 'share'});
+  // v1.4.0: 메일 보내기 대행 요청은 거절하고 방법을 안내한다(내용이 있으면 위 "…라고 메일 보내줘" 규칙이 먼저 채움 준비)
+  if (/(메일|답장|회신)\S*\s*(?:을|를)?\s*(?:바로|지금|대신|그냥)?\s*(?:보내\s*줘|보내\s*주세요|발송해|전송해|보내버려)/.test(t) && !/(라고|다고|이라고|고\s*메일)/.test(t)) return make('small_talk', {kind: 'send'});
   // v1.3.0: 대화 습관 — 감사, 짧은 대답, 되돌리기, "○○한테 …라고 메일 보내줘"
   if (/^(고마워|고맙|감사|땡큐|thx|thanks|thank you|수고)/i.test(t) && t.length <= 20) return make('small_talk', {kind: 'thanks'});
   if (/^(응|어|네|넹|넵|예|ㅇㅇ|ㅇㅋ|오케이|ok|okay|그래|알겠어|알았어|좋아)[.!?\s]*$/i.test(t)) return make('small_talk', {kind: 'ack'});
@@ -231,6 +233,7 @@ export function chatIntent(text, now = new Date(), _nested = false) {
   if (dt && !dt.end && (/(몇\s*일|며칠|날짜)\s*(?:이야|이에요|인가요?|야|지|인지|이지)?\s*\??$/.test(t) || /(무슨|몇)\s*요일/.test(t)) && !/(남았|걸려|동안|간\b|쉬|휴가)/.test(t)) return make('get_weekday', {date: dt.date});
   { const kw = (t.match(/(회의|미팅|약속|교육|행사|면담|간담회|워크숍|출장|외근)\s*(?:이|가|은|는)?\s*(?:있어|있나|있니|있어요|있습니까|있을까|잡혀|있는지)/) || [])[1];
     if (kw && !/(누구|누가|몇\s*명|부서|직원)/.test(t)) { const d0 = dt ? dt.date : chIso(chUtc(chKst(now).y, chKst(now).m, chKst(now).d)); return make('get_schedule', {date: d0, days: dt && dt.end ? Math.round((Date.parse(dt.end) - Date.parse(dt.date)) / 864e5) + 1 : 1, kw, ...(/(오전|아침)/.test(t) ? {part: 'am'} : /(오후|저녁)/.test(t) ? {part: 'pm'} : {})}); } }
+  if (/(선생님들|직원들|팀원들|부서원들?|다들|사람들)/.test(t) && /(휴가|출장|교육|일정|부재|자리)/.test(t) && !/(명단|신청)/.test(t)) { const d0 = dt ? dt.date : chIso(chUtc(chKst(now).y, chKst(now).m, chKst(now).d)); return make('get_staff_status', {date: d0, days: dt && dt.end ? Math.round((Date.parse(dt.end) - Date.parse(dt.date)) / 864e5) + 1 : dt ? 1 : 7, ...(/출장|외근/.test(t) ? {kind: 'trip'} : /교육/.test(t) ? {kind: 'edu'} : /휴가|연차|반차/.test(t) ? {kind: 'leave'} : {})}); }
   if (/(오전|오후|아침|저녁)\s*(?:에|엔|에는)?\s*(?:뭐|무슨|일정|있|할)/.test(t) && !/(신청|등록|예약|반차|외출)/.test(t)) return make('get_schedule', {date: dt ? dt.date : chIso(chUtc(chKst(now).y, chKst(now).m, chKst(now).d)), days: 1, part: /오전|아침/.test(t) ? 'am' : 'pm'});
   if (/(일정|회의|미팅|약속|면담|간담회|워크숍)/.test(t) && /(잡아|등록해|등록\s*좀|추가해|넣어\s*줘|만들어\s*줘|올려\s*줘)/.test(t) && !/(회의실|차량|자원|휴가|연차|출장|시간외|할\s*일|todo)/i.test(t)) return make('prepare_schedule', chatScheduleRequest(t, now));
   if (!_nested) { const cp = chatCompound(t, now); if (cp) return make('multi_read', {steps: cp}); }
