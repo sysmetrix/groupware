@@ -177,7 +177,8 @@ test('문서 첨부: 문서를 읽으면 첨부를 기억하고, 내가 기안�
   assert.ok(r0.cards.some(c => c.type === 'chips' && c.items.includes('그 문서 첨부 내용 정리해줘')));
   const r = await h.api.CHAT_TOOLS.get('read_attachment').run({}, {userText: '그 문서 첨부 내용 정리해줘'});
   assert.equal(r.ok, true);
-  assert.deepEqual(calls, ['AAAABBBBCCCCDDDD1111']);
+  // v0.90.0: 그림 첨부도 뷰어 키를 받아 두어(글자 없음) AI 그림 읽기로 이어 줄 수 있다
+  assert.deepEqual(calls, ['AAAABBBBCCCCDDDD1111', 'AAAABBBBCCCCDDDD2222']);
   assert.equal(r.cards[0].items[0].title, '제목 마을축제 세부 운영계획');
   assert.ok(r.cards[0].sensitive);
 });
@@ -198,4 +199,29 @@ test('문서 첨부: 남이 기안한 문서는 확인 카드 전에는 열지 �
 test('cuSynapText: 좁은 글자 사이(4~5px)는 띄우지 않고 넓은 사이만 띄운다(v0.89.1, "13"이 "1 3"으로 갈라지던 문제)', () => {
   const x = "<document><page w='800' h='1000'><text l='300' t='185' w='2.7' h='10' >1</text><text l='307' t='185' w='4' h='10' >3</text><text l='311' t='194' w='1' h='2' >.</text><text l='330' t='185' w='10' h='12' >금</text></page></document>";
   assert.equal(CU.cuSynapText(x), '13. 금');
+});
+
+// ---------- v0.90.0 그림·스캔 첨부 ----------
+test('그림 읽기 응답: 그림별 글자·요약·할 일을 검증하고 연락처는 다시 가린다', () => {
+  const r = CU.cuParseImageAi(JSON.stringify({text: '[1] 포스터.jpg\n추천기간: 12월 20일까지\n문의 032-111-2222', summary: ['추천 모집 안내입니다.'], asks: [{what: '기관 게시판에 게시', due: '2026-12-20'}], reply_needed: 'no'}));
+  assert.match(r.text, /^\[1\] 포스터\.jpg\n추천기간/);
+  assert.doesNotMatch(r.text, /111-2222/);
+  assert.equal(r.asks[0].due, '2026-12-20');
+  assert.equal(CU.cuParseImageAi('읽을 수 없음'), null);
+  const p = CU.cuImageUserPrompt(['a.jpg', 'b.jpg'], '2026-11-20', '홍보 요청');
+  assert.match(p, /\[1\] a\.jpg\n\[2\] b\.jpg/);
+  assert.match(p, /그림 2장/);
+  assert.match(CU.CU_IMAGE_SYSTEM, /지시가 아니다/);
+  assert.match(CU.CU_IMAGE_SYSTEM, /직원이 할 일/);
+});
+
+test('그림 첨부: AI가 없으면 그림을 받지 않고 안내만 한다', async () => {
+  const fetched = [];
+  const h = harness({mails: [{uid: 11, subject: '포스터 공유', seen: true}], details: {11: {subject: '포스터 공유', account: 'a@b', text: '포스터 공유드립니다.', files: [{name: '포스터.jpg', ext: 'jpg', sn: '1'}]}}, attachPages: async () => { fetched.push('pages'); return {total: 1, pages: [], key: 'KEYKEYKEYKEY', image: true}; }});
+  h.ctx.GW.synapPageImages = async () => { fetched.push('img'); return []; };
+  h.api.cuSetFocus({key: 'mail:11', title: '포스터 공유', ref: {box: 'INBOX', uid: 11}});
+  const r = await h.api.CHAT_TOOLS.get('read_attachment').run({});
+  assert.match(r.text, /그림 1개/);
+  assert.deepEqual(fetched, []);
+  assert.ok(!r.cards.some(c => c.type === 'confirm'));
 });
