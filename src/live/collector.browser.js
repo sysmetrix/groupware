@@ -15,7 +15,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '0.91.1';
+  const VERSION = '0.92.0';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
@@ -775,7 +775,11 @@
       while (!key && Date.now() - t0 < 25000) { await new Promise(r => setTimeout(r, 300)); scan(frame.contentWindow, 0); }
     } finally { frame.remove(); }
     if (!key) throw new GwError('TIMEOUT', '첨부 미리보기를 준비하지 못했습니다(권한이 없거나 변환 시간이 지났습니다).');
-    return synapPages(key, maxPages);
+    try { return await synapPages(key, maxPages); }
+    finally {
+      // 숨은 미리보기 창의 문서 뷰어가 남긴 쪽 정보 캐시(synap_<key>_*, 건당 50~160KB)를 지워 저장 공간이 차지 않게 한다
+      try { for (const k of Object.keys(localStorage)) if (k.startsWith('synap_' + key)) localStorage.removeItem(k); } catch {}
+    }
   }
 
   async function mailAttachment({uid, sn, account = ''} = {}) {

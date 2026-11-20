@@ -116,6 +116,12 @@
     },
   };
   function pruneStorageForQuota(excludeKey) {
+    // v0.92.0: 다시 만들어지는 그룹웨어 문서 뷰어 캐시(synap_*)부터 지운다. 그래도 모자랄 때만 비서 자료를 줄인다.
+    try {
+      const syn = Object.keys(localStorage).filter(k => k.startsWith('synap_'));
+      for (const k of syn) localStorage.removeItem(k);
+      if (syn.length) return true;
+    } catch {}
     let freed = false;
     const p = getPrefix();
     for (const k of ['routing', 'forms', 'gsyncExisting', 'chatModels', 'chatCool', 'chatHist']) {
