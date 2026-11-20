@@ -1255,6 +1255,84 @@
       "notTool": [
         "write_text"
       ]
+    },
+    {
+      "id": "p1",
+      "cat": "정확",
+      "q": "어제 온 메일 중에 중요한 거 있어?",
+      "tool": "list_mail",
+      "args": {
+        "important": true
+      },
+      "why": "실사용: 최근 메일 8통을 그냥 보여 줌"
+    },
+    {
+      "id": "p2",
+      "cat": "정확",
+      "q": "어제 받은 메일 보여줘",
+      "tool": "list_mail",
+      "notTool": [
+        "digest_mail"
+      ]
+    },
+    {
+      "id": "p3",
+      "cat": "정확",
+      "q": "내가 올린 문서 중에 반려된 거 있어?",
+      "tool": "list_approvals",
+      "args": {
+        "queue": "submitted",
+        "status": "반려"
+      },
+      "why": "실사용: 진행 중 건수로 답함"
+    },
+    {
+      "id": "p4",
+      "cat": "정확",
+      "q": "다음 주 금요일에 반차 써도 돼?",
+      "tool": "check_leave_day",
+      "args": {
+        "amount": "half"
+      },
+      "why": "실사용: 연차 현황+요일만 답하고 판단 못 함"
+    },
+    {
+      "id": "p5",
+      "cat": "정확",
+      "q": "28일 연차 써도 될까?",
+      "tool": "check_leave_day",
+      "args": {
+        "amount": "full"
+      }
+    },
+    {
+      "id": "p6",
+      "cat": "정확",
+      "q": "오늘 부서에 누구 없어?",
+      "tool": "get_staff_status",
+      "why": "실사용: 외부 AI 경로로 4초"
+    },
+    {
+      "id": "p7",
+      "cat": "정확",
+      "q": "마을실험실 메일 첨부파일 이름이 뭐야?",
+      "tool": "read_mail",
+      "args": {
+        "files": true
+      },
+      "notTool": [
+        "list_mail"
+      ],
+      "why": "실사용: 첨부 있는 메일 목록만 보여 줌"
+    },
+    {
+      "id": "p8",
+      "cat": "정확",
+      "q": "연차 며칠 남았어?",
+      "tool": "get_leave_status",
+      "notTool": [
+        "check_leave_day"
+      ]
     }
   ]
 }

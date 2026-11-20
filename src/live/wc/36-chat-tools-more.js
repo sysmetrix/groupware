@@ -58,7 +58,7 @@
   chatRegisterTool({
     name: 'list_mail', label: '메일 목록 확인', kind: 'read',
     description: '받은 메일 목록(제목·보낸 사람·받은 시각). filter: unread(안 읽음) | today(오늘 받은) | attach(첨부 있음) | recent(최근). from으로 보낸 사람 이름을 좁힐 수 있다. 본문은 보여주지 않는다.',
-    params: {type: 'object', properties: {filter: {type: 'string', enum: ['unread', 'today', 'attach', 'recent']}, from: {type: 'string'}, limit: {type: 'number'}}},
+    params: {type: 'object', properties: {filter: {type: 'string', enum: ['unread', 'today', 'attach', 'recent']}, from: {type: 'string'}, date: {type: 'string', description: 'YYYY-MM-DD, 그날 받은 메일만'}, important: {type: 'boolean', description: '요청·회신 요구·할 일로 잡힌·안 읽은 메일만(광고성 제외)'}, limit: {type: 'number'}}},
     run: async a => {
       if (!S.raw) return chatNotReady();
       const md = S.raw.data && S.raw.data.mail, nav = {type: 'nav', label: '메일 화면 열기', view: 'mail'};
@@ -71,13 +71,18 @@
       else if (filter === 'today') list = list.filter(m => String(m.date || '').startsWith(t));
       else if (filter === 'attach') list = list.filter(m => m.attach);
       else list = list.filter(m => m.box === 'INBOX');
-      const who = String(a.from || '').replace(/\s+/g, '');
+      const who = String(a.from || '').replace(/\s+/g, ''), acts = new Map(((S.a && S.a.actions) || []).filter(x => x.ref && x.ref.uid).map(x => [String(x.ref.uid), x.key]));
+      // v0.98.0: 특정 날 받은 메일, 챙길 만한 메일
+      const dd = /^\d{4}-\d{2}-\d{2}$/.test(a.date || '') ? a.date : '', all0 = dd ? list.filter(m => String(m.date || '').startsWith(dd)).length : 0;
+      if (dd) list = list.filter(m => String(m.date || '').startsWith(dd));
+      if (a.important) list = list.filter(m => !R.isNoiseMail(m) && (acts.has(String(m.uid)) || !m.seen || /요청|협조|제출|회신|긴급|마감|기한|검토|조사|확인\s*바랍/.test(m.subject || '')));
       if (who) list = list.filter(m => String(m.from || '').replace(/\s+/g, '').includes(who) || String(m.fromEmail || '').includes(who));
       list.sort((x, y) => String(y.date || '').localeCompare(String(x.date || '')));
-      const label = {unread: '안 읽은 메일', today: '오늘 받은 메일', attach: '첨부가 있는 메일', recent: '최근 받은 메일'}[filter];
+      const label = (dd ? `${chatMd(dd)}에 받은 ` : '') + (a.important ? '챙길 만한 메일' : dd ? '메일' : {unread: '안 읽은 메일', today: '오늘 받은 메일', attach: '첨부가 있는 메일', recent: '최근 받은 메일'}[filter]);
       const scope = `받은편지함 최근 ${md.inbox.fetched}통${filter === 'unread' ? '과 다른 편지함의 안 읽은 메일' : ''} 안에서 확인했습니다.${filter === 'unread' && Number.isFinite(Number(md.inbox.unseen)) ? ` 받은편지함 전체의 안 읽음은 ${md.inbox.unseen}통으로 집계됩니다.` : ''}`;
-      const acts = new Map(((S.a && S.a.actions) || []).filter(x => x.ref && x.ref.uid).map(x => [String(x.ref.uid), x.key]));
-      if (!list.length) return {ok: true, text: `${who ? `“${who}” ` : ''}${label}이 없습니다.\n${scope}`, llm: `${label} 0건. ${scope}`, data: {count: 0, filter}, cards: [nav]};
+      if (a.important) list.sort((x, y) => (acts.has(String(y.uid)) - acts.has(String(x.uid))) || (!y.seen - !x.seen));
+      const why = a.important ? `\n${dd ? `그날 받은 ${all0}통 가운데 ` : ''}요청·회신 요구 제목이거나, 할 일로 잡혔거나, 안 읽은 메일입니다(광고성 제외).` : '';
+      if (!list.length) return {ok: true, text: `${who ? `“${who}” ` : ''}${label}이 없습니다.${dd && a.important ? ` 그날 받은 메일은 ${all0}통입니다.` : ''}\n${scope}`, llm: `${label} 0건. ${scope}`, data: {count: 0, filter}, cards: [nav]};
       const items = list.slice(0, lim).map(m => ({title: m.subject || '(제목 없음)', sub: [m.from, m.shortDate || String(m.date || '').slice(5, 16), m.attach ? '첨부' : '', m.box && m.box !== 'INBOX' ? m.box : ''].filter(Boolean).join(' · '), badge: m.seen ? (R.isNoiseMail(m) ? '광고성' : '') : '안 읽음', tone: m.seen ? 'info' : 'todo', ...(acts.has(String(m.uid)) ? {act: {act: 'chatOpenItem', v: acts.get(String(m.uid))}} : {})}));
       // 목록의 읽음 상태가 오래되었을 수 있으므로 항상 명시적으로 확인한다.
       const previews = list.slice(0, Math.min(lim, 3)).filter(m => m.uid).map(m => {
@@ -94,7 +99,7 @@
           }};
       });
 
-      return {ok: true, text: `${who ? `“${who}” ` : ''}${label}은 ${list.length}통입니다.${list.length > lim ? ` 최근 ${lim}통만 보여 드립니다.` : ''}\n${scope}`, llm: `${label} ${list.length}통. ${scope}`,
+      return {ok: true, text: `${who ? `“${who}” ` : ''}${label}은 ${list.length}통입니다.${list.length > lim ? ` 최근 ${lim}통만 보여 드립니다.` : ''}${why}\n${scope}`, llm: `${label} ${list.length}통. ${scope}`,
         data: {count: list.length, filter, items: list.slice(0, lim).map(m => ({itemId: acts.get(String(m.uid)) || '', title: m.subject || '', uid: m.uid, type: 'mail'}))},
         cards: [{type: 'list', title: label, items, more: Math.max(0, list.length - lim)}, ...previews, nav]};
     },
@@ -104,7 +109,7 @@
   chatRegisterTool({
     name: 'list_approvals', label: '결재함 확인', kind: 'read',
     description: '결재·문서유통 목록의 내용을 대화로 보여준다. queue: pending(내가 결재할 문서) | deptWaiting(부서 접수 대기) | distWaiting(배부 대기) | sendWaiting(발송 대기) | submitted(내가 올린 문서와 진행 상태) | viewing(열람문서) | all(전체 건수). 결재·접수·배부는 하지 않는다.',
-    params: {type: 'object', properties: {queue: {type: 'string', enum: ['pending', 'deptWaiting', 'distWaiting', 'sendWaiting', 'submitted', 'viewing', 'all']}, limit: {type: 'number'}}},
+    params: {type: 'object', properties: {queue: {type: 'string', enum: ['pending', 'deptWaiting', 'distWaiting', 'sendWaiting', 'submitted', 'viewing', 'all']}, status: {type: 'string', description: '상태 낱말로 좁히기(예: 반려)'}, limit: {type: 'number'}}},
     run: async a => {
       if (!S.a || !S.raw) return chatNotReady();
       const lists = (S.a.approval && S.a.approval.lists) || {};
@@ -125,6 +130,7 @@
         const stalled = R.stalledSubmitted(inProg, new Date());
         head = `조회된 내가 올린 문서 가운데 결재가 진행 중인 것은 ${inProg.length}건입니다${stalled.length ? `(이 중 ${stalled.length}건은 이틀 넘게 멈춰 있습니다)` : ''}. 조회 기간의 상신문서는 모두 ${total}건입니다.${partial}`;
         const ids = new Set(inProg.map(d => d.docId)); docs = [...inProg, ...docs.filter(d => !ids.has(d.docId))];
+        if (a.status) { const n0 = docs.length, w = String(a.status).slice(0, 10); docs = docs.filter(d => String(d.status || '').includes(w)); const rc = /반려|회수/.test(w) && (S.a.approval.counts || []).find(c => c.name === '반려/회수문서'); head = `내가 올린 문서 최근 ${n0}건 가운데 ${w} 상태는 ${docs.length ? docs.length + '건입니다.' : '없습니다.'}${rc ? (+(rc.total ?? rc.count) ? ` 그룹웨어 반려/회수 문서함에는 ${rc.total ?? rc.count}건이 있습니다.` : ' 그룹웨어 반려/회수 문서함도 비어 있습니다.') : total > n0 ? ` 그 이전 ${total - n0}건은 읽지 않았습니다.` : ''}`; }
       } else if (queue === 'pending') head = total ? `내가 결재할 문서는 ${total}건입니다.${partial}` : `내가 결재할 문서는 없습니다. 내가 올려 결재를 기다리는 문서는 ${lists.submitted && !lists.submitted.error ? inProg.length + '건' : '확인 불가'}입니다.`;
       else if (queue === 'viewing') { const un = docs.filter(d => d.unread).length; head = `열람문서는 ${total}건이고, 읽은 범위에서 안 읽은 것은 ${un}건입니다.${partial}`; docs = [...docs.filter(d => d.unread), ...docs.filter(d => !d.unread)]; }
       else head = `${label}는 부서 전체 기준 ${total}건입니다.${partial}`;
