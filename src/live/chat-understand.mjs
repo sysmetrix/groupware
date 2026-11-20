@@ -11,11 +11,11 @@ const cuIso = s => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ''))
 /** 이메일·전화·계좌·주민번호(띄어 쓴 것 포함)를 지운다. 이름·주소 같은 비정형 개인정보는 지우지 못한다. */
 export function cuMaskBody(s, max = 4000) {
   let t = String(s ?? '').replace(/\r/g, '');
-  t = t.replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, '***@***')
+  t = t.replace(/[\w.+-]+@[\w-]+(?:\.\s?[\w-]+)+/g, '***@***')
     .replace(/\b\d{6}\s*[-–]?\s*[1-4]\d{6}\b/g, '******-*******')
     .replace(/\b01[016789][-.\s)]?\d{3,4}[-.\s]?\d{4}\b/g, '***-****-****')
     .replace(/\(?\b0\d{1,2}\)?[-.\s]?\d{3,4}[-.\s]?\d{4}\b/g, '***-***-****')
-    .replace(/\b\d{2,6}(?:[-\s]\d{2,8}){1,4}\b/g, m => (/^\d{4}-\d{1,2}-\d{1,2}$/.test(m) || m.replace(/\D/g, '').length < 10 ? m : '***'))
+    .replace(/\b\d{2,6}(?:[-\s]\d{2,8}){1,4}\b/g, m => (/^\d{4}-\d{1,2}-\d{1,2}(?:\s+\d{1,2})?$/.test(m) || /^(?:19|20)\d{2}[-\s]\d{1,2}[-\s]\d{1,2}\b/.test(m) || m.replace(/\D/g, '').length < 10 ? m : '***'))
     .replace(/\d{10,}/g, '***');
   t = t.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
   return t.length > max ? t.slice(0, max) + '\n…(이하 생략)' : t;
@@ -217,4 +217,52 @@ export function cuParseDigest(text, n = 0) {
     out.set(i, {n: i, summary, ask: cuStr(m.ask, 120), due: cuIso(m.due), reply_needed: ['yes', 'no', 'maybe'].includes(m.reply_needed) ? m.reply_needed : 'maybe'});
   }
   return out.size ? [...out.values()].sort((a, b) => a.n - b.n) : null;
+}
+
+// ---------- 첨부 문서(시냅 변환 XML) → 글자 (v0.88.0) ----------
+const cuXmlDec = s => String(s).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n)).replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16))).replace(/&amp;/g, '&');
+/**
+ * 그룹웨어 문서 뷰어(시냅)의 쪽별 XML(<text l t w h>글자</text>)을 줄 단위 글자로 되돌린다.
+ * 글자의 세로 범위가 지금 줄과 겹치지 않거나 왼쪽으로 되돌아가면 새 줄, 크기 0인 공백은 줄 판단에 쓰지 않는다.
+ */
+export function cuSynapText(xml = '') {
+  const out = [];
+  for (const pg of String(xml || '').split(/<page\b[^>]*>/).slice(1)) {
+    const lines = []; let line = '', top = null, bot = null, pr = null;
+    const re = /<text\s+l='([\d.]+)'\s+t='([\d.]+)'\s+w='([\d.]+)'\s+h='([\d.]+)'\s*>([\s\S]*?)<\/text>/g;
+    let m;
+    while ((m = re.exec(pg))) {
+      const l = +m[1], t = +m[2], w = +m[3], h = +m[4], ch = cuXmlDec(m[5]);
+      if (!h || !ch.trim()) { if (line && !line.endsWith(' ')) line += ' '; continue; }
+      // 줄 판단: 글자의 세로 범위가 지금 줄의 범위와 겹치지 않거나, 왼쪽으로 크게 되돌아가면 새 줄(마침표·쉼표처럼 작은 글자는 줄 안에 든다)
+      if (top !== null && (t > bot + 1 || t + h < top - 1 || l < pr - 8)) { lines.push(line.trim()); line = ''; top = bot = null; }
+      else if (pr !== null && l - pr > Math.max(4, w * 0.9) && line && !line.endsWith(' ')) line += ' ';
+      line += ch; pr = l + w;
+      if (top === null) { top = t; bot = t + h; } else if (h >= 6) { top = Math.min(top, t); bot = Math.max(bot, t + h); }
+    }
+    if (line.trim()) lines.push(line.trim());
+    out.push(lines.filter(Boolean).join('\n'));
+  }
+  return out.join('\n\n').replace(/[ \t]{2,}/g, ' ').trim();
+}
+
+/**
+ * 공문·첨부 글자(줄 단위)에서 핵심 문장: 줄바꿈으로 끊긴 문장을 이어 붙인 뒤 요청·회신 문장을 먼저, 없으면 제목과 번호 항목을 고른다.
+ * 머리말(저장자·문서관리카드·수신자 목록)과 연락처 줄은 뺀다.
+ */
+export function cuDocHighlights(text = '', max = 4) {
+  const raw = String(text || '').split('\n').map(l => l.trim()).filter(Boolean);
+  const head = /^(저장\s*:|문서관리카드|수신자?\b|\(경유|우\s*\d{5}|전화번호|팩스|시행\s|접수\s|협조자|주무관|전결|붙임\s*\d|끝$|부\s*천\s*시\s*장?$)/;
+  const start = /^(\d{1,2}\s*[.)]|[가-하]\s*[.)]|[○●□■◦※\-•]|제\s*목)/;
+  const sents = [];
+  for (const l of raw) {
+    if (head.test(l)) { sents.push(''); continue; }
+    const last = sents.length ? sents[sents.length - 1] : '';
+    if (last && !/[.!?:。]$/.test(last) && !/^제\s*목/.test(last) && !start.test(l)) sents[sents.length - 1] = last + ' ' + l; else sents.push(l);
+  }
+  const clean = sents.map(x => x.replace(/\s+([,.])/g, '$1').replace(/\s{2,}/g, ' ').trim()).filter(x => x.length >= 8 && x.length <= 400 && !/(무궁한\s*발전|건승|평안|기원합니다|감사드립니다)/.test(x));
+  const ask = clean.filter(x => CU_REPLY_RE.test(x) || CU_ASK_RE.test(x));
+  const title = clean.find(x => /^제\s*목/.test(x));
+  const pick = [...(title ? [title] : []), ...ask, ...clean.filter(x => /^(\d{1,2}\s*[.)]|[가-하]\s*[.)]|○)/.test(x))];
+  return [...new Set(pick)].slice(0, max).map(x => cuStr(x, 200));
 }

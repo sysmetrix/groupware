@@ -74,7 +74,7 @@
       if (!r || !r.found) return {ok: false, text: r && r.reason === 'ambiguous' ? '같은 제목의 문서가 여러 건이라 하나로 정하지 못했습니다. 문서번호로 말씀해 주세요.' : r && r.reason === 'incomplete' ? '검색 결과를 끝까지 확인하지 못해 본문을 읽지 않았습니다.' : `“${cuCut(d.title, 40)}” 문서는 통합검색 색인에서 찾지 못해 본문을 읽지 못했습니다. 최근 도착한 공문은 색인에 늦게 반영되거나 권한 밖일 수 있습니다. 원문을 열어 확인해 주세요.`, cards: openCard};
       const body = R.cuMaskBody(String(r.text || ''), 6000);
       if (!body.replace(/\s/g, '')) return {ok: false, text: '검색 색인에 이 문서의 본문 글자가 없습니다. 원문이 없다는 뜻은 아닙니다(한글 붙임 위주 문서일 수 있음).'};
-      const hl = R.mailHighlights(body), dls = R.extractAllDeadlines(body, new Date()).slice(0, 3), need = R.cuReplyNeed({subject: d.title, text: body});
+      const hl = R.cuDocHighlights(body, 4).concat(R.mailHighlights(body)).filter((v, i, arr) => arr.indexOf(v) === i).slice(0, 4), dls = R.extractAllDeadlines(body, new Date()).slice(0, 3), need = R.cuReplyNeed({subject: d.title, text: body});
       const needTxt = need.need === 'yes' ? '회신·제출을 요구하는 문장이 있습니다' : need.need === 'no' ? '안내·공유 문서로 보입니다' : need.act ? '해 달라는 일은 있지만 회신 요구 문장은 찾지 못했습니다' : '요청 여부는 원문 확인이 필요합니다';
       const x = {type: 'doc', title: d.title, ref: null};
       const cards = [

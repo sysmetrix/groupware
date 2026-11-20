@@ -10,9 +10,9 @@ import * as CU from '../src/live/chat-understand.mjs';
 
 const R = {...B, ...C, ...CU, kstNow: () => ({date: '2026-11-20'})};
 const part = n => readFile(new URL(`../src/live/wc/${n}`, import.meta.url), 'utf8');
-const src = (await Promise.all(['30-chat-ui.js', '31-chat-engine.js', '32-chat-tools-read.js', '43-chat-understand.js', '44-chat-understand-2.js'].map(part))).join('\n');
+const src = (await Promise.all(['30-chat-ui.js', '31-chat-engine.js', '32-chat-tools-read.js', '43-chat-understand.js', '44-chat-understand-2.js', '45-chat-attach.js'].map(part))).join('\n');
 
-function harness({mails = [], details = {}, docs = [], preview = async () => ({found: false}), search = async () => ({groups: {doc: {items: []}}}), events = [], db = {}} = {}) {
+function harness({mails = [], details = {}, docs = [], preview = async () => ({found: false}), search = async () => ({groups: {doc: {items: []}}}), events = [], db = {}, attachPages = null} = {}) {
   const store0 = {chatHistV: 3, ...db};
   const loads = [];
   const records = mails.map(m => ({box: 'INBOX', ...m}));
@@ -26,7 +26,7 @@ function harness({mails = [], details = {}, docs = [], preview = async () => ({f
     findMail: (box, uid) => records.find(m => String(m.uid) === String(uid)),
     loadMailDetail: async (m, allow) => { loads.push({uid: m.uid, allow}); return details[m.uid] || {error: 'none'}; },
     cmdKeywords: q => String(q || '').split(/\s+/).filter(t => t.length >= 2),
-    GW: {docPreview: preview, search},
+    GW: {docPreview: preview, search, ...(attachPages ? {mailAttachmentPages: attachPages} : {})},
   };
   vm.createContext(ctx);
   vm.runInContext(src + '\nthis.api={chatState,chatSend,chatClear,CHAT_TOOLS,cuFocus,cuSetFocus};', ctx);
@@ -110,4 +110,59 @@ test('대화 초점: 저장소에 식별자·제목만 남기고 새로 고침 �
   again.api.chatClear();
   assert.equal(again.store0.chatFocus, undefined);
   assert.equal(again.api.cuFocus(), null);
+});
+
+// ---------- v0.88.0 첨부 읽기 ----------
+const xmlOf = lines => '<?xml version="1.0"?><document><page w="793" h="1121">' + lines.map((ln, i) => [...ln].map((ch, j) => `<text l='${100 + j * 10}' t='${100 + i * 20}' w='9' h='${ch === ' ' ? 0 : ch === '.' ? 2 : 12}' >${ch.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</text>`).join('')).join('') + '</page></document>';
+
+test('cuSynapText: 줄 나눔·작은 글자(마침표)·엔티티를 되살린다', () => {
+  const x = xmlOf(['제목 자료 제출 요청', '1. 양식을 작성하여 회신 바랍니다.', 'A&B <안내>']);
+  assert.equal(CU.cuSynapText(x), '제목 자료 제출 요청\n1. 양식을 작성하여 회신 바랍니다.\nA&B <안내>');
+  assert.equal(CU.cuSynapText(''), '');
+});
+
+test('cuDocHighlights: 끊긴 줄을 잇고 머리말·인사말을 빼며 제목과 요청을 먼저 고른다', () => {
+  const t = ['저장 : 홍길동 / 가상과 (2026-11-18 13:21 : 15)', '문서관리카드가상과-1 1 /2', '제목 마을축제 홍보 협조', '1. 귀 기관의 무궁한 발전을 기원합니다.', '2. 마을축제를 아래와 같이 개최하오니 포스터 게시에', '협조하여 주시기 바랍니다.', '가. 일시: 2026. 12. 1.', '전화번호 ***-***-****'].join('\n');
+  const h = CU.cuDocHighlights(t);
+  assert.equal(h[0], '제목 마을축제 홍보 협조');
+  assert.equal(h[1], '2. 마을축제를 아래와 같이 개최하오니 포스터 게시에 협조하여 주시기 바랍니다.');
+  assert.ok(!h.some(x => /무궁한|저장|전화번호/.test(x)));
+});
+
+test('cuMaskBody: 날짜·시각은 남기고 띄어 쓴 이메일은 가린다', () => {
+  const m = CU.cuMaskBody('저장 (2026-11-18 13:21) 문의 gil dong r1999@korea. kr');
+  assert.match(m, /2026-11-18 13:21/);
+  assert.doesNotMatch(m, /r1999/);
+});
+
+test('첨부 읽기: 초점 메일의 문서 첨부만 읽고, 그림 첨부는 건너뛰며, 결과는 기록에 남기지 않는다', async () => {
+  const calls = [];
+  const h = harness({
+    mails: [{uid: 8, subject: '마을축제 홍보 요청', seen: true}],
+    details: {8: {subject: '마을축제 홍보 요청', account: 'a@b', text: '첨부 공문을 확인해 주세요.', files: [{name: '공문.pdf', ext: 'pdf', sn: '1'}, {name: '포스터.jpg', ext: 'jpg', sn: '2'}, {name: '계획.hwp', ext: 'hwp', sn: '3'}]}},
+    attachPages: async a => { calls.push(a.sn); return {total: 3, pages: [xmlOf(['제목 마을축제 홍보 협조', '포스터를 게시하여 주시기 바랍니다.'])]}; },
+  });
+  h.api.cuSetFocus({key: 'mail:8', title: '마을축제 홍보 요청', ref: {box: 'INBOX', uid: 8}});
+  const r = await h.api.CHAT_TOOLS.get('read_attachment').run({});
+  assert.equal(r.ok, true);
+  assert.deepEqual(calls, ['1', '3']);
+  const list = r.cards.filter(c => c.type === 'list');
+  assert.equal(list.length, 2);
+  assert.ok(list.every(c => c.sensitive === true));
+  assert.match(list[0].title, /3쪽 중 앞 1쪽/);
+  assert.equal(list[0].items[0].title, '제목 마을축제 홍보 협조');
+  // 파일 이름으로 하나만
+  calls.length = 0;
+  await h.api.CHAT_TOOLS.get('read_attachment').run({query: '계획'});
+  assert.deepEqual(calls, ['3']);
+});
+
+test('첨부 읽기: 안 읽은 메일은 확인 전에는 열지 않는다', async () => {
+  const calls = [];
+  const h = harness({mails: [{uid: 9, subject: '새 공문', seen: false}], details: {9: {subject: '새 공문', account: 'a@b', text: '본문', files: [{name: 'a.pdf', ext: 'pdf', sn: '1'}]}}, attachPages: async a => { calls.push(a.sn); return {total: 1, pages: [xmlOf(['내용'])]}; }});
+  h.api.cuSetFocus({key: 'mail:9', title: '새 공문', ref: {box: 'INBOX', uid: 9}});
+  const r = await h.api.CHAT_TOOLS.get('read_attachment').run({});
+  assert.equal(h.loads.length, 0);
+  assert.equal(calls.length, 0);
+  assert.ok(r.cards.some(c => c.type === 'confirm'));
 });

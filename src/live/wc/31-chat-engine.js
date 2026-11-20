@@ -9,9 +9,9 @@
   const CHAT_TOOLS = new Map();
   function chatRegisterTool(def) { if (def && def.name && typeof def.run === 'function') CHAT_TOOLS.set(def.name, def); }
   // 외부 AI에 보낼 수 있다고 검토된 도구별 요약만 허용한다. 원본 data, 제목, 식별자, URL은 보내지 않는다.
-  const CHAT_LLM_SUMMARY = new Set(['list_mail', 'list_approvals', 'list_notices', 'list_deadlines', 'get_capabilities', 'plan_priorities', 'read_mail', 'read_doc', 'digest_mail']);
+  const CHAT_LLM_SUMMARY = new Set(['list_mail', 'list_approvals', 'list_notices', 'list_deadlines', 'get_capabilities', 'plan_priorities', 'read_mail', 'read_doc', 'digest_mail', 'read_attachment']);
   // 로컬 규칙이 확실히 알아들은 이 도구들은 '정리·요약' 같은 말투 때문에 AI로 돌리지 않는다(v0.86.0: AI 경로가 같은 도구를 여러 번 부르고 답을 이어 붙이던 문제).
-  const CHAT_LOCAL_FIRST = new Set(['plan_priorities', 'read_mail', 'read_doc', 'digest_mail', 'list_deadlines', 'list_tasks', 'list_mail', 'list_approvals', 'get_weekly_summary', 'draft_mail_reply', 'get_leave_status', 'get_staff_status']);
+  const CHAT_LOCAL_FIRST = new Set(['plan_priorities', 'read_mail', 'read_doc', 'digest_mail', 'read_attachment', 'list_deadlines', 'list_tasks', 'list_mail', 'list_approvals', 'get_weekly_summary', 'draft_mail_reply', 'get_leave_status', 'get_staff_status']);
   const CHAT_COMPOSE = new Set(); // 검토되지 않은 원문·구조화 데이터는 정리에 보내지 않는다
   // 자동 실행(37번 조각)에서는 조회만 한다. 실행(act) 도구와 화면을 바꾸는 도구는 막는다.
   const CHAT_AUTO_BLOCK = new Set(['open_view', 'open_item', 'refresh_data']);
