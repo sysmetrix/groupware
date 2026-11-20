@@ -171,7 +171,7 @@ export function trimIndentLines(src) {
   return inTpl ? src : out.join('\n');
 }
 
-export const CHANGELOG_DETAIL = 12;
+export const CHANGELOG_DETAIL = 10;
 /**
  * 업데이트 내역 줄이기: 최근 CHANGELOG_DETAIL개 버전만 바뀐 점 목록을 싣고, 그보다 오래된 버전은 제목만 남긴다.
  * (전체 내역은 소스와 GitHub 릴리스에 있다. 89개 버전의 목록이 번들의 60KB를 차지했다.)
@@ -196,7 +196,9 @@ export function assemble({collector, css, parts, template, briefing: briefingSrc
   parts = parts.map(p => ({...p, src: trimIndentLines(stripCommentLines(p.src))}));
   const halves = template.split(PARTS_MARK);
   if (halves.length !== 2) throw new Error('work center parts were not assembled (workcenter.browser.js needs exactly one /*@WC_PARTS@*/ marker)');
-  const wcCss = css.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\n+/g, '\n').replace(/^[ \t]+/gm, '').replace(/;\s+/g, ';').replace(/\{\s+/g, '{').replace(/\s+\}/g, '}');
+  const wcCss = css.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\n+/g, '\n').replace(/^[ \t]+/gm, '').replace(/;\s+/g, ';').replace(/\{\s+/g, '{').replace(/\s+\}/g, '}')
+    // 규칙 사이 줄바꿈·마지막 세미콜론·쉼표/선택자 사이 공백은 뜻이 없다(문자열 안에 해당 문자가 없는지 하네스가 아니라 이 주석의 전제로 둔다: wc.css의 content 값에는 쉼표·콜론을 쓰지 않는다).
+    .replace(/\}\n/g, '}').replace(/;\}/g, '}').replace(/,\s+/g, ',').replace(/\s*>\s*/g, '>').replace(/\s*\{/g, '{').replace(/:\s+/g, ':');
   // The CSS marker is replaced once, in source order (template head, parts, template tail). JSON keeps it on one line.
   const wcSegs = [{label: 'workcenter.browser.js', text: halves[0]}, ...parts.map((p, i) => ({label: `wc/${p.file}`, text: p.src + (i < parts.length - 1 ? '\n' : '')})), {label: 'workcenter.browser.js', text: halves[1]}];
   const cssAt = wcSegs.findIndex(s => s.text.includes(CSS_MARK));

@@ -136,7 +136,8 @@
     const scroll = el.scrollTop;
     if (S.view === 'home' && typeof homePartialRefresh === 'function' && homePartialRefresh()) return; // 홈이 이미 그려져 있으면 입력창을 건드리지 않고 요약만 갱신
     const fn = {notifications: vNotifications, people: vPeople, docs: vDocs, home: vHome, today: vToday, overview: vOverview, approval: vApproval, mail: vMail, search: vSearch, board: vBoard, calendar: vCalendar, gcal: vGcal, gsync: vGsync, budget: vBudget, attendance: vAttendance, resource: vResource, report: vReport, settings: vSettings}[S.view] || vToday;
-    el.innerHTML = viewTabs() + fn();
+    el.innerHTML = fn();
+    { const vt = viewTabs(); if (vt) { const ph = el.querySelector(':scope > .pgh'); if (ph) ph.insertAdjacentHTML('afterend', vt); else el.insertAdjacentHTML('afterbegin', vt); } }
     el.scrollTop = scroll;
     if (S.view === 'notifications' && NTF.items === null && !NTF.loading && !NTF.error) { loadNotifications(); return; }
     if (S.view === 'report') { const f = $('#briefFrame'); if (f) f.srcdoc = R.renderHtml(S.a); }

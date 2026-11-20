@@ -36,11 +36,11 @@
     return {list: out};
   }
   function vGcal() {
-    if (!allowed('googleCalendar')) return pgh('구글 일정', '관리자 설정으로 꺼져 있습니다', '');
+    if (!allowed('googleCalendar')) return pgh('일정·예약', '관리자 설정으로 꺼져 있습니다', '');
     const c = gcalCfg();
     const setup = !c.email || S.gcalEdit;
     if (setup) {
-      return `${pgh('구글 일정', '')}
+      return `${pgh('일정·예약', '')}
       <div class="box" id="gcalSetup"><div style="display:flex;flex-direction:column;gap:10px;max-width:700px">
         <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)">내 구글 계정 이메일<input class="inp" id="gcalEmail" type="email" value="${esc(c.email || '')}" placeholder="예) name@gmail.com" style="height:36px"></label>
         <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)">캘린더 목록과 색 (한 줄에 하나: 캘린더ID 색상 이름)<textarea class="inp" id="gcalExtra" rows="9" style="font-family:inherit" placeholder="name@gmail.com #e7ba51 일상&#10;xxxx@group.calendar.google.com #489160 성장">${esc(gcalLines(c))}</textarea></label>
@@ -54,7 +54,7 @@
       <button class="btn sm primary" data-act="gcalNew">${ic('plus')}새 일정</button>
       <button class="btn sm" data-act="gcalOpen">구글 캘린더 열기</button>
       <button class="btn sm" data-act="gcalEdit">캘린더·색 설정</button>`;
-    return `${pgh('구글 일정', esc(c.email) + (list.length > 1 ? ` 외 ${list.length - 1}개` : ''), tools)}
+    return `${pgh('일정·예약', esc(c.email) + (list.length > 1 ? ` 외 ${list.length - 1}개` : ''), tools)}
       ${legend ? `<div class="muted" style="font-size:13px;margin:2px 0 8px">${legend}</div>` : ''}
       <iframe id="gcalFrame" title="구글 캘린더, Google 계정 로그인 필요" aria-describedby="gcalHelp" src="${esc(gcalUrl(c))}" referrerpolicy="no-referrer" style="width:100%;height:calc(100vh - 270px);min-height:520px;border:1px solid var(--line, #d0d5dd);border-radius:12px;background:#fff"></iframe>
       <div id="gcalHelp" class="muted" style="font-size:12px;margin-top:6px">일정이 안 보이고 로그인 화면이 나오면 "구글 캘린더 열기"로 로그인한 뒤 다시 들어오세요. <b>로그인했는데도 계속 안 보이면</b> 브라우저가 다른 사이트 쿠키를 막고 있는 것입니다. 주소창 왼쪽의 자물쇠(사이트 설정)에서 이 그룹웨어 주소에 "서드 파티 쿠키 허용"을 켜 주세요. 캘린더 등록은 그대로 남아 있습니다. 일정을 고치려면 "구글 캘린더 열기"를 누르세요.</div>`;
