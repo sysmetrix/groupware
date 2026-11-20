@@ -237,11 +237,11 @@
     case 'calDept': teamCfg().dept = el.dataset.v; renderMain(); break;
     case 'calOpts': S.cal.opts = !S.cal.opts; renderMain(); break;
     case 'calMine': { const cf = teamCfg(); cf.mine = !cf.mine; renderMain(); break; }
-    case 'calDay': { const cf = teamCfg(); cf.day = el.dataset.v === cf.day ? '' : el.dataset.v; renderMain(); break; }
+    case 'calDay': { const cf = teamCfg(), d8 = el.dataset.v || ''; cf.day = d8 === cf.day ? '' : d8; if (cf.day) { const n = new Date(); S.cal.offset = (Number(d8.slice(0, 4)) - n.getFullYear()) * 12 + Number(d8.slice(4, 6)) - 1 - n.getMonth(); } renderMain(); if (cf.day) { const p = $('.cal-day'); if (p && p.scrollIntoView) p.scrollIntoView({block: 'nearest'}); } break; }
     case 'calTeamReload': delete (S.team || {})[monthKey()]; renderMain(); break;
-    case 'calPrev': S.cal.offset--; renderMain(); break;
-      case 'calNext': S.cal.offset++; renderMain(); break;
-      case 'calToday': S.cal.offset = 0; renderMain(); break;
+    case 'calPrev': S.cal.offset--; teamCfg().day = ''; renderMain(); break;
+      case 'calNext': S.cal.offset++; teamCfg().day = ''; renderMain(); break;
+      case 'calToday': S.cal.offset = 0; teamCfg().day = ''; renderMain(); break;
       case 'calItem': if (el.dataset.k && S.a.actions.some(x => x.key === el.dataset.k)) { if (go('today')) selectAction(el.dataset.k); } else if (el.dataset.url) openUrl(el.dataset.url, {title: el.textContent.trim()}); break;
       case 'goBudgetPick': S.budget.pickOpen = true; go('budget'); break;
       case 'bTogglePick': S.budget.pickOpen = !S.budget.pickOpen; renderMain(); break;

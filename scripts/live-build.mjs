@@ -17,7 +17,7 @@ import {minifySafely, TERSER_VERSION} from './terser-minify.mjs';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const DEFAULT_OUT_DIR = path.join(ROOT, 'build', 'live');
-export const MAX_SHIPPED_BUNDLE_BYTES = 1060 * 1024;
+export const MAX_SHIPPED_BUNDLE_BYTES = 1070 * 1024;
 export const EXTRA_MODULES = ['home-model.mjs', 'chat.mjs', 'gcal-sync.mjs', 'settings-transfer.mjs', 'doc-find.mjs', 'usage.mjs', 'contract.mjs', 'changelog.mjs'];
 const PARTS_MARK = '  /*@WC_PARTS@*/';
 const CSS_MARK = "'/*@WC_CSS@*/'";
@@ -336,7 +336,7 @@ export async function build({outDir = DEFAULT_OUT_DIR, copyTo = null, root = ROO
   // Retain a stable banner for existing bundle inspectors; all executable code is Terser-minified below.
   const bundle = `/*! BWYF groupware live bundle v${version} compatibility: window.BWYFGW = */\n${await minifySafely(assembledBundle)}`;
   const shippedBytes = Buffer.byteLength(bundle, 'utf8');
-  if (shippedBytes > MAX_SHIPPED_BUNDLE_BYTES) throw new Error(`배포 번들 ${shippedBytes} bytes > 예산 ${MAX_SHIPPED_BUNDLE_BYTES} bytes (1060KB)`);
+  if (shippedBytes > MAX_SHIPPED_BUNDLE_BYTES) throw new Error(`배포 번들 ${shippedBytes} bytes > 예산 ${MAX_SHIPPED_BUNDLE_BYTES} bytes (${MAX_SHIPPED_BUNDLE_BYTES / 1024}KB)`);
   const minifiedSyntax = syntaxError(bundle, 'gw-live.js');
   if (minifiedSyntax) throw new Error(`최소화 번들 문법 오류: ${minifiedSyntax.message}`);
   const extDir = path.join(outDir, 'extension');
