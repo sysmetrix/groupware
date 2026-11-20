@@ -129,6 +129,18 @@ export function chatScheduleSubject(text) {
     .filter(w => w && /[가-힣A-Za-z]{2,}/.test(w) && !DATE.test(w) && !GEN.test(w)).join(' ');
 }
 /**
+ * 메일 첨부파일의 내용을 묻는 말이면 {query}(파일 이름 낱말), 아니면 null(v0.88.0). 받기·저장·붙이기 요청은 제외.
+ */
+export function chatReadAttachIntent(text) {
+  const t = String(text ?? '').replace(/\s+/g, ' ').trim();
+  if (!/첨부|붙임/.test(t) || !(CH_READ_RE.test(t) || /(읽어|열어\s*보고|뭐가\s*있|뭐\s*들었|확인해)/.test(t))) return null;
+  if (/(받아|다운|내려|저장|보내|붙여|올려|첨부해|첨부\s*(?:있는|온)\s*메일)/.test(t)) return null;
+  const q = t.replace(new RegExp(CH_READ_RE.source, 'g'), ' ')
+    .replace(/(첨부\s*파일|첨부|붙임|파일|문서|메일|그거|그것|이거|그\s*메일|이\s*메일|해당|관련|에서|에|의|안|속|읽어\s*줘|읽어|확인해\s*줘|확인|해\s*줘|해줘|줘|좀|알려|내용|뭐가|뭐|있어|들었어|[?？!.,])/g, ' ')
+    .replace(/(?<=[가-힣A-Za-z0-9)\]])(?:은|는|이|가|을|를|의|만)(?=\s|$)/g, ' ').replace(/(?:^|\s)(?:돼|되|될|할|해|요|야|만)(?=\s|$)/g, ' ').replace(/\s+/g, ' ').trim();
+  return {query: q.length >= 2 ? q.slice(0, 60) : ''};
+}
+/**
  * 결재문서·공문의 내용을 묻는 말이면 {query}(제목 낱말), 아니면 null. 메일 이야기는 chatReadMailIntent가 맡는다.
  * 검색·목록·작성 요청("공문 찾아줘", "공문 뭐 왔어", "결과보고 써줘")은 다른 도구가 맡는다.
  */
@@ -181,6 +193,7 @@ export function chatIntent(text, now = new Date()) {
   // 비서가 하지 않는 일(상신·결재 승인·반려·삭제)을 시키는 말은 목록 조회로 바꿔 답하지 않는다. AI나 안내에 맡긴다.
   if (chatNotDoing(t)) return none;
   // 특정 메일의 내용·요청을 묻는 말은 목록이 아니라 본문 읽기(v0.86.0)
+  { const ra = chatReadAttachIntent(t); if (ra) return make('read_attachment', ra.query ? {query: ra.query} : {}); }
   { const rd = chatReadDocIntent(t); if (rd) return make('read_doc', {...(rd.query ? {query: rd.query} : {}), ...(rd.scope ? {scope: rd.scope} : {})}); }
   { const rm = chatReadMailIntent(t); if (rm) return rm.digest ? make('digest_mail', {filter: rm.digest}) : make('read_mail', rm.query ? {query: rm.query} : {}); }
   // 보낸메일함 답장 여부 확인

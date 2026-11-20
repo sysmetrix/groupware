@@ -127,6 +127,10 @@
     {"id": "u19", "cat": "이해", "q": "부서 참고 공문 무슨 내용이야?", "tool": "read_doc", "args": {"scope": "ref"}},
     {"id": "u20", "cat": "이해", "q": "2번 문서 요약해줘", "tool": "read_doc", "args": {"index": 2}},
     {"id": "u21", "cat": "이해", "q": "공문 뭐 왔어?", "tool": "list_reference", "notTool": ["read_doc"]},
-    {"id": "u23", "cat": "이해", "q": "내일 일정 확인하고 준비할 거 알려줘", "tool": "get_schedule"}
+    {"id": "u23", "cat": "이해", "q": "내일 일정 확인하고 준비할 거 알려줘", "tool": "get_schedule"},
+    {"id": "u24", "cat": "이해", "q": "그 메일 첨부 내용 정리해줘", "tool": "read_attachment", "why": "첨부(한글·PDF) 글자 읽기(v0.88.0)"},
+    {"id": "u25", "cat": "이해", "q": "홍보요청 pdf 첨부 뭐래?", "tool": "read_attachment"},
+    {"id": "u26", "cat": "이해", "q": "첨부 받아줘", "tool": "", "notTool": ["read_attachment"]},
+    {"id": "u27", "cat": "이해", "q": "첨부 있는 메일 보여줘", "tool": "list_mail", "notTool": ["read_attachment"]}
   ]
 }
