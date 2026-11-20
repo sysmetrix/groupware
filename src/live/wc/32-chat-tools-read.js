@@ -146,7 +146,7 @@
   chatRegisterTool({
     name: 'get_staff_status', label: '직원 근태 확인', kind: 'read',
     description: '직원의 휴가·출장·교육 일정(시간, 장소, 사유 포함). name을 주면 그 직원의 앞으로 일정을, 안 주면 같은 부서의 해당 날짜 부재 현황을 돌려준다. 시간외 근무·지문은 다루지 않는다.',
-    params: {type: 'object', properties: {name: {type: 'string'}, date: {type: 'string'}, days: {type: 'number'}}},
+    params: {type: 'object', properties: {name: {type: 'string'}, date: {type: 'string'}, days: {type: 'number'}, kind: {type: 'string', enum: ['trip', 'leave', 'edu'], description: '출장·휴가·교육만'}}},
     run: async (a, ctx) => {
       if (!S.a || !S.raw) return chatNotReady();
       const maskExtNames = !!(ctx && ctx.viaAi && !(typeof POLICY !== 'undefined' && POLICY.aiEndpoint));
@@ -170,9 +170,11 @@
           hits.push({iso, name: x.name, dept: x.dept, kind: x.kind === 'leave' ? '휴가' : x.kind === 'trip' ? '출장·교육' : '', label: x.label, time: x.time || '', place: x.place || '', reason: x.reason || '', pending: !!(x.info && x.info.pending)});
         }
       }
+      const KW = {trip: /출장|외근/, leave: /휴가|연차|반차|보상|대체|병가|공가|경조/, edu: /교육|연수|훈련/}[a.kind], kName = {trip: '출장', leave: '휴가', edu: '교육'}[a.kind] || '';
+      if (KW) for (let i = hits.length - 1; i >= 0; i--) if (!KW.test(hits[i].label)) hits.splice(i, 1);
       const span = nn === 1 ? chatMd(d0) : `${chatMd(d0)}~${chatMd(isos[isos.length - 1])}`;
       const short = (x, n) => { x = String(x || ''); return x.length > n ? x.slice(0, n - 1) + '…' : x; };
-      if (!hits.length) return {ok: true, text: name ? `${span} 사이에 “${name}” 님의 휴가·출장·교육 일정이 없습니다.` : `${span}에 ${dept || '우리 부서'}에서 휴가·출장·교육으로 자리를 비우는 직원이 없습니다.`, data: {count: 0}};
+      if (!hits.length) return {ok: true, text: name ? `${span} 사이에 “${name}” 님의 휴가·출장·교육 일정이 없습니다.` : `${span}에 ${dept || '우리 부서'}에서 ${kName ? kName + ' 일정이 있는' : '휴가·출장·교육으로 자리를 비우는'} 직원이 없습니다.`, data: {count: 0}};
       if (name) {
         const first = hits[0];
         const head = hits.length === 1 ? `${name} 님은 ${chatMd(first.iso)} ${first.label}${first.time ? ' ' + first.time : ''}${first.place ? ', ' + short(first.place, 30) : ''} 일정이 있습니다.` : `${name} 님의 일정은 ${hits.length}건이고, 가장 가까운 것은 ${chatMd(first.iso)} ${first.label}${first.time ? ' ' + first.time : ''}입니다.`;
@@ -185,7 +187,7 @@
       const groups = new Map();
       for (const h of hits) { const k = [h.iso, h.kind, h.label, h.time, h.place, h.reason].join('|'); const g = groups.get(k) || {...h, names: []}; g.names.push(h.name); groups.set(k, g); }
       const gl = [...groups.values()], multiDay = nn > 1;
-      const head = `${span} ${dept || '우리 부서'} 자리 비움은 ${new Set(hits.map(h => h.name)).size}명, ${gl.length}개 일정입니다.`;
+      const head = `${span} ${dept || '우리 부서'} ${kName ? kName + (kName === '휴가' ? '는' : '은') : '자리 비움은'} ${new Set(hits.map(h => h.name)).size}명, ${gl.length}개 일정입니다.`;
       const line = g => `${g.names.join('·')} — ${multiDay ? chatMd(g.iso) + ' ' : ''}${g.label}${g.time ? ' ' + g.time : ''}${g.place ? ' · ' + short(g.place, 24) : ''}`;
       const pMap = new Map();
       const alias = nm => { if (!maskExtNames) return nm; if (!pMap.has(nm)) pMap.set(nm, `직원${pMap.size + 1}`); return pMap.get(nm); };

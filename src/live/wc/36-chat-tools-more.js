@@ -78,7 +78,7 @@
       if (a.important) list = list.filter(m => !R.isNoiseMail(m) && (acts.has(String(m.uid)) || !m.seen || /요청|협조|제출|회신|긴급|마감|기한|검토|조사|확인\s*바랍/.test(m.subject || '')));
       if (who) list = list.filter(m => String(m.from || '').replace(/\s+/g, '').includes(who) || String(m.fromEmail || '').includes(who));
       list.sort((x, y) => String(y.date || '').localeCompare(String(x.date || '')));
-      const label = (dd ? `${chatMd(dd)}에 받은 ` : '') + (a.important ? '챙길 만한 메일' : dd ? '메일' : {unread: '안 읽은 메일', today: '오늘 받은 메일', attach: '첨부가 있는 메일', recent: '최근 받은 메일'}[filter]);
+      const label = (dd ? `${chatMd(dd)}에 받은 ` : '') + (a.important ? '챙길 만한 메일' : {unread: '안 읽은 메일', today: '오늘 받은 메일', attach: '첨부가 있는 메일', recent: dd ? '메일' : '최근 받은 메일'}[filter]);
       const scope = `받은편지함 최근 ${md.inbox.fetched}통${filter === 'unread' ? '과 다른 편지함의 안 읽은 메일' : ''} 안에서 확인했습니다.${filter === 'unread' && Number.isFinite(Number(md.inbox.unseen)) ? ` 받은편지함 전체의 안 읽음은 ${md.inbox.unseen}통으로 집계됩니다.` : ''}`;
       if (a.important) list.sort((x, y) => (acts.has(String(y.uid)) - acts.has(String(x.uid))) || (!y.seen - !x.seen));
       const why = a.important ? `\n${dd ? `그날 받은 ${all0}통 가운데 ` : ''}요청·회신 요구 제목이거나, 할 일로 잡혔거나, 안 읽은 메일입니다(광고성 제외).` : '';

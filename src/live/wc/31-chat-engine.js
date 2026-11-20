@@ -11,7 +11,7 @@
   // 외부 AI에 보낼 수 있다고 검토된 도구별 요약만 허용한다. 원본 data, 제목, 식별자, URL은 보내지 않는다.
   const CHAT_LLM_SUMMARY = new Set(['list_mail', 'list_approvals', 'list_notices', 'list_deadlines', 'get_capabilities', 'plan_priorities', 'read_mail', 'read_doc', 'digest_mail', 'read_attachment', 'check_risks', 'write_text']);
   // 로컬 규칙이 확실히 알아들은 이 도구들은 '정리·요약' 같은 말투 때문에 AI로 돌리지 않는다(v0.86.0: AI 경로가 같은 도구를 여러 번 부르고 답을 이어 붙이던 문제).
-  const CHAT_LOCAL_FIRST = new Set(['write_text', 'plan_priorities', 'read_mail', 'read_doc', 'digest_mail', 'read_attachment', 'check_risks', 'list_my_requests', 'get_budget', 'list_deadlines', 'list_tasks', 'list_mail', 'list_approvals', 'get_weekly_summary', 'draft_mail_reply', 'get_leave_status', 'get_staff_status']);
+  const CHAT_LOCAL_FIRST = new Set(['multi_read', 'write_text', 'plan_priorities', 'read_mail', 'read_doc', 'digest_mail', 'read_attachment', 'check_risks', 'list_my_requests', 'get_budget', 'list_deadlines', 'list_tasks', 'list_mail', 'list_approvals', 'get_weekly_summary', 'draft_mail_reply', 'get_leave_status', 'get_staff_status']);
   const CHAT_COMPOSE = new Set(); // 검토되지 않은 원문·구조화 데이터는 정리에 보내지 않는다
   // 자동 실행(37번 조각)에서는 조회만 한다. 실행(act) 도구와 화면을 바꾸는 도구는 막는다.
   const CHAT_AUTO_BLOCK = new Set(['open_view', 'open_item', 'refresh_data']);
@@ -346,6 +346,8 @@
       // v0.96.0 대화 이어가기: 고쳐 말하기("아니 두 번째 거") → 방금 도구를 그 순번으로, 말투만 바꾸기("더 짧게") → 직전 답의 첫 문장, "그날" → 앞 날짜
       { const ci = typeof R.chatCorrectIndex === 'function' ? R.chatCorrectIndex(text) : 0, la = st.ctx.lastIndexed;
         if (ci && la && Date.now() - la.at < 30 * 60000 && CHAT_TOOLS.has(la.tool)) it = {tool: la.tool, args: {...la.args, index: ci}, confidence: 1}; }
+      { const rf = typeof R.chatRefine === 'function' ? R.chatRefine(text) : null, ll = st.ctx.lastList; // v0.99.0 "그중에 안 읽은 거만"
+        if (rf && ll && Date.now() - ll.at < 30 * 60000 && ((ll.tool === 'list_mail' && (rf.filter || rf.important)) || (ll.tool === 'get_staff_status' && rf.kind) || (ll.tool === 'list_approvals' && rf.status))) it = {tool: ll.tool, args: {...ll.args, ...rf}, confidence: 1}; }
       if (!it.tool && typeof R.chatStyleOnly === 'function' && R.chatStyleOnly(text)) {
         const prev = [...st.msgs].reverse().find(m => m.role === 'ai' && m !== ai && m.text && m.state === 'done');
         const first = prev ? String(prev.text).replace(/\s+/g, ' ').split(/(?<=[.!?。])\s+|\s\/\s/)[0] : '';
@@ -376,7 +378,7 @@
       }
       // 기능 안내를 문장으로 요청한 경우에는 버튼 목록을 재출력하지 않는다. AI 연결 없이도 형식을 지킨다.
       const proseCaps = it.tool === 'get_capabilities' && /(?:문장|서술)(?:으로|형태|식)?/.test(text);
-      const localSure = !!fx || (CHAT_LOCAL_FIRST.has(it.tool) && it.confidence >= 1 && ((it.args && it.args.compare) || !/(?:그리고|그다음|동시에|함께|각각|비교|차이|이유|왜|설명|자세히|서술|문장으로|표로)/.test(text)) && !/(?:방금|직전|앞서|위에)\s*(?:답|말|내용)?/.test(text));
+      const localSure = !!fx || (CHAT_LOCAL_FIRST.has(it.tool) && it.confidence >= 1 && ((it.args && it.args.compare) || it.tool === 'multi_read' || !/(?:그리고|그다음|동시에|함께|각각|비교|차이|이유|왜|설명|자세히|서술|문장으로|표로)/.test(text)) && !/(?:방금|직전|앞서|위에)\s*(?:답|말|내용)?/.test(text));
       const preferAi = ready && it.tool !== 'get_leave_status' && !auto && !weekday && !proseCaps && !localSure && !(st.ctx && st.ctx.pendingSlot) && R.chatPreferGemini(text);
       const known = !preferAi && it.tool && it.confidence >= (ready ? 0.9 : 0.6) && CHAT_TOOLS.has(it.tool);
       if (known) {
@@ -385,6 +387,7 @@
         st.ctx.lastRead = res.ok && ['get_schedule', 'get_staff_status', 'get_resource_status'].includes(it.tool) ? {tool: it.tool, args: it.args} : null;
         // 순번으로 고른 도구는 고쳐 말하기에 쓰려고 기억한다(메모리에만)
         if (it.args && it.args.index && ['read_mail', 'read_doc', 'open_item', 'draft_mail_reply', 'check_sent_reply'].includes(it.tool)) st.ctx.lastIndexed = {tool: it.tool, args: {...it.args}, at: Date.now()};
+        if (res.ok && ['list_mail', 'get_staff_status', 'list_approvals'].includes(it.tool)) st.ctx.lastList = {tool: it.tool, args: {...it.args}, at: Date.now()};
         if (S.chat !== st || st.stopped || st.seq !== runSeq) { ai.text = ai.text || '중지했습니다.'; }
         else {
           if (proseCaps && res.ok) { ai.cards = []; ai.text = res.text || res.llm || ''; }

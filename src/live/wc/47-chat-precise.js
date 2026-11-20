@@ -47,3 +47,27 @@
     const n = cuFiles(det);
     return {...r, text: n.length ? `첨부는 ${n.length}개입니다.\n${n.map((x, i) => `${i + 1}. ${x}`).join('\n')}\n“그 메일 첨부 내용 정리해줘”라고 하면 내용까지 읽습니다.` : `“${cuCut(f.title, 40)}” 메일에는 첨부가 없습니다.`, cards: []};
   }; } }
+
+  // v0.99.0: 두세 가지 조회를 한 번에("내일 일정이랑 할 일 같이")
+  chatRegisterTool({
+    name: 'multi_read', label: '여러 가지 함께 확인', kind: 'read',
+    description: '서로 다른 조회 2~3개를 차례로 실행해 한 답으로 묶는다. steps: [{tool, args}] — 조회 도구만.',
+    params: {type: 'object', properties: {steps: {type: 'array', items: {type: 'object'}}}, required: ['steps']},
+    run: async (a, ctx) => {
+      const steps = (Array.isArray(a.steps) ? a.steps : []).filter(x => x && CHAT_TOOLS.has(x.tool) && CHAT_TOOLS.get(x.tool).kind === 'read' && x.tool !== 'multi_read').slice(0, 3);
+      if (!steps.length) return {ok: false, text: '함께 확인할 조회를 알아보지 못했습니다. 하나씩 말씀해 주세요.'};
+      const out = [];
+      for (const x of steps) out.push({def: CHAT_TOOLS.get(x.tool), r: await chatRunTool(x.tool, x.args || {}, ctx) || {ok: false, text: '확인하지 못했습니다.'}});
+      return {ok: out.some(o => o.r.ok), text: out.map(o => `【${o.def.label}】\n${o.r.text || ''}`).join('\n\n'), llm: out.map(o => `[${o.def.label}] ${o.r.llm || o.r.text || ''}`).join(' '), data: {count: out.length}, cards: out.flatMap(o => (o.r.cards || []).filter(c => c.type !== 'confirm')).slice(0, 6)};
+    },
+  });
+
+  // v0.99.0: "오후에 뭐 있어?" → 그날 일정 가운데 오전(12시 전)·오후만
+  { const def = CHAT_TOOLS.get('get_schedule'); if (def) { const run0 = def.run; def.params.properties.part = {type: 'string', enum: ['am', 'pm']}; def.run = async (a, ctx) => {
+    const r = await run0(a, ctx);
+    if (!r || !r.ok || !['am', 'pm'].includes(a.part) || !r.data) return r;
+    const day = (r.data.days || [])[0], all = day ? day.items : [], pm = a.part === 'pm', nm = pm ? '오후' : '오전';
+    const its = all.filter(i => { const h = /^(\d{1,2}):/.exec(i.time || ''); return !h || (pm ? +h[1] >= 12 : +h[1] < 12); });
+    const lbl = chatMd(/^\d{4}-\d{2}-\d{2}$/.test(a.date || '') ? a.date : today());
+    return {...r, text: its.length ? `${lbl} ${nm} 일정은 ${its.length}건입니다(시간이 없는 일정 포함).\n${its.slice(0, 8).map(i => '• ' + (i.time ? i.time + ' ' : '') + i.label).join('\n')}` : `${lbl} ${nm}에는 일정이 없습니다.${all.length ? ` 그날 다른 시간대 일정은 ${all.length}건입니다.` : ''}`, cards: (r.cards || []).filter(c => c.type === 'nav')};
+  }; } }

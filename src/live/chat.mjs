@@ -14,8 +14,17 @@ const CH_DOW_NAME = '일월화수목금토';
 export const chatDowName = iso => CH_DOW_NAME[new Date(iso + 'T00:00:00Z').getUTCDay()];
 
 /** 한국어 날짜 표현 → {date:'YYYY-MM-DD', end?:'YYYY-MM-DD', label}. 못 알아보면 null. */
+/** v0.99.0: 줄임말·구어를 표준 낱말로("낼"→내일, "담주"→다음 주, "어케"→어떻게, "머야"→뭐야). 날짜·의도 해석 앞에서 쓴다. */
+export function chatNormalize(text) {
+  return String(text ?? '').replace(/\s+/g, ' ').trim()
+    .replace(/낼\s*모레/g, '모레').replace(/(?<![가-힣])낼(?=\s|$|은|도|까지|부터|이랑|하고|[?!.])/g, '내일')
+    .replace(/(?<![가-힣])담(?=\s*(?:주|달))/g, '다음').replace(/(?<![가-힣])(이번|다음|지난|다다음|저번)(주|달)(?![가-힣])/g, '$1 $2').replace(/(?<![가-힣])(이번|다음|지난|다다음|저번)(주|달)(?=[에은는도의까부])/g, '$1 $2').replace(/저번 (주|달)/g, '지난 $1')
+    .replace(/어케|어캐/g, '어떻게').replace(/(?<![가-힣])(머|모)(?=야|임|있|\s*있|지|냐)/g, '뭐').replace(/(?<![가-힣])젤(?=\s|[가-힣])/g, '제일')
+    .replace(/누구\s*누구/g, '누구').replace(/언제\s*언제/g, '언제').replace(/휴가자/g, '휴가 간 사람').replace(/출장자/g, '출장 가는 사람');
+}
+
 export function chatParseDate(text, now = new Date()) {
-  const t = String(text ?? '').replace(/\s+/g, ' ').trim();
+  const t = chatNormalize(text);
   if (!t) return null;
   const k = chKst(now), base = chUtc(k.y, k.m, k.d);
   const at = (ms, label, end) => ({date: chIso(ms), ...(end ? {end: chIso(end)} : {}), label});
@@ -169,8 +178,8 @@ export function chatExtractPerson(text) {
 const CH_VIEWS = [[/결재|문서유통/, 'approval'], [/메일/, 'mail'], [/검색/, 'search'], [/보드/, 'board'], [/구글/, 'gcal'], [/캘린더|달력/, 'calendar'], [/예산/, 'budget'], [/근태|연차/, 'attendance'], [/자원|차량|예약/, 'resource'], [/차트|현황/, 'overview'], [/보고서/, 'report'], [/설정/, 'settings'], [/할 ?일 ?목록|오늘 할 일/, 'today'], [/홈/, 'home']];
 const chHas = (t, re) => re.test(t);
 /** 문장 → {tool, args, confidence}. 못 알아보면 {tool:'', args:{}, confidence:0}. */
-export function chatIntent(text, now = new Date()) {
-  const t = String(text ?? '').replace(/\s+/g, ' ').trim();
+export function chatIntent(text, now = new Date(), _nested = false) {
+  const t = chatNormalize(text);
   const none = {tool: '', args: {}, confidence: 0};
   if (!t) return none;
   const dt = chatParseDate(t, now), rg = chatParseRange(t);
@@ -199,8 +208,15 @@ export function chatIntent(text, now = new Date()) {
   if (/(공유|전달|알리|안내)\S*\s*(?:하는|할|하기|용)?\s*(?:메일|문구|글|공지)/.test(t) && /(써|작성|만들|보내|초안)/.test(t) && !/(답장|회신)/.test(t)) return make('write_text', {kind: 'share'});
   // v0.98.0: 묻는 것에 정확히 — 휴가 가능 여부, 부서 부재, 반려 문서, 날짜·중요 메일, 첨부 이름
   if (/(반반차|반차|연차|휴가)/.test(t) && /(써도|쓸\s*수|내도|가능|괜찮|될까|되나|돼\??$|되겠)/.test(t) && !/(남았|며칠|몇\s*일|잔여)/.test(t)) return make('check_leave_day', {date: dt ? dt.date : '', amount: /반반차/.test(t) ? 'quarter' : /반차/.test(t) ? 'half' : 'full'});
-  if (/(누구|누가|몇\s*명)/.test(t) && /(없|안\s*나|자리|휴가|출장|외근|부재|빠지)/.test(t) && /(부서|팀|우리|실|직원|사람)/.test(t)) return make('get_staff_status', {date: dt ? dt.date : chIso(chUtc(chKst(now).y, chKst(now).m, chKst(now).d)), days: 1});
+  if (/(누구|누가|몇\s*명)/.test(t) && /(없|안\s*나|자리|휴가|출장|교육|외근|부재|빠지)/.test(t) && (/(부서|팀|우리|실|직원|사람)/.test(t) || /(휴가|출장|교육|외근)/.test(t))) {
+    const d0 = dt ? dt.date : chIso(chUtc(chKst(now).y, chKst(now).m, chKst(now).d)), days = dt && dt.end ? Math.round((Date.parse(dt.end) - Date.parse(dt.date)) / 864e5) + 1 : 1;
+    const kind = /출장|외근/.test(t) ? 'trip' : /교육|연수/.test(t) ? 'edu' : /휴가|연차|반차/.test(t) && !/(없|자리|부재)/.test(t) ? 'leave' : '';
+    return make('get_staff_status', {date: d0, days, ...(kind ? {kind} : {})});
+  }
+  if (/(오전|오후|아침|저녁)\s*(?:에|엔|에는)?\s*(?:뭐|무슨|일정|있|할)/.test(t) && !/(신청|등록|예약|반차|외출)/.test(t)) return make('get_schedule', {date: dt ? dt.date : chIso(chUtc(chKst(now).y, chKst(now).m, chKst(now).d)), days: 1, part: /오전|아침/.test(t) ? 'am' : 'pm'});
+  if (!_nested) { const cp = chatCompound(t, now); if (cp) return make('multi_read', {steps: cp}); }
   if (/반려/.test(t) && /(내가|내\s|올린|상신|기안|문서|결재)/.test(t)) return make('list_approvals', {queue: 'submitted', status: '반려'});
+  if (/(올린|상신한|기안한|올려\s*둔)\s*(?:거|것|문서|결재|기안)?/.test(t) && /(결재|문서|기안|상신)/.test(t) && /(어떻게|됐|되었|진행|상태|어디까지|결과)/.test(t)) return make('list_approvals', {queue: 'submitted'});
   if (/메일/.test(t) && dt && !dt.end && (dt.label !== '오늘' || /(중요|급한|챙겨|봐야|꼭|놓친)/.test(t)) && /(온|받은|들어온|왔)/.test(t) && !/(답장|회신\s*써|요약|내용|정리)/.test(t)) return make('list_mail', {filter: 'recent', date: dt.date, ...(/(중요|급한|챙겨|봐야|꼭|놓친)/.test(t) ? {important: true} : {})});
   if (/첨부/.test(t) && /(이름|목록|파일명|뭐야|뭐\s*있|뭔지|몇\s*개)/.test(t) && !/(내용|정리|요약|읽어)/.test(t)) { const q = t.replace(/(메일|첨부\s*파일|첨부|파일명|이름|목록|뭐야|뭐|있어|뭔지|몇\s*개|알려\s*줘|이|가|은|는|의|[?.!])/g, ' ').replace(/\s+/g, ' ').trim(); if (q.length >= 2) return make('read_mail', {query: q, files: true}); }
   { const ra = chatReadAttachIntent(t); if (ra) return make('read_attachment', ra.query ? {query: ra.query} : {}); }
@@ -549,4 +565,38 @@ export function chatStyleOnly(text) {
 }
 /** "그날", "그때", "당일"처럼 앞에서 말한 날짜를 가리키는지. */
 export function chatRefersDay(text) { return /(그날|그\s+날|그때|그\s+때|당일|같은\s*날)/.test(String(text ?? '')); }
+
+// ---------- v0.99.0: 두 가지를 한 번에, 이어서 거르기 ----------
+const CH_MULTI_OK = new Set(['get_schedule', 'list_tasks', 'list_mail', 'get_staff_status', 'list_approvals', 'get_leave_status', 'list_notices', 'list_deadlines', 'get_work_hours', 'list_my_requests']);
+/** "내일 일정이랑 할 일 같이 알려줘" → [{tool:'get_schedule',...},{tool:'list_tasks',...}]. 서로 다른 조회 두세 개일 때만. */
+export function chatCompound(text, now = new Date()) {
+  const t = chatNormalize(text);
+  if (!/(이랑|랑|하고|그리고|및|,|와 |과 )/.test(t) || /(신청|보내|예약|삭제|등록|써\s*줘|작성|답장|결재해|비교|차이)/.test(t)) return null;
+  const tail = (t.match(/\s*(?:같이|함께|모두|다|둘\s*다)?\s*(?:알려\s*줘|보여\s*줘|정리해\s*줘|확인해\s*줘|있어|뭐야)?[?.!\s]*$/) || [''])[0];
+  const body = t.slice(0, t.length - tail.length);
+  const parts = body.split(/\s*(?:이랑|(?<=[가-힣])랑|하고|그리고|및|,|(?<=[가-힣])와\s|(?<=[가-힣])과\s)\s*/).map(x => x.trim()).filter(x => x.length >= 2);
+  if (parts.length < 2 || parts.length > 3) return null;
+  const d0 = chatParseDate(parts[0], now), steps = [];
+  for (const p of parts) {
+    const q = (!chatParseDate(p, now) && d0 && !/(할\s*일|메일|결재|공지|연차)/.test(p) ? d0.label + ' ' : '') + p + ' 알려줘';
+    const it = chatIntent(q, now, true);
+    if (!it.tool || it.confidence < 1 || !CH_MULTI_OK.has(it.tool)) return null;
+    steps.push({tool: it.tool, args: it.args});
+  }
+  return new Set(steps.map(x => x.tool + JSON.stringify(x.args))).size === steps.length && new Set(steps.map(x => x.tool)).size >= 2 ? steps : null;
+}
+
+/** "그중에 안 읽은 거만", "거기서 첨부 있는 거" → 직전 목록 조건에 더할 것. 앞말이 없으면 null. */
+export function chatRefine(text) {
+  const t = chatNormalize(text);
+  if (!/^(?:그\s*중|그\s*가운데|거기서|여기서|이\s*중|그것\s*중|그\s*목록에서)/.test(t) || t.length > 30) return null;
+  if (/안\s*읽/.test(t)) return {filter: 'unread'};
+  if (/첨부/.test(t)) return {filter: 'attach'};
+  if (/(중요|급한|챙길|봐야)/.test(t)) return {important: true};
+  if (/출장|외근/.test(t)) return {kind: 'trip'};
+  if (/휴가|연차|반차/.test(t)) return {kind: 'leave'};
+  if (/교육|연수/.test(t)) return {kind: 'edu'};
+  if (/반려/.test(t)) return {status: '반려'};
+  return null;
+}
 
