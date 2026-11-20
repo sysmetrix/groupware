@@ -306,7 +306,7 @@
   });
 
   chatRegisterTool({
-    name: 'get_resource_status', label: '차량 예약 현황', kind: 'read',
+    name: 'get_resource_status', label: '자원 예약 현황', kind: 'read',
     description: '공용차량(자원)의 해당 날짜 예약 현황과 09~18시 빈 시간.',
     params: {type: 'object', properties: {date: {type: 'string'}, kind: {type: 'string', enum: ['car', 'room', 'led']}}},
     run: async a => {
