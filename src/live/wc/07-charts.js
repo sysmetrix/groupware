@@ -2,7 +2,7 @@
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
   // ----- 현황 (charts moved off the home screen) -----
   function vOverview() {
-    return `${pgh('현황', '')}<div class="cards">${chartFlow()}${chartDeadlines()}${chartBudget()}${chartAttendance()}${chartTrend()}</div>`;
+    return `${pgh('보고·현황', '')}<div class="cards">${chartFlow()}${chartDeadlines()}${chartBudget()}${chartAttendance()}${chartTrend()}</div>`;
   }
 
   // All interactive SVG marks have an equivalent native button in a data table.

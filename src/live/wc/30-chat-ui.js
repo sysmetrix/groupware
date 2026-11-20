@@ -95,7 +95,7 @@
   const chatChipsHtml = () => { const st = chatState(); if (st.busy) return ''; const fresh = !st.msgs.some(m => !m.restored); return chatSuggestions().slice(0, fresh ? 4 : 3).map(q => `<button class="ch-chip" data-act="chatChip" data-v="${esc(q)}">${esc(q)}</button>`).join(''); };
   function chatFootHtml() {
     const m = chatMode();
-    return `${m.ready ? '<small class="ch-help">외부 전송: 질문·최근 대화 일부·조회 요약을 Google Gemini로 보냅니다. 자동 가림은 완전하지 않으므로 개인정보·비공개 문서를 입력하지 마세요.</small>' : ''}<span class="ch-mode ${m.ready && !m.limited ? 'ch-mode-ai' : ''}" ${m.ready && m.model ? `title="${esc(m.model)}"` : ''}><i class="ch-dot" aria-hidden="true"></i>${m.ready ? (m.limited ? 'AI 사용 한도에 도달해 기본 모드로 답합니다(잠시 뒤 자동 재시도)' : `AI 연결됨${m.model ? ' · ' + esc(m.model) : ''}`) : '기본 모드 · 정해진 질문을 이해합니다'}</span>`;
+    return `${m.ready ? '<small class="ch-help" title="질문·최근 대화 일부·조회 요약을 Google Gemini로 보냅니다. 자동 가림은 완전하지 않습니다.">외부 전송: 질문과 조회 요약이 Google Gemini로 갑니다 · 개인정보·비공개 문서는 입력하지 마세요</small>' : ''}<span class="ch-mode ${m.ready && !m.limited ? 'ch-mode-ai' : ''}" ${m.ready && m.model ? `title="${esc(m.model)}"` : ''}><i class="ch-dot" aria-hidden="true"></i>${m.ready ? (m.limited ? 'AI 사용 한도에 도달해 기본 모드로 답합니다(잠시 뒤 자동 재시도)' : `AI 연결됨${m.model ? ' · ' + esc(m.model) : ''}`) : '기본 모드 · 정해진 질문을 이해합니다'}</span>`;
   }
   const chatHeadActsHtml = () => `${chatState().msgs.length ? `<button class="ch-hbtn" data-act="chatClear" title="대화 기록을 지우고 새로 시작합니다">${ic('refresh')}<span>새 대화</span></button>` : ''}<button class="ch-hbtn" data-act="chatSetupAi" aria-label="${chatMode().ready ? 'AI 설정' : 'AI 연결하기'}" title="${chatMode().ready ? 'AI 설정' : 'AI 연결하기'}">${ic('gear')}<span>${chatMode().ready ? 'AI 설정' : 'AI 연결하기'}</span></button>`;
 
