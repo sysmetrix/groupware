@@ -1414,6 +1414,48 @@
       "q": "한도윤 주무관한테 메일 보낼 거 있어?",
       "why": "\"보낼\"을 \"내일\"로 바꾸지 않음",
       "tool": ""
+    },
+    {
+      "id": "s1",
+      "cat": "실행",
+      "q": "김소연이랑 회의 일정 잡아줘",
+      "tool": "prepare_schedule",
+      "notTool": [
+        "get_schedule"
+      ],
+      "why": "실사용: 오늘 일정 조회로 답함"
+    },
+    {
+      "id": "s2",
+      "cat": "실행",
+      "q": "다음 주 화요일 2시에 팀 회의 일정 등록해줘",
+      "tool": "prepare_schedule",
+      "args": {
+        "date": "2026-11-24",
+        "start": "14:00",
+        "end": "15:00",
+        "title": "팀 회의"
+      }
+    },
+    {
+      "id": "s3",
+      "cat": "실행",
+      "q": "내일 오전 10시 반 한도윤 주무관이랑 마을실험실 미팅 잡아줘",
+      "tool": "prepare_schedule",
+      "args": {
+        "start": "10:30",
+        "title": "마을실험실 미팅",
+        "memo": "함께: 한도윤"
+      }
+    },
+    {
+      "id": "s4",
+      "cat": "실행",
+      "q": "다음 주 휴가 등록해줘",
+      "tool": "prepare_leave_request",
+      "notTool": [
+        "prepare_schedule"
+      ]
     }
   ]
 }

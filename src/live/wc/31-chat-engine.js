@@ -365,6 +365,7 @@
         const dt = R.chatParseDate(text, new Date()), rg = R.chatParseRange(text);
         if (dt || rg.start) {
           const merged = {...st.ctx.pendingSlot.args, ...(dt ? {date: dt.date, ...(dt.end ? {end_date: dt.end} : {})} : {}), ...(rg.start ? {start: rg.start} : {}), ...(rg.end ? {end: rg.end} : {})};
+          if (st.ctx.pendingSlot.tool === 'prepare_schedule' && typeof R.chatScheduleRequest === 'function') { const sr = R.chatScheduleRequest(text, new Date()); Object.assign(merged, sr.date ? {date: sr.date} : {}, sr.start ? {start: sr.start, end: sr.end} : {}); delete merged.end_date; }
           it = {tool: st.ctx.pendingSlot.tool, args: merged, confidence: 1};
         }
       }

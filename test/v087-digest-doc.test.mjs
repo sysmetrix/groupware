@@ -402,3 +402,26 @@ test('v0.99.0: 줄임말·이어서 거르기·두 가지 함께·오전/오후'
   const p = fs.readFileSync(new URL('../src/live/wc/47-chat-precise.js', import.meta.url), 'utf8');
   assert.match(p, /CHAT_TOOLS\.get\(x\.tool\)\.kind === 'read'/, '함께 확인은 조회 도구만 실행한다');
 });
+
+test('v1.0.0: 일정 잡기(등록 창 채우기만), 등록 자동 클릭 차단, 쓰지 않는 공개 함수 덜어 내기', async () => {
+  const C6 = await import('../src/live/chat.mjs');
+  const now = new Date('2026-11-20T18:30:00Z');
+  assert.deepEqual(C6.chatScheduleRequest('모레 4시 이하림 과장하고 예산 점검 회의 잡아줘', now), {date: '2026-11-23', start: '16:00', end: '17:00', title: '예산 점검 회의', memo: '함께: 이하림'});
+  assert.deepEqual(C6.chatScheduleRequest('25일 2시~4시 간담회 일정 넣어줘', now), {date: '2026-11-25', start: '14:00', end: '16:00', title: '간담회', memo: ''});
+  assert.equal(C6.chatScheduleRequest('내일 오전 7시 조찬 회의 잡아줘', now).start, '07:00', '오전이라고 하면 오후로 바꾸지 않는다');
+  assert.equal(C6.chatScheduleRequest('김소연이랑 회의 일정 잡아줘', now).date, '', '날짜가 없으면 묻는다');
+  assert.equal(C6.chatIntent('회의실 예약해줘', now).tool === 'prepare_schedule', false);
+  const eng = fs.readFileSync(new URL('../src/live/wc/19-draft-engine.js', import.meta.url), 'utf8');
+  const deny = new Function('return ' + eng.match(/const DENY_BTN = (\/.*\/);/)[1])();
+  assert.ok(deny.test('등록'), '일정 저장 버튼은 자동으로 누르지 않는다');
+  assert.ok(!deny.test('일정등록'), '등록 창을 여는 버튼은 누를 수 있다');
+  const p = fs.readFileSync(new URL('../src/live/wc/47-chat-precise.js', import.meta.url), 'utf8');
+  assert.match(p, /installGuard\(w\); AUTO\.running = true/);
+  assert.match(p, /작성 중인 내용이 있어 덮어쓰지 않았습니다/);
+  assert.doesNotMatch(p, /참여자 검색/, '참여자(초대 알림)는 자동으로 넣지 않는다');
+  const {assemble, readSources, PUBLIC_REPORT_API} = await import('../scripts/live-build.mjs');
+  const {shipped, exported} = assemble(await readSources(new URL('..', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')));
+  assert.ok(exported.includes('toDataset') && !shipped.includes('toDataset'), '노드 보고서 전용 함수는 번들 공개 목록에서 뺀다');
+  for (const n of PUBLIC_REPORT_API) assert.ok(shipped.includes(n), n + ' 공개 API는 남긴다');
+  assert.ok(shipped.includes('chatIntent') && shipped.includes('cuWriteLines'));
+});
