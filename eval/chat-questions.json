@@ -120,6 +120,13 @@
     {"id": "u12", "cat": "이해", "q": "한도윤 팀장님 내일 출근해?", "tool": "get_staff_status", "args": {"name": "한도윤"}, "why": "실사용: 남의 근무시간 조회로 오인해 거절하던 질문. 휴가·출장·교육 기록으로 답한다"},
     {"id": "u13", "cat": "이해", "q": "김 팀장 퇴근했어?", "tool": "", "notTool": ["get_work_hours", "get_my_attendance"], "why": "남의 퇴근 기록을 내 기록으로 답하면 안 된다"},
     {"id": "u14", "cat": "이해", "q": "답장해야 할 메일 몇 개야?", "tool": "list_tasks", "notTool": ["read_mail"]},
-    {"id": "u15", "cat": "이해", "q": "안 읽은 메일 보여줘", "tool": "list_mail", "notTool": ["read_mail"]}
+    {"id": "u15", "cat": "이해", "q": "안 읽은 메일 보여줘", "tool": "list_mail", "notTool": ["read_mail"]},
+    {"id": "u16", "cat": "이해", "q": "안 읽은 메일 요약해줘", "tool": "digest_mail", "args": {"filter": "unread"}, "why": "여러 메일 한꺼번에 정리(v0.87.0)"},
+    {"id": "u17", "cat": "이해", "q": "오늘 온 메일 정리해줘", "tool": "digest_mail", "args": {"filter": "today"}},
+    {"id": "u18", "cat": "이해", "q": "마을축제 결과보고 문서 내용 알려줘", "tool": "read_doc", "args": {"query": "마을축제 결과보고"}},
+    {"id": "u19", "cat": "이해", "q": "부서 참고 공문 무슨 내용이야?", "tool": "read_doc", "args": {"scope": "ref"}},
+    {"id": "u20", "cat": "이해", "q": "2번 문서 요약해줘", "tool": "read_doc", "args": {"index": 2}},
+    {"id": "u21", "cat": "이해", "q": "공문 뭐 왔어?", "tool": "list_reference", "notTool": ["read_doc"]},
+    {"id": "u23", "cat": "이해", "q": "내일 일정 확인하고 준비할 거 알려줘", "tool": "get_schedule"}
   ]
 }

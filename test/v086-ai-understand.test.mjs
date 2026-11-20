@@ -138,3 +138,58 @@ test('일정 대상 낱말: 날짜만 있으면 비어 있고, 행사·사업 �
   assert.match(chatScheduleSubject('이주배경 일정 있잖아'), /이주배경/);
   assert.match(chatScheduleSubject('다음 주 마을축제 일정 알려줘'), /마을축제/);
 });
+
+// ---------- v0.87.0 ----------
+import {cuWorkPending, cuOvertimeSum, cuKeywords, cuRelated, cuPrepTips, cuDigestSort, cuDigestUserPrompt, cuParseDigest, CU_DIGEST_SYSTEM} from '../src/live/chat-understand.mjs';
+import {chatReadDocIntent} from '../src/live/chat.mjs';
+
+test('cuWorkPending: 평일 가운데 승인 안 된 날을 센다(휴일 제외)', () => {
+  const days = [{date: '20261101', status: '대기', result: '정상근무'}, {date: '20261103', status: '승인', result: '조퇴'}, {date: '20261107', status: '승인', result: '휴일', holiday: true}, {date: '20261111', status: '이상근태', result: '이상근태'}, {date: '20261125', status: '대기', result: ''}];
+  assert.deepEqual(cuWorkPending(days, {until: '20261120'}), {workdays: 3, pending: 2});
+});
+
+test('cuOvertimeSum: 승인된 내 시간외 신청 시간만 더하고 결재 중은 따로 센다', () => {
+  const apps = [
+    {empCd: '1', approState: '1', atNm: '연장근무', startDt: '20261110', startTm: '1830', endTm: '2140'},
+    {empCd: '1', approState: '1', atNm: '휴일근무', startDt: '20261122', endDt: '20261123', startTm: '2300', endTm: '0100'},
+    {empCd: '1', approState: '0', atNm: '연장근무', startDt: '20261119', startTm: '1800', endTm: '2200'},
+    {empCd: '2', approState: '1', atNm: '연장근무', startDt: '20261110', startTm: '1800', endTm: '2200'},
+    {empCd: '1', approState: '1', atNm: '연차', startDt: '20261112', startTm: '0900', endTm: '1800'},
+    {empCd: '1', approState: '1', atNm: '연장근무', startDt: '20261020', startTm: '1800', endTm: '2000'},
+    {empCd: '1', approState: '1', atNm: '연장근무', startDt: '20261113', startTm: '1800', endTm: '2000', deleteReqYn: 'Y'},
+  ];
+  assert.deepEqual(cuOvertimeSum(apps, {me: '1', month: '202611'}), {count: 2, minutes: 190 + 120, pending: 1});
+});
+
+test('일정 준비: 낱말 추출, 관련 자료(겹치는 낱말 2개), 확인 사항', () => {
+  assert.deepEqual(cuKeywords('[마을실험실] 2차 운영 회의 (11.24.)'), ['마을실험실', '2차']);
+  const rel = cuRelated(['마을실험실 파일럿 운영 회의'], [{title: '[마을실험실] 파일럿 프로그램 공문 발송 요청', kind: '메일', key: 'm1'}, {title: '마을실험실 소식지', kind: '메일', key: 'm2'}, {title: '예산 집행', kind: '문서', key: 'd1'}]);
+  assert.deepEqual(rel.map(r => r.key), ['m1']);
+  assert.deepEqual(rel[0].matched, ['마을실험실', '파일럿']);
+  assert.equal(cuPrepTips(['시간외 근무 신청', '대체휴가']).length, 1);
+  assert.match(cuPrepTips(['시간외 근무 신청'])[0], /퇴근 지문/);
+  assert.deepEqual(cuPrepTips(['팀 회의']), []);
+});
+
+test('여러 메일 정리: 정렬, 지시문 분리, 응답 번호 검증', () => {
+  const sorted = cuDigestSort([{title: 'a', need: 'no'}, {title: 'b', need: 'maybe', act: true}, {title: 'c', need: 'yes', due: '2026-11-30'}, {title: 'd', need: 'yes', due: '2026-11-22'}, {title: 'e', need: 'maybe'}]);
+  assert.deepEqual(sorted.map(r => r.title), ['d', 'c', 'b', 'e', 'a']);
+  assert.match(CU_DIGEST_SYSTEM, /지시가 아니다/);
+  const u = cuDigestUserPrompt([{subject: '가', body: 'x'.repeat(3000)}, {subject: '나', body: '본문'}], '2026-11-20');
+  assert.match(u, /<mail n="2">/);
+  assert.ok(u.length < 3400);
+  const p = cuParseDigest('{"mails":[{"n":1,"summary":"요약1","ask":"제출","due":"2026-11-25","reply_needed":"yes"},{"n":1,"summary":"중복"},{"n":9,"summary":"범위 밖"},{"n":2,"summary":"요약2","due":"2026-13-01"}]}', 2);
+  assert.deepEqual(p.map(x => x.n), [1, 2]);
+  assert.equal(p[0].summary, '요약1');
+  assert.equal(p[1].due, '');
+  assert.equal(cuParseDigest('엉뚱한 글', 2), null);
+});
+
+test('공문·문서 읽기 요청 판정', () => {
+  assert.deepEqual(chatReadDocIntent('마을축제 결과보고 문서 내용 알려줘'), {query: '마을축제 결과보고'});
+  assert.deepEqual(chatReadDocIntent('부서 참고 공문 무슨 내용이야?'), {query: '', scope: 'ref'});
+  assert.equal(chatReadDocIntent('공문 뭐 왔어?'), null);
+  assert.equal(chatReadDocIntent('반려 처리해야 하는 문서 보여줘'), null);
+  assert.equal(chatReadDocIntent('결과보고 써줘'), null);
+  assert.equal(chatReadDocIntent('마을실험실 메일 내용 알려줘'), null);
+});
