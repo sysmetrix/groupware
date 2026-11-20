@@ -173,6 +173,8 @@ export function trimIndentLines(src) {
 }
 
 export const CHANGELOG_DETAIL = 6;
+/** 번들에 싣는 업데이트 내역 줄 수(v1.1.0). 나머지는 GitHub 릴리스에서 본다. 전체 개수는 CHANGELOG_ALL로 알린다. */
+export const CHANGELOG_SHIP = 40;
 /** 그룹웨어 탭 밖(Aside 스킬, 시험)에서 window.BWYFGW_REPORT로 부르는 함수. 번들 안에서 안 써도 남긴다. */
 export const PUBLIC_REPORT_API = new Set(['analyze', 'renderHtml', 'nextState', 'recommendRouting', 'extractAllDeadlines']);
 /**
@@ -180,7 +182,7 @@ export const PUBLIC_REPORT_API = new Set(['analyze', 'renderHtml', 'nextState', 
  * (전체 내역은 소스와 GitHub 릴리스에 있다. 89개 버전의 목록이 번들의 60KB를 차지했다.)
  * 한 줄에 한 버전이라는 약속(scripts/bump.mjs가 지킨다)에 기대며, 모양이 다르면 손대지 않는다.
  */
-export function trimChangelog(src, keep = CHANGELOG_DETAIL) {
+export function trimChangelog(src, keep = CHANGELOG_DETAIL, ship = Infinity) {
   const mark = 'export const CHANGELOG = [\n';
   const a = src.indexOf(mark), b = a < 0 ? -1 : src.indexOf('\n];', a);
   if (a < 0 || b < 0) return src;
@@ -188,14 +190,15 @@ export function trimChangelog(src, keep = CHANGELOG_DETAIL) {
   // 예전 줄은 {"v":…,"items":[…]} 처럼 따옴표가 붙은 것도 있다. 두 모양 모두 다룬다.
   const row = /^(\s*\{"?v"?: ?"\d+\.\d+\.\d+",.*,\s?"?items"?: ?)\[.*\]\},?$/;
   if (!lines.every(l => row.test(l))) return src;
-  return src.slice(0, a + mark.length) + lines.map((l, i) => (i < keep ? l : l.replace(row, '$1[]},'))).join('\n') + src.slice(b);
+  const kept = lines.slice(0, ship).map((l, i) => (i < keep ? l : l.replace(row, '$1[]},')));
+  return src.slice(0, a + mark.length) + kept.join('\n') + src.slice(b).replace('export const CHANGELOG_ALL = CHANGELOG.length;', `export const CHANGELOG_ALL = ${lines.length};`);
 }
 
 /** Assembles the bundle text from sources. Pure: same input, same output. Returns a line map for error reporting. */
 export function assemble({collector, css, parts, template, briefing: briefingSrc}) {
   if (parts.length < 10) throw new Error('work center parts missing');
   collector = trimIndentLines(stripCommentLines(collector));
-  briefingSrc = trimIndentLines(stripCommentLines(trimChangelog(briefingSrc)));
+  briefingSrc = trimIndentLines(stripCommentLines(trimChangelog(briefingSrc, CHANGELOG_DETAIL, CHANGELOG_SHIP)));
   parts = parts.map(p => ({...p, src: trimIndentLines(stripCommentLines(p.src))}));
   const halves = template.split(PARTS_MARK);
   if (halves.length !== 2) throw new Error('work center parts were not assembled (workcenter.browser.js needs exactly one /*@WC_PARTS@*/ marker)');

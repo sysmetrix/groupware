@@ -1456,6 +1456,70 @@
       "notTool": [
         "prepare_schedule"
       ]
+    },
+    {
+      "id": "y1",
+      "cat": "조회",
+      "q": "다음 주 월요일 오전에 회의 있어?",
+      "tool": "get_schedule",
+      "args": {
+        "kw": "회의",
+        "part": "am"
+      },
+      "why": "실사용: 있다/없다 없이 건수만"
+    },
+    {
+      "id": "y2",
+      "cat": "조회",
+      "q": "다음 주 출장 있어?",
+      "tool": "get_schedule",
+      "args": {
+        "kw": "출장"
+      }
+    },
+    {
+      "id": "y3",
+      "cat": "조회",
+      "q": "이번 주 금요일 몇 일이야?",
+      "tool": "get_weekday",
+      "why": "실사용: 외부 AI가 11/27로 답함"
+    },
+    {
+      "id": "y4",
+      "cat": "조회",
+      "q": "25일 무슨 요일이야?",
+      "tool": "get_weekday"
+    },
+    {
+      "id": "y5",
+      "cat": "조회",
+      "q": "오늘 할 일 다 끝났어?",
+      "tool": "list_tasks",
+      "args": {
+        "ask_done": true
+      },
+      "notTool": [
+        "mark_task"
+      ],
+      "why": "실사용: 끝냄 표시 도구로 감"
+    },
+    {
+      "id": "y6",
+      "cat": "실행",
+      "q": "2번 다 했어",
+      "tool": "mark_task"
+    },
+    {
+      "id": "y7",
+      "cat": "조회",
+      "q": "다음 주 부서 출장 누구 있어?",
+      "tool": "get_staff_status",
+      "args": {
+        "kind": "trip"
+      },
+      "notTool": [
+        "get_schedule"
+      ]
     }
   ]
 }
