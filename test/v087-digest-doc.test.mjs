@@ -286,3 +286,12 @@ test('v0.93.0: 문서 금액·공지 관련성(흔한 낱말 제외)', () => {
   const hits = CU.cuNoticeRelevance(notices, ['청소년', '마을축제', '데이터']);
   assert.deepEqual(hits.map(h => h.title), ['마을축제 홍보 안내', '데이터 분석 교육']);
 });
+
+test('v0.94.0: 홈 "챙겨 둘 것"에 놓치기 쉬운 일 신호가 있고, 누르면 비서가 점검한다', () => {
+  const home = fs.readFileSync(new URL('../src/live/wc/29-home-view.js', import.meta.url), 'utf8');
+  assert.match(home, /\$\{homeRiskSig\(\)\}/);
+  assert.match(home, /data-v="risks"/);
+  assert.match(home, /v === 'risks'[\s\S]{0,200}chatSend\('이번 주에 내가 놓치기 쉬운 거 있어\?'\)/);
+  const read = fs.readFileSync(new URL('../src/live/wc/32-chat-tools-read.js', import.meta.url), 'utf8');
+  assert.match(read, /name: 'get_resource_status', label: '자원 예약 현황'/);
+});

@@ -133,8 +133,16 @@
     const resourceHtml = `<section class="hm-card hm-today hm-res" aria-label="오늘 자원 예약"><div class="hm-card-h"><h2 class="hm-card-k hm-today-k">오늘 자원 예약 (직원 전체)</h2></div>${resources.rows.length ? `<ul class="hm-tl">${resources.rows.map(r => `<li class="hm-tl-car"><span class="hm-tl-t">${esc(r.from)}${r.to ? '~' + esc(r.to) : ''}</span><span class="hm-tl-l">${esc(r.label)}</span></li>`).join('')}</ul>${resources.more ? `<div class="hm-more">외 ${resources.more}건</div>` : ''}` : resourceGaps.length ? '' : '<div class="hm-empty">조회된 자원 예약이 없습니다.</div>'}${resourceGaps.map(x => `<div class="hm-empty">${esc(x)}</div>`).join('')}</section>`;
     const sum = (S.a && S.a.summary) || {};
     const sig = (id, icon, k, v) => `<button class="hm-sig" data-act="homeTile" data-v="${id}" aria-label="${esc(k + ' ' + v)}">${typeof ic === 'function' ? ic(icon) : ''}<span class="hm-sig-k">${esc(k)}</span><b class="hm-sig-v">${esc(v)}</b></button>`;
-    const signals = `<section class="hm-card hm-sigs" aria-label="업무 참고 현황"><div class="hm-card-h"><h2 class="hm-card-k hm-today-k">챙겨 둘 것</h2></div><div class="hm-sig-l">${sig('mail', 'mail', '안 읽은 메일', d.unread == null ? '확인 불가' : '조회분 ' + d.unread + '건')}${sum.pending !== undefined ? sig('approval', 'doc', '내가 결재할 문서', sum.pending == null ? '확인 불가' : sum.pending + '건') : ''}${sig('ref', 'inbox', '부서 참고', (d.taskGaps ? '확인된 ' : '') + d.refN + '건')}<button class="hm-sig" data-act="homeTile" data-v="leave" aria-label="남은 연차 합계 ${esc(d.leave || '확인 불가')} · ${esc(d.leaveTypes)}"><span class="hm-sig-k">남은 연차 합계 <b>${esc(d.leave || '확인 불가')}</b><br><small>${esc(d.leaveTypes)}${S.raw.collectedAt ? '<br>' + leaveStamp() : ''}</small></span></button></div></section>`;
+    const signals = `<section class="hm-card hm-sigs" aria-label="업무 참고 현황"><div class="hm-card-h"><h2 class="hm-card-k hm-today-k">챙겨 둘 것</h2></div><div class="hm-sig-l">${homeRiskSig()}${sig('mail', 'mail', '안 읽은 메일', d.unread == null ? '확인 불가' : '조회분 ' + d.unread + '건')}${sum.pending !== undefined ? sig('approval', 'doc', '내가 결재할 문서', sum.pending == null ? '확인 불가' : sum.pending + '건') : ''}${sig('ref', 'inbox', '부서 참고', (d.taskGaps ? '확인된 ' : '') + d.refN + '건')}<button class="hm-sig" data-act="homeTile" data-v="leave" aria-label="남은 연차 합계 ${esc(d.leave || '확인 불가')} · ${esc(d.leaveTypes)}"><span class="hm-sig-k">남은 연차 합계 <b>${esc(d.leave || '확인 불가')}</b><br><small>${esc(d.leaveTypes)}${S.raw.collectedAt ? '<br>' + leaveStamp() : ''}</small></span></button></div></section>`;
     return tlHtml + signals + (typeof autoCardHtml === 'function' ? autoCardHtml() : '') + resourceHtml;
+  }
+
+  // v0.94.0: "놓치기 쉬운 일"을 묻지 않아도 보이게(지난·임박 기한, 하루 넘게 안 읽은 요청 메일, 오래된 답장 확인, 근태 확인, 반려). 누르면 비서가 이유와 함께 답한다.
+  function homeRiskSig() {
+    if (!S.a || typeof R.cuRisks !== 'function') return '';
+    const items = mineVisible().map(x => ({key: x.key, title: x.title, state: stateOf(x), base: x.base, type: x.type, deadline: x.deadline && x.deadline.date || '', when: x.when || ''}));
+    const n = R.cuRisks(items, {today: today()}).length;
+    return `<button class="hm-sig" data-act="homeTile" data-v="risks" aria-label="${esc('놓치기 쉬운 일 ' + n + '건, 누르면 비서가 이유를 알려 줍니다')}">${typeof ic === 'function' ? ic('alert') : ''}<span class="hm-sig-k">놓치기 쉬운 일</span><b class="hm-sig-v">${n ? n + '건 · 이유 보기' : '없음'}</b></button>`;
   }
 
   // 넓은 화면: 왼쪽은 인사 → 지금 할 일 → 숫자 줄 → 대화, 오른쪽은 오늘 일정과 참고. 좁은 화면에서는 같은 순서로 한 줄로 쌓인다(순서는 CSS order).
@@ -171,6 +179,7 @@
   }
 
   HOME_ACTS.homeTile = (el, v) => {
+    if (v === 'risks') { if (typeof chatSend === 'function') { const i = $('#chInput'); if (i) i.focus({preventScroll: true}); chatSend('이번 주에 내가 놓치기 쉬운 거 있어?'); } return; }
     if (['urgent', 'todo', 'wait'].includes(v)) { S.filter = {...S.filter, level: v === 'urgent' ? 'urgent' : v === 'wait' ? 'wait' : 'all', area: 'all', q: '', onlyNew: false, showHidden: false}; S.todayTab = 'mine'; go('today'); }
     else if (v === 'schedule' || v === 'away') { S.cal.offset = 0; if (v === 'away') teamCfg().day = today().replace(/-/g, ''); go('calendar'); }
     else if (v === 'mail') openUnreadMail();
