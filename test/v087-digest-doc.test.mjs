@@ -250,7 +250,7 @@ test('cuRisks: 지난 기한·휴가 전 기한·오래 안 읽은 요청 메일
   assert.deepEqual(r.map(x => x.key), ['c', 'b', 'd']);
   const before = CU.cuRisks(items, {today: '2026-11-20', until: '2026-11-27'});
   assert.ok(before.some(x => x.key === 'e' && x.level === 0));
-  assert.ok(before.some(x => x.key === 'a' && x.level === 2 && /회신해 두면/.test(x.why.join(' '))));
+  assert.ok(before.some(x => x.key === 'a' && x.level === 2 && /11\/27까지 회신해 두면/.test(x.why.join(' '))));
 });
 
 test('cuBudgetHealth: 경과율 대비 느림·빠름·초과를 가리고 차이가 큰 순으로', () => {
