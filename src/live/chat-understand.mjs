@@ -342,13 +342,13 @@ export function cuRisks(items = [], {today = '', until = ''} = {}) {
     const dl = cuIso(x.deadline), a = age(x.when), why = [];
     let level = 3;
     if (dl && t0 && dl < t0) { why.push(`기한 ${cuMd(dl)}이 지났습니다`); level = 0; }
-    else if (dl && lim && dl <= lim) { why.push(`기한 ${cuMd(dl)}이 ${cuMd(lim)} 전입니다`); level = 0; }
+    else if (dl && lim && dl <= lim) { why.push(`기한 ${cuMd(dl)}이 ${cuMd(lim)}까지 처리할 범위 안입니다`); level = 0; }
     else if (dl && t0 && (Date.parse(dl) - Date.parse(t0)) / 86400000 <= 3) { why.push(`기한 ${cuMd(dl)}이 3일 안입니다`); level = 0; }
     if (x.base === 'rejected') { why.push('반려되어 다시 올려야 합니다'); level = Math.min(level, 0); }
     if (x.base === 'mailUnreadAsk' && a !== null && a >= 1) { why.push(`요청 메일을 ${a}일째 읽지 않았습니다`); level = Math.min(level, 1); }
     if (x.base === 'mailReply' && a !== null && a >= 2) { why.push(`답장 필요 여부를 ${a}일째 확인하지 않았습니다`); level = Math.min(level, 1); }
     if (x.type === 'attendance') { why.push('근태 기록 확인이 남아 있습니다'); level = Math.min(level, 1); }
-    if (lim && level > 1 && (x.base === 'mailUnreadAsk' || x.base === 'mailReply')) { why.push(`${cuMd(lim)} 전에 회신해 두면 좋습니다`); level = 2; }
+    if (lim && level > 1 && (x.base === 'mailUnreadAsk' || x.base === 'mailReply')) { why.push(`${cuMd(lim)}까지 회신해 두면 좋습니다`); level = 2; }
     if (level < 3) out.push({key: x.key, title: cuStr(x.title, 70), why: why.slice(0, 2), level});
   }
   return out.sort((p, q) => p.level - q.level);
