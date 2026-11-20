@@ -3,9 +3,10 @@
   chatRegisterTool({
     name: 'small_talk', label: '대화', kind: 'read',
     description: '감사·짧은 대답·되돌리기 요청에 답한다(외부 전송 없음). kind: thanks | ack | undo',
-    params: {type: 'object', properties: {kind: {type: 'string', enum: ['thanks', 'ack', 'undo']}}},
+    params: {type: 'object', properties: {kind: {type: 'string', enum: ['thanks', 'ack', 'undo', 'send']}}},
     run: async a => {
       const st = chatState(), pend = Object.values(st.pending || {}).filter(p => p && p.card && !p.card.state).pop(), btn = pend ? `[${pend.card.confirmLabel || '확인'}]` : '';
+      if (a.kind === 'send') return {ok: true, text: '메일 [보내기]는 비서가 대신 누르지 않습니다. 답장이면 “그 메일 답장 써줘”, 새 메일이면 “○○한테 …라고 메일 보내줘”라고 하시면 창을 열어 내용을 채워 드리고, [보내기]는 직접 누르시면 됩니다.'};
       if (a.kind === 'thanks') return {ok: true, text: '천만에요. 더 필요한 일이 있으면 말씀해 주세요.'};
       if (a.kind === 'ack') return {ok: true, text: pend ? `실행하려면 위 확인 카드의 ${btn} 버튼을 눌러 주세요. 말로 대답하는 것만으로는 실행하지 않습니다.` : '네. 다른 필요한 일이 있으면 말씀해 주세요.'};
       return {ok: true, text: pend ? `아직 실행하지 않았습니다. 위 확인 카드의 [${pend.card.cancelLabel || '취소'}]를 누르면 됩니다.` : '비서가 그룹웨어에 저장하거나 보낸 것은 없습니다. 할 일 끝냄·미루기는 할 일 목록에서 되돌릴 수 있고, 메일·일정·신청 창은 [보내기]·[등록]·[상신] 전이면 창을 닫으면 됩니다.'};

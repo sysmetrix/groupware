@@ -102,11 +102,14 @@
       if (!S.a || !S.raw) return chatNotReady();
       // 문서(결재·공문) 첨부: 말에 문서·공문이 있거나, 방금 다룬 것이 메일보다 문서일 때
       const st = chatState(), df = st.ctx.docFocus && st.ctx.docFocus.owner === S.userKey && Date.now() - st.ctx.docFocus.at < CU_FOCUS_MS ? st.ctx.docFocus : null, mf = cuFocus();
-      const wantDoc = /(문서|공문|결재|기안|보고서|계획서)/.test((ctx && ctx.userText) || '') || (df && (!mf || df.at > mf.at));
+      const GEN = /^(pdf|hwpx?|docx?|xlsx?|pptx?|jpe?g|png|zip|첨부|파일|첨부파일|내용|뭐래|뭐야)$/i, keys = cmdKeywords(String(a.query || '')).filter(k => !GEN.test(k));
+      const explicitDoc = /(문서|공문|결재|기안|보고서|계획서)/.test((ctx && ctx.userText) || ''), inTitle = (t, ks) => ks.some(k => String(t || '').replace(/\s+/g, '').includes(k));
+      const mailHit = keys.length && !explicitDoc && !(df && inTitle(df.title, keys)) && mailActions().some(m => inTitle(m.title, keys)); // v1.4.0
+      const wantDoc = !mailHit && (explicitDoc || (df && (!mf || df.at > mf.at)));
       if (wantDoc) {
         const q = String(a.query || '').trim();
         // 낱말이 지금 문서 제목에 없으면 그 낱말로 문서를 먼저 찾는다(파일 이름일 수도 있으니 첨부 이름도 본다)
-        const fits = df && (!q || cmdKeywords(q).some(k => (df.title + ' ' + (df.files || []).map(x => x.name).join(' ')).replace(/\s+/g, '').includes(k)));
+        const fits = df && (!keys.length || keys.some(k => (df.title + ' ' + (df.files || []).map(x => x.name).join(' ')).replace(/\s+/g, '').includes(k)));
         if (fits) return cuDocAttach(df, q && !cmdKeywords(q).some(k => df.title.replace(/\s+/g, '').includes(k)) ? q : '');
         if (!q) return {ok: true, text: '어느 문서의 첨부인지 먼저 정해 주세요. 예) “○○ 문서 요약해줘” 다음에 “그 문서 첨부 내용 정리해줘”', data: {count: 0}};
         const before = st.ctx.docFocus, r0 = await CHAT_TOOLS.get('read_doc').run({query: q}, ctx), now = st.ctx.docFocus;

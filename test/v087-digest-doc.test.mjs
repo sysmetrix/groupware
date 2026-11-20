@@ -475,3 +475,17 @@ test('v1.3.0: 대화 습관 — 감사·짧은 대답·되돌리기는 로컬, "
   const eng = fs.readFileSync(new URL('../src/live/wc/31-chat-engine.js', import.meta.url), 'utf8');
   assert.match(eng, /CHAT_TOOLS\.has\(n\) \? '“' \+ CHAT_TOOLS\.get\(n\)\.label/, '답에 드러난 내부 도구 이름은 이름표로 바꾼다');
 });
+
+test('v1.4.0: 회귀 점검 수정 — 순번은 같은 종류 목록에서, 첨부 낱말, 보내기 대행 거절, 무리 낱말', async () => {
+  const C10 = await import('../src/live/chat.mjs');
+  const now = new Date('2026-11-20T18:30:00Z');
+  assert.equal(C10.chatIntent('이 메일 바로 보내줘', now).args.kind, 'send');
+  assert.equal(C10.chatIntent('김소연한테 내일 회의 취소됐다고 메일 보내줘', now).tool, 'compose_mail', '내용이 있으면 채움 준비');
+  assert.equal(C10.chatExtractName('선생님들 휴가 일정 알려줘'), '');
+  const eng = fs.readFileSync(new URL('../src/live/wc/31-chat-engine.js', import.meta.url), 'utf8');
+  assert.match(eng, /read_mail: 'mail', draft_mail_reply: 'mail', check_sent_reply: 'mail', read_doc: 'doc'/, '메일 도구는 메일 목록의 순번을 쓴다');
+  assert.match(eng, /st\.ctx\.byType = \{/);
+  const at = fs.readFileSync(new URL('../src/live/wc/45-chat-attach.js', import.meta.url), 'utf8');
+  assert.match(at, /pdf\|hwpx\?/, '"pdf·첨부" 같은 낱말로 문서에 맞았다고 보지 않는다');
+  assert.match(at, /const wantDoc = !mailHit &&/);
+});
