@@ -194,3 +194,8 @@ test('문서 첨부: 남이 기안한 문서는 확인 카드 전에는 열지 �
   await card.onConfirm();
   assert.deepEqual(calls, ['AAAABBBBCCCCDDDD3333']);
 });
+
+test('cuSynapText: 좁은 글자 사이(4~5px)는 띄우지 않고 넓은 사이만 띄운다(v0.89.1, "13"이 "1 3"으로 갈라지던 문제)', () => {
+  const x = "<document><page w='800' h='1000'><text l='300' t='185' w='2.7' h='10' >1</text><text l='307' t='185' w='4' h='10' >3</text><text l='311' t='194' w='1' h='2' >.</text><text l='330' t='185' w='10' h='12' >금</text></page></document>";
+  assert.equal(CU.cuSynapText(x), '13. 금');
+});
