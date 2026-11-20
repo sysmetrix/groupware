@@ -252,16 +252,19 @@
     description: '결재문서·메일·게시판을 제목 중심으로 검색한다(본문은 보여주지 않는다). scope: all | approval | mail | notice.',
     params: {type: 'object', properties: {query: {type: 'string'}, scope: {type: 'string', enum: ['all', 'approval', 'mail', 'notice']}}, required: ['query']},
     run: async a => {
-      const q = String(a.query || '').trim();
+      // v1.5.0: "지난달·이번 주·올해" 같은 기간 낱말은 검색어에서 빼고 날짜 범위로 건다
+      const PER = /(지난\s*달|저번\s*달|이번\s*달|지난\s*주|저번\s*주|이번\s*주|올해|작년|지난해|\d{1,2}\s*월(?!\s*\d)|상반기|하반기)(?:에|의)?/g, per = (String(a.query || '').match(PER) || [])[0] || '';
+      const pr = per && typeof R.cuPeriod === 'function' ? R.cuPeriod(per.replace(/(에|의)$/, ''), today()) : null;
+      const q = String(a.query || '').replace(PER, ' ').replace(/(어디\s*있[가-힣]*|어딨[가-힣]*|\?)/g, ' ').replace(/\s+/g, ' ').trim();
       if (q.length < 2) return {ok: false, text: '검색어를 두 글자 이상 알려 주세요. 예) 월간업무보고 검색'};
-      const types = {approval: ['doc'], mail: ['mail'], notice: ['board']}[a.scope] || ['doc', 'mail', 'board'];
-      let res; try { res = await GW.search(q, {types, pageSize: 5}); } catch (e) { return {ok: false, text: '검색하지 못했습니다: ' + String(e.message || e).slice(0, 80)}; }
+      const types = {approval: ['doc'], mail: ['mail'], notice: ['board']}[a.scope] || (/(건의|결의|기안|보고|계획|공문|협조|알림)/.test(q) ? ['doc'] : ['doc', 'mail', 'board']);
+      let res; try { res = await GW.search(q, {types, pageSize: 5, ...(pr && pr.from ? {from: pr.from, to: pr.to} : {})}); } catch (e) { return {ok: false, text: '검색하지 못했습니다: ' + String(e.message || e).slice(0, 80)}; }
       const cards = [], data = {}, listItems = [];
-      const add = (key, title, f) => { const g = res.groups[key]; if (!g || !g.items.length) return; data[key] = g.items.slice(0, 5).map(x => f(x).title); for (const x of g.items.slice(0, 5)) listItems.push({itemId: x.docId ? `doc:search:${x.docId}` : x.uid ? `mail:search:${x.uid}` : '', title: f(x).title, uid: x.uid || '', url: x.url || '', type: key}); cards.push({type: 'list', title: `${title} ${g.total}건`, items: g.items.slice(0, 5).map(f), more: Math.max(0, g.total - 5)}); };
+      const add = (key, title, f) => { const g = res.groups[key]; if (!g || !g.items.length) return; data[key] = g.items.slice(0, 5).map(x => f(x).title); for (const x of g.items.slice(0, 5)) listItems.push({itemId: x.docId ? `doc:search:${x.docId}` : x.uid ? `mail:search:${x.uid}` : '', title: f(x).title, uid: x.uid || '', url: x.url || '', type: key, docNo: x.docNo || '', date: String(x.date || '').slice(0, 10)}); cards.push({type: 'list', title: `${title} ${g.total}건`, items: g.items.slice(0, 5).map(f), more: Math.max(0, g.total - 5)}); };
       add('doc', '결재문서', x => ({title: x.title || '(제목 없음)', sub: [x.docNo, ymd8(x.date)].filter(Boolean).join(' · ')}));
       add('mail', '메일', x => ({title: x.subject || '(제목 없음)', sub: x.from || ''}));
       add('board', '게시판', x => ({title: x.title || '(제목 없음)', sub: String(x.date || '').slice(0, 10)}));
-      if (!cards.length) return {ok: true, text: `“${q}”에 해당하는 결과가 없습니다. 검색어나 범위를 바꿔 보세요.`, data: {count: 0}};
+      if (!cards.length) return {ok: true, text: `“${q}”${pr && pr.label ? `(${pr.label})` : ''}에 해당하는 결과가 없습니다. 검색어나 범위를 바꿔 보세요.`, data: {count: 0}};
       // 본문은 일반 답변이나 AI 도구 응답이 아닌 확인 후 카드에만 표시한다.
       const docRows = (res.groups.doc && res.groups.doc.items || []).slice(0, 3);
       for (const x of docRows) {

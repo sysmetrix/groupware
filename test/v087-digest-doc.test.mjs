@@ -489,3 +489,15 @@ test('v1.4.0: 회귀 점검 수정 — 순번은 같은 종류 목록에서, 첨
   assert.match(at, /pdf\|hwpx\?/, '"pdf·첨부" 같은 낱말로 문서에 맞았다고 보지 않는다');
   assert.match(at, /const wantDoc = !mailHit &&/);
 });
+
+test('v1.5.0: 속도 — 검색 순번의 문서번호를 넘기고, 형식 요청이 아닌 낱말로 외부 AI에 보내지 않는다', async () => {
+  const C11 = await import('../src/live/chat.mjs');
+  for (const q of ['자동화 목록 보여줘', '발표 일정', '개인정보 점검표 메일', '다시 알려줘']) assert.equal(C11.chatPreferGemini(q), false, q);
+  for (const q of ['목록으로 정리해줘', '표로 보여줘', '다시 설명해줘', '비교해줘']) assert.equal(C11.chatPreferGemini(q), true, q);
+  const eng = fs.readFileSync(new URL('../src/live/wc/31-chat-engine.js', import.meta.url), 'utf8');
+  assert.match(eng, /if \(hit\.docNo && !runArgs\.docNo\)/, '검색 결과 순번으로 문서를 읽을 때 다시 검색하지 않는다');
+  assert.match(eng, /\['plan_priorities', 'check_risks'\]\.includes\(it\.tool\)/, '이유가 들어 있는 답은 "이유도"로 외부에 넘기지 않는다');
+  const rd = fs.readFileSync(new URL('../src/live/wc/32-chat-tools-read.js', import.meta.url), 'utf8');
+  assert.match(rd, /R\.cuPeriod\(per/, '기간 낱말은 검색 날짜 범위로');
+  assert.match(rd, /docNo: x\.docNo \|\| ''/);
+});
