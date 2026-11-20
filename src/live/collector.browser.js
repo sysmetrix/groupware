@@ -15,7 +15,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '0.89.1';
+  const VERSION = '0.90.0';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
@@ -700,6 +700,7 @@
     return synapPages(key, maxPages);
   }
   // Read a converted document by its viewer key: status (page count) then one positioned-character XML per page.
+  const SYNAP_IMG = /^(jpe?g|png|gif|bmp|tiff?)$/i;
   async function synapPages(key, maxPages = 8) {
     if (!/^[A-Za-z0-9_=+-]{10,300}$/.test(String(key || ''))) throw new GwError('BAD_ARG', '문서 뷰어 키가 올바르지 않습니다.');
     const get = async (p, ms = 20000) => {
@@ -715,15 +716,44 @@
     let st = null;
     for (let i = 0; i < 8; i++) {
       try { st = JSON.parse(await get(`status/${key}?`)); } catch { st = null; }
-      if (st && Number(st.pageNum) > 0) break;
+      if (st && (Number(st.pageNum) > 0 || SYNAP_IMG.test(String(st.format || '')))) break;
       await new Promise(r => setTimeout(r, 1000));
     }
     const total = st ? Number(st.pageNum) || 0 : 0;
+    // 그림 파일은 쪽 수가 0으로 오고 글자 XML이 없다: 한 장짜리 그림으로 돌려준다(글자는 AI 그림 읽기로만)
+    if (!total && st && SYNAP_IMG.test(String(st.format || ''))) return {format: str(st.format, 10), total: 1, pages: [], key, image: true};
     if (!total) throw new GwError('NOT_READY', '문서 변환이 아직 끝나지 않았습니다. 잠시 뒤 다시 시도하세요.');
     const n = Math.min(total, Math.max(1, Math.min(20, Number(maxPages) || 8)));
     const pages = [];
     for (let p = 0; p < n; p++) { const x = await get(`thumbnailxml/${key}/${p}?dpi=96&dispAnnot=2&`); pages.push(x.length > 600000 ? '' : x); }
-    return {format: str(st.format, 10), total, pages};
+    return {format: str(st.format, 10), total, pages, key};
+  }
+  // Page images of a converted document (v0.90.0), for reading scans and pictures with AI after the user agrees.
+  // Same viewer GET as the page thumbnails; PNG/JPEG only, at most 4 pages and 2.5MB each, returned as base64.
+  async function synapPageImages({key, pages = 1, width = 1600} = {}) {
+    if (!/^[A-Za-z0-9_=+-]{10,300}$/.test(String(key || ''))) throw new GwError('BAD_ARG', '문서 뷰어 키가 올바르지 않습니다.');
+    const n = Math.max(1, Math.min(4, Number(pages) || 1)), long = Math.max(800, Math.min(2000, Number(width) || 1600));
+    // w·h는 잘라내기 크기라서, 쪽마다 원래 크기(96dpi)를 보고 긴 변이 long이 되도록 dpi를 낮춘 뒤 그 dpi의 정확한 크기로 받는다
+    const dims = async dpi => { try { return JSON.parse(await (await fetch(`${ORIGIN}/SynapDocViewServer/dimension/${key}/0-${n - 1}?dpi=${dpi}&`, {credentials: 'same-origin', redirect: 'error'})).text()); } catch { return []; } };
+    const base = await dims(96);
+    const out = [];
+    for (let p = 0; p < n; p++) {
+      const ac = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const tm = setTimeout(() => { try { ac && ac.abort(); } catch {} }, 30000);
+      try {
+        const d0 = base.find(x => x && x.p === p) || {w: 793, h: 1121};
+        const dpi = Math.max(24, Math.min(96, Math.floor(96 * long / Math.max(d0.w || 793, d0.h || 1121))));
+        const d1 = (await dims(dpi)).find(x => x && x.p === p) || {w: Math.round((d0.w || 793) * dpi / 96), h: Math.round((d0.h || 1121) * dpi / 96)};
+        const r = await fetch(`${ORIGIN}/SynapDocViewServer/thumbnail/${key}/${p}?dpi=${dpi}&w=${d1.w}&h=${d1.h}&dispAnnot=2&`, {credentials: 'same-origin', redirect: 'error', ...(ac ? {signal: ac.signal} : {})});
+        if (!r.ok) throw new GwError('API_ERROR', `쪽 그림을 받지 못했습니다(${r.status}).`);
+        const blob = await r.blob();
+        if (!/^image\/(png|jpeg)$/i.test(blob.type) || blob.size < 100 || blob.size > 2.5 * 1048576) throw new GwError('BAD_IMAGE', '쪽 그림 형식이나 크기가 맞지 않습니다.');
+        const data = await new Promise((resolve, reject) => { const fr = new FileReader(); fr.onload = () => resolve(String(fr.result || '').replace(/^data:[^,]*,/, '')); fr.onerror = () => reject(new GwError('API_ERROR', '쪽 그림을 읽지 못했습니다.')); fr.readAsDataURL(blob); });
+        out.push({mime: blob.type, data, bytes: blob.size, page: p});
+      } catch (e) { throw e instanceof GwError ? e : new GwError('API_ERROR', '쪽 그림을 받지 못했습니다.'); }
+      finally { clearTimeout(tm); }
+    }
+    return out;
   }
   // Text of an approval-document (ECM) attachment (v0.89.0). The groupware's own file popup converts the file for the
   // signed-in user's permissions; a hidden frame opens it only until the viewer key appears, then the same page XML is read.
@@ -998,7 +1028,7 @@
   }
 
   window.BWYFGW = Object.freeze({
-    version: VERSION, collect, call, search, organizationTree, organizationMembers, budgetCatalog, budgetProject, budgetAll, budgetLedger, budgetMonthly, attendanceDays, teamAttendance, teamPlanned, resourceList, resourceBookings, resourceDetail, resourceCheck, reserveResource, routingHistory, submittedRange, approvalPage, approvalFallback, docPreview, frequentForms, findReply, mailDetail, mailInlineImage, mailAttachment, mailAttachmentPreview, mailAttachmentPages, docAttachmentPages, saveBlob,
+    version: VERSION, collect, call, search, organizationTree, organizationMembers, budgetCatalog, budgetProject, budgetAll, budgetLedger, budgetMonthly, attendanceDays, teamAttendance, teamPlanned, resourceList, resourceBookings, resourceDetail, resourceCheck, reserveResource, routingHistory, submittedRange, approvalPage, approvalFallback, docPreview, frequentForms, findReply, mailDetail, mailInlineImage, mailAttachment, mailAttachmentPreview, mailAttachmentPages, docAttachmentPages, synapPageImages, saveBlob,
     context: () => { const c = context(); return {name: c.name, deptName: c.deptName, compName: c.compName, duty: c.duty, position: c.position}; },
     readOnlyEndpoints: () => [...READ_ONLY], routes: ROUTES, links: LINKS, searchLabels: SEARCH_LABELS, defaults: DEFAULTS,
   });
