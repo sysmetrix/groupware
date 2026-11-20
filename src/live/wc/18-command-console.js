@@ -328,7 +328,7 @@
     if (!x0) return cmdPickMail(q, x => cmdMailReplyTo(q, template, x), {reply: true});
     return cmdMailReplyTo(q, template, x0);
   }
-  async function cmdMailReplyTo(q, template, x) {
+  async function cmdMailReplyTo(q, template, x, custom = null) {
     closeOverlay();
     if (x.key) {
       // selectAction은 이미 선택된 항목을 다시 부르면 선택을 해제하므로, 같은 항목이면 다시 부르지 않는다
@@ -340,13 +340,13 @@
     const unread = typeof marksRead === 'function' ? marksRead({type: 'mail', ref: x.ref}) : false;
     if (!openUrl(GW.links.compose('re', {box: x.ref.box, uid: x.ref.uid}), {title: `답장: ${x.title}`, unread, what: '메일'})) { toast('답장 화면을 열지 않았고 회신 문구도 넣지 않았습니다.'); return 'cancel'; }
     // 편집기가 뜨고 원문 인용이 채워질 때까지 기다렸다가 넣고, 실제로 들어갔는지까지 확인한 결과를 받는다(실패 안내는 autoFillMail이 한다).
-    const ready = !!(S.sel && (x.key ? S.sel.key === x.key : S.sel.uid === x.ref.uid)) && await autoFillMail(template);
+    const ready = !!(S.sel && (x.key ? S.sel.key === x.key : S.sel.uid === x.ref.uid)) && await autoFillMail(template, custom);
     logActionRecord({
       command: q,
       type: '메일',
       target: x.title,
       summary: ready ? '회신 화면을 열고 회신 문구를 본문에 넣었습니다.' : '회신 화면을 열었지만 회신 문구는 넣지 못했습니다.',
-      steps: [`대상 메일: ${x.title}`, `회신문 종류: ${template === 'submit' ? '자료 제출' : '확인'}`, ready ? '편집기 확인 후 회신문 삽입, 본문에 남아 있는지 확인' : '회신문을 넣지 못함(편집기 미준비 또는 화면 이동)'],
+      steps: [`대상 메일: ${x.title}`, `회신문 종류: ${template === 'custom' ? 'AI 초안' : template === 'submit' ? '자료 제출' : '확인'}`, ready ? '편집기 확인 후 회신문 삽입, 본문에 남아 있는지 확인' : '회신문을 넣지 못함(편집기 미준비 또는 화면 이동)'],
       verified: false,
       details: '본문을 확인하고 직접 [보내기]를 누르세요.'
     });

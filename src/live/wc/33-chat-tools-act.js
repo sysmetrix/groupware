@@ -87,6 +87,7 @@
       if (!S.a) return chatNotReady();
       const mails = mailActions();
       let x = a.mail_key ? mails.find(m => m.key === a.mail_key) : null;
+      if (!x && a.uid && typeof cuPickMail === 'function') x = cuPickMail({uid: a.uid, box: a.box}).x || null;
       if (!x) {
         const toks = cmdKeywords(String(a.query || '')).filter(t => !/^(답장|회신|메일|작성|써|초안|보내|확인|표준)$/.test(t));
         const scored = toks.length ? mails.map(m => ({m, n: toks.filter(k => String(m.title || '').replace(/\s+/g, '').includes(k)).length})).filter(o => o.n > 0).sort((p, q) => q.n - p.n) : [];
@@ -98,7 +99,11 @@
         }
       }
       const points = String(a.points || '').slice(0, 300), tpl = /제출|자료|첨부/.test(points + (a.query || '')) ? 'submit' : 'confirm';
-      return {ok: true, text: `“${String(x.title).slice(0, 40)}” 메일의 답장 작성창을 열 준비를 했습니다. 보내기는 하지 않습니다.`, cards: [{type: 'confirm', title: '메일 답장 작성창 열기', risk: 'low', rows: [['대상 메일', x.title || '(제목 없음)'], ['동작', `답장 창을 열고 ${tpl === 'submit' ? '자료 제출' : '확인'} 표준 문구를 넣습니다`], ['보내기', '직접 눌러야 합니다']], confirmLabel: '답장 창 열기', cancelLabel: '취소',
+      if (typeof cuSetFocus === 'function') cuSetFocus(x);
+      // AI 연결 시: 본문을 읽어 맞춤 초안을 쓰는 카드를 먼저 낸다(v0.86.0). 표준 문구 카드는 그대로 남긴다.
+      const unread = typeof marksRead === 'function' && marksRead({type: 'mail', ref: x.ref});
+      const aiCard = typeof cuAiOk === 'function' && cuAiOk() ? [{type: 'confirm', title: 'AI 맞춤 초안으로 답장 창 열기', risk: 'low', rows: [['대상 메일', x.title || '(제목 없음)'], ['동작', '메일 본문을 읽어 AI가 답장 본문을 쓰고, 답장 창 맨 위에 넣습니다'], ['외부 전송', '이 메일의 가린 본문을 Google Gemini로 보냅니다'], ...(unread ? [['바뀌는 것', '안 읽은 메일이라 읽음으로 표시됩니다']] : []), ['보내기', '직접 눌러야 합니다']], confirmLabel: 'AI 초안으로 열기', cancelLabel: '취소', onConfirm: async () => cuReplyDraft(x, a.query, points)}] : [];
+      return {ok: true, text: `“${String(x.title).slice(0, 40)}” 메일의 답장 작성창을 열 준비를 했습니다.${aiCard.length ? ' AI 맞춤 초안이나 표준 문구 중에서 고르세요.' : ''} 보내기는 하지 않습니다.`, cards: [...aiCard, {type: 'confirm', title: aiCard.length ? '표준 문구로 답장 창 열기' : '메일 답장 작성창 열기', risk: 'low', rows: [['대상 메일', x.title || '(제목 없음)'], ['동작', `답장 창을 열고 ${tpl === 'submit' ? '자료 제출' : '확인'} 표준 문구를 넣습니다`], ['보내기', '직접 눌러야 합니다']], confirmLabel: '답장 창 열기', cancelLabel: '취소',
         onConfirm: async () => {
           const r = await cmdMailReplyTo(String(a.query || '채팅 요청'), tpl, x);
           if (r !== 'filled' && r !== 'opened') return {ok: false, text: '답장 창을 열지 않았습니다(작성 중인 화면을 그대로 두었거나 취소했습니다).'};

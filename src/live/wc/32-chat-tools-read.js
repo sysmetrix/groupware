@@ -55,8 +55,8 @@
 
   chatRegisterTool({
     name: 'list_tasks', label: '할 일 확인', kind: 'read',
-    description: '내가 처리할 일 목록. state: urgent(급함·기한 지남) | todo | check(확인 필요) | wait(기다리는 중) | all. area로 결재/메일/근태/공지를 좁힐 수 있다.',
-    params: {type: 'object', properties: {state: {type: 'string', enum: ['urgent', 'todo', 'check', 'wait', 'all']}, area: {type: 'string', enum: ['결재', '메일', '근태', '공지']}, limit: {type: 'number'}}},
+    description: '내가 처리할 일 목록. state: urgent(급함·기한 지남) | todo | check(확인 필요) | wait(기다리는 중) | all. area로 결재/메일/근태/공지를 좁힐 수 있다. need=reply는 답장(회신·제출)이 필요한 메일만.',
+    params: {type: 'object', properties: {state: {type: 'string', enum: ['urgent', 'todo', 'check', 'wait', 'all']}, area: {type: 'string', enum: ['결재', '메일', '근태', '공지']}, need: {type: 'string', enum: ['reply']}, limit: {type: 'number'}}},
     run: async a => {
       if (!S.a) return chatNotReady();
       const st = a.state || 'all', lim = Math.min(Math.max(Number(a.limit) || 8, 1), 15);
@@ -65,10 +65,13 @@
       else if (st === 'todo') list = list.filter(x => stateOf(x) === 'todo');
       else if (st === 'check') list = list.filter(x => ['check', 'confirm'].includes(stateOf(x)));
       if (a.area) list = list.filter(x => x.area === a.area);
-      const label = {urgent: '급한 일', todo: '할 일', check: '확인이 필요한 일', wait: '기다리는 중인 일', all: '처리할 일'}[st] || '처리할 일';
+      // 답장 후보: 요청 메일·답장 확인 메일, 또는 기한이 붙은 메일(이미 답장한 것은 '끝났는지 확인'으로 따로 빠진다)
+      if (a.need === 'reply') list = list.filter(x => x.type === 'mail' && (['mailUnreadAsk', 'mailReply'].includes(x.base) || !!(x.deadline && x.deadline.date)));
+      const label = a.need === 'reply' ? '답장이 필요할 수 있는 메일' : {urgent: '급한 일', todo: '할 일', check: '확인이 필요한 일', wait: '기다리는 중인 일', all: '처리할 일'}[st] || '처리할 일';
       const dateNote = a.requested_date && a.requested_date !== today() ? `\n${a.requested_date}의 업무를 예측한 결과가 아니라 현재 수집된 목록의 우선순위입니다. 그날 다시 확인해 주세요.` : '';
+      if (!list.length && a.need === 'reply') return {ok: true, text: '답장(회신·제출)이 필요해 보이는 메일이 없습니다. 메일 할 일은 “메일 처리할 일 보여줘”로 볼 수 있습니다.' + dateNote, data: {count: 0, items: []}};
       if (!list.length) return {ok: true, text: (a.area ? `${a.area}: 지금 ${st === 'all' ? '처리하거나 답할' : label} 것이 없습니다.` : `${label}이 없습니다.`) + dateNote, data: {count: 0, items: []}};
-      return {ok: true, text: `${a.area ? a.area + ' ' : ''}${label} ${list.length}건입니다.${list.length > lim ? ` 위에서 ${lim}건만 보여 드립니다.` : ''}${dateNote}`, data: {count: list.length, items: list.slice(0, lim).map(x => ({itemId: x.key, title: x.title, area: x.area, state: stateOf(x), deadline: x.deadline && x.deadline.date || ''}))},
+      return {ok: true, text: `${a.area && a.need !== 'reply' ? a.area + ' ' : ''}${label} ${list.length}건입니다.${list.length > lim ? ` 위에서 ${lim}건만 보여 드립니다.` : ''}${a.need === 'reply' ? ' 메일을 고르면 “1번 메일 요약해줘”, “1번 메일 답장 써줘”로 이어서 처리할 수 있습니다.' : ''}${dateNote}`, data: {count: list.length, items: list.slice(0, lim).map(x => ({itemId: x.key, title: x.title, area: x.area, state: stateOf(x), deadline: x.deadline && x.deadline.date || '', ...(x.type === 'mail' && x.ref ? {uid: x.ref.uid, box: x.ref.box} : {})}))},
         cards: [{type: 'list', title: label, items: list.slice(0, lim).map(chatTaskItem), more: Math.max(0, list.length - lim)}]};
     },
   });
@@ -212,7 +215,7 @@
     name: 'get_my_attendance', label: '내 근태 확인', kind: 'read',
     description: '내 남은 연차와 이번 달(또는 month=YYYY-MM) 시간외 신청일 중 퇴근 지문 확인이 필요한 날짜. 출근 지문 누락은 판정하지 않는다.',
     params: {type: 'object', properties: {month: {type: 'string'}}},
-    run: async a => {
+    run: async (a, ctx) => {
       if (!S.a || !S.raw) return chatNotReady();
       const p = R.kstNow(new Date()), thisM = p.date.slice(0, 7);
       const m = /^\d{4}-\d{2}$/.test(String(a.month || '')) ? a.month : thisM, mm = m.replace('-', '');
@@ -229,6 +232,13 @@
       if (lv) bits.push(`남은 연차는 ${fmtDays(lv.remaining)}입니다(받은 ${fmtDays(lv.granted)}, 쓴 ${fmtDays(lv.used)}) · ${leaveTypesText(lv)}`);
       bits.push(m === thisM ? '시간외 퇴근 지문 확인은 신청일 기준 최근 150일 내 신청과 어제까지의 자료 기준입니다' : '시간외 신청은 신청일 기준 최근 150일 이내 자료입니다');
       bits.push(an.length ? `${Number(m.slice(5))}월에 시간외 신청일 중 퇴근 지문 확인이 필요한 날이 ${an.length}일 있습니다` : `${Number(m.slice(5))}월에 조회된 시간외 신청일 중 퇴근 지문 확인이 필요한 날은 없습니다`);
+      // 특정 날짜를 물었으면 그날이 확인 대상인지 먼저 답한다(v0.86.0)
+      const asked = /지문|퇴근|출근|근태/.test((ctx && ctx.userText) || '') ? R.chatParseDate(ctx.userText, new Date()) : null;
+      if (asked && asked.date && asked.date.slice(0, 7) === m) {
+        const d8 = asked.date.replace(/-/g, ''), hit = an.find(x => x.date === d8), md = `${+asked.date.slice(5, 7)}월 ${+asked.date.slice(8, 10)}일`; // '일은'으로 끝나 조사가 맞는다
+        const applied = (ot.apps || []).some(x => x && String(x.startDt || '') === d8 && String(x.empCd || '') === String(ot.me) && String(x.approState) === '1' && /연장근무|휴일근무|조기근무|시간외/.test([x.atNm, x.atItemNm].join(' ')));
+        bits.unshift(hit ? `${md}은 승인된 시간외(${hit.item || '연장근무'}) 신청이 있는데 신청 종료 뒤의 퇴근 지문이 조회되지 않아 확인 대상입니다` : asked.date >= p.date ? `${md}은 아직 지나지 않아 퇴근 지문을 판단하지 않습니다` : `${md}은 현재 확인 대상이 아닙니다(${applied ? '퇴근 지문 기록이 있거나 판정 기준을 충족합니다' : '그날의 승인된 시간외 신청이 조회되지 않았습니다'})`);
+      }
       return {ok: true, text: bits.join('. ') + '.', data: {remaining_leave: lv ? fmtDays(lv.remaining) : '', anomalies: an.length},
         cards: [{type: 'kpi', items: [{label: '남은 연차', value: lv ? fmtDays(lv.remaining) : '-', tone: 'info'}, {label: '퇴근 지문 확인 필요한 날', value: an.length, tone: an.length ? 'urgent' : 'ok'}]}, ...(an.length ? [{type: 'list', title: '시간외 신청일 퇴근 지문 확인', items: an.slice(0, 8).map(x => ({title: `${ymd8(x.date).slice(5).replace('-', '/')} ${x.item || ''}`.trim(), sub: '시간외 신청일의 퇴근 지문 기록을 확인해 주세요', tone: 'urgent'}))}] : []), {type: 'nav', label: '근태·연차 화면 열기', view: 'attendance'}]};
     },
@@ -379,16 +389,22 @@
   });
 
   chatRegisterTool({
-    name: 'get_weekly_summary', label: '이번 주 실적 요약', kind: 'read',
-    description: '최근 7일간 내가 상신·접수한 결재문서 실적을 요약해 준다.',
-    params: {type: 'object', properties: {}},
-    run: async () => {
+    name: 'get_weekly_summary', label: '주간 실적 정리', kind: 'read',
+    description: '이번 주(월~오늘) 또는 지난주(월~일)에 내가 상신한 결재문서로 주간 업무 실적을 정리한다. week: this | last, draft=true면 보고용 초안 문장을 함께 보여 준다.',
+    params: {type: 'object', properties: {week: {type: 'string', enum: ['this', 'last']}, draft: {type: 'boolean'}}},
+    run: async a => {
       if (!S.raw) return chatNotReady();
       try {
-        const sub = await GW.submittedRange({days: 7, size: 100});
+        // KST 기준 월요일부터. 지난주는 월~일 7일.
+        const t0 = today(), dow = (new Date(t0 + 'T00:00:00Z').getUTCDay() + 6) % 7;
+        const mon = chatAddDays(t0, -dow - (a.week === 'last' ? 7 : 0)), end = a.week === 'last' ? chatAddDays(mon, 6) : t0;
+        const sub = await GW.submittedRange({size: 100, from: mon.replace(/-/g, ''), to: end.replace(/-/g, '')});
         const docs = sub.docs || [];
         const txt = R.weeklyReport({submitted: docs, receipts: [], me: `${S.raw.principal?.deptName || ''} ${S.raw.principal?.name || ''}`.trim(), from: sub.from, to: sub.to});
-        return {ok: true, text: `최근 7일 상신 문서는 ${docs.length}건입니다.\n` + docs.slice(0, 6).map(d => `• ${d.title} (${d.status || ''})`).join('\n'), llm: txt.slice(0, 1200), data: {count: docs.length}, cards: [{type: 'nav', label: '보고서 화면에서 초안 편집', view: 'report'}]};
+        const span = `${a.week === 'last' ? '지난주' : '이번 주'}(${+mon.slice(5, 7)}/${+mon.slice(8, 10)}~${+end.slice(5, 7)}/${+end.slice(8, 10)})`;
+        const cards = [...(a.draft && docs.length ? [{type: 'note', tone: 'info', text: txt}] : []), {type: 'nav', label: '보고서 화면에서 초안 편집', view: 'report'}];
+        if (a.draft && docs.length) copyText(txt);
+        return {ok: true, text: `${span} 상신 문서는 ${docs.length}건입니다.${a.draft && docs.length ? ' 아래 초안을 복사해 두었습니다. 상신 문서 목록만으로 만든 초안이라 회의·외부 활동 같은 실적은 직접 보태야 합니다.' : ''}\n` + (a.draft ? '' : docs.slice(0, 6).map(d => `• ${d.title} (${d.status || ''})`).join('\n')), llm: txt.slice(0, 1200), data: {count: docs.length, from: mon, to: end}, cards};
       } catch (e) { return {ok: false, text: '주간 실적을 읽지 못했습니다: ' + String(e.message || e).slice(0, 80)}; }
     },
   });

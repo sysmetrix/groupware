@@ -9,7 +9,9 @@
   const CHAT_TOOLS = new Map();
   function chatRegisterTool(def) { if (def && def.name && typeof def.run === 'function') CHAT_TOOLS.set(def.name, def); }
   // 외부 AI에 보낼 수 있다고 검토된 도구별 요약만 허용한다. 원본 data, 제목, 식별자, URL은 보내지 않는다.
-  const CHAT_LLM_SUMMARY = new Set(['list_mail', 'list_approvals', 'list_notices', 'list_deadlines', 'get_capabilities']);
+  const CHAT_LLM_SUMMARY = new Set(['list_mail', 'list_approvals', 'list_notices', 'list_deadlines', 'get_capabilities', 'plan_priorities', 'read_mail']);
+  // 로컬 규칙이 확실히 알아들은 이 도구들은 '정리·요약' 같은 말투 때문에 AI로 돌리지 않는다(v0.86.0: AI 경로가 같은 도구를 여러 번 부르고 답을 이어 붙이던 문제).
+  const CHAT_LOCAL_FIRST = new Set(['plan_priorities', 'read_mail', 'list_deadlines', 'list_tasks', 'list_mail', 'list_approvals', 'get_weekly_summary', 'draft_mail_reply', 'get_leave_status', 'get_staff_status']);
   const CHAT_COMPOSE = new Set(); // 검토되지 않은 원문·구조화 데이터는 정리에 보내지 않는다
   // 자동 실행(37번 조각)에서는 조회만 한다. 실행(act) 도구와 화면을 바꾸는 도구는 막는다.
   const CHAT_AUTO_BLOCK = new Set(['open_view', 'open_item', 'refresh_data']);
@@ -84,7 +86,7 @@
     if (urgent) out.push('급한 일 알려줘');
     if (unread) out.push('안 읽은 메일 보여줘');
     if (pending) out.push('결재할 문서 있어?');
-    out.push('오늘 요약해줘', '앞으로 2주 마감 기한 알려줘', '내일 일정 알려줘', '연차 현황 알려줘', '오늘 누가 출장이야?', '답장 필요한 메일 있어?', '뭘 할 수 있어?');
+    out.push('오늘 뭐부터 해야 해?', '오늘 요약해줘', '앞으로 2주 마감 기한 알려줘', '내일 일정 알려줘', '연차 현황 알려줘', '오늘 누가 출장이야?', '답장 필요한 메일 있어?', '뭘 할 수 있어?');
     return [...new Set(out)];
   }
   const chatNowStr = () => { const p = R.kstNow(new Date()); return `${p.date} (${R.chatDowName(p.date)}) ${new Date(Date.now() + 9 * 3600000).toISOString().slice(11, 16)}`; };
@@ -100,7 +102,7 @@
     // 대화 이력이나 외부 자료의 문구만으로 직원 개인을 새로 지정하지 않는다.
     if (ctx.viaAi && name === 'get_staff_status' && args && typeof args.name === 'string' && args.name.trim() && !(ctx.userText || '').replace(/\s/g, '').includes(args.name.replace(/\s/g, ''))) return {ok: false, text: '현재 요청에 없는 직원을 추정해 조회하지 않았습니다. 직원 이름을 직접 알려 주세요.'};
     // 특정 행사 조건을 지원하지 않는 일반 일정 도구가 조건을 버리고 '없음'이라고 답하지 않도록 한다.
-    if (ctx.viaAi && name === 'get_schedule' && /(일정|스케줄|약속|회의)/.test(ctx.userText || '') && !R.chatIntent(ctx.userText, new Date()).tool) return {ok: false, text: '특정 행사나 사업을 일반 일정 조회만으로 확인할 수 없습니다. 일정의 출처와 날짜를 확인해 주세요. 구글 캘린더는 직접 읽지 않습니다.'};
+    if (ctx.viaAi && name === 'get_schedule' && /(일정|스케줄|약속|회의)/.test(ctx.userText || '') && !R.chatIntent(ctx.userText, new Date()).tool && R.chatScheduleSubject(ctx.userText) && !(args && typeof args.query === 'string' && args.query.trim().length >= 2)) return {ok: false, text: '특정 행사나 사업을 일반 일정 조회만으로 확인할 수 없습니다. 일정의 출처와 날짜를 확인해 주세요. 구글 캘린더는 직접 읽지 않습니다.'};
     // AI가 사업·행사명을 직원으로 추정한 경우에도 실제 직원 근태를 조회하지 않는다.
     if (ctx.viaAi && name === 'get_staff_status' && /(일정|스케줄|약속|회의)/.test(ctx.userText || '') && (/(사업|행사|프로그램|프로젝트)/.test(ctx.userText || '') || !/(님|씨|팀장|실장|과장|대리|주임|센터장|선생님|직원|출장|휴가|연차|교육|근태|자리|어디|계셔|누가)/.test(ctx.userText || ''))) return {ok: false, text: '행사·사업 일정인지 직원 근태 일정인지 명확하지 않아 직원 근태를 조회하지 않았습니다. 대상을 확인해 주세요.'};
     const chip = {name, label: def.label || name, state: 'run'};
@@ -114,6 +116,7 @@
         if (hit.itemId) runArgs.itemId = hit.itemId;
         if (hit.title && !runArgs.query) runArgs.query = hit.title;
         if (hit.uid && !runArgs.mail_key) runArgs.mail_key = hit.itemId || '';
+        if (hit.uid && !runArgs.uid) runArgs.uid = hit.uid;
       }
     }
     let res;
@@ -132,7 +135,13 @@
     } else if (res.ok) {
       st.ctx.pendingSlot = null;
     }
-    for (const c of res.cards || []) {
+    // 한 통만 찾은 메일 목록이면 다음 말("그거 답장 써줘")의 대상으로 기억한다.
+    if (res.ok && res.data && Array.isArray(res.data.items) && res.data.items.length === 1 && res.data.items[0].uid && typeof cuSetFocus === 'function') { const it = res.data.items[0]; cuSetFocus({key: it.itemId || '', title: it.title || '', ref: {box: it.box || 'INBOX', uid: it.uid}}); }
+    chatAddCards(st, msg, res.cards);
+    return res;
+  }
+  function chatAddCards(st, msg, cards) {
+    for (const c of cards || []) {
       if (c && c.type === 'confirm') {
         const id = 'cf' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
         const card = {...c, id, fresh: true, state: '', result: ''}; const fn = c.onConfirm; delete card.onConfirm;
@@ -140,7 +149,9 @@
         msg.cards.push(card);
       } else if (c) msg.cards.push(c);
     }
-    return res;
+    // '이어서' 버튼 묶음은 늘 맨 아래에 둔다(확인 카드의 결과 카드가 뒤에 붙어도)
+    const chips = msg.cards.filter(c => c && c.type === 'chips');
+    if (chips.length && msg.cards[msg.cards.length - 1] !== chips[chips.length - 1]) msg.cards = [...msg.cards.filter(c => !(c && c.type === 'chips')), chips[chips.length - 1]];
   }
 
   // ---------- 확인 카드 ----------
@@ -161,13 +172,13 @@
       if (S.userKey !== owner || S.chat !== st) return;
       p.card.state = r && r.ok === false ? 'err' : 'done';
       p.card.result = (r && r.text) || '처리했습니다.';
-      for (const c of (r && r.cards) || []) if (c && c.type !== 'confirm') p.msg.cards.push(c);
+      chatAddCards(st, p.msg, (r && r.cards) || []);
     } catch (e) { if (S.userKey !== owner || S.chat !== st) return; logError('chatConfirm', e.message); p.card.state = 'err'; p.card.result = '처리하지 못했습니다: ' + String(e.message || e).slice(0, 100); }
     if (S.userKey !== owner || S.chat !== st) return;
     chatRefresh(true); chatSave();
   }
 
-  const CHAT_HELP = '아직 이해하지 못했습니다. 이렇게 말씀해 보세요.\n• 오늘 요약해줘 · 급한 일 알려줘\n• 안 읽은 메일 보여줘 · 결재할 문서 있어?\n• 내일 일정 알려줘 · 연차 현황 알려줘\n• 11/12 연차 신청해줘 · 차량 예약 가능한 시간\n• 매일 9시에 아침 브리핑 해줘\n전체 목록은 “뭘 할 수 있어?”라고 물어보세요.';
+  const CHAT_HELP = '아직 이해하지 못했습니다. 이렇게 말씀해 보세요.\n• 오늘 요약해줘 · 급한 일 알려줘\n• 안 읽은 메일 보여줘 · 결재할 문서 있어?\n• 오늘 뭐부터 해야 해? · ○○ 메일 무슨 내용이야?\n• 내일 일정 알려줘 · 연차 현황 알려줘\n• 11/12 연차 신청해줘 · 차량 예약 가능한 시간\n• 매일 9시에 아침 브리핑 해줘\n전체 목록은 “뭘 할 수 있어?”라고 물어보세요.';
 
   // ---------- Gemini 호출 (모델 자동 전환) ----------
   async function chatGemini(body, ctl) {
@@ -273,9 +284,10 @@
     contents.push({role: 'user', parts: [{text: R.chatSanitizeText(text, 600)}]});
     const tools = rephrase ? [] : R.chatToGeminiTools([...CHAT_TOOLS.values()]);
     const system = R.chatSystemPrompt(chatNowStr(), name, org);
-    const texts = []; let anySuccess = false, scheduleVerified = false, relevantSuccess = false, privateResult = false;
+    const texts = [], calls = new Map(); let anySuccess = false, scheduleVerified = false, relevantSuccess = false, privateResult = false;
     const expectedTool = R.chatIntent(text, new Date()).tool;
-    const ambiguousSchedule = /(일정|스케줄|약속|회의)/.test(text) && !R.chatIntent(text, new Date()).tool;
+    // 행사·사업 같은 대상 낱말이 있을 때만 모호하다고 본다(날짜만 있는 비교 질문은 일반 일정 조회로 답한다, v0.86.0).
+    const ambiguousSchedule = /(일정|스케줄|약속|회의)/.test(text) && !R.chatIntent(text, new Date()).tool && !!R.chatScheduleSubject(text);
     // 대상이 모호할 때는 도구 호출을 강제하지 않아 확인 질문을 할 수 있어야 한다.
     const needTool = !ambiguousSchedule && /일정|할\s*일|연차|근태|근무|출장|휴가|예산|결재|상신|메일|공지|알림|공문|차량|예약|지문|실적|기한|마감|신청|자동화|브리핑/.test(text);
     for (let round = 0; round < 3; round++) {
@@ -289,10 +301,10 @@
       if (!r.calls.length) {
         if (ambiguousSchedule && !scheduleVerified) { ai.text = '일정 대상을 확인하지 못했습니다. 행사·사업명과 날짜, 그룹웨어 또는 구글 캘린더 중 확인할 곳을 알려 주세요. 아직 일정을 조회하지 않았습니다.'; return; }
         if (round === 0 && needTool && !texts.length) { ai.text = '그룹웨어 자료를 조회할 도구가 호출되지 않아 단정적으로 답할 수 없습니다. 구체적으로 다시 질문해 주세요.'; return; }
-        if (texts.length && !anySuccess) { ai.text = texts.join('\n'); return; }
+        if (texts.length && !anySuccess) { ai.text = R.chatJoinTexts(texts); return; }
         if (needTool && expectedTool && !relevantSuccess) { ai.text = '요청에 맞는 자료를 확인하지 못했습니다. 해당 자료는 아직 조회하지 않았습니다.'; return; }
-        if (needTool && !expectedTool && texts.length) { ai.text = texts.join('\n'); return; }
-        ai.text = privateResult ? (texts.join('\n') || '조회 결과는 화면의 카드에서 확인해 주세요.') : (r.text || texts.join('\n')); ai.historySafe = false; return;
+        if (needTool && !expectedTool && texts.length) { ai.text = R.chatJoinTexts(texts); return; }
+        ai.text = privateResult ? (R.chatJoinTexts(texts) || '조회 결과는 화면의 카드에서 확인해 주세요.') : (r.text || R.chatJoinTexts(texts)); ai.historySafe = false; return;
       }
       let fc = 0;
       const keptParts = r.parts.filter(p => !p.functionCall || (++fc <= 4));
@@ -300,17 +312,19 @@
       const resp = [];
       for (const call of r.calls.slice(0, 4)) {
         if (S.chat !== st || st.stopped || st.seq !== runSeq) return;
-        const res = await chatExec(call.name, call.args, ai, {userText: text, viaAi: true});
+        const ck = R.chatCallKey(call.name, call.args), dup = calls.get(ck);
+        const res = dup || await chatExec(call.name, call.args, ai, {userText: text, viaAi: true});
+        if (!dup) calls.set(ck, res);
         if (S.chat !== st || st.stopped || st.seq !== runSeq) return;
         if (res.ok) { anySuccess = true; if (call.name === expectedTool) relevantSuccess = true; if (call.name === 'get_schedule' && call.args && typeof call.args.query === 'string' && call.args.query.trim().length >= 2) scheduleVerified = true; }
-        if (res.text) texts.push(res.text);
+        if (res.text && !dup) texts.push(res.text);
         if (res.ok && (!CHAT_LLM_SUMMARY.has(call.name) || typeof res.llm !== 'string')) privateResult = true;
         const safeText = res.ok ? (CHAT_LLM_SUMMARY.has(call.name) && typeof res.llm === 'string' ? res.llm : '도구 실행 결과는 화면에 표시됩니다. 상세 자료는 외부 AI에 전달하지 않았습니다.') : (/자동 저장하지 않았습니다|현재 요청에 없는 직원을 추정|특정 행사나 사업|행사·사업 일정인지 직원 근태/.test(res.text || '') ? res.text : '도구 실행에 실패하거나 차단되었습니다.');
         resp.push({functionResponse: {name: call.name, response: {result: {ok: !!res.ok, text: R.chatSanitizeText(safeText, 600)}}}});
       }
       contents.push({role: 'user', parts: resp});
     }
-    if (!st.stopped && st.seq === runSeq) ai.text = ambiguousSchedule && !scheduleVerified ? '일정 대상을 확인하지 못했습니다. 아직 일정을 조회하지 않았습니다.' : needTool && expectedTool && !relevantSuccess && anySuccess ? '요청에 맞는 자료를 확인하지 못했습니다. 해당 자료는 아직 조회하지 않았습니다.' : texts.join('\n') || '요청을 정리하지 못했습니다. 조금 더 구체적으로 말씀해 주세요.';
+    if (!st.stopped && st.seq === runSeq) ai.text = ambiguousSchedule && !scheduleVerified ? '일정 대상을 확인하지 못했습니다. 아직 일정을 조회하지 않았습니다.' : needTool && expectedTool && !relevantSuccess && anySuccess ? '요청에 맞는 자료를 확인하지 못했습니다. 해당 자료는 아직 조회하지 않았습니다.' : R.chatJoinTexts(texts) || '요청을 정리하지 못했습니다. 조금 더 구체적으로 말씀해 주세요.';
   }
 
   async function chatSend(text, opt = {}) {
@@ -341,9 +355,18 @@
           it = {tool: st.ctx.pendingSlot.tool, args: merged, confidence: 1};
         }
       }
+      // "그거/그 메일"은 앞에서 다룬 메일(대화 초점)로 채운다(v0.86.0).
+      const fx = !weekday && typeof cuFocus === 'function' && R.chatRefersBack(text) ? cuFocus() : null;
+      if (fx) {
+        const ref = {mail_key: fx.key || '', uid: fx.uid, box: fx.box};
+        if (['draft_mail_reply', 'read_mail', 'check_sent_reply'].includes(it.tool)) it = {...it, args: {...it.args, ...ref, query: ''}, confidence: 1};
+        else if (it.tool === 'add_todo') it = {...it, args: {title: `메일 처리: ${fx.title}`.slice(0, 80), due: it.args.due || (fx.local && fx.local.deadlines && fx.local.deadlines[0]) || ''}, confidence: 1};
+        else if ((!it.tool || it.tool === 'list_tasks') && /(내용|요약|요점|핵심|뭐래|해야|필요|기한|언제까지|첨부)/.test(text)) it = {tool: 'read_mail', args: ref, confidence: 1};
+      }
       // 기능 안내를 문장으로 요청한 경우에는 버튼 목록을 재출력하지 않는다. AI 연결 없이도 형식을 지킨다.
       const proseCaps = it.tool === 'get_capabilities' && /(?:문장|서술)(?:으로|형태|식)?/.test(text);
-      const preferAi = ready && it.tool !== 'get_leave_status' && !auto && !weekday && !proseCaps && !(st.ctx && st.ctx.pendingSlot) && R.chatPreferGemini(text);
+      const localSure = !!fx || (CHAT_LOCAL_FIRST.has(it.tool) && it.confidence >= 1 && !/(?:그리고|그다음|동시에|함께|각각|비교|차이|이유|왜|설명|자세히|서술|문장으로|표로)/.test(text) && !/(?:방금|직전|앞서|위에)\s*(?:답|말|내용)?/.test(text));
+      const preferAi = ready && it.tool !== 'get_leave_status' && !auto && !weekday && !proseCaps && !localSure && !(st.ctx && st.ctx.pendingSlot) && R.chatPreferGemini(text);
       const known = !preferAi && it.tool && it.confidence >= (ready ? 0.9 : 0.6) && CHAT_TOOLS.has(it.tool);
       if (known) {
         const res = await chatExec(it.tool, it.args, ai, {userText: text, viaAi: false, auto: !!auto});

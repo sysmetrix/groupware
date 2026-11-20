@@ -596,12 +596,12 @@ ${mailFilesBox(m)}
     }
     return null;
   }
-  async function autoFillMail(templateType) {
+  async function autoFillMail(templateType, custom = null) {
     if (S.pane.fillBusy) return false;
     S.pane.fillBusy = true;
-    try { return await autoFillMailRun(templateType); } finally { S.pane.fillBusy = false; }
+    try { return await autoFillMailRun(templateType, custom); } finally { S.pane.fillBusy = false; }
   }
-  async function autoFillMailRun(templateType) {
+  async function autoFillMailRun(templateType, custom = null) {
     // 메일 읽기 화면이나 빈 처리 창에서 눌러도, 고른 메일의 답장 화면을 처리 창에 먼저 연다.
     if (!isMailCompose(S.pane.url)) {
       const m = paneMailRef();
@@ -646,6 +646,13 @@ ${mailFilesBox(m)}
 <p>&nbsp; 4. 비고: ${hasAttach ? '세부 사항은 첨부파일을 참조하여 주시기 바랍니다.' : '(첨부파일을 붙이거나 내용을 적으세요)'}</p>
 <p><br></p>
 <p>감사합니다.</p><p><br></p>`;
+    } else if (templateType === 'custom' && Array.isArray(custom) && custom.length) {
+      // AI 초안(v0.86.0): 인사·맺음은 여기서 붙이고, 초안 문단은 글자로만 넣는다(HTML로 해석하지 않음).
+      bodyText = `<p>안녕하십니까, ${esc(me)}입니다.</p>
+<p><br></p>
+${custom.slice(0, 12).map(l => `<p>${esc(String(l).slice(0, 400))}</p>`).join('\n')}
+<p><br></p>
+<p>감사합니다.</p><p><br></p>`;
     } else if (templateType === 'extend') {
       bodyText = `<p>안녕하십니까, ${esc(me)}입니다.</p>
 <p><br></p>
@@ -669,7 +676,8 @@ ${mailFilesBox(m)}
     let injected = put();
     // 그룹웨어가 본문을 뒤늦게 다시 채워 문구가 지워졌으면 한 번 더 넣는다.
     if (injected) { await new Promise(r => setTimeout(r, 900)); if (S.pane.url !== url) return false; if (!has()) injected = put() && has(); }
-    if (injected) toast(`회신 문구를 본문 맨 위에 넣었습니다. 괄호 칸을 채우고${templateType === 'submit' && !hasAttach ? ' 첨부파일을 붙인 뒤' : ''} 직접 보내세요.`);
+    if (injected && templateType === 'custom') toast('AI 초안을 본문 맨 위에 넣었습니다. 사실관계와 (확인 필요) 칸을 고친 뒤 직접 보내세요.');
+    else if (injected) toast(`회신 문구를 본문 맨 위에 넣었습니다. 괄호 칸을 채우고${templateType === 'submit' && !hasAttach ? ' 첨부파일을 붙인 뒤' : ''} 직접 보내세요.`);
     else toast('메일 편집기를 찾지 못했습니다. 답장 화면이 다 뜬 뒤 회신문 버튼을 다시 누르세요.');
     return injected;
   }

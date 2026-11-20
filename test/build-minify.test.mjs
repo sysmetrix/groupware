@@ -6,13 +6,13 @@ import path from 'node:path';
 import {build, MAX_SHIPPED_BUNDLE_BYTES} from '../scripts/live-build.mjs';
 import {minifySafely, TERSER_VERSION} from '../scripts/terser-minify.mjs';
 
-test('work90 minifier is local, formatting-only, and deterministic', async () => {
+test('work90 minifier is local and deterministic; v0.86.0 shortens only function-local names', async () => {
   const source = '/* removable */ function keepName(longArgument) { const untouched = longArgument + 1; return untouched; }';
   const first = await minifySafely(source);
   const second = await minifySafely(source);
   assert.equal(first, second);
-  assert.match(first, /function keepName\(longArgument\)/);
-  assert.match(first, /const untouched=longArgument\+1/);
+  assert.match(first, /function keepName\(\w+\)/); // 최상위 이름은 그대로, 지역 이름(인자·지역 변수)만 짧아진다
+  assert.match(first, /const \w+=\w+\+1/);
   assert.doesNotMatch(first, /removable/);
   assert.equal(TERSER_VERSION, '5.44.1');
 });

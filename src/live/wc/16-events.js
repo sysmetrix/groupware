@@ -305,6 +305,7 @@
       case 'chatConfirm':
       case 'chatCancel':
       case 'chatSetupAi':
+      case 'aiBodyMode':
       case 'chatFocus':
       case 'chatOpenItem':
       case 'chatNav':

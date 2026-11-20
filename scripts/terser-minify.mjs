@@ -21,12 +21,16 @@ async function loadTerser() {
   return terserPromise;
 }
 
-/** Compact equivalent expressions and declarations; keep identifier and property names intact. */
+/**
+ * Compact equivalent expressions and declarations and shorten function-local names (v0.86.0: ~100KB smaller).
+ * Top-level and property names stay intact (window.BWYFGW*, data-act dispatch, message types); sources use no eval/with,
+ * so renaming locals cannot change any lookup. Tests load the unminified sources, not this output.
+ */
 export async function minifySafely(code) {
   const terser = await loadTerser();
   const result = await terser.minify(code, {
     compress: {defaults: false, booleans: true, arrows: true, sequences: true, join_vars: true},
-    mangle: false,
+    mangle: {toplevel: false},
     format: {comments: false},
   });
   if (result.error) throw result.error;

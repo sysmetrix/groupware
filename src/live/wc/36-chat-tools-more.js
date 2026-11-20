@@ -207,13 +207,17 @@
       if (q.length < 2) return {ok: false, text: '찾을 사업이나 예산 과목 이름을 알려 주세요. 예) 출장비 잔액 알려줘', cards: [nav]};
       if (!GW.budgetAll) return {ok: false, text: '전체 사업 예산 조회를 쓸 수 없습니다.', cards: [nav]};
       let all; try { all = await GW.budgetAll({}); } catch (e) { return {ok: false, text: '전체 사업 예산을 읽지 못했습니다: ' + String(e.message || e).slice(0, 80), cards: [nav]}; }
-      const res = R.searchBudget(R.budgetRecords(all), q, {max: 8}), failed = (all.projects || []).filter(p => p.error).length;
+      const recs = R.budgetRecords(all), res = R.searchBudget(recs, q, {max: 8}), failed = (all.projects || []).filter(p => p.error).length;
+      // 사업(단위사업·항/관) 이름 자체를 물었으면 그 사업 전체 합계를 먼저 답한다(v0.86.0: 세목만 나열하던 문제).
+      const qn = q.replace(/\s+/g, ''), units = qn.length >= 3 ? recs.filter(r => !r.empty && (r.level === '항' || r.level === '관') && r.name.replace(/\s+/g, '').includes(qn)) : [];
+      const unit = units.length === 1 ? units[0] : null;
+      const unitTxt = unit ? `${unit.name}(${unit.projectName || unit.project}) 사업 전체: 예산 ${won(unit.budget)}원 · 집행 ${won(unit.executed)}원(${pct(unit.rate)}) · 잔액 ${won(unit.balance)}원입니다.\n` : '';
       const limit = failed ? `\n확인 제한: 사업 ${failed}개는 읽지 못해 결과에서 빠졌을 수 있습니다.` : '';
       if (!res.rows.length) return {ok: true, text: `“${q}”에 해당하는 예산 과목을 찾지 못했습니다. 과목 이름의 일부나 사업 코드로 다시 물어봐 주세요.${limit}`, data: {count: 0}, cards: [nav]};
       const top = res.rows[0];
       const line = r => `${r.name}: 예산 ${won(r.budget)}원 · 집행 ${won(r.executed)}원(${pct(r.rate)}) · 잔액 ${won(r.balance)}원`;
-      return {ok: true, text: `“${q}” 과목은 ${res.total}건 찾았습니다${res.mode === 'any' ? '(일부 단어만 일치)' : ''}.${res.total === 1 ? ` ${top.projectName || top.project}의 ${line(top)}입니다.` : ' 여러 사업이 일치합니다. 아래 목록에서 사업과 과목을 확인해 주세요.'}${limit}`,
-        data: {count: res.total, items: res.rows.map(r => ({project: r.projectName || r.project, name: r.name, level: r.level, budget: r.budget, executed: r.executed, balance: r.balance, rate: r.rate}))},
+      return {ok: true, text: `${unitTxt}“${q}” 과목은 ${res.total}건 찾았습니다${res.mode === 'any' ? '(일부 단어만 일치)' : ''}.${res.total === 1 ? ` ${top.projectName || top.project}의 ${line(top)}입니다.` : ' 여러 사업이 일치합니다. 아래 목록에서 사업과 과목을 확인해 주세요.'}${limit}`,
+        data: {count: res.total, ...(unit ? {unit: {name: unit.name, budget: unit.budget, executed: unit.executed, balance: unit.balance, rate: unit.rate}} : {}), items: res.rows.map(r => ({project: r.projectName || r.project, name: r.name, level: r.level, budget: r.budget, executed: r.executed, balance: r.balance, rate: r.rate}))},
         cards: [{type: 'list', title: '예산 과목', items: res.rows.map(r => ({title: `${r.name} (${r.level})`, sub: [r.projectName || r.project, ...r.trail.slice(-2)].filter(Boolean).join(' › ') + ` · 집행 ${won(r.executed)}원 / 잔액 ${won(r.balance)}원`, badge: r.empty ? '미사용' : pct(r.rate), tone: 'info'})), more: Math.max(0, res.total - res.rows.length)}, nav]};
     },
   });
@@ -295,7 +299,7 @@
     params: {type: 'object', properties: {}},
     run: async (_a, ctx) => {
       const prose = /문장|글로|줄글|서술|목록\s*(말고|없이)|버튼\s*(말고|없이)/.test((ctx && ctx.userText) || '');
-      const text = '저는 수집된 그룹웨어 자료를 바탕으로 할 일, 메일 목록, 결재함, 공지, 일정, 근태, 연차와 예산 현황을 확인하고 문서를 검색할 수 있습니다. 휴가·출장·시간외 신청서, 차량 예약, 기안과 메일 작성은 확인할 수 있도록 준비해 드립니다. 정해진 시각에 조회와 브리핑을 실행하는 자동화도 지원합니다. 구글 캘린더 일정은 직접 읽지 못하며, 자료가 누락되었거나 확인하지 못한 내용은 알 수 없다고 안내합니다. 신청·발송은 확인 카드와 원래 화면의 안내에 따라 사용자가 직접 진행해야 합니다.';
+      const text = '저는 수집된 그룹웨어 자료를 바탕으로 할 일, 메일 목록, 결재함, 공지, 일정, 근태, 연차와 예산 현황을 확인하고 문서를 검색할 수 있습니다. 먼저 할 일을 이유와 함께 고르고, 고른 메일 한 통을 읽어 요청·기한·답장 필요 여부를 정리하며, 동의하시면 AI 요약과 맞춤 답장 초안까지 만듭니다. 휴가·출장·시간외 신청서, 차량 예약, 기안과 메일 작성은 확인할 수 있도록 준비해 드립니다. 정해진 시각에 조회와 브리핑을 실행하는 자동화도 지원합니다. 구글 캘린더 일정은 직접 읽지 못하며, 자료가 누락되었거나 확인하지 못한 내용은 알 수 없다고 안내합니다. 신청·발송은 확인 카드와 원래 화면의 안내에 따라 사용자가 직접 진행해야 합니다.';
       return {ok: true, text: prose ? text : text + '\n아래 예시를 누르면 바로 실행합니다.', llm: text, cards: prose ? [] : CHAT_CAPS.map(([title, qs]) => ({type: 'chips', title, items: qs}))};
     },
   });
