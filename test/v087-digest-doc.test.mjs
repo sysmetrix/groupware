@@ -295,3 +295,14 @@ test('v0.94.0: 홈 "챙겨 둘 것"에 놓치기 쉬운 일 신호가 있고, �
   const read = fs.readFileSync(new URL('../src/live/wc/32-chat-tools-read.js', import.meta.url), 'utf8');
   assert.match(read, /name: 'get_resource_status', label: '자원 예약 현황'/);
 });
+
+test('v0.95.0: 본문 기한 — 회신·제출 요구 메일만, 지난 7일~앞으로, 답장에 인용된 내 요청의 기한은 제외', () => {
+  const yes = CU.cuReplyNeed({text: '양식을 작성하여 11월 25일까지 회신 부탁드립니다.'});
+  assert.equal(CU.cuBodyDeadline([{date: '2026-11-30'}, {date: '2026-11-25'}], yes, '2026-11-21'), '2026-11-25');
+  assert.equal(CU.cuBodyDeadline([{date: '2026-11-25'}], CU.cuReplyNeed({text: '행사를 안내드립니다.'}), '2026-11-21'), '');
+  assert.equal(CU.cuBodyDeadline([{date: '2026-10-01'}], yes, '2026-11-21'), '');
+  const quoted = '센터 의견입니다. 원문: 11월 18일(수)까지 회신해 주시면 반영하겠습니다. 감사합니다. 전략경영실 홍길동 T. 032';
+  assert.equal(CU.cuBodyDeadline([{date: '2026-11-18'}], CU.cuReplyNeed({text: quoted}), '2026-11-21', {body: quoted, self: '홍길동'}), '');
+  const r = CU.cuRisks([{key: 'm', title: '자료 요청', state: 'todo', type: 'mail', base: 'mailReply', deadline: '2026-11-22', dlSource: 'body', when: '2026-11-21'}], {today: '2026-11-21'});
+  assert.match(r[0].why[0], /^본문의 기한 11\/22/);
+});

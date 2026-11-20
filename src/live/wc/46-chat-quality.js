@@ -1,6 +1,31 @@
   // ---------- 46. 자유 질문 품질 (v0.91.0) ----------
   // 실사용 자유 질문 10개 점검에서 틀리던 유형: 놓치기 쉬운 일·휴가 전 처리, 신청 횟수, 사업 예산 상태, ○○ 건(메일 아니면 문서).
 
+  // v0.95.0: 메일 할 일에 기한이 없으면, 회신·제출을 요구하는 본문의 날짜를 기한으로 본다(이미 읽은 메일만 본문을 연다: 읽음 상태가 바뀌지 않음)
+  function cuRiskItem(x, det) {
+    const it = {key: x.key, title: x.title, state: stateOf(x), base: x.base, type: x.type, deadline: x.deadline && x.deadline.date || '', when: x.when || ''};
+    if (!it.deadline && det && !det.error) {
+      const body = cuBodyText(det), d = R.cuBodyDeadline(R.extractAllDeadlines(body, new Date()), R.cuReplyNeed({subject: det.subject || x.title, text: body}), today(), {body, self: (S.raw && S.raw.principal && S.raw.principal.name) || ''});
+      if (d) { it.deadline = d; it.dlSource = 'body'; }
+    }
+    return it;
+  }
+  const cuCachedDet = x => (x.type === 'mail' && x.ref && S.mailDet && S.mailDet[x.ref.uid] && !S.mailDet[x.ref.uid].error ? S.mailDet[x.ref.uid] : null);
+  function cuRiskItemsCached() { return mineVisible().map(x => cuRiskItem(x, cuCachedDet(x))); }
+  async function cuRiskItemsLoad(max = 8) {
+    const out = []; let opened = 0, unread = 0;
+    for (const x of mineVisible()) {
+      let det = cuCachedDet(x);
+      if (!det && x.type === 'mail' && x.ref && x.ref.uid && !(x.deadline && x.deadline.date)) {
+        const rec = findMail(x.ref.box, x.ref.uid) || findMail('', x.ref.uid);
+        if (rec && rec.seen === true && opened < max) { opened++; try { det = await loadMailDetail(rec, false); } catch { det = null; } }
+        else if (rec && rec.seen !== true) unread++;
+      }
+      out.push(cuRiskItem(x, det));
+    }
+    return {items: out, unread};
+  }
+
   const cuMdw = iso => (/^\d{4}-\d{2}-\d{2}$/.test(String(iso || '')) ? `${+iso.slice(5, 7)}/${+iso.slice(8, 10)}(${'일월화수목금토'[new Date(iso + 'T00:00:00Z').getUTCDay()]})` : '');
 
   chatRegisterTool({
@@ -14,7 +39,7 @@
       const hol = (S.raw && S.raw.data && S.raw.data.schedule && S.raw.data.schedule.holidays) || [];
       let before = start ? chatAddDays(start, -1) : '';
       for (let i = 0; before && i < 7; i++) { const info = R.homeDayInfo({date: before, holidays: hol}); if (!(info.weekend || info.holiday) || before <= t) break; before = chatAddDays(before, -1); }
-      const items = mineVisible().map(x => ({key: x.key, title: x.title, state: stateOf(x), base: x.base, type: x.type, deadline: x.deadline && x.deadline.date || '', when: x.when || ''}));
+      const {items, unread} = await cuRiskItemsLoad(8);
       const risks = R.cuRisks(items, {today: t, until: before});
       // 일정 확인 사항: 오늘~사흘(또는 휴가 전날까지)의 내 근태 일정
       const span = start ? Math.max(1, Math.min(7, Math.round((Date.parse(start) - Date.parse(t)) / 86400000) + 1)) : 3;
@@ -29,7 +54,7 @@
       }
       const why = a.reason || '휴가';
       const head = start ? `${cuMdw(start)} ${why}${startLabels.length ? `(${startLabels.join(', ')})` : ''} 전, ${cuMdw(before)}까지 처리하면 좋은 일 ${risks.length}건입니다.` : risks.length ? `놓치기 쉬운 일 ${risks.length}건입니다.` : '놓치기 쉬운 일은 찾지 못했습니다.';
-      const basis = '기준: 기한, 하루 넘게 안 읽은 요청 메일, 이틀 넘은 답장 확인, 근태 확인, 반려 문서. 메일 본문 속 기한은 메일을 읽어야 보입니다.';
+      const basis = `기준: 기한(회신·제출을 요구하는 메일은 본문의 날짜 포함), 하루 넘게 안 읽은 요청 메일, 이틀 넘은 답장 확인, 근태 확인, 반려 문서.${unread ? ` 안 읽은 메일 ${unread}통은 열면 읽음으로 바뀌어 본문 기한을 보지 않았습니다.` : ''}`;
       const cards = [];
       if (risks.length) cards.push({type: 'list', title: start ? `${why} 전에 처리` : '놓치기 쉬운 일', items: risks.slice(0, 8).map(r => ({title: r.title, sub: r.why.join(' · '), badge: r.level === 0 ? '먼저' : r.level === 1 ? '확인' : '권장', tone: r.level === 0 ? 'urgent' : r.level === 1 ? 'todo' : 'info', act: {act: 'chatOpenItem', v: r.key}})), more: Math.max(0, risks.length - 8)});
       if (tips.length) cards.push({type: 'note', tone: 'info', text: `**일정 확인 사항**\n${[...new Set(tips)].map(x => '• ' + x).join('\n')}`});
