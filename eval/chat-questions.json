@@ -1670,6 +1670,26 @@
       "args": {
         "kind": "trip"
       }
+    },
+    {
+      "id": "v1",
+      "cat": "조회",
+      "q": "지난달 결과보고 문서 찾아줘",
+      "tool": "search_documents",
+      "args": {
+        "scope": "approval"
+      },
+      "why": "기간 낱말은 날짜 범위로"
+    },
+    {
+      "id": "v2",
+      "cat": "조회",
+      "q": "발표 자료 일정 알려줘",
+      "notTool": [
+        "open_view"
+      ],
+      "why": "\"발표\"의 \"표\"로 외부 AI 서식 요청이라 보지 않음",
+      "tool": "get_schedule"
     }
   ]
 }

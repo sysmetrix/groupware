@@ -32,7 +32,7 @@
     if (/^doc:/.test(id)) {
       const docId = id.split(':').pop(), x = pool.find(d => d.docId === docId || d.key === id);
       if (x) return {x};
-      if (a.query) return {x: {key: id, title: String(a.query), docNo: '', year: '', docId}};
+      if (a.query) return {x: {key: id, title: String(a.query), docNo: String(a.docNo || ''), year: /^\d{4}$/.test(a.year || '') ? a.year : '', docId}};
     }
     const q = String(a.query || '').trim();
     if (q) {

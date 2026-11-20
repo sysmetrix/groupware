@@ -11,7 +11,7 @@
   // 외부 AI에 보낼 수 있다고 검토된 도구별 요약만 허용한다. 원본 data, 제목, 식별자, URL은 보내지 않는다.
   const CHAT_LLM_SUMMARY = new Set(['list_mail', 'list_approvals', 'list_notices', 'list_deadlines', 'get_capabilities', 'plan_priorities', 'read_mail', 'read_doc', 'digest_mail', 'read_attachment', 'check_risks', 'write_text']);
   // 로컬 규칙이 확실히 알아들은 이 도구들은 '정리·요약' 같은 말투 때문에 AI로 돌리지 않는다(v0.86.0: AI 경로가 같은 도구를 여러 번 부르고 답을 이어 붙이던 문제).
-  const CHAT_LOCAL_FIRST = new Set(['small_talk', 'multi_read', 'write_text', 'plan_priorities', 'read_mail', 'read_doc', 'digest_mail', 'read_attachment', 'check_risks', 'list_my_requests', 'get_budget', 'list_deadlines', 'list_tasks', 'list_mail', 'list_approvals', 'get_weekly_summary', 'draft_mail_reply', 'get_leave_status', 'get_staff_status']);
+  const CHAT_LOCAL_FIRST = new Set(['get_overview', 'list_automations', 'refresh_data', 'mark_task', 'small_talk', 'multi_read', 'write_text', 'plan_priorities', 'read_mail', 'read_doc', 'digest_mail', 'read_attachment', 'check_risks', 'list_my_requests', 'get_budget', 'list_deadlines', 'list_tasks', 'list_mail', 'list_approvals', 'get_weekly_summary', 'draft_mail_reply', 'get_leave_status', 'get_staff_status']);
   const CHAT_COMPOSE = new Set(); // 검토되지 않은 원문·구조화 데이터는 정리에 보내지 않는다
   // 자동 실행(37번 조각)에서는 조회만 한다. 실행(act) 도구와 화면을 바꾸는 도구는 막는다.
   const CHAT_AUTO_BLOCK = new Set(['open_view', 'open_item', 'refresh_data']);
@@ -120,6 +120,7 @@
         if (hit.title && !runArgs.query) runArgs.query = hit.title;
         if (hit.uid && !runArgs.mail_key) runArgs.mail_key = hit.itemId || '';
         if (hit.uid && !runArgs.uid) runArgs.uid = hit.uid;
+        if (hit.docNo && !runArgs.docNo) { runArgs.docNo = hit.docNo; runArgs.year = String(hit.date || '').slice(0, 4); } // 검색 결과의 문서번호를 넘겨 다시 찾지 않는다(v1.5.0)
       }
     }
     let res;
@@ -131,7 +132,7 @@
     chip.state = res.ok ? 'ok' : 'err';
     if (typeof usageNote === 'function') usageNote(ctx.viaAi ? 'toolAi' : 'tool', name + (res.ok ? '' : ':err')); // 도구 이름과 성공 여부만 센다(40-usage.js)
     if (res.ok && res.data && Array.isArray(res.data.items) && res.data.items.length) {
-      st.ctx.lastItems = res.data.items.map(it => ({itemId: it.itemId || '', title: it.title || '', uid: it.uid || '', url: it.url || '', type: it.type || (it.uid ? 'mail' : '')}));
+      st.ctx.lastItems = res.data.items.map(it => ({itemId: it.itemId || '', title: it.title || '', uid: it.uid || '', url: it.url || '', type: it.type || (it.uid ? 'mail' : ''), docNo: it.docNo || '', date: it.date || ''}));
       { const ty = st.ctx.lastItems[0].type; if (ty && st.ctx.lastItems.every(i => i.type === ty)) st.ctx.byType = {...(st.ctx.byType || {}), [ty]: st.ctx.lastItems}; }
       st.ctx.pendingSlot = null;
     } else if (!res.ok && /^prepare_|^reserve_/.test(name) && /날짜|시간/.test(res.text || '')) {
@@ -383,7 +384,7 @@
       }
       // 기능 안내를 문장으로 요청한 경우에는 버튼 목록을 재출력하지 않는다. AI 연결 없이도 형식을 지킨다.
       const proseCaps = it.tool === 'get_capabilities' && /(?:문장|서술)(?:으로|형태|식)?/.test(text);
-      const localSure = !!fx || it.tool === 'small_talk' || (CHAT_LOCAL_FIRST.has(it.tool) && it.confidence >= 1 && ((it.args && it.args.compare) || it.tool === 'multi_read' || !/(?:그리고|그다음|동시에|함께|각각|비교|차이|이유|왜|설명|자세히|서술|문장으로|표로)/.test(text)) && !/(?:방금|직전|앞서|위에)\s*(?:답|말|내용)?/.test(text));
+      const localSure = !!fx || it.tool === 'small_talk' || (['plan_priorities', 'check_risks'].includes(it.tool) && !/(문장|서술|표로|비교)/.test(text)) || (CHAT_LOCAL_FIRST.has(it.tool) && it.confidence >= 1 && ((it.args && it.args.compare) || it.tool === 'multi_read' || !/(?:그리고|그다음|동시에|함께|각각|비교|차이|이유|왜|설명|자세히|서술|문장으로|표로)/.test(text)) && !/(?:방금|직전|앞서|위에)\s*(?:답|말|내용)?/.test(text));
       const preferAi = ready && it.tool !== 'get_leave_status' && !auto && !weekday && !proseCaps && !localSure && !(st.ctx && st.ctx.pendingSlot) && R.chatPreferGemini(text);
       const known = !preferAi && it.tool && it.confidence >= (ready ? 0.9 : 0.6) && CHAT_TOOLS.has(it.tool);
       if (known) {
