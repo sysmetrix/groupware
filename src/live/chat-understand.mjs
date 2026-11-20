@@ -293,3 +293,72 @@ export function cuParseImageAi(text) {
   return {text: body, summary: base ? base.summary : [], asks: base ? base.asks : [], reply_needed: base ? base.reply_needed : 'maybe', reply_reason: base ? base.reply_reason : ''};
 }
 
+// ---------- 자유 질문 품질 (v0.91.0): 기간, 신청 횟수, 놓치기 쉬운 일, 예산 상태 ----------
+const cuYmd = d => `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(d.getUTCDate()).padStart(2, '0')}`;
+/** 말 속 기간 → {from, to(YYYYMMDD), label}. 이번 달(기본)·지난달·올해·작년·N월·이번 주·지난주. today는 YYYY-MM-DD(KST). */
+export function cuPeriod(text = '', today = '') {
+  const t = String(text || ''), d0 = cuIso(today) ? new Date(today + 'T00:00:00Z') : new Date();
+  const y = d0.getUTCFullYear(), m = d0.getUTCMonth();
+  const month = (yy, mm) => ({from: cuYmd(new Date(Date.UTC(yy, mm, 1))), to: cuYmd(new Date(Date.UTC(yy, mm + 1, 0))), label: `${yy === y ? '' : yy + '년 '}${mm + 1}월`});
+  if (/(지난\s*달|저번\s*달)/.test(t)) return month(m === 0 ? y - 1 : y, (m + 11) % 12);
+  if (/(올해|금년|올\s*한\s*해)/.test(t)) return {from: `${y}0101`, to: cuYmd(d0), label: `올해(${y}년)`};
+  if (/(작년|지난\s*해)/.test(t)) return {from: `${y - 1}0101`, to: `${y - 1}1231`, label: `작년(${y - 1}년)`};
+  if (/(이번|금)\s*주/.test(t) || /(지난|저번)\s*주/.test(t)) {
+    const dow = (d0.getUTCDay() + 6) % 7, mon = new Date(d0.getTime() - (dow + (/(지난|저번)\s*주/.test(t) ? 7 : 0)) * 86400000);
+    return {from: cuYmd(mon), to: cuYmd(new Date(mon.getTime() + 6 * 86400000)), label: /(지난|저번)\s*주/.test(t) ? '지난주' : '이번 주'};
+  }
+  const nm = t.match(/(\d{1,2})\s*월/);
+  if (nm && +nm[1] >= 1 && +nm[1] <= 12) return month(+nm[1] - 1 > m ? y - 1 : y, +nm[1] - 1);
+  return month(y, m);
+}
+const CU_KIND = {출장: /출장/, 휴가: /휴가|연차|반차|반반차|대체|보상/, 시간외: /연장근무|휴일근무|조기근무|시간외/, 외출: /외출/, 교육: /교육/};
+/** 내 근태 신청 중 기간·종류에 맞는 승인 건수와 일수. 결재 중은 따로 센다. */
+export function cuRequestCount(apps = [], {me = '', kind = '', from = '', to = ''} = {}) {
+  const re = CU_KIND[kind] || null, out = {count: 0, days: 0, pending: 0, items: []};
+  for (const a of Array.isArray(apps) ? apps : []) {
+    if (!a || (me && String(a.empCd || '') !== String(me)) || a.deleteReqYn === 'Y') continue;
+    const name = [a.atNm, a.atItemNm].join(' ');
+    if (re && !re.test(name)) continue;
+    const s0 = String(a.startDt || ''), e0 = String(a.endDt || a.startDt || '');
+    if (!/^\d{8}$/.test(s0) || (to && s0 > to) || (from && e0 < from)) continue;
+    if (String(a.approState) === '0') { out.pending++; continue; }
+    if (String(a.approState) !== '1') continue;
+    const s1 = s0 < from ? from : s0, e1 = to && e0 > to ? to : e0;
+    const days = Math.max(1, Math.round((Date.UTC(+e1.slice(0, 4), +e1.slice(4, 6) - 1, +e1.slice(6, 8)) - Date.UTC(+s1.slice(0, 4), +s1.slice(4, 6) - 1, +s1.slice(6, 8))) / 86400000) + 1);
+    out.count++; out.days += days; out.items.push({start: s0, end: e0, name: cuStr(a.atNm || a.atItemNm, 20)});
+  }
+  out.items.sort((p, q) => p.start.localeCompare(q.start));
+  return out;
+}
+/**
+ * 놓치기 쉬운 일: 지난 기한·임박 기한, 오래 안 읽은 요청 메일, 오래된 답장 확인, 근태 확인, 반려 문서.
+ * until(YYYY-MM-DD)을 주면 그날까지 끝내야 할 것(휴가 전 처리)으로 본다. 반환 [{key,title,why,level}] (level: 0 높음 ~ 2).
+ */
+export function cuRisks(items = [], {today = '', until = ''} = {}) {
+  const t0 = cuIso(today), lim = cuIso(until), out = [];
+  const age = w => { const g = /(\d{4})[-./]?(\d{2})[-./]?(\d{2})/.exec(String(w || '')); return g && t0 ? Math.round((Date.parse(t0) - Date.UTC(+g[1], +g[2] - 1, +g[3])) / 86400000) : null; };
+  for (const x of Array.isArray(items) ? items : []) {
+    if (!x || !x.key || x.state === 'info') continue;
+    const dl = cuIso(x.deadline), a = age(x.when), why = [];
+    let level = 3;
+    if (dl && t0 && dl < t0) { why.push(`기한 ${cuMd(dl)}이 지났습니다`); level = 0; }
+    else if (dl && lim && dl <= lim) { why.push(`기한 ${cuMd(dl)}이 ${cuMd(lim)} 전입니다`); level = 0; }
+    else if (dl && t0 && (Date.parse(dl) - Date.parse(t0)) / 86400000 <= 3) { why.push(`기한 ${cuMd(dl)}이 3일 안입니다`); level = 0; }
+    if (x.base === 'rejected') { why.push('반려되어 다시 올려야 합니다'); level = Math.min(level, 0); }
+    if (x.base === 'mailUnreadAsk' && a !== null && a >= 1) { why.push(`요청 메일을 ${a}일째 읽지 않았습니다`); level = Math.min(level, 1); }
+    if (x.base === 'mailReply' && a !== null && a >= 2) { why.push(`답장 필요 여부를 ${a}일째 확인하지 않았습니다`); level = Math.min(level, 1); }
+    if (x.type === 'attendance') { why.push('근태 기록 확인이 남아 있습니다'); level = Math.min(level, 1); }
+    if (lim && level > 1 && (x.base === 'mailUnreadAsk' || x.base === 'mailReply')) { why.push(`${cuMd(lim)} 전에 회신해 두면 좋습니다`); level = 2; }
+    if (level < 3) out.push({key: x.key, title: cuStr(x.title, 70), why: why.slice(0, 2), level});
+  }
+  return out.sort((p, q) => p.level - q.level);
+}
+/** 관심 사업 예산 상태: 집행률과 연간 경과율 차이로 느림(−20%p 이하)·빠름(+15%p 이상)·보통. projects: [{name, budget, executed, balance, rate}] */
+export function cuBudgetHealth(projects = [], elapsed = 0) {
+  const e = Number(elapsed) || 0;
+  return (Array.isArray(projects) ? projects : []).filter(p => p && Number(p.budget) > 0).map(p => {
+    const rate = Number(p.rate) || 0, gap = Math.round((rate - e) * 10) / 10;
+    return {name: cuStr(p.name, 40), budget: Number(p.budget), executed: Number(p.executed) || 0, balance: Number(p.balance) || 0, rate, gap, flag: gap <= -20 ? 'slow' : gap >= 15 ? 'fast' : Number(p.balance) < 0 ? 'over' : 'ok'};
+  }).sort((p, q) => Math.abs(q.gap) - Math.abs(p.gap));
+}
+

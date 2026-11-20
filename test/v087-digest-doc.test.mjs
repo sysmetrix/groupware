@@ -225,3 +225,36 @@ test('그림 첨부: AI가 없으면 그림을 받지 않고 안내만 한다', 
   assert.deepEqual(fetched, []);
   assert.ok(!r.cards.some(c => c.type === 'confirm'));
 });
+
+// ---------- v0.91.0 자유 질문 품질 ----------
+test('cuPeriod·cuRequestCount: 기간 해석과 승인 건수·일수(기간에 걸친 출장은 기간 안 일수만)', () => {
+  assert.deepEqual(CU.cuPeriod('이번 달', '2026-11-20'), {from: '20261101', to: '20261130', label: '11월'});
+  assert.equal(CU.cuPeriod('지난달', '2026-01-05').label, '2025년 12월');
+  assert.equal(CU.cuPeriod('지난주', '2026-11-20').from, '20261109');
+  const apps = [{empCd: '1', approState: '1', atNm: '관외출장', startDt: '20261030', endDt: '20261102'}, {empCd: '1', approState: '1', atNm: '관내출장', startDt: '20261119'}, {empCd: '1', approState: '0', atNm: '관내출장', startDt: '20261125'}, {empCd: '2', approState: '1', atNm: '관내출장', startDt: '20261110'}, {empCd: '1', approState: '1', atNm: '연차', startDt: '20261105'}];
+  assert.deepEqual(CU.cuRequestCount(apps, {me: '1', kind: '출장', from: '20261101', to: '20261130'}).count, 2);
+  assert.equal(CU.cuRequestCount(apps, {me: '1', kind: '출장', from: '20261101', to: '20261130'}).days, 3);
+  assert.equal(CU.cuRequestCount(apps, {me: '1', kind: '출장', from: '20261101', to: '20261130'}).pending, 1);
+});
+
+test('cuRisks: 지난 기한·휴가 전 기한·오래 안 읽은 요청 메일·근태·반려를 고르고 우선순위로 정렬', () => {
+  const items = [
+    {key: 'a', title: '평범한 메일', state: 'todo', type: 'mail', base: 'mailReply', when: '2026-11-20'},
+    {key: 'b', title: '요청 메일', state: 'todo', type: 'mail', base: 'mailUnreadAsk', when: '2026-11-18'},
+    {key: 'c', title: '기한 지난 제출', state: 'overdue', type: 'mail', deadline: '2026-11-18'},
+    {key: 'd', title: '근태', state: 'check', type: 'attendance'},
+    {key: 'e', title: '휴가 중 기한', state: 'todo', type: 'mail', deadline: '2026-11-27'},
+    {key: 'f', title: '참고', state: 'info'},
+  ];
+  const r = CU.cuRisks(items, {today: '2026-11-20'});
+  assert.deepEqual(r.map(x => x.key), ['c', 'b', 'd']);
+  const before = CU.cuRisks(items, {today: '2026-11-20', until: '2026-11-27'});
+  assert.ok(before.some(x => x.key === 'e' && x.level === 0));
+  assert.ok(before.some(x => x.key === 'a' && x.level === 2 && /회신해 두면/.test(x.why.join(' '))));
+});
+
+test('cuBudgetHealth: 경과율 대비 느림·빠름·초과를 가리고 차이가 큰 순으로', () => {
+  const h = CU.cuBudgetHealth([{name: 'A', budget: 100, executed: 60, balance: 40, rate: 60}, {name: 'B', budget: 100, executed: 99, balance: 1, rate: 99}, {name: 'C', budget: 100, executed: 85, balance: 15, rate: 85}, {name: 'D', budget: 0}], 85);
+  assert.deepEqual(h.map(x => [x.name, x.flag]), [['A', 'slow'], ['B', 'ok'], ['C', 'ok']]);
+  assert.equal(CU.cuBudgetHealth([{name: 'E', budget: 100, executed: 120, balance: -20, rate: 120}], 85)[0].flag, 'fast');
+});
