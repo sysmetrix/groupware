@@ -501,3 +501,19 @@ test('v1.5.0: 속도 — 검색 순번의 문서번호를 넘기고, 형식 요�
   assert.match(rd, /R\.cuPeriod\(per/, '기간 낱말은 검색 날짜 범위로');
   assert.match(rd, /docNo: x\.docNo \|\| ''/);
 });
+
+test('v1.6.0: 왜 먼저야, 바쁜·한가한 날, 한 문단으로', async () => {
+  const C12 = await import('../src/live/chat.mjs');
+  const now = new Date('2026-11-20T18:30:00Z');
+  assert.equal(C12.chatIntent('왜 소사청소년센터 메일이 먼저야?', now).args.why, '소사청소년센터');
+  assert.deepEqual(C12.chatIntent('다음 주 바쁜 날이 언제야?', now).args, {date: '2026-11-23', days: 5, free: false});
+  assert.equal(C12.chatIntent('이번 주 한가한 날', now).args.free, true);
+  assert.equal(C12.chatExtractName('다음 주 바쁜 날이 언제야?'), '');
+  assert.equal(C12.chatPreferGemini('한 문단으로 정리해줘'), true);
+  const h = fs.readFileSync(new URL('../src/live/wc/49-chat-habits.js', import.meta.url), 'utf8');
+  assert.match(h, /name: 'busy_days'/);
+  assert.match(h, /순서는 ① 기한이 지났거나/, '먼저인 이유와 함께 순서 기준을 밝힌다');
+  assert.match(h, /가장 먼저 볼 것은 「/);
+  const eng = fs.readFileSync(new URL('../src/live/wc/31-chat-engine.js', import.meta.url), 'utf8');
+  assert.match(eng, /\['get_weekly_summary', 'get_overview'\]\.includes\(it\.tool\) && \/\(문단\|줄글\)\//, '문단 요청은 로컬 줄글로');
+});
