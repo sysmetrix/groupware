@@ -158,8 +158,8 @@ export function cuOvertimeSum(apps = [], {me = '', month = ''} = {}) {
 const CU_STOP = /^(일정|회의|행사|운영|관련|안내|요청|건|및|등|의|참석|진행|개최|예정|협조|공유|드립니다|드려요|입니다|제출|결과|계획|보고|기안|신청|근무|시간외|기한|년|월|일)$/;
 /** 제목에서 찾기용 낱말(2글자 이상, 날짜·일반어 제외). */
 export function cuKeywords(title = '') {
-  return [...new Set(String(title || '').replace(/[\[\]()「」『』<>“”"'·,~:]/g, ' ').replace(/\d{1,4}[./-]\d{1,2}(?:[./-]\d{1,2})?/g, ' ').split(/\s+/)
-    .map(w => w.replace(/(?:은|는|이|가|을|를|의|에|와|과|도|로|으로)$/, '')).filter(w => w.length >= 2 && !/^\d+$/.test(w) && !CU_STOP.test(w)))].slice(0, 6);
+  return [...new Set(String(title || '').replace(/[\[\]()「」『』<>“”"'·․,~:]/g, ' ').replace(/\d{1,4}[./-]\d{1,2}(?:[./-]\d{1,2})?/g, ' ').split(/\s+/)
+    .map(w => w.replace(/[.,!?;:'"’‘“”]+$/, '').replace(/(?:은|는|이|가|을|를|의|에|와|과|도|로|으로)$/, '')).filter(w => w.length >= 2 && !/^\d+(?:년|차|월)?$/.test(w) && !CU_STOP.test(w)))].slice(0, 6);
 }
 /** 일정 제목들과 낱말이 2개 이상(낱말이 하나뿐이면 1개) 겹치는 자료. items: {title, kind, key}. */
 export function cuRelated(eventTitles = [], items = [], {max = 5} = {}) {
@@ -311,21 +311,23 @@ export function cuPeriod(text = '', today = '') {
   if (nm && +nm[1] >= 1 && +nm[1] <= 12) return month(+nm[1] - 1 > m ? y - 1 : y, +nm[1] - 1);
   return month(y, m);
 }
-const CU_KIND = {출장: /출장/, 휴가: /휴가|연차|반차|반반차|대체|보상/, 시간외: /연장근무|휴일근무|조기근무|시간외/, 외출: /외출/, 교육: /교육/};
+const CU_KIND = {출장: /출장/, 휴가: /휴가|연차|반차|반반차|대체\s*휴가|보상\s*휴가|(?<!관)외출|조퇴/, 시간외: /연장근무|휴일근무|조기근무|시간외/, 외출: /외출/, 교육: /교육/};
 /** 내 근태 신청 중 기간·종류에 맞는 승인 건수와 일수. 결재 중은 따로 센다. */
 export function cuRequestCount(apps = [], {me = '', kind = '', from = '', to = ''} = {}) {
-  const re = CU_KIND[kind] || null, out = {count: 0, days: 0, pending: 0, items: []};
+  const re = CU_KIND[kind] || null, out = {count: 0, days: 0, partial: 0, pending: 0, items: []};
   for (const a of Array.isArray(apps) ? apps : []) {
     if (!a || (me && String(a.empCd || '') !== String(me)) || a.deleteReqYn === 'Y') continue;
     const name = [a.atNm, a.atItemNm].join(' ');
     if (re && !re.test(name)) continue;
+    if (kind === '휴가' && /근무일\s*대체/.test(name)) continue; // 근무일 맞바꾸기는 휴가가 아니다
     const s0 = String(a.startDt || ''), e0 = String(a.endDt || a.startDt || '');
     if (!/^\d{8}$/.test(s0) || (to && s0 > to) || (from && e0 < from)) continue;
     if (String(a.approState) === '0') { out.pending++; continue; }
     if (String(a.approState) !== '1') continue;
     const s1 = s0 < from ? from : s0, e1 = to && e0 > to ? to : e0;
     const days = Math.max(1, Math.round((Date.UTC(+e1.slice(0, 4), +e1.slice(4, 6) - 1, +e1.slice(6, 8)) - Date.UTC(+s1.slice(0, 4), +s1.slice(4, 6) - 1, +s1.slice(6, 8))) / 86400000) + 1);
-    out.count++; out.days += days; out.items.push({start: s0, end: e0, name: cuStr(a.atNm || a.atItemNm, 20)});
+    const part = /((?<!관)외출|조퇴|반차|반반차)/.test(name); // "관외출장"의 '외출'은 외출이 아니다
+    out.count++; if (part) out.partial++; else out.days += days; out.items.push({start: s0, end: e0, name: cuStr(a.atNm || a.atItemNm, 20), part});
   }
   out.items.sort((p, q) => p.start.localeCompare(q.start));
   return out;
@@ -362,3 +364,38 @@ export function cuBudgetHealth(projects = [], elapsed = 0) {
   }).sort((p, q) => Math.abs(q.gap) - Math.abs(p.gap));
 }
 
+// ---------- 자유 질문 2차 (v0.93.0): 문서 금액, 공지 관련성 ----------
+/** 문서 글자에서 금액(원)과 앞뒤 맥락을 뽑는다. 큰 금액부터, 같은 금액은 한 번. [{won, text, label}] */
+export function cuAmounts(text = '', max = 6) {
+  const t = String(text || '').replace(/\s+/g, ' '), out = new Map();
+  const re = /(\d[\d,]*(?:\.\d+)?)\s*(억|천만|백만|만)\s*원|(?:금\s*)?(\d{1,3}(?:,\d{3})+|\d{4,})\s*원(?!\s*[가-힣]{0,2}장)/g;
+  let m;
+  while ((m = re.exec(t))) {
+    const won = m[3] ? Number(m[3].replace(/,/g, '')) : Math.round(Number(m[1].replace(/,/g, '')) * {억: 1e8, 천만: 1e7, 백만: 1e6, 만: 1e4}[m[2]]);
+    if (!Number.isFinite(won) || won < 1000) continue;
+    const before = t.slice(Math.max(0, m.index - 40), m.index).replace(/^\S*\s/, '');
+    const label = (before.match(/([가-힣A-Za-z()·]{2,20})\s*[:：]?\s*(?:금\s*)?$/) || [])[1] || '';
+    if (!out.has(won)) out.set(won, {won, label: label.replace(/^(및|등|총|금)\s*/, ''), text: cuStr(before + m[0], 80)});
+  }
+  return [...out.values()].sort((a, b) => b.won - a.won).slice(0, max);
+}
+/**
+ * 공지 관련성: 내 키워드(부서·관심 사업·최근 내 문서 제목 낱말)와 공지 제목이 겹치는 정도로 고른다.
+ * notices: [{title, ...}], keywords: [낱말]. 반환 [{...notice, matched[]}] (겹친 낱말 많은 순).
+ */
+export function cuNoticeRelevance(notices = [], keywords = []) {
+  const ks = [...new Set((Array.isArray(keywords) ? keywords : []).map(k => String(k || '').replace(/\s+/g, '')).filter(k => k.length >= 2 && !/^(\d+|20\d\d년?|운영|사업|안내|관련|계획|결과|보고|재단|부천|부천시|협조|요청|참여|모집|개최|공유)$/.test(k)))];
+  const list = Array.isArray(notices) ? notices : [], titles = list.map(n => String(n && n.title || '').replace(/\s+/g, ''));
+  // 이 기관 공지에 흔한 낱말(청소년·청년 등)은 관련성 근거가 되지 못한다: 공지의 30% 이상에 나오면 뺀다
+  const common = new Set(list.length >= 5 ? ks.filter(k => titles.filter(t => t.includes(k)).length / list.length >= 0.3) : []);
+  return list.map((n, i) => ({...n, matched: ks.filter(k => !common.has(k) && titles[i].includes(k))}))
+    .filter(n => n.matched.length).sort((a, b) => b.matched.length - a.matched.length);
+}
+
+
+/** 받침에 맞춘 조사: cuJosa('휴가', '은는') → '휴가는', cuJosa('출장', '은는') → '출장은' */
+export function cuJosa(word = '', pair = '은는') {
+  const w = String(word || ''), c = w.charCodeAt(w.length - 1);
+  const has = c >= 0xac00 && c <= 0xd7a3 ? (c - 0xac00) % 28 !== 0 : /[013678]$/.test(w);
+  return w + (has ? pair[0] : pair[1]);
+}

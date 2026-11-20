@@ -51,7 +51,7 @@
       const p = R.cuPeriod(a.period || '', today()), c = R.cuRequestCount(dt.apps || [], {me: dt.me, kind: a.kind, from: p.from, to: p.to});
       const cutoff = chatAddDays(today(), -150).replace(/-/g, ''), partial = p.from < cutoff;
       const md8 = d => `${+d.slice(4, 6)}/${+d.slice(6, 8)}`;
-      const text = `${p.label} ${a.kind}${c.count ? `은 ${c.count}번(${c.days}일)입니다` : ' 기록은 없습니다'}.${c.pending ? ` 결재 중인 신청 ${c.pending}건은 따로입니다.` : ''}\n승인된 근태 신청 기준입니다.${partial ? ' 신청 자료는 최근 150일만 읽으므로 그보다 앞선 기간은 빠졌을 수 있습니다.' : ''}`;
+      const text = `${p.label} ${c.count ? `${R.cuJosa(a.kind, '은는')} ${c.count}번입니다(${c.days ? `하루 단위 ${c.days}일` : ''}${c.days && c.partial ? ', ' : ''}${c.partial ? `외출·반차 ${c.partial}번` : ''})` : `${a.kind} 기록은 없습니다`}.${c.pending ? ` 결재 중인 신청 ${c.pending}건은 따로입니다.` : ''}\n승인된 근태 신청 기준입니다.${partial ? ' 신청 자료는 최근 150일만 읽으므로 그보다 앞선 기간은 빠졌을 수 있습니다.' : ''}`;
       return {ok: true, text, llm: `${p.label} ${a.kind} ${c.count}번(${c.days}일).`, data: {count: c.count, days: c.days, pending: c.pending},
         cards: c.items.length ? [{type: 'list', title: `${p.label} ${a.kind}`, items: c.items.slice(0, 10).map(x => ({title: `${md8(x.start)}${x.end !== x.start ? '~' + md8(x.end) : ''} ${x.name}`})), more: Math.max(0, c.items.length - 10)}, {type: 'nav', label: '근태·연차 화면 열기', view: 'attendance'}] : [{type: 'nav', label: '근태·연차 화면 열기', view: 'attendance'}]};
     };
@@ -88,4 +88,39 @@
     const A = nums(p), B = nums(c), md = d => `${+d.slice(5, 7)}/${+d.slice(8, 10)}`, sign = n => (n > 0 ? `+${n}` : String(n));
     const text = `지난주(${md(p.data.from)}~${md(p.data.to)}) 상신 ${A.all}건 → 이번 주(${md(c.data.from)}~${md(c.data.to)}) ${B.all}건(${sign(B.all - A.all)}).\n• 기안·보고: ${A.work}건 → ${B.work}건(${sign(B.work - A.work)}), 이번 주 결재완료 ${B.done}건·진행 ${B.going}건\n• 복무 신청: ${A.personal}건 → ${B.personal}건\n상신 문서 목록 기준이라 회의·외부 활동 같은 실적은 포함되지 않습니다. 이번 주는 오늘까지입니다.`;
     return {ok: true, text, llm: `지난주 ${A.all}건, 이번 주 ${B.all}건.`, data: {last: A, this: B}, cards: [...(p.cards || []).filter(x => x.type === 'note'), ...(c.cards || [])]};
+  }; } }
+
+  // ---------- v0.93.0: 자유 질문 2차 ----------
+  // 문서 금액: "○○ 문서 금액 얼마였지?" → 문서 색인 본문에서 금액과 맥락
+  { const def = CHAT_TOOLS.get('read_doc'); if (def) { const run0 = def.run; def.params.properties.want = {type: 'string', enum: ['amount']}; def.run = async (a, ctx) => {
+    const st = chatState(), before = st.ctx.docFocus, r = await run0(a, ctx);
+    if (a.want !== 'amount' || !r || !r.ok || !(r.data && r.data.read) || st.ctx.docFocus === before || !st.ctx.docFocus) return r;
+    const am = R.cuAmounts(st.ctx.docFocus.body || '', 6);
+    const head = am.length ? `문서에 적힌 금액 가운데 가장 큰 것은 ${won(am[0].won)}원${am[0].label ? `(${am[0].label})` : ''}입니다.` : '문서 색인 본문에서 금액을 찾지 못했습니다. 붙임 파일에 있을 수 있으니 “그 문서 첨부 내용 정리해줘”로 확인해 보세요.';
+    return {...r, text: `${head}\n${r.text}`, cards: [...(am.length ? [{type: 'list', sensitive: true, title: '문서에 적힌 금액 (큰 순)', items: am.map(x => ({title: `${won(x.won)}원${x.label ? ' · ' + x.label : ''}`, sub: x.text}))}] : []), ...(r.cards || [])]};
+  }; } }
+
+  // 공지 관련성: 내 부서·관심 사업·최근 내 문서 제목 낱말과 겹치는 공지만
+  { const def = CHAT_TOOLS.get('list_notices'); if (def) { const run0 = def.run; def.params.properties.relevant = {type: 'boolean'}; def.run = async (a, ctx) => {
+    if (!a.relevant) return run0(a, ctx);
+    if (!S.a || !S.raw) return chatNotReady();
+    const nt = S.a.notice || {}, list = Array.isArray(nt.recent) ? nt.recent : [];
+    const mineDocs = ((S.a.approval && S.a.approval.lists && S.a.approval.lists.submitted && S.a.approval.lists.submitted.docs) || []).slice(0, 40).map(d => d.title);
+    const kw = [String((S.raw.principal && S.raw.principal.deptName) || ''), ...(S.settings.budget || []).map(b => b.label || ''), ...mineDocs].flatMap(x => R.cuKeywords(x));
+    const hits = R.cuNoticeRelevance(list, kw);
+    if (!list.length) return {ok: true, text: '최근 공지가 없습니다.', data: {count: 0}};
+    return {ok: true, text: hits.length ? `최근 공지 ${list.length}건 가운데 내 부서·사업·최근 문서와 낱말이 겹치는 공지는 ${hits.length}건입니다.` : `최근 공지 ${list.length}건 가운데 내 부서·사업·최근 문서와 낱말이 겹치는 공지는 없습니다.`, llm: `관련 공지 ${hits.length}건.`,
+      data: {count: hits.length, items: hits.slice(0, 8).map(x => ({itemId: '', title: x.title || '', url: x.url || '', type: 'board'}))},
+      cards: [...(hits.length ? [{type: 'list', title: '관련 있어 보이는 공지', items: hits.slice(0, 8).map(x => ({title: x.title || '(제목 없음)', sub: `겹친 낱말: ${x.matched.slice(0, 3).join(', ')} · ${String(x.date || '').slice(0, 10)}`, badge: x.read ? '' : '안 읽음', tone: x.read ? 'info' : 'todo', ...(x.url ? {act: {act: 'chatOpenUrl', v: x.url}} : {})}))}] : []), {type: 'note', tone: 'info', text: '판단 기준: 부서 이름, 관심 사업, 최근 내가 올린 문서 제목의 낱말. 낱말이 겹치지 않는 관련 공지는 놓칠 수 있습니다.'}]};
+  }; } }
+
+  // 결재 기다리는 내 신청: 승인 전 근태 신청만
+  { const def = CHAT_TOOLS.get('list_my_requests'); if (def) { const run0 = def.run; def.params.properties.pending = {type: 'boolean'}; def.run = async (a, ctx) => {
+    if (!a.pending) return run0(a, ctx);
+    if (!S.raw) return chatNotReady();
+    let dt; try { dt = await loadApps(); } catch (e) { return {ok: false, text: '근태 신청 내역을 읽지 못했습니다: ' + cuCut(e.message, 80)}; }
+    const pend = (dt.apps || []).filter(x => String(x.empCd) === String(dt.me) && x.deleteReqYn !== 'Y' && String(x.approState) === '0').sort((x, y) => String(x.startDt).localeCompare(String(y.startDt)));
+    const md8 = d => `${+String(d).slice(4, 6)}/${+String(d).slice(6, 8)}`;
+    return {ok: true, text: pend.length ? `결재를 기다리는 내 근태 신청은 ${pend.length}건입니다.` : '결재를 기다리는 내 근태 신청은 없습니다(최근 150일 신청 기준).', llm: `승인 전 신청 ${pend.length}건.`, data: {count: pend.length},
+      cards: pend.length ? [{type: 'list', title: '승인 전 신청', items: pend.slice(0, 8).map(x => ({title: `${md8(x.startDt)}${x.endDt && x.endDt !== x.startDt ? '~' + md8(x.endDt) : ''} ${x.atNm || '신청'}`, badge: '승인 전', tone: 'todo'}))}, {type: 'nav', label: '근태·연차 화면 열기', view: 'attendance'}] : [{type: 'note', tone: 'info', text: '결재문서(상신 문서)의 진행 상황은 “결재 올린 거 중에 안 끝난 거 있어?”로 확인할 수 있습니다.'}]};
   }; } }

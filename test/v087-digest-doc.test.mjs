@@ -269,3 +269,20 @@ test('저장 공간: 문서 첨부를 읽은 뒤 뷰어 캐시를 지우고, 저
   const pr = st.slice(st.indexOf('function pruneStorageForQuota'), st.indexOf('function cleanupLegacyStorage'));
   assert.ok(pr.indexOf("startsWith('synap_')") > 0 && pr.indexOf("startsWith('synap_')") < pr.indexOf("'chatHist'"), '뷰어 캐시를 비서 자료보다 먼저 지운다');
 });
+
+test('v0.93.0: 관외출장은 외출·휴가로 세지 않고, 근무일대체는 휴가가 아니며, 외출·반차는 일수에서 따로 센다', () => {
+  const apps = [{empCd: '1', approState: '1', atNm: '관외출장', startDt: '20261103', endDt: '20261104'}, {empCd: '1', approState: '1', atNm: '외출', startDt: '20261105'}, {empCd: '1', approState: '1', atNm: '근무일대체', startDt: '20261106'}, {empCd: '1', approState: '1', atNm: '대체휴가', startDt: '20261109'}, {empCd: '1', approState: '1', atNm: '오후반차', startDt: '20261110'}];
+  const v = CU.cuRequestCount(apps, {me: '1', kind: '휴가', from: '20261101', to: '20261130'});
+  assert.deepEqual([v.count, v.days, v.partial], [3, 1, 2]);
+  assert.deepEqual(CU.cuRequestCount(apps, {me: '1', kind: '출장', from: '20261101', to: '20261130'}).days, 2);
+  assert.equal(CU.cuJosa('휴가', '은는'), '휴가는');
+  assert.equal(CU.cuJosa('출장', '은는'), '출장은');
+});
+
+test('v0.93.0: 문서 금액·공지 관련성(흔한 낱말 제외)', () => {
+  const am = CU.cuAmounts('소요 예산: 금1,250,000원(부가세 포함) 단가 25,000원, 사업비 총 4천만원, 대학별 1,000만원');
+  assert.deepEqual(am.map(x => x.won), [40000000, 10000000, 1250000, 25000]);
+  const notices = ['청소년 정책 간담회', '청소년 활동 공모', '청소년 축제', '청년 히어로', '마을축제 홍보 안내', '데이터 분석 교육'].map(t => ({title: t}));
+  const hits = CU.cuNoticeRelevance(notices, ['청소년', '마을축제', '데이터']);
+  assert.deepEqual(hits.map(h => h.title), ['마을축제 홍보 안내', '데이터 분석 교육']);
+});

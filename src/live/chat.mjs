@@ -162,8 +162,9 @@ export function chatMentionsOther(text) {
 }
 /** "(이름) 전화번호", "(이름) 팀장 부서" 같은 말에서 이름만 뽑는다. */
 export function chatExtractPerson(text) {
-  const m = String(text ?? '').match(/([가-힣]{2,4})\s*(?:님|씨|팀장|실장|과장|대리|주임|센터장|선생님)?\s*(?:의|은|는|이)?\s*(?:전화|연락처|내선|이메일|메일 ?주소|부서|직급|직책|번호|어느 ?팀|어디 ?소속)/);
-  return m && !CH_STOP.has(m[1]) && !/^(내|제|우리|담당|부서|직원)$/.test(m[1]) ? m[1] : '';
+  // v0.93.0: "이승봉 팀장님 연락처"처럼 직함 뒤의 "님"까지 한 덩어리로 건너뛴다(직함만 이름으로 잡지 않게)
+  const m = String(text ?? '').match(/([가-힣]{2,4})\s*(?:(?:팀장|실장|과장|대리|주임|센터장|선생|주무관|부장|차장|국장)\s*님?|님|씨)?\s*(?:의|은|는|이)?\s*(?:전화|연락처|내선|이메일|메일 ?주소|부서|직급|직책|번호|어느 ?팀|어디 ?소속)/);
+  return m && !CH_STOP.has(m[1]) && !CH_TITLE_ONLY.test(m[1]) && !/^(내|제|우리|담당|부서|직원)$/.test(m[1]) ? m[1] : '';
 }
 const CH_VIEWS = [[/결재|문서유통/, 'approval'], [/메일/, 'mail'], [/검색/, 'search'], [/보드/, 'board'], [/구글/, 'gcal'], [/캘린더|달력/, 'calendar'], [/예산/, 'budget'], [/근태|연차/, 'attendance'], [/자원|차량|예약/, 'resource'], [/차트|현황/, 'overview'], [/보고서/, 'report'], [/설정/, 'settings'], [/할 ?일 ?목록|오늘 할 일/, 'today'], [/홈/, 'home']];
 const chHas = (t, re) => re.test(t);
@@ -201,6 +202,15 @@ export function chatIntent(text, now = new Date()) {
   // ---------- v0.65: 자동화·브리핑·전 영역 조회 (실행 동사가 있으면 아래 실행 규칙에 맡긴다) ----------
   const doAct = /신청|올려|올릴|등록|내줘|내 줘|써줘|써 줘|잡아|예약해|작성|보내줘|보내 줘/.test(t);
   // v0.91.0: 자유 질문 — 놓치기 쉬운 일·휴가 전 처리, 신청 횟수, ○○ 건 마감·처리 방법, 부서 부재, 근무 끝난 뒤 할 일
+  // v0.93.0: 자유 질문 2차 — 예산 과목 사용액, 문서 금액, 연차 쓴 날, 결재 기다리는 내 신청, 공지 관련성
+  if (/(수당|여비|출장비|운영비|사업비|보상금|홍보비|인건비|용역비|구입비|사무용품|예산|과목)/.test(t) && /(얼마|썼|쓴|남았|남은|잔액|집행)/.test(t) && !/(문서|공문|기안|결의서)/.test(t) && !doAct) return make('get_budget', {project: t.slice(0, 60)});
+  if (/(문서|공문|기안|구입|지급|결의|계약|견적)/.test(t) && /(금액|얼마|비용|총액|단가|예산액)/.test(t) && !/(남았|잔액|집행률)/.test(t) && !doAct) {
+    const q = t.replace(/(문서|공문|기안문?|금액|얼마였지|얼마였어|얼마야|얼마|비용|총액|단가|예산액|이었지|였지|이야|은|는|이|가|의|좀|알려\s*줘|[?？!.,])/g, ' ').replace(/\s+/g, ' ').trim();
+    if (q.length >= 2) return make('read_doc', {query: q.slice(0, 60), want: 'amount'});
+  }
+  if (/(연차|휴가|반차|대체\s*휴가|보상\s*휴가)/.test(t) && /(언제|며칠|날짜|무슨\s*날|어느\s*날)/.test(t) && /(썼|쓴|갔|냈|다녀)/.test(t) && !chatExtractName(t) && !chatMentionsOther(t)) return make('list_my_requests', {kind: '휴가', period: t.slice(0, 40)});
+  if (/(결재|승인)\s*(?:을|를|이|가)?\s*(?:기다리|대기|안\s*난|안\s*된|중인|전인|나지\s*않)/.test(t) && /(신청|올린|낸|내\s)/.test(t) && !/(문서|공문|상신\s*문서)/.test(t)) return make('list_my_requests', {pending: true});
+  if (/(공지|게시판|게시글)/.test(t) && /(나랑|나와|나한테|내\s*(?:업무|일|사업)|우리\s*(?:부서|팀)|관련\s*(?:있|된)|해당\s*(?:되|하))/.test(t)) return make('list_notices', {relevant: true});
   if (/(놓치|빠뜨|빼먹|잊기\s*쉬|잊어\s*버리|놓친\s*(?:거|것)|빠진\s*(?:거|것)\s*(?:없|있))/.test(t) && !doAct) return make('check_risks', {});
   if (/(휴가|연차|반차|대체\s*휴가|보상\s*휴가|출장|교육)\S*\s*(?:\S+\s*)?(?:전에|가기\s*전|떠나기\s*전|앞두고|이니까|인데|이라서|라서)/.test(t) && /(처리|해야|할\s*일|챙길|챙겨|마무리|정리)/.test(t) && !/(신청|올려|내줘|쓰고\s*싶)/.test(t)) {
     const d = dt ? dt.date : '';
@@ -268,7 +278,7 @@ export function chatIntent(text, now = new Date()) {
   // --- 실행(확인 카드) ---
   if (/답장|회신/.test(t) && /메일|건|에게|한테|보내|써|작성|초안/.test(t)) return make('draft_mail_reply', {query: t.replace(/(메일|답장|회신|초안|써줘|써 줘|작성|해줘|해 줘)/g, ' ').replace(/\s+/g, ' ').trim()});
   if (/(차량|관용차|니로|자동차)/.test(t) && /(예약|잡아|빌려|쓰고|쓸)/.test(t) && !/(가능|비어|빈|언제|있어|있나|현황|확인)/.test(t)) return make('reserve_vehicle', {date: dt ? dt.date : '', start: rg.start, end: rg.end, title: ''});
-  if (/(차량|관용차|니로|자동차|회의실|자원)/.test(t) && /(가능|비어|빈|언제|있어|있나|현황|확인|예약 상황|예약상황)/.test(t)) return make('get_resource_status', {date: dt ? dt.date : 'today'});
+  if (/(차량|관용차|니로|자동차|회의실|자원|세미나실|강당|LED|패널|전광판|차\s)/i.test(t) && /(가능|비어|빈|언제|있어|있나|현황|확인|예약 상황|예약상황|쓸\s*수)/.test(t)) return make('get_resource_status', {date: dt ? dt.date : 'today', ...(/(회의실|회의\s*공간|세미나실|강당|교육장)/.test(t) ? {kind: 'room'} : /(LED|패널|전광판)/i.test(t) ? {kind: 'led'} : {})});
   if (/(시간외|연장근무|야근|휴일근무|조기근무)/.test(t) && want) return make('prepare_overtime_request', {date: dt ? dt.date : '', start: rg.start, end: rg.end, reason: ''});
   if (/출장/.test(t) && /신청|올려|내줘|내 줘|가야|갈래|갑니다|가려/.test(t) && !/언제|누가|있어|있나/.test(t)) return make('prepare_trip_request', {date: dt ? dt.date : '', end_date: dt && dt.end ? dt.end : '', scope: /관외/.test(t) ? '관외' : '관내'});
   if (/(연차|반차|휴가|대체휴가|보상휴가|쉬고|쉴래|쉬려)/.test(t) && (want || /쉬고|쉴래|쉬려|쓸래|쓸게|쓰고|쓰려|내고|낼래/.test(t)) && !/잔여|남은|몇 ?일|몇 개|누가|언제 가/.test(t)) return make('prepare_leave_request', {date: dt ? dt.date : '', end_date: dt && dt.end ? dt.end : '', kind: /대체/.test(t) ? '대체휴가' : /보상/.test(t) ? '보상휴가' : /반차/.test(t) ? (/오후/.test(t) ? '오후반차' : '오전반차') : '연차'});
