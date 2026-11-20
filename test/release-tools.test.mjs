@@ -66,3 +66,9 @@ test('trimChangelog keeps details only for the newest versions and leaves odd-lo
   assert.ok(bundle.includes(CHANGELOG[0].items[0]), 'the newest detail line is shipped');
   assert.ok(bundle.includes(old.title), 'old titles stay');
 });
+
+test('업데이트 내역 항목은 문장 단위다(명령줄 따옴표 때문에 낱말로 쪼개진 항목이 없다)', async () => {
+  const {CHANGELOG} = await import('../src/live/changelog.mjs');
+  const bad = CHANGELOG.slice(0, 20).flatMap(c => c.items.filter(i => String(i).trim().length < 12).map(i => `${c.v}: ${i}`));
+  assert.deepEqual(bad, [], '짧게 쪼개진 항목: ' + bad.join(', '));
+});
