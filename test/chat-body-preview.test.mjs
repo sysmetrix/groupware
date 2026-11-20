@@ -31,7 +31,8 @@ test('문서 선택 전에는 본문을 조회하지 않고 모호하거나 불�
 test('확인 결과는 메시지 카드로만 추가되고 AI의 과거 대화에는 메시지 텍스트만 전달한다', async () => {
   const engine = await readFile(new URL('../src/live/wc/31-chat-engine.js', import.meta.url), 'utf8');
   assert.match(engine, /p\.card\.result = \(r && r\.text\)/);
-  assert.match(engine, /p\.msg\.cards\.push\(c\)/);
+  assert.match(engine, /chatAddCards\(st, p\.msg,/); // v0.86.0: 확인 결과 카드도 공통 함수로 붙인다(확인 카드는 다시 확인 대기로)
+  assert.match(engine, /} else if \(c\) msg\.cards\.push\(c\);/);
   assert.match(engine, /text: R\.chatSanitizeText\(m\.text, 400\)/);
   assert.doesNotMatch(engine, /text: res\.llm !== undefined \? res\.llm : res\.text, data: res\.data/);
   assert.match(engine, /CHAT_LLM_SUMMARY/);

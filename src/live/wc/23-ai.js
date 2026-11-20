@@ -42,7 +42,8 @@
       </div>
       <div style="display:flex;gap:8px;margin-top:12px"><input id="aiQ" class="inp" style="flex:1;height:40px" placeholder="무엇이든 물어보세요 (Enter로 보내기 · 앞 대화를 이어서 답합니다)" aria-label="AI에게 질문"><button class="btn primary" data-act="aiAsk">물어보기</button></div>
       <div id="aiOut" class="box" style="margin-top:14px;min-height:80px;line-height:1.8"><span class="muted">질문을 고르거나 입력하세요.</span></div>
-      <details style="margin-top:10px"><summary class="muted" style="cursor:pointer">AI에게 보내는 내용 보기</summary><pre style="white-space:pre-wrap;font:inherit;font-size:12.5px;margin:6px 0 0">${esc(aiContext())}</pre><div class="muted" style="font-size:12px">업무 제목·상태·마감과 직원 이름·휴가 구분만 보냅니다. 메일·문서 본문, 계좌번호, 비밀번호는 보내지 않습니다.</div></details>
+      <details style="margin-top:10px"><summary class="muted" style="cursor:pointer">AI에게 보내는 내용 보기</summary><pre style="white-space:pre-wrap;font:inherit;font-size:12.5px;margin:6px 0 0">${esc(aiContext())}</pre><div class="muted" style="font-size:12px">이 창은 업무 제목·상태·마감과 직원 휴가 구분만 보냅니다. 메일 본문은 대화에서 메일 정리·AI 답장 초안을 고를 때 그 한 통만 보내며, 아래에서 끌 수 있습니다. 계좌번호·비밀번호는 보내지 않습니다.</div></details>
+      ${cuBodyModeHtml()}
       <div class="acts"><button class="btn sm ghost" data-act="aiSetup">키 바꾸기</button><button class="btn sm ghost danger" data-act="aiForget">키 지우기</button></div>`);
   }
 
