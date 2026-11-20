@@ -207,21 +207,30 @@
     description: '재단 전체 사업에서 예산 과목을 이름으로 찾아 예산·집행·잔액·집행률을 알려준다. 예) 출장비, 사무용품, A201 홍보.',
     params: {type: 'object', properties: {query: {type: 'string'}}, required: ['query']},
     run: async a => {
-      const q = String(a.query || '').replace(/(예산|집행률?|잔액|현황|얼마나?|남았어?|남은|어때|알려\s*줘|보여\s*줘|확인|해\s*줘|좀|[?？])/g, ' ').replace(/\s+/g, ' ').trim();
+      const q = String(a.query || '').replace(/(예산|집행률?|잔액|현황|얼마나?|남았어?|남은|어때|썼어|썼나|썼지|쓴|사용했어|사용액|집행했어|집행액|알려\s*줘|보여\s*줘|확인|해\s*줘|좀|[?？])/g, ' ').replace(/\s+/g, ' ').trim();
       const nav = {type: 'nav', label: '예산 집행 화면 열기', view: 'budget'};
       if (q.length < 2) return {ok: false, text: '찾을 사업이나 예산 과목 이름을 알려 주세요. 예) 출장비 잔액 알려줘', cards: [nav]};
       if (!GW.budgetAll) return {ok: false, text: '전체 사업 예산 조회를 쓸 수 없습니다.', cards: [nav]};
       let all; try { all = await GW.budgetAll({}); } catch (e) { return {ok: false, text: '전체 사업 예산을 읽지 못했습니다: ' + String(e.message || e).slice(0, 80), cards: [nav]}; }
-      const recs = R.budgetRecords(all), res = R.searchBudget(recs, q, {max: 8}), failed = (all.projects || []).filter(p => p.error).length;
+      const recs = R.budgetRecords(all), failed = (all.projects || []).filter(p => p.error).length;
+      let res = R.searchBudget(recs, q, {max: 8});
+      // v0.93.0: 여러 사업에 같은 과목이 있으면 내 부서 사업을 먼저(나머지는 개수만)
+      const dept = String((S.raw && S.raw.principal && S.raw.principal.deptName) || '').replace(/\s+/g, '');
+      let deptNote = '';
+      if (dept && res.total > 1) {
+        const allRows = R.searchBudget(recs, q, {max: 300}).rows, mineRows = allRows.filter(r => (r.projectName + r.trail.join('')).replace(/\s+/g, '').includes(dept));
+        if (mineRows.length && mineRows.length < allRows.length) { deptNote = ` 내 부서(${dept}) 사업에서는 ${mineRows.length}건이고, 아래는 내 부서 것만 보여 드립니다(전체 ${allRows.length}건).`; res = {...res, rows: mineRows.slice(0, 8), total: mineRows.length}; }
+      }
       // 사업(단위사업·항/관) 이름 자체를 물었으면 그 사업 전체 합계를 먼저 답한다(v0.86.0: 세목만 나열하던 문제).
       const qn = q.replace(/\s+/g, ''), units = qn.length >= 3 ? recs.filter(r => !r.empty && (r.level === '항' || r.level === '관') && r.name.replace(/\s+/g, '').includes(qn)) : [];
       const unit = units.length === 1 ? units[0] : null;
       const unitTxt = unit ? `${unit.name}(${unit.projectName || unit.project}) 사업 전체: 예산 ${won(unit.budget)}원 · 집행 ${won(unit.executed)}원(${pct(unit.rate)}) · 잔액 ${won(unit.balance)}원입니다.\n` : '';
       const limit = failed ? `\n확인 제한: 사업 ${failed}개는 읽지 못해 결과에서 빠졌을 수 있습니다.` : '';
       if (!res.rows.length) return {ok: true, text: `“${q}”에 해당하는 예산 과목을 찾지 못했습니다. 과목 이름의 일부나 사업 코드로 다시 물어봐 주세요.${limit}`, data: {count: 0}, cards: [nav]};
+      { const seen = new Map(); for (const r of res.rows) { const k = `${r.project}|${r.budget}|${r.executed}|${r.balance}`, p = seen.get(k); if (!p || (({세: 3, 목: 2, 항: 1, 관: 0})[r.level] || 0) > (({세: 3, 목: 2, 항: 1, 관: 0})[p.level] || 0)) seen.set(k, r); } const kept = [...seen.values()]; if (kept.length < res.rows.length) { res = {...res, rows: kept, total: res.total - (res.rows.length - kept.length)}; if (deptNote) deptNote = deptNote.replace(/에서는 \d+건/, `에서는 ${res.total}건`); } }
       const top = res.rows[0];
       const line = r => `${r.name}: 예산 ${won(r.budget)}원 · 집행 ${won(r.executed)}원(${pct(r.rate)}) · 잔액 ${won(r.balance)}원`;
-      return {ok: true, text: `${unitTxt}“${q}” 과목은 ${res.total}건 찾았습니다${res.mode === 'any' ? '(일부 단어만 일치)' : ''}.${res.total === 1 ? ` ${top.projectName || top.project}의 ${line(top)}입니다.` : ' 여러 사업이 일치합니다. 아래 목록에서 사업과 과목을 확인해 주세요.'}${limit}`,
+      return {ok: true, text: `${unitTxt}“${q}” 과목은 ${res.total}건 찾았습니다${res.mode === 'any' ? '(일부 단어만 일치)' : ''}.${deptNote}${res.total === 1 ? ` ${top.projectName || top.project}의 ${line(top)}입니다.` : res.total <= 4 ? '\n' + res.rows.slice(0, 4).map(r => '• ' + line(r)).join('\n') : ' 여러 사업이 일치합니다. 아래 목록에서 사업과 과목을 확인해 주세요.'}${limit}`,
         data: {count: res.total, ...(unit ? {unit: {name: unit.name, budget: unit.budget, executed: unit.executed, balance: unit.balance, rate: unit.rate}} : {}), items: res.rows.map(r => ({project: r.projectName || r.project, name: r.name, level: r.level, budget: r.budget, executed: r.executed, balance: r.balance, rate: r.rate}))},
         cards: [{type: 'list', title: '예산 과목', items: res.rows.map(r => ({title: `${r.name} (${r.level})`, sub: [r.projectName || r.project, ...r.trail.slice(-2)].filter(Boolean).join(' › ') + ` · 집행 ${won(r.executed)}원 / 잔액 ${won(r.balance)}원`, badge: r.empty ? '미사용' : pct(r.rate), tone: 'info'})), more: Math.max(0, res.total - res.rows.length)}, nav]};
     },

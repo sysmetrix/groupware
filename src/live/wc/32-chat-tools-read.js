@@ -308,7 +308,7 @@
   chatRegisterTool({
     name: 'get_resource_status', label: '차량 예약 현황', kind: 'read',
     description: '공용차량(자원)의 해당 날짜 예약 현황과 09~18시 빈 시간.',
-    params: {type: 'object', properties: {date: {type: 'string'}}},
+    params: {type: 'object', properties: {date: {type: 'string'}, kind: {type: 'string', enum: ['car', 'room', 'led']}}},
     run: async a => {
       if (typeof allowed === 'function' && !allowed('resource')) return {ok: false, text: '자원 예약 기능이 관리자 설정으로 꺼져 있습니다.'};
       const iso = chatDateArg(a.date);
@@ -317,7 +317,14 @@
       try {
         const list = ((resState().list) || await GW.resourceList()).filter(r => r.useYn !== 'N');
         // 차량이 없을 때 회의실 등 첫 번째 자원을 차량으로 오인하지 않는다.
-        const car = list.find(r => /차량|관용|니로|승용|승합|자동차|카니발|스타리아/.test(r.name));
+        // v0.93.0: 회의실·LED처럼 다른 종류를 물으면 그 자원을 찾고, 그룹웨어에 없으면 없다고 답한다(차량으로 대신 답하지 않음)
+        const KIND = {room: [/회의실|회의|세미나|강당|교육장/, '회의실'], led: [/LED|패널|전광판/i, 'LED 패널']};
+        if (a.kind && KIND[a.kind]) {
+          const hit = list.filter(r => KIND[a.kind][0].test(r.name));
+          if (!hit.length) return {ok: true, text: `그룹웨어 자원 예약에는 ${KIND[a.kind][1]}이 등록되어 있지 않아 비어 있는지 확인할 수 없습니다. 등록된 자원: ${list.map(r => r.name).join(', ') || '없음'}.`, data: {count: 0, resources: list.map(r => r.name)}, cards: [{type: 'nav', label: '자원 예약 화면 열기', view: 'resource'}]};
+          list.splice(0, list.length, ...hit);
+        }
+        const car = a.kind && KIND[a.kind] ? list[0] : list.find(r => /차량|관용|니로|승용|승합|자동차|카니발|스타리아/.test(r.name));
         if (!car) return {ok: false, text: '자원 목록에서 차량을 찾지 못했습니다. 자원 예약 화면에서 직접 확인해 주세요.', cards: [{type: 'nav', label: '자원 예약 화면 열기', view: 'resource'}]};
         const all = await GW.resourceBookings({from: d8, to: d8, resSeqs: [car.resSeq]});
         const day = all.filter(b => R.bookingSpanOnDay(b, d8)).sort((x, y) => x.start.localeCompare(y.start));

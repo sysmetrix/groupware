@@ -141,6 +141,14 @@
     {"id": "f07", "cat": "자유", "q": "부서 사람들 다음 주 휴가 일정 정리해줘", "tool": "get_staff_status", "notTool": ["prepare_leave_request"], "why": "실사용: 내 휴가 신청 준비로 오인할 뻔함"},
     {"id": "f08", "cat": "자유", "q": "지난주 실적이랑 이번 주 실적 비교해줘", "tool": "get_weekly_summary", "args": {"compare": true}},
     {"id": "f09", "cat": "자유", "q": "내일 시간외 근무 끝나면 뭐 해야 돼?", "tool": "get_schedule", "why": "실사용: 할 일 목록으로 답함"},
-    {"id": "f10", "cat": "자유", "q": "지난달 시간외 몇 번 했어?", "tool": "list_my_requests", "args": {"kind": "시간외"}}
+    {"id": "f10", "cat": "자유", "q": "지난달 시간외 몇 번 했어?", "tool": "list_my_requests", "args": {"kind": "시간외"}},
+    {"id": "f11", "cat": "자유", "q": "최근 공지 중에 나랑 관련 있는 거 있어?", "tool": "list_notices", "args": {"relevant": true}, "why": "실사용(2차): 최근 공지 전체를 나열"},
+    {"id": "f12", "cat": "자유", "q": "마을축제 운영물품 구입 문서 금액 얼마였지?", "tool": "read_doc", "args": {"want": "amount"}, "why": "실사용: 검색 결과 나열, 금액 없음"},
+    {"id": "f13", "cat": "자유", "q": "출장비 예산 얼마 남았어?", "tool": "get_budget"},
+    {"id": "f14", "cat": "자유", "q": "한도윤 팀장님 연락처 알려줘", "tool": "lookup_person", "args": {"name": "한도윤"}, "why": "실사용: “팀장님”을 이름으로 조회"},
+    {"id": "f15", "cat": "자유", "q": "내일 오전에 회의실 비어 있어?", "tool": "get_resource_status", "args": {"kind": "room"}, "why": "실사용: 차량 예약 현황으로 답함"},
+    {"id": "f16", "cat": "자유", "q": "이번 달 내가 쓴 연차 언제였지?", "tool": "list_my_requests", "args": {"kind": "휴가"}},
+    {"id": "f17", "cat": "자유", "q": "청년 거버넌스 회의 참석수당 얼마 썼어?", "tool": "get_budget", "notTool": ["get_schedule"], "why": "실사용: “회의” 때문에 일정 조회로 감"},
+    {"id": "f18", "cat": "자유", "q": "지금 결재 기다리는 내 신청 있어?", "tool": "list_my_requests", "args": {"pending": true}, "why": "실사용: 기다리는 할 일(없음)로 답함"}
   ]
 }

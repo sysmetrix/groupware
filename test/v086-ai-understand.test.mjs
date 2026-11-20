@@ -162,7 +162,7 @@ test('cuOvertimeSum: 승인된 내 시간외 신청 시간만 더하고 결재 �
 });
 
 test('일정 준비: 낱말 추출, 관련 자료(겹치는 낱말 2개), 확인 사항', () => {
-  assert.deepEqual(cuKeywords('[마을실험실] 2차 운영 회의 (11.24.)'), ['마을실험실', '2차']);
+  assert.deepEqual(cuKeywords('[마을실험실] 2차 운영 회의 (11.24.)'), ['마을실험실']); // v0.93.0: '2차'·'2026.' 같은 차수·연도는 찾기 낱말이 아니다
   const rel = cuRelated(['마을실험실 파일럿 운영 회의'], [{title: '[마을실험실] 파일럿 프로그램 공문 발송 요청', kind: '메일', key: 'm1'}, {title: '마을실험실 소식지', kind: '메일', key: 'm2'}, {title: '예산 집행', kind: '문서', key: 'd1'}]);
   assert.deepEqual(rel.map(r => r.key), ['m1']);
   assert.deepEqual(rel[0].matched, ['마을실험실', '파일럿']);
