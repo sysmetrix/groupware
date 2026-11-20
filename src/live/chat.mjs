@@ -197,6 +197,12 @@ export function chatIntent(text, now = new Date()) {
   // v0.97.0: 업무 문장 쓰기 — 상급자 보고 문장, 부서 공유 메일(앞에서 다룬 메일 기준)
   if (/(보고\s*(?:할|드릴|용|하는)?\s*(?:문장|내용|글|메모|요약|문구)|보고\s*(?:문장|글)으로|(?:팀장|실장|과장|부장|국장|상급자|윗분)\S*\s*(?:께|에게|한테)\s*보고)/.test(t) && /(써|작성|정리|만들|뽑아)/.test(t) && !/(결과\s*보고|주간|실적|기안)/.test(t)) return make('write_text', {kind: 'report'});
   if (/(공유|전달|알리|안내)\S*\s*(?:하는|할|하기|용)?\s*(?:메일|문구|글|공지)/.test(t) && /(써|작성|만들|보내|초안)/.test(t) && !/(답장|회신)/.test(t)) return make('write_text', {kind: 'share'});
+  // v0.98.0: 묻는 것에 정확히 — 휴가 가능 여부, 부서 부재, 반려 문서, 날짜·중요 메일, 첨부 이름
+  if (/(반반차|반차|연차|휴가)/.test(t) && /(써도|쓸\s*수|내도|가능|괜찮|될까|되나|돼\??$|되겠)/.test(t) && !/(남았|며칠|몇\s*일|잔여)/.test(t)) return make('check_leave_day', {date: dt ? dt.date : '', amount: /반반차/.test(t) ? 'quarter' : /반차/.test(t) ? 'half' : 'full'});
+  if (/(누구|누가|몇\s*명)/.test(t) && /(없|안\s*나|자리|휴가|출장|외근|부재|빠지)/.test(t) && /(부서|팀|우리|실|직원|사람)/.test(t)) return make('get_staff_status', {date: dt ? dt.date : chIso(chUtc(chKst(now).y, chKst(now).m, chKst(now).d)), days: 1});
+  if (/반려/.test(t) && /(내가|내\s|올린|상신|기안|문서|결재)/.test(t)) return make('list_approvals', {queue: 'submitted', status: '반려'});
+  if (/메일/.test(t) && dt && !dt.end && (dt.label !== '오늘' || /(중요|급한|챙겨|봐야|꼭|놓친)/.test(t)) && /(온|받은|들어온|왔)/.test(t) && !/(답장|회신\s*써|요약|내용|정리)/.test(t)) return make('list_mail', {filter: 'recent', date: dt.date, ...(/(중요|급한|챙겨|봐야|꼭|놓친)/.test(t) ? {important: true} : {})});
+  if (/첨부/.test(t) && /(이름|목록|파일명|뭐야|뭐\s*있|뭔지|몇\s*개)/.test(t) && !/(내용|정리|요약|읽어)/.test(t)) { const q = t.replace(/(메일|첨부\s*파일|첨부|파일명|이름|목록|뭐야|뭐|있어|뭔지|몇\s*개|알려\s*줘|이|가|은|는|의|[?.!])/g, ' ').replace(/\s+/g, ' ').trim(); if (q.length >= 2) return make('read_mail', {query: q, files: true}); }
   { const ra = chatReadAttachIntent(t); if (ra) return make('read_attachment', ra.query ? {query: ra.query} : {}); }
   { const rd = chatReadDocIntent(t); if (rd) return make('read_doc', {...(rd.query ? {query: rd.query} : {}), ...(rd.scope ? {scope: rd.scope} : {})}); }
   { const rm = chatReadMailIntent(t); if (rm) return rm.digest ? make('digest_mail', {filter: rm.digest}) : make('read_mail', rm.query ? {query: rm.query} : {}); }

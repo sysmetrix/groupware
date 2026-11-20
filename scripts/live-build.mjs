@@ -17,7 +17,8 @@ import {minifySafely, TERSER_VERSION} from './terser-minify.mjs';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const DEFAULT_OUT_DIR = path.join(ROOT, 'build', 'live');
-export const MAX_SHIPPED_BUNDLE_BYTES = 1070 * 1024;
+// 1080KB(v0.98.0, 1070KB에서 상향): 죽은 CSS·오래된 업데이트 상세를 먼저 덜어 낸 뒤 올림. 번들은 브라우저 저장소에 약 1.0M자로 들어가며 한도(약 5.2M자)에 여유가 크다.
+export const MAX_SHIPPED_BUNDLE_BYTES = 1080 * 1024;
 export const EXTRA_MODULES = ['home-model.mjs', 'chat.mjs', 'chat-understand.mjs', 'gcal-sync.mjs', 'settings-transfer.mjs', 'doc-find.mjs', 'usage.mjs', 'contract.mjs', 'changelog.mjs'];
 const PARTS_MARK = '  /*@WC_PARTS@*/';
 const CSS_MARK = "'/*@WC_CSS@*/'";
@@ -171,7 +172,7 @@ export function trimIndentLines(src) {
   return inTpl ? src : out.join('\n');
 }
 
-export const CHANGELOG_DETAIL = 10;
+export const CHANGELOG_DETAIL = 6;
 /**
  * 업데이트 내역 줄이기: 최근 CHANGELOG_DETAIL개 버전만 바뀐 점 목록을 싣고, 그보다 오래된 버전은 제목만 남긴다.
  * (전체 내역은 소스와 GitHub 릴리스에 있다. 89개 버전의 목록이 번들의 60KB를 차지했다.)

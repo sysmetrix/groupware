@@ -352,3 +352,26 @@ test('v0.97.0: 업무 문장 쓰기 — 보고·공유 문장, 답장 요점', a
   assert.match(q, /cmdMailReplyTo\('공유 메일', 'custom', x, lines, 'fw'\)/, '공유는 전달 창에만 넣고 보내지 않는다');
   assert.match(q, /sensitive: true, tone: 'info', text: `\*\*\$\{kind === 'share'/, '본문에서 나온 문장 카드는 저장하지 않는다');
 });
+
+test('v0.98.0: 묻는 것에 정확히 — 휴가 가능 여부, 반려, 날짜·중요 메일, 첨부 이름, 외부 발신자', async () => {
+  const C4 = await import('../src/live/chat.mjs');
+  const now = new Date('2026-11-20T18:30:00Z'); // 11/21(토) 03:30 KST
+  const it = q => C4.chatIntent(q, now);
+  assert.deepEqual(it('이번 주 금요일에 반차 써도 돼?'), {tool: 'check_leave_day', args: {date: '2026-11-20', amount: 'half'}, confidence: 1});
+  assert.equal(it('다음 주 월요일 반반차 가능해?').args.amount, 'quarter');
+  assert.equal(it('연차 며칠 남았어?').tool, 'get_leave_status');
+  assert.equal(it('휴가 신청해줘').tool, 'prepare_leave_request');
+  assert.deepEqual(it('오늘 부서에 누구 없어?').args, {date: '2026-11-21', days: 1});
+  assert.deepEqual(it('내가 올린 문서 중에 반려된 거 있어?').args, {queue: 'submitted', status: '반려'});
+  assert.deepEqual(it('어제 온 메일 중에 중요한 거 있어?').args, {filter: 'recent', date: '2026-11-20', important: true});
+  assert.equal(it('오늘 온 메일 보여줘').args.filter, 'today');
+  assert.deepEqual(it('마을실험실 메일 첨부파일 이름이 뭐야?').args, {query: '마을실험실', files: true});
+  assert.equal(it('그 메일 첨부 내용 정리해줘').tool, 'read_attachment');
+  const p = fs.readFileSync(new URL('../src/live/wc/47-chat-precise.js', import.meta.url), 'utf8');
+  assert.match(p, /비서는 신청하지 않습니다/, '휴가는 판단 자료만, 신청은 하지 않는다');
+  assert.match(p, /지났으므로 다음 주 같은 요일/, '주말에 말한 지난 요일은 다음 주로');
+  assert.match(p, /주소는 화면에만 표시/, '외부 발신자 메일 주소는 외부 AI 요약(llm)에 넣지 않는다');
+  const m = fs.readFileSync(new URL('../src/live/wc/36-chat-tools-more.js', import.meta.url), 'utf8');
+  assert.match(m, /c\.name === '반려\/회수문서'/, '반려는 그룹웨어 반려/회수 문서함 건수로 확인한다');
+  assert.match(m, /!R\.isNoiseMail\(m\)/);
+});

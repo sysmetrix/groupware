@@ -63,12 +63,7 @@ aside{overflow:hidden;border-left:1px solid var(--line);background:var(--card);d
 .bdg.check{background:var(--md-soft);color:var(--md)}.bdg.confirm{background:var(--ok-soft);color:var(--ok)}.bdg.info{background:var(--soft);color:var(--muted);border:1px solid var(--line)}
 .bdg.new{background:var(--accent);color:#fff}.bdg.date{background:var(--soft);color:var(--fg);border:1px solid var(--line);font-weight:600}.bdg.date.hot{background:var(--hi-soft);color:var(--hi);border-color:transparent}
 .bdg.tag{background:var(--soft);color:var(--muted);font-weight:600}
-.muted{color:var(--muted);font-size:13px}.err{color:var(--hi)}.okt{color:var(--ok)}
-/* home summary */
-.hello{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;box-shadow:var(--sh);display:flex;gap:20px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
-.hello .msg{flex:1;min-width:260px}.hello .msg b.big{font-size:22px;letter-spacing:-.3px}.hello .msg .next{margin-top:6px;color:var(--muted)}
-.hello .msg .next a{color:var(--accent);cursor:pointer;font-weight:600;text-decoration:none}
-.stats{display:flex;gap:8px;flex-wrap:wrap}
+.muted{color:var(--muted);font-size:13px}.err{color:var(--hi)}
 .stat{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:8px 14px;min-width:96px;cursor:pointer;text-align:left}
 .stat:hover{border-color:var(--accent)}.stat.on{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
 .stat .l{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}.stat .v{font-size:22px;font-weight:800;line-height:1.2}
@@ -99,8 +94,6 @@ textarea{width:100%;min-height:280px;height:auto;padding:10px;line-height:1.7}
 .row .qa{display:flex;gap:6px;align-items:center}
 .row.ref{padding:9px 14px}.row.ref .t{font-weight:600;font-size:14px;-webkit-line-clamp:1}
 .empty{padding:36px 20px;text-align:center;color:var(--muted)}.empty .ill{font-size:34px;margin-bottom:6px}.empty b{display:block;color:var(--fg);font-size:16px;margin-bottom:4px}
-
-
 /* tables */
 table{width:100%;border-collapse:separate;border-spacing:0;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;font-size:14px;box-shadow:var(--sh)}
 th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}tr:last-child td{border-bottom:0}
@@ -185,13 +178,12 @@ kbd{font:12px monospace;border:1px solid var(--line2);border-bottom-width:2px;bo
 .set{background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:var(--sh);margin-bottom:12px}
 .set .si{display:grid;grid-template-columns:200px 1fr;gap:16px;padding:14px 18px;border-bottom:1px solid var(--line);align-items:start}.set .si:last-child{border-bottom:0}
 .set .si>b{font-weight:700;padding-top:6px}.set label{display:inline-flex;align-items:center;gap:6px;margin-right:16px;min-height:34px}
-@media (max-height:800px),(max-width:1400px){.hello{padding:12px 16px}.hello .msg b.big{font-size:19px}.stat .v{font-size:19px}.pgh h1{font-size:20px}main{padding:16px 18px 40px}}
+@media (max-height:800px),(max-width:1400px){.stat .v{font-size:19px}.pgh h1{font-size:20px}main{padding:16px 18px 40px}}
 @media (max-width:1400px){.wc{grid-template-columns:172px minmax(380px,1fr) 6px var(--paneW,520px)}.wc.nopane{grid-template-columns:172px 1fr 0 0}header .home{width:150px}}
 .frame.idle{flex:0 0 auto;min-height:0}.frame.idle .fe{position:static;padding:16px;flex-direction:row;gap:14px;justify-content:space-between;text-align:left}.frame.idle .fe>div:first-child{display:none}
 .pill{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:6px;font-size:12px;font-weight:700;margin:0 4px 2px 0;background:var(--soft);color:var(--muted);white-space:nowrap}.pill.solid,.pill.high{background:var(--hi-soft);color:var(--hi)}.pill.medium{background:var(--md-soft);color:var(--md)}.pill.ok{background:var(--ok-soft);color:var(--ok)}.pill.new{background:var(--accent);color:#fff}
 th{white-space:nowrap}
 .card2 svg{max-width:640px}
-.wc:not(.nopane) .hello .stats{display:none}.wc:not(.nopane) .hello{padding:12px 16px}
 .menu{max-width:340px}.menu .mh{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 nav .foot a{white-space:nowrap}
 .frame.idle:empty{display:none}
@@ -202,7 +194,6 @@ main{container-type:inline-size}
 .wc:not(.nopane) .row{grid-template-columns:24px 1fr auto auto}.wc:not(.nopane) .row .qa{grid-column:auto;justify-content:flex-end;margin-top:0}
 @container (max-width:680px){.row{grid-template-columns:24px 1fr auto!important}.row .qa{grid-column:2/4!important;justify-content:flex-start!important}}
 .ph.viewer .in{display:none}.ph.viewer{max-height:none;border-bottom:1px solid var(--line)}
-
 /* Auto-fill Service Bar */
 .autofill-bar{
   display: flex;
@@ -228,7 +219,6 @@ main{container-type:inline-size}
   font-size:13px;
   background: var(--card);
 }
-
 /* AI Command Console & Observable Progress Runner */
 .cmd-console{width:min(720px,94vw);padding:24px 26px}
 .cmd-top{display:flex;align-items:center;gap:14px;margin-bottom:18px}
@@ -243,7 +233,6 @@ main{container-type:inline-size}
 .cmd-preset:hover{border-color:var(--accent);transform:translateY(-1px);background:var(--card-hover)}
 .cp-head{display:flex;align-items:center;gap:8px;font-size:15px}
 .cp-desc{font-size:13px;color:var(--muted);margin-top:4px;line-height:1.4}
-
 /* Runner box */
 .runner-box{background:var(--card);border:1px solid var(--accent);border-radius:12px;padding:14px 16px;margin-bottom:18px;box-shadow:var(--sh-md)}
 .rb-title{font-size:15px;color:var(--accent);margin-bottom:10px;display:flex;align-items:center;gap:8px}
@@ -251,7 +240,6 @@ main{container-type:inline-size}
 .rb-step{padding:6px 10px;border-radius:6px;background:var(--bg-subtle);color:var(--muted)}
 .rb-step.cur{background:var(--accent-soft);color:var(--accent-text);font-weight:700}
 .rb-step.done{background:var(--ok-soft);color:var(--ok-text);font-weight:600}
-
 /* History cards */
 .hist-dialog{width:min(760px,94vw);max-height:82vh}
 .hist-list{display:flex;flex-direction:column;gap:10px;max-height:56vh;overflow:auto;padding-right:4px}
@@ -261,11 +249,8 @@ main{container-type:inline-size}
 .hc-summary{font-weight:600;font-size:14px;margin-top:6px;line-height:1.5}
 .hc-steps{margin:8px 0 6px 18px;padding:0;font-size:13px;color:var(--fg-secondary);line-height:1.6}
 .hc-details{font-size:13px;color:var(--muted);margin-top:4px;background:var(--bg-subtle);padding:6px 10px;border-radius:6px}
-
 .wc .rec-dialog{width:min(780px,95vw);padding:28px}.wc .rec-head{display:flex;gap:14px;align-items:flex-start;margin-bottom:22px}.wc .rec-head h2{margin:0 40px 4px 0}.wc .rec-head p{margin:0;color:var(--muted);font-size:13px}.wc .rec-mark{width:42px;height:42px;flex:none;display:grid;place-items:center;border-radius:11px;background:var(--accent-soft);color:var(--accent)}.wc .rec-status,.wc .rec-pending{display:flex;flex-direction:column;gap:3px;padding:14px 16px;border:1px solid var(--line2);border-radius:9px;background:var(--soft)}.wc .rec-status.ready{border-color:var(--ok);background:var(--ok-soft)}.wc .rec-status span,.wc .rec-pending span{font-size:13px;color:var(--muted)}.wc .rec-pending{margin-top:12px;border-color:var(--md);background:var(--md-soft);align-items:flex-start}.wc .rec-how{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:19px 0}.wc .rec-how div{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600}.wc .rec-how b{display:grid;place-items:center;width:23px;height:23px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-size:12px}.wc .rec-actions,.wc .rec-item-actions{display:flex;gap:8px;flex-wrap:wrap}.wc .rec-notice{display:flex;flex-direction:column;gap:5px;margin:18px 0 24px;padding:14px 16px;border-left:3px solid var(--md);background:var(--soft);font-size:13px;line-height:1.65}.wc .rec-list-head{display:flex;justify-content:space-between;gap:12px;align-items:baseline;border-bottom:1px solid var(--line);padding-bottom:10px}.wc .rec-list-head h3{margin:0;font-size:15px}.wc .rec-list-head span,.wc .rec-item span{font-size:12px;color:var(--muted)}.wc .rec-item{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid var(--line)}.wc .rec-item>div:first-child{display:flex;flex-direction:column;gap:3px}.wc .rec-empty{padding:25px 12px;text-align:center;color:var(--muted);font-size:13px;line-height:1.7}@media(max-width:640px){.wc .rec-how{grid-template-columns:1fr}.wc .rec-item{align-items:flex-start;flex-direction:column}}
-
 .people-table tbody th,.people-table tbody td{padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:top;line-height:1.5;overflow-wrap:anywhere}.people-table tbody tr:hover{background:var(--sel)}.people-table tbody tr[hidden]{display:none}
-
 /* === Workcenter section: theme === *//* =====================================================================
    GW 비서 통합 테마 토큰 (Slate-Teal 라이트/다크 단일 토큰 소스)
    ===================================================================== */
@@ -305,8 +290,8 @@ main{padding:26px 30px 56px}
 .pgh .sub{color:var(--muted)}
 h2{font-size:15px;font-weight:700;letter-spacing:-.01em;color:var(--fg);margin:24px 0 12px}
 /* surfaces */
-.card2,.box,.list,.cal .c,.att .c,.col,.card,table,.hello,.cmd-preset,.hist-card,.runner-box{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
-.card2,.box,.hello{padding:16px 18px}
+.card2,.box,.list,.cal .c,.att .c,.col,.card,table,.cmd-preset,.hist-card,.runner-box{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card2,.box{padding:16px 18px}
 .box.tip{background:var(--ok-soft);border-color:transparent;color:var(--fg)}.box.warn{background:var(--md-soft);border-color:transparent}
 .list{overflow:hidden;padding:0}
 .row{border-bottom:1px solid var(--line);transition:background .12s}.row:hover{background:var(--soft)}
@@ -371,7 +356,6 @@ aside{background:var(--card);border-left:1px solid var(--line)}
 /* motion */
 @media (prefers-reduced-motion:no-preference){main>*{animation:wcIn .28s ease both}@keyframes wcIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}}
 ::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:var(--line2);border-radius:8px;border:2px solid transparent;background-clip:padding-box}::-webkit-scrollbar-track{background:transparent}
-
 /* ---- refinement pass (visual review): restraint, hierarchy, density ---- */
 /* gradient only for the AI entry point; everything else is quiet */
 .btn.primary{background:var(--fg);color:var(--bg);border-color:transparent;font-weight:600;box-shadow:none}
@@ -454,28 +438,16 @@ nav a{margin:1px 0}
 .cal .ev{min-height:24px;line-height:1.5}
 main>.cal,main>.teambar,main>.tprob{max-width:none}
 @media (prefers-reduced-motion:reduce){.stat:hover,.cmd-preset:hover,.btn:active,.hb:active{transform:none}.wc *{transition-duration:.01ms!important}}
-
-.teamhome{margin:22px 0 8px;align-items:start}
-.teamhome.quiet{display:flex;gap:10px;align-items:center;padding:10px 14px;border:1px dashed var(--line2);border-radius:12px}
-.teamhome .card2 .ct{display:flex;align-items:center;gap:8px}
-
-.teamhome .trow{display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid var(--line);font-size:13px}
-
 .trow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--line);font-size:13px}
-
 .att .c.part{border-style:dashed}
 nav a:focus:not(:focus-visible){background:transparent}
 input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc.dark input[type=date],.wc.dark select.inp{color-scheme:dark}
 .cal .ev{height:auto}
-
 /* 홈: 오늘 타임라인 */
 .tl{margin:10px 0 6px}.tl .tk{position:absolute;transform:translateX(-50%)}
-
 .tl .sg{position:absolute;top:3px;bottom:3px;border-radius:5px;opacity:.9}
 .tl .nw{position:absolute;top:0;bottom:0;width:2px;background:var(--hi);box-shadow:0 0 0 2px var(--hi-soft)}
-
-
 /* v0.30.0: 정의 없이 쓰이던 토큰(명령 콘솔·결과 카드·상세)을 정의하고, 키보드 포커스와 선택 상자를 또렷하게 */
 .wc{--bg-subtle:rgba(15,23,42,.04);--card-hover:rgba(99,102,241,.05);--fg-secondary:#475569;--accent-text:#4338ca;--ok-text:#065f46;--sh-sm:0 1px 2px rgba(16,24,40,.06);--sh-md:0 4px 12px -2px rgba(16,24,40,.10);--pane:560px}
 .wc.dark{--bg-subtle:rgba(255,255,255,.04);--card-hover:rgba(255,255,255,.07);--fg-secondary:#a3acc2;--accent-text:#c7d2fe;--ok-text:#a7f3d0;--sh-sm:0 1px 2px rgba(0,0,0,.4);--sh-md:0 6px 16px -4px rgba(0,0,0,.6)}
@@ -483,11 +455,9 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .row .ck{opacity:.8}.wc .row:focus-within .ck{opacity:1}
 .wc header .srch:focus-within{box-shadow:0 0 0 2px var(--accent)}
 .wc .t,.wc .ct,.wc h1,.wc h2,.wc h3{word-break:keep-all;overflow-wrap:anywhere}
-
 /* v0.31: 결과 보고 창은 뒤 화면(채운 서식)을 가리지 않는다 */
 .wc .modal.peek{background:transparent!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important;pointer-events:none}
 .wc .modal.peek .dlg{pointer-events:auto;max-height:70vh;overflow:auto;box-shadow:var(--sh2)}
-
 /* 예산 차트 전용: 카드 높이는 내용에 맞추고 긴 목록은 카드 안에서 스크롤 */
 .wc .budget-summary{margin-top:12px}.wc .budget-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:10px 0}.wc .budget-metrics div{min-width:0;padding:10px;border:1px solid var(--line);border-radius:8px}.wc .budget-metrics span,.wc .budget-metrics strong{display:block}.wc .budget-metrics strong{font-size:1.15em;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}.wc .budget-summary summary{cursor:pointer;font-weight:600}.wc .budget-summary summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.wc .budget-detail-link{float:right;color:var(--accent);font-weight:600}.wc .budget-cards{align-items:start;min-width:0}
 .wc .budget-chart{min-width:0;align-self:start}
@@ -509,13 +479,11 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .budget-month-plot{display:flex;align-items:end;justify-content:center;height:105px;border-bottom:1px solid var(--line2)}.wc .budget-month-bar{width:65%;min-width:4px;background:var(--accent);border-radius:3px 3px 0 0}.wc .budget-month-value{display:none}
 .wc .budget-chart :is(button,summary):focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 @media(max-width:700px){.wc .budget-cards{grid-template-columns:minmax(0,1fr)}.wc .budget-months{grid-template-columns:repeat(6,minmax(0,1fr));row-gap:12px}.wc .budget-month-plot{height:75px}}
-
 /* Keyboard navigation and readable status contrast */
 .wc .skip-main{position:absolute;left:12px;top:8px;z-index:1000;transform:translateY(-180%);padding:10px 14px;border:2px solid var(--accent);border-radius:8px;background:var(--bg);color:var(--fg)}
 .wc .skip-main:focus-visible{transform:translateY(0)}
 .wc .bdg.new{background:#065f46;color:#fff}
 .wc main>.board{max-width:none}
-
 /* === Workcenter section: home === *//* GW 비서 · 홈 전용 스타일(v0.65에서 한 파일로 모음). 접두 hm- (홈). 색은 wc-style/wc-theme의 변수(--bg --fg --muted --line --line2 --card --soft --accent --hi --md --ok 및 *-soft)만 쓴다.
    라이트·다크는 .wc.dark 변수 교체로 따라간다. 글자 크기는 12px 이상, 모션은 prefers-reduced-motion에서 끈다.
    배치: 넓은 화면은 [왼쪽 비서(인사+대화) | 오른쪽 오늘 현황]을 화면 높이에 맞추고 각자 스크롤한다. 좁은 화면(컨테이너 1000px 이하)은 인사 → 대화 → 현황 → 참고 순으로 쌓는다.
@@ -529,16 +497,13 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc #hmHead{flex:none;min-width:0}
 .wc #hmTop,.wc #hmDash{display:flex;flex-direction:column;gap:14px;min-width:0}
 .wc #hmTop:empty,.wc #hmDash:empty{display:none}
-
 /* 인사 */
 .wc .hm-head{padding:2px 2px 0}
 .wc .hm-eyebrow{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px;font-size:13px;font-weight:600;color:var(--muted)}
-
 .wc .hm-hello{margin:0;font-size:clamp(22px,1.55vw,28px);line-height:1.3;font-weight:750;letter-spacing:-.035em}
 .wc .hm-sub{margin:6px 0 0;font-size:15px;line-height:1.55;color:var(--muted)}
 .wc .hm-sub.hm-tone-urgent{color:var(--hi);font-weight:700}
 .wc .hm-sub.hm-tone-ok{color:var(--ok)}
-
 /* 카드 공통 */
 .wc .hm-card{min-width:0;padding:18px 20px;border:1px solid var(--line);border-radius:14px;background:var(--card);box-shadow:var(--hm-sh)}
 .wc .hm-card-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
@@ -551,7 +516,6 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .hm-badge:empty{display:none}
 .wc .hm-badge.hm-tone-urgent{background:var(--hi-soft);color:var(--hi)}
 .wc .hm-badge.hm-tone-todo{background:var(--accent-soft);color:var(--accent)}
-
 /* 핵심 숫자: 위 두 칸(급한 일, 처리·확인할 일)은 크게, 아래 세 칸은 작게 */
 .wc .hm-stats{padding:6px}
 .wc .hm-tiles{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:2px}
@@ -568,7 +532,6 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .hm-tile.hm-tone-ok .hm-tile-v{color:var(--ok)}
 .wc .hm-skel{cursor:default;background:linear-gradient(90deg,var(--soft),var(--line),var(--soft));background-size:200% 100%;animation:hmsk 1.4s linear infinite}
 @keyframes hmsk{to{background-position:-200% 0}}
-
 /* 지금 할 일 */
 .wc .hm-next-t{font-size:16px;line-height:1.5;font-weight:700;overflow-wrap:anywhere}
 .wc .hm-next-s{margin-top:4px;font-size:13px;line-height:1.55;color:var(--muted);overflow-wrap:anywhere}
@@ -579,7 +542,6 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .hm-q{display:flex;align-items:center;gap:10px;width:100%;min-height:40px;padding:6px 8px;border:0;border-radius:8px;background:none;color:var(--fg);font-size:14px;text-align:left;cursor:pointer}
 .wc .hm-q:hover{background:var(--soft)}
 .wc .hm-q-t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-
 /* 오늘 일정, 자원 예약 */
 .wc .hm-tl{list-style:none;margin:0;padding:0}
 .wc .hm-tl li{display:flex;gap:12px;align-items:baseline;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px;line-height:1.5}
@@ -590,7 +552,6 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .hm-tl-car .hm-tl-t{color:var(--ok)}
 .wc .hm-away{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);font-size:13px;line-height:1.6}
 .wc .hm-away-k{display:inline-block;margin-right:6px;padding:1px 8px;border-radius:5px;background:var(--md-soft);color:var(--md);font-weight:700;font-size:12px}
-
 /* 챙겨 둘 것 */
 .wc .hm-sig-l{display:flex;flex-direction:column;margin:-4px -8px}
 .wc .hm-sig{display:flex;align-items:center;gap:10px;min-height:42px;padding:6px 8px;border:0;border-radius:8px;background:none;color:var(--fg);font-size:14px;text-align:left;cursor:pointer}
@@ -599,7 +560,6 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .hm-sig-k{flex:1;min-width:0}
 .wc .hm-sig-v{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
 .wc .hm-sig::after{content:'›';margin-left:2px;color:var(--line2);font-size:16px;line-height:1}
-
 /* 자동화 */
 .wc .hm-auto-l{list-style:none;margin:0 0 10px;padding:0;display:flex;flex-direction:column;gap:2px}
 .wc .hm-auto{display:flex;align-items:center;gap:10px;min-height:46px}
@@ -621,10 +581,8 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .hm-chip:hover{border-style:solid;border-color:var(--accent);background:var(--accent-soft)}
 .wc .hm-chip .i{width:12px;height:12px;color:var(--accent)}
 .wc .hm-chip small{font-size:12px;font-weight:500;color:var(--muted)}
-
 .wc .hm button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .wc .hm-tile:focus-visible,.wc .hm-q:focus-visible,.wc .hm-sig:focus-visible{outline-offset:-2px}
-
 /* 좁은 화면: 한 줄로 쌓고 페이지 전체를 스크롤한다 */
 @container (max-width:1000px){
 .wc .hm{display:flex;flex-direction:column;height:auto;gap:16px}
@@ -648,11 +606,6 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .hm-rail{overflow:visible}
 }
 @media (prefers-reduced-motion:reduce){.wc .hm-tile,.wc .hm-skel,.wc .hm-sw,.wc .hm-sw i{animation:none;transition:none}}
-
-/* 내비게이션 '더보기' */
-#nav .navmore{cursor:pointer;color:var(--muted);font-size:13px}
-#nav .navmore:hover{color:var(--fg)}
-
 /* 구글 캘린더 동기화 화면 */
 .gs-rules ul{margin:6px 0 0 18px;padding:0;line-height:1.7}
 .gs-list{display:flex;flex-direction:column;gap:8px;margin-top:10px}
@@ -671,14 +624,12 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .gs-memo{margin:4px 0 8px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);font:inherit;font-size:14px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere}
 @container (max-width:700px){.gs-l{grid-template-columns:1fr}.gs-sub{grid-column:1}.gs-main{align-items:flex-start;flex-direction:column}}
 .gs-found{margin:6px 0;padding:8px 10px;border-radius:8px;background:var(--ok-soft);color:var(--fg);font-size:14px}
-
 /* === Workcenter section: chat === *//* GW 비서 · AI 채팅 전용 스타일(v0.65에서 한 파일로 모음). 접두 ch- (채팅). 색은 wc 변수와 홈의 --hm-grad·--hm-sh만 쓴다. 글자 12px 이상,
    모션은 prefers-reduced-motion에서 끈다. CLASS INDEX: ch ch-head ch-mark ch-head-t ch-heading ch-foot ch-mode ch-dot ch-head-a ch-hbtn ch-log ch-welcome ch-brief ch-facts ch-fact
    ch-caps(-k/-more) ch-cap(-i/-b) ch-msg ch-user ch-ai ch-sys ch-err ch-av ch-body ch-bubble ch-meta ch-auto ch-tools ch-tool(-run/-ok/-err) ch-cards
    ch-card(-list/-kpi/-nav/-note/-time/-chips/-confirm) ch-card-t ch-card-empty ch-card-more ch-ul ch-li(-t/-s/-b/-btn) ch-kpi ch-time ch-rows ch-warn ch-result
    ch-risk-low/high ch-done ch-actions ch-btn(-primary/-ghost/-danger) ch-dock ch-chips ch-chip ch-composer ch-input ch-send ch-stop ch-help ch-link ch-more ch-past ch-dots ch-sr ch-tone-* */
 .wc .ch{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;border:1px solid var(--line);border-radius:16px;background:var(--card);box-shadow:var(--hm-sh);overflow:hidden}
-
 /* 머리말 */
 .wc .ch-head{flex:none;display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line)}
 .wc .ch-mark{flex:none;display:grid;place-items:center;width:36px;height:36px;border-radius:11px;background:var(--hm-grad);color:#fff}
@@ -693,7 +644,6 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .ch-hbtn{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 10px;border:1px solid transparent;border-radius:8px;background:none;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
 .wc .ch-hbtn:hover{background:var(--soft);border-color:var(--line);color:var(--fg)}
 .wc .ch-hbtn .i{width:14px;height:14px}
-
 /* 대화 */
 .wc .ch-log{flex:1 1 auto;min-height:150px;overflow-y:auto;display:flex;flex-direction:column;gap:18px;padding:20px;scrollbar-width:thin}
 .wc .ch-log:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
@@ -718,28 +668,11 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .ch-dots i{width:7px;height:7px;border-radius:50%;background:var(--muted);animation:chdot 1.2s ease-in-out infinite}
 .wc .ch-dots i:nth-child(2){animation-delay:.15s}.wc .ch-dots i:nth-child(3){animation-delay:.3s}
 @keyframes chdot{0%,60%,100%{opacity:.25;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
-
 /* 첫 화면: 브리핑과 맡길 수 있는 일 */
 .wc .ch-welcome{display:flex;flex-direction:column;gap:14px}
 .wc .ch-brief-note{font-size:13px;color:var(--md)}
 .wc .ch-facts{display:grid;grid-template-columns:repeat(auto-fill,minmax(124px,1fr));gap:8px}
-
-
-
-
-
-
-.wc .ch-caps-k{margin-top:6px;font-size:13px;font-weight:700;color:var(--muted)}
 .wc .ch-caps{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}
-
-
-
-
-
-
-
-.wc .ch-caps-more{align-self:flex-start}
-
 /* 카드 */
 .wc .ch-cards{display:flex;flex-direction:column;gap:8px}
 .wc .ch-card{padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--bg);font-size:14px}
@@ -771,7 +704,6 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .ch-card-note.ch-tone-ok{background:var(--ok-soft);border-color:transparent}
 .wc .ch-card-note.ch-tone-info{background:var(--accent-soft);border-color:transparent}
 .wc .ch-card-chips{background:transparent;border-style:dashed}
-
 /* 확인 카드 */
 .wc .ch-card-confirm{border-width:1.5px;border-color:var(--accent);background:var(--card)}
 .wc .ch-card-confirm .ch-card-t{font-size:14px;color:var(--fg)}
@@ -793,7 +725,6 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .ch-btn-danger{background:var(--hi);border-color:var(--hi);color:#fff}
 .wc.dark .ch-btn-danger{color:#1a0b0b}
 .wc .ch-btn-ghost{background:transparent}
-
 /* 추천 질문 + 입력창 */
 .wc .ch-dock{flex:none;display:flex;flex-direction:column;gap:10px;padding:12px 18px 14px;border-top:1px solid var(--line);background:var(--card)}
 .wc .ch-chips{display:flex;gap:6px;flex-wrap:wrap}
@@ -815,7 +746,6 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .ch-sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 .wc .ch button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .wc .ch-li-btn:focus-visible{outline-offset:-2px}
-
 /* 접이식: 자세히 보기, 이전 대화 */
 .wc .ch-more{flex:none;border:1px solid var(--line);border-radius:10px;background:var(--bg);padding:2px 12px}
 .wc.dark .ch-more{background:var(--soft)}
@@ -825,14 +755,12 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .ch-past{background:transparent;border-style:dashed}
 .wc .ch-past summary{color:var(--muted);font-weight:600}
 .wc .ch-past[open]{display:flex;flex-direction:column;gap:16px;padding-bottom:12px}
-
 /* 좁은 화면에서는 대화 영역 높이를 화면에 맞춰 제한한다(넓은 화면은 홈 배치가 높이를 정한다) */
 @container (max-width:1000px){.wc .ch-log{max-height:clamp(220px,calc(100vh - 500px),500px)}}
 @container (max-width:640px){.wc .ch-head{padding:12px 14px}.wc .ch-log{padding:16px 14px}.wc .ch-dock{padding:10px 14px 12px}.wc .ch-hbtn span,.wc .ch-send span,.wc .ch-stop span{display:none}.wc .ch-rows dt{flex-basis:62px}.wc .ch-caps{grid-template-columns:1fr 1fr}}
 @media (max-height:620px){.wc .ch-log{max-height:320px}}
 @media (max-height:760px){.wc .ch-help{display:none}.wc .ch-log{padding-top:16px;padding-bottom:16px}}
 @media (prefers-reduced-motion:reduce){.wc .ch-dots i{animation:none;opacity:.6}.wc .ch-chip,.wc .ch-composer,.wc .ch-cap,.wc .ch-fact,.wc .ch-btn{transition:none}}
-
 /* === Workcenter section: premium === */
 /* GW 비서: 업무에 집중하는 차분한 화면. 장식보다 정보와 상태를 우선한다. */
 .wc header,.wc.dark header{background:var(--card);backdrop-filter:none;-webkit-backdrop-filter:none;border-color:var(--line);gap:8px}
@@ -840,16 +768,13 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .hb{border-radius:7px;box-shadow:none;background:transparent}.wc .hb[data-act="openCmd"]{background:#234e5e;color:white;box-shadow:none}.wc .hb.back{background:var(--card);border-color:var(--line2)}
 .wc nav{background:var(--card);padding:18px 11px}.wc nav a{border-radius:6px;font-size:14px;min-height:39px}.wc nav a.on{background:var(--sel);font-weight:700}.wc nav a .n.mine{background:var(--accent);color:#fff}.wc.dark nav a .n.mine{background:#426c78;color:#fff}
 .wc main{padding:30px 34px 64px;container-type:inline-size}.wc .pgh h1{font-size:24px;font-weight:700;letter-spacing:-.035em}
-.wc .card2,.wc .box,.wc .list,.wc .cal .c,.wc .att .c,.wc .col,.wc .card,.wc table,.wc .hello,.wc .cmd-preset,.wc .hist-card,.wc .runner-box{border-radius:8px;box-shadow:none}.wc .cmd-preset:hover{transform:none;box-shadow:none}.wc .btn,.wc .dlg,.wc .menu{border-radius:7px}.wc .btn.primary{background:#265d70;color:#fff;border-color:#265d70;box-shadow:none}.wc .btn.primary:hover{background:#1d4a5a;color:#fff}.wc .menu{backdrop-filter:none;background:var(--card)}
+.wc .card2,.wc .box,.wc .list,.wc .cal .c,.wc .att .c,.wc .col,.wc .card,.wc table,.wc .cmd-preset,.wc .hist-card,.wc .runner-box{border-radius:8px;box-shadow:none}.wc .cmd-preset:hover{transform:none;box-shadow:none}.wc .btn,.wc .dlg,.wc .menu{border-radius:7px}.wc .btn.primary{background:#265d70;color:#fff;border-color:#265d70;box-shadow:none}.wc .btn.primary:hover{background:#1d4a5a;color:#fff}.wc .menu{backdrop-filter:none;background:var(--card)}
 @media(max-width:1050px){.wc header{overflow-x:auto}.wc header .home{min-width:150px}.wc header .srch{min-width:190px}.wc:not(.nopane):not(.expanded){grid-template-columns:160px 0 0 minmax(0,1fr)}.wc:not(.nopane):not(.expanded) main{display:none}.wc:not(.nopane):not(.expanded) aside{grid-column:2/5}.wc .pane-back-txt{font-size:0}.wc .pane-back-txt::after{content:'목록으로';font-size:13px}.wc.nopane{grid-template-columns:160px minmax(0,1fr) 0 0}.wc nav{padding:10px 6px}.wc main{padding:22px 18px 48px}}
 @media(max-width:640px){.wc.nopane{grid-template-columns:64px minmax(0,1fr) 0 0}.wc nav a .lb,.wc nav .foot .lb{display:none}.wc nav a{justify-content:center;padding:9px 4px}.wc nav a .n{position:absolute;right:0;top:0}.wc main{padding:20px 12px 40px}}
 @media(prefers-reduced-motion:reduce){.wc *, .wc *::before,.wc *::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
-
 @media(max-width:1050px){.wc header .home{min-width:112px;width:auto;padding-left:2px}.wc header .srch{min-width:120px}.wc header .stat,.wc header [data-act="openHistory"],.wc header [data-act="help"]{display:none}.wc header .sp{display:none}.wc header .hb{padding-left:8px;padding-right:8px}.wc header .hb.icon{width:34px;flex:0 0 34px}.wc header .back{margin-left:auto}}
-
 /* 브랜드 마크는 충분한 크기로 유지하고 배경 장식을 사용하지 않는다. */
 .wc header .home .logo{width:32px;height:32px;padding:0;background:transparent;box-shadow:none}.wc header .home .logo img{width:100%;height:100%;display:block;border-radius:7px}
-
 /* 탐색 크롬: 업무 본문보다 한 단계 차분하게, 작업과 전역 명령은 명확하게. */
 .wc{grid-template-columns:224px minmax(420px,1fr) 6px var(--paneW,560px);grid-template-rows:68px auto 1fr}.wc.nopane{grid-template-columns:224px minmax(0,1fr) 0 0}.wc.expanded{grid-template-columns:224px 0 6px 1fr}
 .wc header,.wc.dark header{padding:0 20px 0 18px;gap:10px;background:var(--card);border-bottom:1px solid var(--line);overflow:visible}
@@ -857,11 +782,10 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc header .srch{height:38px;flex:1 1 390px;max-width:460px;padding:0 12px;border:1px solid var(--line);border-radius:9px;background:var(--bg)}.wc header .srch input{font-size:13px}.wc header .srch kbd{font-size:12px;padding:2px 5px;border-color:var(--line2)}
 .wc header .sp{min-width:0;flex:1}.wc header .stat{border:0;background:transparent;box-shadow:none;padding:0 6px;font-size:12px;white-space:nowrap}.wc header .stat:hover{transform:none;color:var(--fg)}
 .wc header .hb{height:36px;border:1px solid transparent;background:transparent;border-radius:8px;padding:0 10px;font-size:13px;font-weight:600}.wc header .hb:hover{background:var(--soft);border-color:var(--line)}.wc header .hb.icon{width:36px;padding:0}.wc header .hb[data-act="openCmd"]{background:var(--accent-soft);color:var(--accent);border-color:transparent;box-shadow:none}.wc header .hb[data-act="menuNew"]{background:#20596c;color:white;border-color:#20596c}.wc header .hb.back{background:var(--card);color:var(--muted);border-color:var(--line2);font-weight:600}.wc header .hb.back:hover{color:var(--fg)}
-.wc nav{background:var(--bg);border-right:1px solid var(--line);padding:19px 12px 12px;gap:3px}.wc.dark nav{background:#1a232b}.wc nav .nav-label{padding:2px 10px 9px;font-size:12px;line-height:1.4;font-weight:700;color:var(--muted)}.wc nav a{min-height:38px;padding:8px 10px;border:1px solid transparent;border-radius:8px;font-size:14px;font-weight:550;color:var(--muted);gap:11px}.wc nav a svg{width:17px;height:17px;stroke-width:1.8;opacity:.85}.wc nav a:hover{background:var(--card);color:var(--fg);border-color:var(--line)}.wc nav a.on{background:var(--card);color:var(--fg);border-color:var(--line);box-shadow:0 1px 2px rgba(19,39,49,.05);font-weight:700}.wc nav a.on svg{color:var(--accent);opacity:1}.wc nav a .n{min-width:23px;padding:0 6px;border-radius:6px;font-size:12px;line-height:20px;font-weight:700}.wc nav a .n.mine{background:var(--accent-soft);color:var(--accent)}.wc nav a .n.hot{background:var(--hi-soft);color:var(--hi)}.wc nav .sep{margin:10px 6px 7px}.wc nav .navmore{font-size:13px;color:var(--muted)}.wc nav .foot{border-top:1px solid var(--line);margin-top:auto;padding:12px 0 0}.wc nav .foot a{min-height:34px;font-size:12px}
+.wc nav{background:var(--bg);border-right:1px solid var(--line);padding:19px 12px 12px;gap:3px}.wc.dark nav{background:#1a232b}.wc nav .nav-label{padding:2px 10px 9px;font-size:12px;line-height:1.4;font-weight:700;color:var(--muted)}.wc nav a{min-height:38px;padding:8px 10px;border:1px solid transparent;border-radius:8px;font-size:14px;font-weight:550;color:var(--muted);gap:11px}.wc nav a svg{width:17px;height:17px;stroke-width:1.8;opacity:.85}.wc nav a:hover{background:var(--card);color:var(--fg);border-color:var(--line)}.wc nav a.on{background:var(--card);color:var(--fg);border-color:var(--line);box-shadow:0 1px 2px rgba(19,39,49,.05);font-weight:700}.wc nav a.on svg{color:var(--accent);opacity:1}.wc nav a .n{min-width:23px;padding:0 6px;border-radius:6px;font-size:12px;line-height:20px;font-weight:700}.wc nav a .n.mine{background:var(--accent-soft);color:var(--accent)}.wc nav a .n.hot{background:var(--hi-soft);color:var(--hi)}.wc nav .sep{margin:10px 6px 7px}.wc nav .foot{border-top:1px solid var(--line);margin-top:auto;padding:12px 0 0}.wc nav .foot a{min-height:34px;font-size:12px}
 @media(max-width:1200px){.wc header .home{width:auto;min-width:155px}.wc header .srch{flex-basis:200px}.wc header [data-act="help"],.wc header [data-act="openHistory"]{display:none}.wc header .stat{display:none}}
 @media(max-width:1050px){.wc.nopane{grid-template-columns:168px minmax(0,1fr) 0 0}.wc:not(.nopane):not(.expanded){grid-template-columns:168px 0 0 minmax(0,1fr)}.wc header{gap:6px;padding:0 12px}.wc header .home{min-width:128px}.wc header .home .logo{width:33px;height:33px;flex-basis:33px}.wc header .srch{min-width:120px}.wc nav{padding:14px 7px}.wc header .hb{padding:0 8px}.wc header .back{margin-left:auto}}
 @media(max-width:640px){.wc.nopane{grid-template-columns:64px minmax(0,1fr) 0 0}.wc:not(.nopane):not(.expanded){grid-template-columns:64px 0 0 minmax(0,1fr)}.wc nav .nav-label,.wc nav .nav-chevron{display:none}.wc nav a .lb{display:none}.wc nav a{justify-content:center;padding:8px 4px}.wc header .brand-name small{display:none}.wc header .home{min-width:auto}.wc header .srch{min-width:110px}.wc header [data-act="openCmd"]{display:none}}
-
 /* 대화상자와 작업 메뉴: 내용을 먼저 읽고 다음 행동을 고를 수 있게 정돈한다. */
 .wc .modal{padding:24px;align-items:center;background:rgba(20,32,40,.48);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
 .wc .modal.peek{align-items:flex-start}.wc .dlg,.wc:not(.dark) .dlg,.wc.dark .dlg{background:var(--card);border:1px solid var(--line2);border-radius:14px;box-shadow:0 20px 55px rgba(12,28,39,.22);padding:26px;max-height:min(84vh,900px);line-height:1.65}.wc .dlg h2{font-size:19px;line-height:1.35;letter-spacing:-.025em;margin:0 42px 12px 0}.wc .dlg h3{font-size:14px;margin:24px 0 8px}.wc .dlg p{line-height:1.7;color:var(--fg)}.wc .dlg .x{top:16px;right:16px;border-radius:8px}.wc .dlg .acts{gap:8px}.wc .dlg .inp,.wc .dlg select,.wc .dlg textarea{border-radius:8px;min-height:40px}.wc .dlg input:focus,.wc .dlg select:focus,.wc .dlg textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
@@ -869,24 +793,19 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .new-menu{width:min(410px,calc(100vw - 24px));min-width:0;max-width:410px;max-height:min(78vh,760px);padding:10px}.wc .new-heading{display:flex;flex-direction:column;gap:2px;padding:10px 11px 14px;border-bottom:1px solid var(--line)}.wc .new-heading strong{font-size:16px;color:var(--fg)}.wc .new-heading span{font-size:12px;color:var(--muted)}.wc .new-section{padding:16px 11px 7px;font-size:12px;font-weight:700;color:var(--muted)}.wc .new-action{display:flex;align-items:center;gap:12px;width:100%;border:0;border-radius:8px;padding:9px 10px;background:transparent;text-align:left;color:var(--fg);cursor:pointer}.wc .new-action:hover{background:var(--soft)}.wc .new-icon{width:34px;height:34px;display:grid;place-items:center;flex:none;background:var(--accent-soft);color:var(--accent);border-radius:8px}.wc .new-icon svg{width:17px;height:17px}.wc .new-copy{display:flex;flex-direction:column;gap:2px;min-width:0}.wc .new-copy b{font-size:13px;line-height:1.35}.wc .new-copy small{font-size:12px;line-height:1.4;color:var(--muted)}
 .wc .pal{padding:18px}.wc .pal #palq{min-height:46px;border:1px solid var(--line2);border-radius:9px;padding:0 14px;background:var(--bg);color:var(--fg)}.wc .pal .it{border-radius:8px;min-height:44px}.wc .pal .it.on{background:var(--sel)}.wc aside .ph .top{padding:12px 16px;background:var(--card);color:var(--fg)}.wc aside .ph .in{padding:18px}.wc aside .ph .t{font-size:17px;line-height:1.5;font-weight:700}
 @media(max-width:640px){.wc .modal{padding:12px}.wc .dlg,.wc:not(.dark) .dlg,.wc.dark .dlg{width:100%;max-width:100%;max-height:90vh;padding:20px}.wc .new-menu{right:8px;top:58px;max-height:calc(100vh - 72px)}}
-
 .wc .rec-dialog{width:min(780px,95vw);padding:28px}.wc .rec-head{display:flex;gap:14px;align-items:flex-start;margin-bottom:22px}.wc .rec-head h2{margin:0 40px 4px 0}.wc .rec-head p{margin:0;color:var(--muted);font-size:13px}.wc .rec-mark{width:42px;height:42px;flex:none;display:grid;place-items:center;border-radius:11px;background:var(--accent-soft);color:var(--accent)}.wc .rec-status,.wc .rec-pending{display:flex;flex-direction:column;gap:3px;padding:14px 16px;border:1px solid var(--line2);border-radius:9px;background:var(--soft)}.wc .rec-status.ready{border-color:var(--ok);background:var(--ok-soft)}.wc .rec-status span,.wc .rec-pending span{font-size:13px;color:var(--muted)}.wc .rec-pending{margin-top:12px;border-color:var(--md);background:var(--md-soft);align-items:flex-start}.wc .rec-how{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:19px 0}.wc .rec-how div{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600}.wc .rec-how b{display:grid;place-items:center;width:23px;height:23px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-size:12px}.wc .rec-actions,.wc .rec-item-actions{display:flex;gap:8px;flex-wrap:wrap}.wc .rec-notice{display:flex;flex-direction:column;gap:5px;margin:18px 0 24px;padding:14px 16px;border-left:3px solid var(--md);background:var(--soft);font-size:13px;line-height:1.65}.wc .rec-list-head{display:flex;justify-content:space-between;gap:12px;align-items:baseline;border-bottom:1px solid var(--line);padding-bottom:10px}.wc .rec-list-head h3{margin:0;font-size:15px}.wc .rec-list-head span,.wc .rec-item span{font-size:12px;color:var(--muted)}.wc .rec-item{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid var(--line)}.wc .rec-item>div:first-child{display:flex;flex-direction:column;gap:3px}.wc .rec-empty{padding:25px 12px;text-align:center;color:var(--muted);font-size:13px;line-height:1.7}@media(max-width:640px){.wc .rec-how{grid-template-columns:1fr}.wc .rec-item{align-items:flex-start;flex-direction:column}}
-
 .wc .demo-pill{display:inline-flex;align-items:center;height:28px;padding:0 10px;border-radius:999px;background:var(--md-soft);color:var(--md);border:1px solid color-mix(in srgb,currentColor 25%,transparent);font-size:12px;font-weight:700;white-space:nowrap;cursor:help}
 .wc header .srch kbd{white-space:nowrap}
 @media(max-width:900px){.wc header .srch kbd{display:none}.wc header .back{font-size:0;gap:0;padding:0;width:36px;flex:0 0 36px;justify-content:center}.wc header .back .i{width:17px;height:17px}.wc .demo-pill{font-size:0;padding:0 9px}.wc .demo-pill::before{content:'둘러보기';font-size:12px}}
-
 /* 설치된 버전은 왼쪽 메뉴 아래에 상시 표시. */
 .wc nav .foot .navver{display:flex;min-height:38px;align-items:center}.wc nav .foot .navver .lb{display:flex!important;flex-direction:column;gap:2px;line-height:1.3;white-space:normal}.wc nav .foot .navver b{color:var(--fg);font-variant-numeric:tabular-nums}.wc nav .foot .navver small{font-size:12px;color:var(--muted);font-weight:500}
 .wc nav .foot .navver.ok .lb{color:var(--ok)}.wc nav .foot .navver.new .lb{color:var(--hi)}
 @media(max-width:640px){.wc nav .foot .navver small{display:none}.wc nav .foot .navver .lb{font-size:12px;text-align:center}}
-
 /* === Workcenter section: lean === *//* GW 비서 · 간결 화면(v0.48). 볼 것만 한 줄로, 자세한 내용은 고른 항목만 오른쪽 창에서 본다.
    색은 wc-style/wc-theme의 변수만 쓴다. 글자 크기는 12px 이상. 마지막에 이어 붙으므로 앞의 규칙을 덮어쓴다. */
 .vtabs{display:flex;margin:0 0 12px}
 .wc .btn.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
 .lean-note{margin:0 0 8px;font-size:13px}
-
 /* 한 줄 목록 */
 .wc .row.lean{display:flex;align-items:center;gap:10px;padding:6px 8px 6px 14px;min-height:44px}
 .wc .row.lean .ck,.wc .row.lean .type-icon{flex:0 0 auto}
@@ -903,7 +822,6 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 @media (hover:none){.wc .row.lean .qa{opacity:1}}
 @container (max-width:640px){.wc .row.lean .what{display:none}.wc .row.lean .w{display:none}}
 @media (prefers-reduced-motion:reduce){.wc .row.lean .qa{transition:none}}
-
 /* 문서 찾기: 기안=파랑(--accent), 접수=초록(--ok), 발송=주황(--md). 줄 왼쪽 띠와 배지 색으로 구분한다. */
 .wc .df-b{min-width:38px;justify-content:center;font-weight:700}
 .wc .df-b.df-draft{background:var(--accent-soft);color:var(--accent)}
@@ -926,7 +844,6 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .df-x .i{width:12px;height:12px}
 .wc .df-help{margin:6px 0 0 18px;padding:0;line-height:1.9;font-size:14px}
 .wc .df-foot{margin-top:12px;font-size:13px}
-
 /* === Workcenter section: studio === *//* =====================================================================
    GW 비서 · 디자인(v0.76). 원칙 다섯 가지 — 자세한 근거는 docs/design/principles.md
    1) 상자 대신 여백과 가는 선. 테두리 있는 상자는 떠 있는 것(창·메뉴)과 입력칸, 나란히 놓인 패널뿐. 카드 안에 카드는 없다.
@@ -954,13 +871,11 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc.nopane{grid-template-columns:var(--navW) minmax(0,1fr) 0 0}
 .wc.expanded{grid-template-columns:var(--navW) 0 6px 1fr}
 .wc *{scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
-
 /* ---------- 공통: 초점·누름·선택 ---------- */
 .wc :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
 .wc ::selection{background:var(--hl);color:var(--fg)}
 .wc .btn,.wc .hb,.wc .ch-btn,.wc .chip,.wc .ch-chip,.wc .ch-cap,.wc .ch-fact,.wc .hm-tile,.wc .hm-q,.wc nav a{transition:background var(--t1),border-color var(--t1),color var(--t1),box-shadow var(--t1),transform var(--t1) var(--e-out)}
 .wc .btn:active,.wc .hb:active,.wc .ch-btn:active,.wc .chip:active,.wc .ch-chip:active{transform:scale(.97)}
-
 /* ---------- 머리글: 흰 바탕, 아래 가는 선 하나 ---------- */
 .wc header,.wc.dark header{background:var(--card);border:0;border-bottom:1px solid var(--line);padding:0 14px 0 0;gap:6px;position:relative;backdrop-filter:none;-webkit-backdrop-filter:none}
 .wc header .home{width:auto;min-width:0;flex:0 0 calc(var(--navW) - 48px);padding:0 0 0 16px;gap:10px;border-radius:8px}
@@ -997,7 +912,6 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc header.m-loading::after{opacity:1;animation:stLoad 1.1s var(--e-out) infinite}
 @keyframes stLoad{0%{transform:scaleX(0);transform-origin:0 50%}55%{transform:scaleX(1);transform-origin:0 50%}56%{transform-origin:100% 50%}100%{transform:scaleX(0);transform-origin:100% 50%}}
 .wc .band .b{margin:0 10px 8px 0;border:0;border-radius:10px;padding:8px 14px;font-size:14px}
-
 /* ---------- 왼쪽 메뉴: 옅은 바탕, 지금 화면은 한 단계 짙게 ---------- */
 .wc nav,.wc.dark nav{background:var(--bg);border:0;border-right:1px solid var(--line);padding:12px 10px 10px;gap:0}
 .wc nav .nav-g{display:flex;flex-direction:column;gap:1px;margin-bottom:16px}
@@ -1023,7 +937,6 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc.navmini nav a{justify-content:center;padding:0;min-height:38px;position:relative}
 .wc.wc.navmini nav a .n,.wc.wc.navmini nav a .n.hot{position:absolute;top:5px;right:5px;width:7px;height:7px;min-width:0;padding:0;border-radius:50%;font-size:0;background:var(--accent);box-shadow:0 0 0 2px var(--bg)}
 .wc.wc.navmini nav a .n.hot{background:var(--hi)}
-
 /* ---------- 본문: 흰 바탕 그대로. 떠 있는 종이도, 둥근 모서리도 없다 ---------- */
 .wc main{background:var(--card);border:0;border-radius:0;margin:0;padding:30px 40px 64px}
 .wc:not(.nopane) main{margin-right:0}
@@ -1038,7 +951,6 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .grp{margin:26px 0 4px;padding-bottom:6px;border-bottom:1px solid var(--line2);font-size:13px;font-weight:700;color:var(--fg);letter-spacing:0}
 .wc .grp .c{font-weight:500}
 .wc .muted{color:var(--muted)}
-
 /* 버튼: 주된 것 하나만 잉크, 나머지는 조용하게 */
 .wc .btn{height:34px;border-radius:8px;border:1px solid var(--line2);background:var(--card);color:var(--fg);font-size:14px;font-weight:600;box-shadow:var(--sh-sm)}
 .wc .btn:hover{border-color:var(--line2);color:var(--fg);background:var(--soft)}
@@ -1067,9 +979,8 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .chip.on,.wc .chip.on:hover{background:var(--accent-soft);border-color:transparent;color:var(--accent);font-weight:700}
 .wc .chip:disabled{opacity:1;cursor:default;background:var(--soft);border-color:transparent;color:var(--fg-secondary)}
 .wc kbd{border:0;background:var(--soft);color:var(--muted);border-radius:5px}
-
 /* 면: 목록과 표는 상자에 넣지 않는다. 나란히 놓인 패널(.card2)과 안내(.box)만 면을 가진다 */
-.wc .card2,.wc .hello,.wc .cmd-preset,.wc .hist-card,.wc .runner-box{border:1px solid var(--line);border-radius:var(--r);box-shadow:none}
+.wc .card2,.wc .cmd-preset,.wc .hist-card,.wc .runner-box{border:1px solid var(--line);border-radius:var(--r);box-shadow:none}
 .wc .box{border:0;border-radius:var(--r);background:var(--soft);box-shadow:none}
 .wc .list,.wc table{border:0;border-radius:0;box-shadow:none;background:none}
 .wc th{border-bottom:1px solid var(--line2)}
@@ -1077,7 +988,6 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .box.tip{background:var(--accent-soft)}
 .wc .cmd-preset:hover,.wc .stat:hover{transform:none;box-shadow:none;border-color:var(--line2);background:var(--soft)}
 .wc .cmd-logo{box-shadow:none!important}
-
 /* 배지: 작은 알약. 급한 것만 색을 쓴다 */
 .wc .bdg{height:21px;border-radius:6px;font-weight:600;padding:0 7px;border:0;transform:none}
 .wc .bdg.urgent,.wc .hm-badge.hm-tone-urgent{background:var(--hi-soft);color:var(--hi);border:0;font-weight:700;letter-spacing:0;transform:none}
@@ -1087,7 +997,6 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .bdg.new{background:var(--accent);color:var(--card)}
 .wc .bdg.date{background:var(--soft);border:0;color:var(--fg-secondary)}
 .wc .bdg.date.hot{background:var(--hi-soft);color:var(--hi);border:0}
-
 /* 상자 안의 상자를 없앤다: 안내 상자 안의 본문, 예산 요약의 숫자 칸 */
 .wc .box .body-text{border:0;background:var(--card)}
 .wc .box.budget-summary{background:none;padding:0;margin-top:16px}
@@ -1119,7 +1028,6 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .empty{padding:44px 20px}
 /* 좁아진 본문(처리 창을 열었을 때): 첫 줄에 보낸 사람과 받은 날, 둘째 줄에 제목, 셋째 줄에 표시와 미리보기를 한 줄로 둔다 */
 @container (max-width:680px){.wc .row[data-act="selMail"]{grid-template-columns:1fr auto!important;row-gap:2px}.wc .row[data-act="selMail"]>div:first-child{grid-column:1;grid-row:1;font-size:13px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.wc .row[data-act="selMail"]>.w{grid-column:2;grid-row:1}.wc .row[data-act="selMail"]>.mn{grid-column:1/-1;grid-row:2}.wc .row[data-act="selMail"] .hl{flex-wrap:nowrap}.wc .row[data-act="selMail"] .hl>.muted{flex:1 1 auto;min-width:0}.wc .row[data-act="selMail"] .hl>.bdg{flex:0 0 auto}}
-
 /* 달력·근태: 한 장의 표. 오늘은 옅은 파랑 */
 .wc .cal{border-radius:var(--r);box-shadow:none}
 .wc .cal .h{background:transparent;font-size:13px;font-weight:600;letter-spacing:0;padding:9px 12px}
@@ -1133,7 +1041,6 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .att .c.sel{box-shadow:inset 0 0 0 2px var(--accent)}.wc .att .c.today{box-shadow:inset 0 0 0 2px var(--accent)}
 .wc .col{border:0;border-radius:var(--r);background:var(--soft)}
 .wc .card{border:1px solid var(--line);border-radius:10px;box-shadow:var(--sh-sm)}
-
 /* 구글 동기화: 올릴 캘린더 고르기 */
 .wc .gs-picks{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px}
 .wc .gs-picks .muted{flex-basis:100%}
@@ -1172,7 +1079,6 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .kv b{font-weight:500}
 .wc .body-text,.wc .file{border-radius:10px}
 .wc .sec>.sh{font-weight:700;font-size:14px}
-
 /* ---------- 홈: 한 문장 → 먼저 할 일 → 한 줄 현황 → 묻기. 오른쪽은 오늘 ---------- */
 .wc .hm{grid-template-columns:minmax(0,1fr) clamp(300px,27%,380px);gap:0;max-width:1400px}
 .wc .hm-main{gap:0;padding-right:40px}
@@ -1181,7 +1087,6 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .hm-hello{order:1;margin:2px 0 0;font-size:13px;font-weight:500;color:var(--muted);letter-spacing:0;line-height:1.5}
 .wc .hm-sub,.wc .hm-sub.hm-tone-urgent{order:2;margin:10px 0 0;font-size:clamp(24px,2.3vw,30px);line-height:1.3;font-weight:700;letter-spacing:-.04em;color:var(--fg)}
 .wc .hm-sub.hm-tone-warn{font-size:17px;color:var(--md)}
-
 .wc #hmTop{flex:none;gap:0}
 .wc .hm-card{border:0;border-radius:0;background:none;box-shadow:none;padding:0}
 .wc .hm-card-h{margin-bottom:8px}
@@ -1221,7 +1126,6 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .hm-today .dr-note{margin:4px 0 10px;font-size:13px}
 .wc .hm-today .dr-b{font-size:0;padding:0}
 @container (max-width:1000px){.wc .hm-main{padding-right:0}.wc .hm-rail{padding-left:0;border-left:0}.wc #hmHead{order:1}.wc #hmTop{order:2}.wc .hm-chatcol{order:3;flex:none}.wc #hmDash{order:4;margin-top:28px;padding-top:24px;border-top:1px solid var(--line)}.wc .ch-dock{position:static}.wc .ch-log{max-height:clamp(220px,calc(100vh - 420px),520px)}}
-
 /* 하루 띠: 08~19시 한 줄. 일정은 칸, 지금은 바늘. (그리는 곳: wc/29-home-view.js homeRailHtml) */
 .wc .dr{position:relative;margin:14px 0 2px;padding:26px 0 22px;user-select:none}
 .wc .dr-track{position:relative;height:30px;border-radius:6px;background:var(--card);border:1px solid var(--line);overflow:hidden}
@@ -1247,7 +1151,6 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .dr-note b{color:var(--fg);font-weight:700}
 .wc .dr-allday{display:inline-flex;align-items:center;gap:5px}
 .wc .dr-allday i{width:8px;height:8px;border-radius:2px;background:var(--accent)}
-
 /* ---------- 채팅: 상자도 머리띠도 없다. 입력칸만 면을 가진다 ---------- */
 .wc .hm-chatcol{margin-top:26px;padding-top:6px;border-top:1px solid var(--line)}
 .wc .ch{border:0;border-radius:0;background:none;box-shadow:none;overflow:visible}
@@ -1265,14 +1168,12 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .ch-ai .ch-bubble{background:none;border:0;padding:4px 0}
 .wc .ch-user .ch-bubble{background:var(--soft);color:var(--fg);border:0}
 .wc .ch-card{border-color:var(--line);border-radius:10px;box-shadow:none}
-
 .wc .ch-chip{border-radius:999px;border-color:var(--line2);background:none}
 .wc .ch-cap:hover,.wc .ch-fact:hover,.wc .ch-chip:hover{border-color:var(--muted);background:var(--soft);transform:none}
 .wc .ch-composer{border-radius:12px;border-color:var(--line2);box-shadow:var(--sh-sm);background:var(--card)}
 .wc .ch-composer:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
 .wc .ch-send{background:var(--pri);color:var(--pri-fg);border-radius:8px}
 .wc .ch-send:hover{background:var(--pri-h)}
-
 /* ---------- 겹쳐 뜨는 것: 창·명령·알림 ---------- */
 .wc .modal{background:rgba(15,18,24,.36);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);box-shadow:none;border-radius:0}
 .wc .dlg,.wc:not(.dark) .dlg,.wc.dark .dlg{background:var(--card);border:0;border-radius:16px;box-shadow:var(--sh2)}
@@ -1288,7 +1189,6 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 @keyframes stRise{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
 @keyframes stDrop{from{opacity:0;transform:scaleY(.94)}to{opacity:1;transform:none}}
 @keyframes stToast{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
-
 /* ---------- 움직임: 화면을 바꿨을 때 한 번 ---------- */
 .wc main{animation:none}
 .wc.m-view main>*{animation:stIn var(--t2) var(--e-out) both}
@@ -1305,7 +1205,6 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 /* 숫자가 바뀌었을 때 */
 .wc .m-tick{display:inline-block;animation:stTick var(--t3) var(--e-out)}
 @keyframes stTick{from{transform:translateY(40%);opacity:0}to{transform:none;opacity:1}}
-
 /* ---------- 좁은 화면 ---------- */
 @media (max-width:1050px){.wc{--navW:168px}.wc.navmini{--navW:64px}.wc:not(.nopane):not(.expanded){grid-template-columns:var(--navW) 0 0 minmax(0,1fr)}.wc.nopane{grid-template-columns:var(--navW) minmax(0,1fr) 0 0}.wc main{padding:22px 20px 48px}.wc header .home{min-width:0}.wc header .srch{flex:1 1 140px;min-width:120px}.wc header .back{margin-left:2px}}
 @media (max-width:640px){.wc,.wc.navmini{--navW:64px}.wc header .home{flex-basis:auto}.wc header .brand-name,.wc header .navtg,.wc nav .foot{display:none}.wc nav .nav-g{margin-bottom:8px}.wc nav a{padding:0;min-height:38px}.wc main{padding:18px 14px 40px;margin-right:6px}}
@@ -1336,17 +1235,13 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .mbody{flex:1 1 0;min-height:220px;position:relative;background:#fff}
 .wc .mbody[hidden]{display:none}
 .wc .mbody iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff}
-
 .wc .hm-why summary,.wc .hm-auto-manage summary{cursor:pointer;padding:5px 0;font-weight:600}.wc .hm-why p{margin:4px 0;line-height:1.55}
 @media(max-width:480px){.wc>header{flex-wrap:wrap;height:auto;min-height:0;align-content:center;gap:4px;padding:4px 6px}.wc>header .srch{min-width:0;flex:1 1 64%}.wc>header .sp{display:none}.wc{grid-template-rows:auto auto minmax(0,1fr)}.wc .hm-next-t,.wc .ch-msg{overflow-wrap:anywhere}}
-
 /* 홈: 내 업무와 대화를 먼저, 부서·예약 참고 정보는 그 아래에 둔다. */
 .wc .hm.desk{display:block;height:auto;max-width:1440px;margin:auto}.wc .desk-grid{display:grid;grid-template-columns:minmax(0,1.12fr) minmax(0,1fr);gap:24px;align-items:start}.wc .desk .hm-head{display:block;margin:0 0 16px}.wc .desk .hm-hello{font-size:clamp(24px,2.2vw,34px);font-weight:750;color:var(--fg);line-height:1.2;margin:4px 0}.wc .desk .hm-sub{font-size:14px;color:var(--muted);font-weight:500}.wc .desk .hm-eyebrow{font-size:12px;font-weight:700;color:var(--accent)}.wc .desk .hm-main{display:block;max-height:none;padding:0;overflow:visible}.wc .desk .hm-next{padding:18px 20px;margin:0;border-radius:12px;background:var(--pri);color:var(--pri-fg);border:1px solid var(--pri)}.wc .desk .hm-next .hm-card-k,.wc .desk .hm-next-t{color:var(--pri-fg)}.wc .desk .hm-next .hm-next-s,.wc .desk .hm-why{color:color-mix(in srgb,var(--pri-fg) 84%,transparent)}.wc .desk .hm-next .hm-next-t{font-size:clamp(17px,1.5vw,22px);margin:8px 0}.wc .desk .hm-next .ch-btn-primary{background:var(--pri-fg);color:var(--pri);border-color:var(--pri-fg)}.wc .desk .hm-next .ch-btn-ghost{color:var(--pri-fg);border-color:color-mix(in srgb,var(--pri-fg) 45%,transparent);background:transparent}.wc .desk-index,.wc .desk-num{font-variant-numeric:tabular-nums;font-weight:700}.wc .desk-index{color:color-mix(in srgb,var(--pri-fg) 70%,transparent);padding-right:5px}.wc .desk-num{color:var(--muted);font-size:12px}.wc .desk .hm-queue-k{margin-top:12px}.wc .desk .hm-q{display:flex;gap:10px;width:100%;align-items:center;text-align:left}.wc .desk .hm-q-t{flex:1}.wc .desk .hm-why{font-size:12px}.wc .desk .hm-why summary{font-weight:500}.wc .desk .hm-chatcol{display:block;min-width:0;border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin:0;background:var(--card)}.wc .desk .ch{height:clamp(340px,52vh,540px);min-height:0;overflow:hidden}.wc .desk .ch-head{padding:0;align-items:flex-start;flex-wrap:wrap}.wc .desk .ch-head-t{min-width:130px;flex:1}.wc .desk .ch-head-a{margin:0}.wc .desk #chLog{flex:1 1 0;min-height:0;overflow:auto}.wc .desk .ch-dock{position:static}.wc .desk .ch-foot .ch-help{display:block;line-height:1.45}.wc .desk-start{padding:10px 0}.wc .desk-start h2,.wc .desk-ref{font-size:15px;margin:0 0 8px}.wc .desk-links{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.wc .desk-links button{display:grid;gap:3px;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:9px;color:var(--fg);cursor:pointer}.wc .desk-links button:hover{border-color:var(--accent)}.wc .desk-links small{font-size:12px;color:var(--muted)}.wc .desk .hm-rail{display:block;max-height:none;overflow:visible;border:0;border-top:1px solid var(--line);margin-top:20px;padding:18px 0 0}.wc .desk #hmDash{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 24px;border:0;padding:0;margin:0}.wc .desk #hmDash>.hm-card{min-width:0;margin:0}.wc .desk .hm-tile{margin:0}.wc .desk .hm-stats{margin:8px 0}.wc .desk .hm-rail .hm-card-k{font-size:14px}
 @container(max-width:840px){.wc .desk-grid,.wc .desk #hmDash{grid-template-columns:minmax(0,1fr)}.wc .desk .ch{height:380px}.wc .desk-grid{gap:14px}.wc .desk .hm-next{padding:14px}.wc .desk .desk-start{padding:8px 0}}
 @container(max-width:420px){.wc .desk-links{grid-template-columns:1fr}.wc .desk-links button{display:flex;justify-content:space-between;flex-wrap:wrap}.wc .desk .hm-chatcol{padding:10px}.wc .desk .ch{height:auto;min-height:300px}.wc .desk .ch-log{max-height:240px;flex:auto}}
-
 .wc .rpt-review{width:min(1020px,94vw);max-height:90vh;overflow:auto;padding:20px 24px}.wc .rpt-review h2,.wc .rpt-review h3{margin:4px 0 8px}.wc .rpt-grid{display:grid;grid-template-columns:1fr 1.2fr;gap:22px}.wc .rpt-grid>div{min-width:0}.wc .rpt-review label{display:block;margin:10px 0}.wc .rpt-review input.inp,.wc .rpt-review textarea{display:block;width:100%;margin:4px 0}.wc .rpt-review textarea{min-height:270px;line-height:1.6}.wc .rpt-review details{border-bottom:1px solid var(--line);padding:7px}.wc .rpt-review details p{white-space:pre-wrap;overflow-wrap:anywhere}.wc .rpt-review summary{cursor:pointer}.wc .rpt-review .acts{justify-content:flex-end}.wc .rpt-review p,.wc .rpt-review small{color:var(--muted)}@media(max-width:800px){.wc .rpt-grid{grid-template-columns:1fr}}
-
 /* ---------- v0.85 화면 정돈: 12개 메뉴가 같은 뼈대를 쓴다 ----------
    제목(메뉴 이름) → 하위 탭 → 도구줄 → 본문. 목록은 가는 선, 상자는 떠 있는 것만. 고정 색 대신 토큰. */
 .wc .vh{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
@@ -1420,7 +1315,6 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .set .si .muted{display:block;margin-top:4px}
 .wc .set .danger-zone{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line2)}
 .wc .cal-more{display:block;margin-top:3px;font-size:12px}
-
 /* 날짜를 누르면 그 날의 상세 내역을 달력 옆에, 좁은 화면에서는 아래에 표시 */
 .cal-layout.has-day{display:grid;grid-template-columns:minmax(0,1fr) minmax(250px,320px);gap:12px;align-items:start}
 .cal-day{padding:16px;max-height:720px;overflow:auto;min-width:0}
