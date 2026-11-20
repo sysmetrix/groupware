@@ -328,7 +328,7 @@
     if (!x0) return cmdPickMail(q, x => cmdMailReplyTo(q, template, x), {reply: true});
     return cmdMailReplyTo(q, template, x0);
   }
-  async function cmdMailReplyTo(q, template, x, custom = null) {
+  async function cmdMailReplyTo(q, template, x, custom = null, kind = 're') {
     closeOverlay();
     if (x.key) {
       // selectAction은 이미 선택된 항목을 다시 부르면 선택을 해제하므로, 같은 항목이면 다시 부르지 않는다
@@ -338,7 +338,7 @@
     // 열지 않았으면(입력 중인 화면을 지키기로 함) 그 화면에 회신 문구를 넣지 않는다
     // 안 읽은 메일은 답장 창을 열면 읽음으로 바뀌므로 상세 창의 답장 버튼처럼 먼저 묻는다.
     const unread = typeof marksRead === 'function' ? marksRead({type: 'mail', ref: x.ref}) : false;
-    if (!openUrl(GW.links.compose('re', {box: x.ref.box, uid: x.ref.uid}), {title: `답장: ${x.title}`, unread, what: '메일'})) { toast('답장 화면을 열지 않았고 회신 문구도 넣지 않았습니다.'); return 'cancel'; }
+    if (!openUrl(GW.links.compose(kind === 'fw' ? 'fw' : 're', {box: x.ref.box, uid: x.ref.uid}), {title: `${kind === 'fw' ? '전달' : '답장'}: ${x.title}`, unread, what: '메일'})) { toast(`${kind === 'fw' ? '전달' : '답장'} 화면을 열지 않았고 문구도 넣지 않았습니다.`); return 'cancel'; }
     // 편집기가 뜨고 원문 인용이 채워질 때까지 기다렸다가 넣고, 실제로 들어갔는지까지 확인한 결과를 받는다(실패 안내는 autoFillMail이 한다).
     const ready = !!(S.sel && (x.key ? S.sel.key === x.key : S.sel.uid === x.ref.uid)) && await autoFillMail(template, custom);
     logActionRecord({

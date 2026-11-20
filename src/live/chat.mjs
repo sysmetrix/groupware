@@ -194,6 +194,9 @@ export function chatIntent(text, now = new Date()) {
   // 비서가 하지 않는 일(상신·결재 승인·반려·삭제)을 시키는 말은 목록 조회로 바꿔 답하지 않는다. AI나 안내에 맡긴다.
   if (chatNotDoing(t)) return none;
   // 특정 메일의 내용·요청을 묻는 말은 목록이 아니라 본문 읽기(v0.86.0)
+  // v0.97.0: 업무 문장 쓰기 — 상급자 보고 문장, 부서 공유 메일(앞에서 다룬 메일 기준)
+  if (/(보고\s*(?:할|드릴|용|하는)?\s*(?:문장|내용|글|메모|요약|문구)|보고\s*(?:문장|글)으로|(?:팀장|실장|과장|부장|국장|상급자|윗분)\S*\s*(?:께|에게|한테)\s*보고)/.test(t) && /(써|작성|정리|만들|뽑아)/.test(t) && !/(결과\s*보고|주간|실적|기안)/.test(t)) return make('write_text', {kind: 'report'});
+  if (/(공유|전달|알리|안내)\S*\s*(?:하는|할|하기|용)?\s*(?:메일|문구|글|공지)/.test(t) && /(써|작성|만들|보내|초안)/.test(t) && !/(답장|회신)/.test(t)) return make('write_text', {kind: 'share'});
   { const ra = chatReadAttachIntent(t); if (ra) return make('read_attachment', ra.query ? {query: ra.query} : {}); }
   { const rd = chatReadDocIntent(t); if (rd) return make('read_doc', {...(rd.query ? {query: rd.query} : {}), ...(rd.scope ? {scope: rd.scope} : {})}); }
   { const rm = chatReadMailIntent(t); if (rm) return rm.digest ? make('digest_mail', {filter: rm.digest}) : make('read_mail', rm.query ? {query: rm.query} : {}); }
@@ -276,7 +279,12 @@ export function chatIntent(text, now = new Date()) {
   // 사람 찾기: 전화·부서·직급
   { const pn = chatExtractPerson(t); if (pn) return make('lookup_person', {name: pn}); }
   // --- 실행(확인 카드) ---
-  if (/답장|회신/.test(t) && /메일|건|에게|한테|보내|써|작성|초안/.test(t)) return make('draft_mail_reply', {query: t.replace(/(메일|답장|회신|초안|써줘|써 줘|작성|해줘|해 줘)/g, ' ').replace(/\s+/g, ' ').trim()});
+  if (/답장|회신/.test(t) && /메일|건|에게|한테|보내|써|작성|초안/.test(t)) {
+    // v0.97.0: "답장 써줘. 25일까지 게시하겠다고" → 뒤의 말을 답장 요점으로
+    const pm = t.match(/(?:답장|회신)\s*(?:을|를)?\s*(?:써\s*줘|써줘|작성해\s*줘|초안\s*(?:써\s*줘|만들어\s*줘)?)\s*[.,:]?\s*(.{4,})$/);
+    const points = pm && !/^(?:작성|써|만들|해\s*줘|줘)/.test(pm[1].trim()) ? pm[1].replace(/(?:라고|다고|이라고|하겠다고|겠다고)\s*$/, '').trim() : '';
+    return make('draft_mail_reply', {query: (pm ? t.slice(0, t.length - pm[1].length) : t).replace(/(메일|답장|회신|초안|써줘|써 줘|작성|해줘|해 줘|[.,:])/g, ' ').replace(/\s+/g, ' ').trim(), ...(points.length >= 4 ? {points: points.slice(0, 200)} : {})});
+  }
   if (/(차량|관용차|니로|자동차)/.test(t) && /(예약|잡아|빌려|쓰고|쓸)/.test(t) && !/(가능|비어|빈|언제|있어|있나|현황|확인)/.test(t)) return make('reserve_vehicle', {date: dt ? dt.date : '', start: rg.start, end: rg.end, title: ''});
   if (/(차량|관용차|니로|자동차|회의실|자원|세미나실|강당|LED|패널|전광판|차\s)/i.test(t) && /(가능|비어|빈|언제|있어|있나|현황|확인|예약 상황|예약상황|쓸\s*수)/.test(t)) return make('get_resource_status', {date: dt ? dt.date : 'today', ...(/(회의실|회의\s*공간|세미나실|강당|교육장)/.test(t) ? {kind: 'room'} : /(LED|패널|전광판)/i.test(t) ? {kind: 'led'} : {})});
   if (/(시간외|연장근무|야근|휴일근무|조기근무)/.test(t) && want) return make('prepare_overtime_request', {date: dt ? dt.date : '', start: rg.start, end: rg.end, reason: ''});

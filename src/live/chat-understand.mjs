@@ -421,3 +421,45 @@ export function cuBodyDeadline(deadlines = [], need = {}, today = '', {body = ''
   return ds[0] || '';
 }
 
+// ---------- 업무 문장 쓰기 (v0.97.0): 상급자 보고, 부서 공유 ----------
+/**
+ * 메일에서 확인한 사실만으로 보고·공유 문장을 만든다(지어내지 않음, 모르는 칸은 (작성 필요)).
+ * info: {subject, from, asks[], summary[], need, deadlines[YYYY-MM-DD], files[]}, kind: report | share
+ */
+export function cuWriteLines(info = {}, kind = 'report') {
+  const subj = cuStr(String(info.subject || '').replace(/^\s*(re|fw|fwd)\s*:\s*/i, ''), 80) || '(제목 없음)';
+  const asks = (info.asks || []).map(a => cuStr(a, 110)).filter(Boolean).slice(0, 3);
+  const sum = (info.summary || []).map(a => cuStr(a, 140)).filter(Boolean).slice(0, 2);
+  const dl = [...new Set((info.deadlines || []).map(cuIso).filter(Boolean))].sort().slice(0, 3).map(cuMd);
+  const files = (info.files || []).map(n => cuStr(n, 40)).filter(Boolean);
+  const need = {yes: '회신·제출 필요', no: '회신 불필요(안내·공유)', maybe: '회신 여부 확인 필요'}[info.need] || '';
+  if (kind === 'share') return [
+    `${subj} 관련 내용을 공유드립니다.`,
+    ...(sum.length ? sum : asks.length ? [`요청 사항: ${asks[0]}`] : []),
+    ...(asks.length && sum.length ? [`요청 사항: ${asks.join(' / ')}`] : []),
+    ...(dl.length ? [`관련 일정·기한: ${dl.join(', ')}`] : []),
+    ...(files.length ? [`첨부: ${files.slice(0, 4).join(', ')}${files.length > 4 ? ` 외 ${files.length - 4}개` : ''}`] : []),
+    '업무에 참고하시기 바랍니다.',
+  ];
+  return [
+    `[보고] ${subj} 건`,
+    `• 보낸 곳: ${cuStr(info.from, 40) || '(확인 필요)'}`,
+    ...(sum.length ? [`• 주요 내용: ${sum.join(' ')}`] : []),
+    `• 요청 사항: ${asks.length ? asks.join(' / ') : '(작성 필요)'}${need ? ` — ${need}` : ''}`,
+    `• 기한: ${dl.length ? dl.join(', ') : '본문에 적힌 기한 없음'}`,
+    ...(files.length ? [`• 첨부: ${files.length}개(${files.slice(0, 2).join(', ')}${files.length > 2 ? ' 등' : ''})`] : []),
+    '• 처리 계획: (작성 필요)',
+  ];
+}
+
+/** 답장 요점("25일까지 게시") → 공손한 한 문장("25일까지 게시하겠습니다."). 이미 문장이면 마침표만 맞춘다. */
+export function cuPointSentence(p) {
+  let x = cuStr(p, 200).replace(/[.。]+$/, '').trim();
+  if (!x) return '';
+  if (/(니다|세요|어요|아요|해요|겠음|함|음)$/.test(x)) return x + '.';
+  if (/(게시|제출|회신|검토|전달|공유|안내|처리|참석|확인|송부|발송|접수|협조|진행|반영|준비|홍보|등록|보고)$/.test(x)) return x + '하겠습니다.';
+  if (/(하|되|보내|드리|알리|올리)$/.test(x)) return x + '겠습니다.';
+  if (/(렵|없|있|같|많|않|좋)다$/.test(x)) return x.replace(/다$/, '습니다.');
+  return x + '.';
+}
+
