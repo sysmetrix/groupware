@@ -6,13 +6,20 @@ import path from 'node:path';
 import {build, MAX_SHIPPED_BUNDLE_BYTES} from '../scripts/live-build.mjs';
 import {minifySafely, TERSER_VERSION} from '../scripts/terser-minify.mjs';
 
-test('work90 minifier is local and deterministic; v0.86.0 shortens only function-local names', async () => {
+test('work90 minifier is local and deterministic; shortens only function-local names and keeps behavior', async () => {
   const source = '/* removable */ function keepName(longArgument) { const untouched = longArgument + 1; return untouched; }';
   const first = await minifySafely(source);
   const second = await minifySafely(source);
   assert.equal(first, second);
   assert.match(first, /function keepName\(\w+\)/); // 최상위 이름은 그대로, 지역 이름(인자·지역 변수)만 짧아진다
-  assert.match(first, /const \w+=\w+\+1/);
+  // v0.92.0: 기본 압축을 켜도 동작은 같아야 한다
+  const box = {}; new Function('box', first + '; box.r = keepName(41);')(box);
+  assert.equal(box.r, 42);
+  // 선언되지 않은 전역의 typeof 검사는 그대로 둔다(typeofs: false)
+  const guard = await minifySafely('function hasPolicy() { return typeof POLICY !== "undefined" && !!POLICY; }');
+  assert.match(guard, /typeof POLICY/);
+  const box2 = {}; new Function('box', guard + '; box.r = hasPolicy();')(box2);
+  assert.equal(box2.r, false);
   assert.doesNotMatch(first, /removable/);
   assert.equal(TERSER_VERSION, '5.44.1');
 });

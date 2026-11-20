@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 // v0.87.0 화면 조각(43·44)을 가짜 그룹웨어 자료로 실행한다: 여러 메일 정리, 공문 읽기, 일정 준비, 대화 초점 유지.
 // 실제 계정에서는 안 읽은 메일을 읽음으로 바꾸게 되므로 이 흐름은 여기서 검증한다.
 import test from 'node:test';
@@ -257,4 +258,14 @@ test('cuBudgetHealth: 경과율 대비 느림·빠름·초과를 가리고 차�
   const h = CU.cuBudgetHealth([{name: 'A', budget: 100, executed: 60, balance: 40, rate: 60}, {name: 'B', budget: 100, executed: 99, balance: 1, rate: 99}, {name: 'C', budget: 100, executed: 85, balance: 15, rate: 85}, {name: 'D', budget: 0}], 85);
   assert.deepEqual(h.map(x => [x.name, x.flag]), [['A', 'slow'], ['B', 'ok'], ['C', 'ok']]);
   assert.equal(CU.cuBudgetHealth([{name: 'E', budget: 100, executed: 120, balance: -20, rate: 120}], 85)[0].flag, 'fast');
+});
+
+// ---------- v0.92.0 저장 공간 ----------
+test('저장 공간: 문서 첨부를 읽은 뒤 뷰어 캐시를 지우고, 저장 공간이 모자라면 뷰어 캐시부터 지운다', () => {
+  const col = fs.readFileSync(new URL('../src/live/collector.browser.js', import.meta.url), 'utf8');
+  const fn = col.slice(col.indexOf('async function docAttachmentPages'), col.indexOf('async function docAttachmentPages') + 2500);
+  assert.match(fn, /finally \{[\s\S]*startsWith\('synap_' \+ key\)[\s\S]*removeItem/);
+  const st = fs.readFileSync(new URL('../src/live/wc/01-storage.js', import.meta.url), 'utf8');
+  const pr = st.slice(st.indexOf('function pruneStorageForQuota'), st.indexOf('function cleanupLegacyStorage'));
+  assert.ok(pr.indexOf("startsWith('synap_')") > 0 && pr.indexOf("startsWith('synap_')") < pr.indexOf("'chatHist'"), '뷰어 캐시를 비서 자료보다 먼저 지운다');
 });
