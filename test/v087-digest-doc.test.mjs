@@ -306,3 +306,20 @@ test('v0.95.0: 본문 기한 — 회신·제출 요구 메일만, 지난 7일~�
   const r = CU.cuRisks([{key: 'm', title: '자료 요청', state: 'todo', type: 'mail', base: 'mailReply', deadline: '2026-11-22', dlSource: 'body', when: '2026-11-21'}], {today: '2026-11-21'});
   assert.match(r[0].why[0], /^본문의 기한 11\/22/);
 });
+
+test('v0.96.0: 대화 이어가기 — 고쳐 말하기 순번, 말투만 바꾸기, 그날', async () => {
+  const C2 = await import('../src/live/chat.mjs');
+  assert.equal(C2.chatCorrectIndex('아니 두 번째 거'), 2);
+  assert.equal(C2.chatCorrectIndex('두 번째 거요'), 2);
+  assert.equal(C2.chatCorrectIndex('말고 3번'), 3);
+  assert.equal(C2.chatCorrectIndex('두 번째 메일 답장 써줘'), 0);
+  assert.ok(C2.chatStyleOnly('더 짧게 한 줄로'));
+  assert.ok(C2.chatStyleOnly('요점만 정리해줘'));
+  assert.ok(!C2.chatStyleOnly('짧게 내일 일정 알려줘'));
+  assert.equal(C2.chatIntent('짧게 내일 일정 알려줘', new Date('2026-11-20T18:30:00Z')).tool, 'get_schedule');
+  assert.ok(C2.chatRefersDay('그날 부서 사람들 휴가는?'));
+  const eng = fs.readFileSync(new URL('../src/live/wc/31-chat-engine.js', import.meta.url), 'utf8');
+  assert.match(eng, /st\.ctx\.lastIndexed = \{tool: it\.tool/);
+  assert.match(eng, /R\.chatRefersDay\(text\) && st\.ctx\.lastRead/);
+  assert.match(eng, /typeof R\.chatCorrectIndex === 'function'/); // 일부 도우미만 주는 시험 환경에서도 대화가 멈추지 않게
+});

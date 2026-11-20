@@ -343,6 +343,17 @@
       const ready = !auto && chatMode().ready && allowed('aiAssistant');
       const weekday = /^(?:(?:오늘|내일|모레|어제|그제|그저께|\d{4}[-./]\d{1,2}[-./]\d{1,2}|\d{1,2}\s*월\s*\d{1,2}\s*일|\d{1,2}[/.]\d{1,2})\s*)?(?:은|는|이|가)?\s*(?:무슨|몇)\s*요일(?:이야|인가요|이에요|입니까|인지|이니|이죠|일까|알려줘|인가)?[?？!\s]*$/.test(text);
       let it = weekday ? {tool: 'get_weekday', args: {date: (R.chatParseDate(text, new Date()) || {}).date || (/\d/.test(text) ? 'invalid' : 'today')}, confidence: 1} : R.chatScheduleFollowup(text, st.ctx.lastRead) || R.chatFollowupIntent(text, st.ctx.lastRead, new Date()) || R.chatIntent(text, new Date());
+      // v0.96.0 대화 이어가기: 고쳐 말하기("아니 두 번째 거") → 방금 도구를 그 순번으로, 말투만 바꾸기("더 짧게") → 직전 답의 첫 문장, "그날" → 앞 날짜
+      { const ci = typeof R.chatCorrectIndex === 'function' ? R.chatCorrectIndex(text) : 0, la = st.ctx.lastIndexed;
+        if (ci && la && Date.now() - la.at < 30 * 60000 && CHAT_TOOLS.has(la.tool)) it = {tool: la.tool, args: {...la.args, index: ci}, confidence: 1}; }
+      if (!it.tool && typeof R.chatStyleOnly === 'function' && R.chatStyleOnly(text)) {
+        const prev = [...st.msgs].reverse().find(m => m.role === 'ai' && m !== ai && m.text && m.state === 'done');
+        const first = prev ? String(prev.text).replace(/\s+/g, ' ').split(/(?<=[.!?。])\s+|\s\/\s/)[0] : '';
+        ai.text = first ? first.slice(0, 160) : '줄일 앞 답변이 없습니다. 무엇을 짧게 정리할지 말씀해 주세요.'; ai.state = 'done';
+        if (st.seq === runSeq) { st.busy = false; st.abort = null; st.activeReply = null; }
+        chatSave(); chatRefresh(true); return;
+      }
+      if (typeof R.chatRefersDay === 'function' && R.chatRefersDay(text) && st.ctx.lastRead && st.ctx.lastRead.args && /^\d{4}-\d{2}-\d{2}$/.test(String(st.ctx.lastRead.args.date || '')) && ['get_schedule', 'get_staff_status', 'get_resource_status'].includes(it.tool) && !R.chatParseDate(text, new Date())) it = {...it, args: {...it.args, date: st.ctx.lastRead.args.date}};
       // 우선순위 질문에만 표시 개수를 좁힌다. 목록 순서는 기존 홈 기준을 유지한다.
       if (it.tool === 'list_tasks' && /(?:제일|가장)\s*먼저|맨\s*먼저/.test(text) && !/(신청|등록|삭제|변경|보내|예약)/.test(text)) {
         const target = R.chatParseDate(text, new Date());
@@ -372,6 +383,8 @@
         const res = await chatExec(it.tool, it.args, ai, {userText: text, viaAi: false, auto: !!auto});
         if (S.userKey !== owner || S.chat !== st || st.seq !== runSeq) return;
         st.ctx.lastRead = res.ok && ['get_schedule', 'get_staff_status', 'get_resource_status'].includes(it.tool) ? {tool: it.tool, args: it.args} : null;
+        // 순번으로 고른 도구는 고쳐 말하기에 쓰려고 기억한다(메모리에만)
+        if (it.args && it.args.index && ['read_mail', 'read_doc', 'open_item', 'draft_mail_reply', 'check_sent_reply'].includes(it.tool)) st.ctx.lastIndexed = {tool: it.tool, args: {...it.args}, at: Date.now()};
         if (S.chat !== st || st.stopped || st.seq !== runSeq) { ai.text = ai.text || '중지했습니다.'; }
         else {
           if (proseCaps && res.ok) { ai.cards = []; ai.text = res.text || res.llm || ''; }
