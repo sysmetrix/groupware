@@ -194,6 +194,38 @@ export function trimChangelog(src, keep = CHANGELOG_DETAIL, ship = Infinity) {
   return src.slice(0, a + mark.length) + kept.join('\n') + src.slice(b).replace('export const CHANGELOG_ALL = CHANGELOG.length;', `export const CHANGELOG_ALL = ${lines.length};`);
 }
 
+/**
+ * v1.2.0: 맨 바깥 단계에서 같은 선택자(쉼표 없는 하나짜리)를 뒤에서 다시 선언해 덮어쓴 속성은 앞 선언에서 지운다.
+ * 같은 선택자·같은 우선순위에서는 늘 뒤 선언이 이기므로 결과 화면은 같다. !important, @규칙 안, 여러 선택자 규칙은 건드리지 않는다.
+ * 문자열·괄호 안의 ; { } 는 나누지 않는다.
+ */
+export function dropShadowedCss(css) {
+  const split = (body, sep) => { const out = []; let d = 0, q = '', cur = ''; for (const c of body) { if (q) { cur += c; if (c === q) q = ''; continue; } if (c === '"' || c === "'") { q = c; cur += c; continue; } if (c === '(') d++; else if (c === ')') d--; if (c === sep && !d) { out.push(cur); cur = ''; } else cur += c; } if (cur) out.push(cur); return out; };
+  const rules = []; let depth = 0, q = '', start = 0, open = -1;
+  for (let k = 0; k < css.length; k++) {
+    const c = css[k];
+    if (q) { if (c === q) q = ''; continue; }
+    if (c === '"' || c === "'") { q = c; continue; }
+    if (c === '{') { if (!depth) open = k; depth++; }
+    else if (c === '}') { depth--; if (!depth) { rules.push({a: start, open, b: k, sel: css.slice(start, open).trim()}); start = k + 1; } }
+  }
+  if (depth || q) return css; // 짝이 맞지 않으면 손대지 않는다
+  const seen = new Map(), edits = new Map();
+  for (let i = rules.length - 1; i >= 0; i--) {
+    const r = rules[i];
+    if (r.sel.startsWith('@') || split(r.sel, ',').length !== 1) continue;
+    const decls = split(css.slice(r.open + 1, r.b), ';').map(x => x.trim()).filter(Boolean), later = seen.get(r.sel) || new Set();
+    const prop = d => d.slice(0, d.indexOf(':')).trim().toLowerCase();
+    const keep = decls.filter(d => d.indexOf(':') < 0 || /!important/i.test(d) || !later.has(prop(d)));
+    for (const d of decls) if (d.indexOf(':') > 0) later.add(prop(d));
+    seen.set(r.sel, later);
+    if (keep.length !== decls.length) edits.set(i, keep);
+  }
+  let out = '', pos = 0;
+  rules.forEach((r, i) => { if (!edits.has(i)) return; const keep = edits.get(i); out += css.slice(pos, r.a) + (keep.length ? css.slice(r.a, r.open + 1) + keep.join(';') + '}' : ''); pos = r.b + 1; });
+  return out + css.slice(pos);
+}
+
 /** Assembles the bundle text from sources. Pure: same input, same output. Returns a line map for error reporting. */
 export function assemble({collector, css, parts, template, briefing: briefingSrc}) {
   if (parts.length < 10) throw new Error('work center parts missing');
@@ -205,10 +237,11 @@ export function assemble({collector, css, parts, template, briefing: briefingSrc
   const wcCss = css.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\n+/g, '\n').replace(/^[ \t]+/gm, '').replace(/;\s+/g, ';').replace(/\{\s+/g, '{').replace(/\s+\}/g, '}')
     // 규칙 사이 줄바꿈·마지막 세미콜론·쉼표/선택자 사이 공백은 뜻이 없다(문자열 안에 해당 문자가 없는지 하네스가 아니라 이 주석의 전제로 둔다: wc.css의 content 값에는 쉼표·콜론을 쓰지 않는다).
     .replace(/\}\n/g, '}').replace(/;\}/g, '}').replace(/,\s+/g, ',').replace(/\s*>\s*/g, '>').replace(/\s*\{/g, '{').replace(/:\s+/g, ':');
+  const wcCssSlim = dropShadowedCss(wcCss);
   // The CSS marker is replaced once, in source order (template head, parts, template tail). JSON keeps it on one line.
   const wcSegs = [{label: 'workcenter.browser.js', text: halves[0]}, ...parts.map((p, i) => ({label: `wc/${p.file}`, text: p.src + (i < parts.length - 1 ? '\n' : '')})), {label: 'workcenter.browser.js', text: halves[1]}];
   const cssAt = wcSegs.findIndex(s => s.text.includes(CSS_MARK));
-  if (cssAt >= 0) wcSegs[cssAt] = {...wcSegs[cssAt], text: wcSegs[cssAt].text.replace(CSS_MARK, () => JSON.stringify(wcCss))};
+  if (cssAt >= 0) wcSegs[cssAt] = {...wcSegs[cssAt], text: wcSegs[cssAt].text.replace(CSS_MARK, () => JSON.stringify(wcCssSlim))};
   const workcenter = wcSegs.map(s => s.text).join('');
   if (workcenter.includes('/*@WC_PARTS@*/')) throw new Error('work center parts were not assembled');
   if (!workcenter.includes(':host{all:initial}')) throw new Error('wc.css was not inlined');

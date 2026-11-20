@@ -15,7 +15,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '1.1.0';
+  const VERSION = '1.2.0';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
@@ -979,6 +979,14 @@
     return {project, code, year: y, gisu: g, months: res};
   }
 
+  // 보낸메일함 최근 목록(읽기 전용, 본문 없음). 대화 비서의 "보낸 메일" 조회용.
+  async function sentMail({size = 50} = {}) {
+    const boxes = arr((await call('/mail/mail000A01')).mailboxList), sent = boxes.find(b => b.name === 'SENT');
+    if (!sent) return [];
+    const d = await call('/mail/mail003A01', {boxName: 'SENT', mainApiCode: 'mail003A01', mboxSeq: sent.mboxSeq, page: 1, pageSize: Math.min(Math.max(+size || 50, 1), 100), sort: 'rfc822date', sortType: 'desc', listType: '', showType: '', seen: false});
+    return arr(d && d.Records).map(r => ({uid: str(r.muid, 40), subject: mask(r.subject, 200), date: str(r.tooltipDate || r.rfc822date, 25), to: str(r.toAddrName, 60)}));
+  }
+
   // A subject match is only a candidate, never evidence of a reply to this message.
   async function findReply({subject = '', since = ''} = {}) {
     const boxes = arr((await call('/mail/mail000A01')).mailboxList);
@@ -1032,7 +1040,7 @@
   }
 
   window.BWYFGW = Object.freeze({
-    version: VERSION, collect, call, search, organizationTree, organizationMembers, budgetCatalog, budgetProject, budgetAll, budgetLedger, budgetMonthly, attendanceDays, teamAttendance, teamPlanned, resourceList, resourceBookings, resourceDetail, resourceCheck, reserveResource, routingHistory, submittedRange, approvalPage, approvalFallback, docPreview, frequentForms, findReply, mailDetail, mailInlineImage, mailAttachment, mailAttachmentPreview, mailAttachmentPages, docAttachmentPages, synapPageImages, saveBlob,
+    version: VERSION, collect, call, search, organizationTree, organizationMembers, sentMail, budgetCatalog, budgetProject, budgetAll, budgetLedger, budgetMonthly, attendanceDays, teamAttendance, teamPlanned, resourceList, resourceBookings, resourceDetail, resourceCheck, reserveResource, routingHistory, submittedRange, approvalPage, approvalFallback, docPreview, frequentForms, findReply, mailDetail, mailInlineImage, mailAttachment, mailAttachmentPreview, mailAttachmentPages, docAttachmentPages, synapPageImages, saveBlob,
     context: () => { const c = context(); return {name: c.name, deptName: c.deptName, compName: c.compName, duty: c.duty, position: c.position}; },
     readOnlyEndpoints: () => [...READ_ONLY], routes: ROUTES, links: LINKS, searchLabels: SEARCH_LABELS, defaults: DEFAULTS,
   });

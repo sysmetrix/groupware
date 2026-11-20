@@ -84,7 +84,7 @@
 
   // 예산: "내가 맡은 사업 예산 괜찮아?"처럼 사업 이름이 없으면 관심 사업 전체의 집행 상태(경과율 대비)를 답한다
   { const def = CHAT_TOOLS.get('get_budget'); if (def) { const run0 = def.run; def.run = async (a, ctx) => {
-    const rest = String(a.project || '').replace(/(요즘|최근|요새|내가|제가|맡은|담당|담당한|우리|내|저희|사업들?|예산|집행률?|괜찮[가-힣]*|어때|어떤가요?|잘|되고|되는지|돼|있어|있나|현황|전체|부서|관심|상태|좀|해\s*줘|알려\s*줘|봐\s*줘|확인|[?？!.,])/g, ' ').replace(/\s+/g, '').trim();
+    const rest = String(a.project || '').replace(/(이번\s*달|이번\s*년|올해|지금|현재|요즘|최근|요새|내가|제가|맡은|담당|담당한|우리|내|저희|사업들?|예산|집행률?|괜찮[가-힣]*|어때|어떤가요?|잘|되고|되는지|돼|있어|있나|현황|전체|부서|관심|상태|좀|해\s*줘|알려\s*줘|봐\s*줘|확인|[?？!.,])/g, ' ').replace(/\s+/g, '').trim();
     if (rest.length >= 2 || !S.a || !S.a.budget) return run0(a, ctx);
     const el = Number(S.a.budget.elapsedPct) || 0;
     const list = (S.a.budget.projects || []).filter(p => !p.error && p.rows && p.rows.length).map(p => { const top = p.rows[0]; return {name: (S.settings.budget.find(b => b.project === p.project) || {}).label || p.label || p.project, budget: top.budget, executed: top.executed, balance: top.balance, rate: top.rate}; });

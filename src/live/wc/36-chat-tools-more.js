@@ -77,12 +77,14 @@
       if (dd) list = list.filter(m => String(m.date || '').startsWith(dd));
       if (a.important) list = list.filter(m => !R.isNoiseMail(m) && (acts.has(String(m.uid)) || !m.seen || /요청|협조|제출|회신|긴급|마감|기한|검토|조사|확인\s*바랍/.test(m.subject || '')));
       if (who) list = list.filter(m => String(m.from || '').replace(/\s+/g, '').includes(who) || String(m.fromEmail || '').includes(who));
+      const qk = String(a.query || '').split(/\s+/).filter(x => x.length >= 2); if (qk.length) list = list.filter(m => qk.every(k => String(m.subject || '').replace(/\s+/g, '').includes(k.replace(/\s+/g, ''))));
       list.sort((x, y) => String(y.date || '').localeCompare(String(x.date || '')));
       const label = (dd ? `${chatMd(dd)}에 받은 ` : '') + (a.important ? '챙길 만한 메일' : {unread: '안 읽은 메일', today: '오늘 받은 메일', attach: '첨부가 있는 메일', recent: dd ? '메일' : '최근 받은 메일'}[filter]);
       const scope = `받은편지함 최근 ${md.inbox.fetched}통${filter === 'unread' ? '과 다른 편지함의 안 읽은 메일' : ''} 안에서 확인했습니다.${filter === 'unread' && Number.isFinite(Number(md.inbox.unseen)) ? ` 받은편지함 전체의 안 읽음은 ${md.inbox.unseen}통으로 집계됩니다.` : ''}`;
       if (a.important) list.sort((x, y) => (acts.has(String(y.uid)) - acts.has(String(x.uid))) || (!y.seen - !x.seen));
       const why = a.important ? `\n${dd ? `그날 받은 ${all0}통 가운데 ` : ''}요청·회신 요구 제목이거나, 할 일로 잡혔거나, 안 읽은 메일입니다(광고성 제외).` : '';
-      if (!list.length) return {ok: true, text: `${who ? `“${who}” ` : ''}${label}이 없습니다.${dd && a.important ? ` 그날 받은 메일은 ${all0}통입니다.` : ''}\n${scope}`, llm: `${label} 0건. ${scope}`, data: {count: 0, filter}, cards: [nav]};
+      if (a.when && list.length) { list.sort((x, y) => String(y.date || '').localeCompare(String(x.date || ''))); const m = list[0]; return {ok: true, text: `“${chatCut(m.subject, 50)}” 메일은 ${chatMd(String(m.date).slice(0, 10))} ${String(m.date).slice(11, 16)}에 받았습니다(보낸 사람 ${String(m.from || '').replace(/["']/g, '')}).${list.length > 1 ? ` 제목이 비슷한 메일이 ${list.length - 1}통 더 있습니다.` : ''}`, data: {count: list.length, items: list.slice(0, 5).map(x => ({itemId: acts.get(String(x.uid)) || '', title: x.subject || '', uid: x.uid, type: 'mail'}))}, cards: [nav]}; }
+      if (!list.length) return {ok: true, text: `${qk.length ? `제목에 “${qk.join(' ')}”이 들어간 ` : ''}${who ? `“${who}” ` : ''}${label}이 없습니다.${dd && a.important ? ` 그날 받은 메일은 ${all0}통입니다.` : ''}\n${scope}`, llm: `${label} 0건. ${scope}`, data: {count: 0, filter}, cards: [nav]};
       const items = list.slice(0, lim).map(m => ({title: m.subject || '(제목 없음)', sub: [m.from, m.shortDate || String(m.date || '').slice(5, 16), m.attach ? '첨부' : '', m.box && m.box !== 'INBOX' ? m.box : ''].filter(Boolean).join(' · '), badge: m.seen ? (R.isNoiseMail(m) ? '광고성' : '') : '안 읽음', tone: m.seen ? 'info' : 'todo', ...(acts.has(String(m.uid)) ? {act: {act: 'chatOpenItem', v: acts.get(String(m.uid))}} : {})}));
       // 목록의 읽음 상태가 오래되었을 수 있으므로 항상 명시적으로 확인한다.
       const previews = list.slice(0, Math.min(lim, 3)).filter(m => m.uid).map(m => {

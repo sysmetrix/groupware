@@ -443,3 +443,20 @@ test('v1.1.0: 있어?에 예/아니요, 날짜 묻기, 다 끝났어?, 업데이
   const ui = fs.readFileSync(new URL('../src/live/wc/26-changelog.js', import.meta.url), 'utf8');
   assert.match(ui, /R\.CHANGELOG_ALL/);
 });
+
+test('v1.2.0: 찾고 확인하기 라우팅, 덮어쓴 CSS 덜어 내기', async () => {
+  const C8 = await import('../src/live/chat.mjs');
+  const now = new Date('2026-11-20T18:30:00Z');
+  assert.deepEqual(C8.chatIntent('지난주에 내가 보낸 메일 보여줘', now).args, {date: '2026-11-09', end: '2026-11-13'});
+  assert.deepEqual(C8.chatIntent('보낸 메일 중에 견적 들어간 거', now).args, {query: '견적'});
+  assert.equal(C8.chatIntent('한도윤 주무관이 보낸 메일', now).args.from, '한도윤');
+  assert.equal(C8.chatIntent('그 메일 답장 보냈는지 확인해줘', now).tool, 'check_sent_reply');
+  assert.equal(C8.chatIntent('부서 사람들 다음 주 휴가 일정 정리해줘', now).tool, 'get_staff_status');
+  assert.equal(C8.chatIntent('내가 맡은 사업 예산 괜찮아?', now).tool, 'get_budget', '"내가 맡은"은 담당자 찾기가 아니다');
+  const {dropShadowedCss} = await import('../scripts/live-build.mjs');
+  const css = '.a{color:red;margin:0}.a{color:blue}@media (x){.a{margin:1px}}.a,.c{color:green}.d{background:url("data:x;y")}.d{background:none}.e{width:1px!important}.e{width:2px}.f{color:red}';
+  assert.equal(dropShadowedCss(css), '.a{margin:0}.a{color:blue}@media (x){.a{margin:1px}}.a,.c{color:green}.d{background:none}.e{width:1px!important}.e{width:2px}.f{color:red}');
+  assert.equal(dropShadowedCss('.a{color:red'), '.a{color:red', '짝이 안 맞으면 손대지 않는다');
+  const col = fs.readFileSync(new URL('../src/live/collector.browser.js', import.meta.url), 'utf8');
+  assert.match(col, /async function sentMail[\s\S]{0,400}mail003A01/, '보낸 메일은 기존 읽기 전용 목록 주소만 쓴다');
+});

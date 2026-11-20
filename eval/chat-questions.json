@@ -1520,6 +1520,88 @@
       "notTool": [
         "get_schedule"
       ]
+    },
+    {
+      "id": "n1",
+      "cat": "조회",
+      "q": "한도윤한테 온 메일 다 보여줘",
+      "tool": "list_mail",
+      "args": {
+        "from": "한도윤"
+      },
+      "why": "실사용: 최근 메일 전체를 보여 줌"
+    },
+    {
+      "id": "n2",
+      "cat": "조회",
+      "q": "홍보요청 메일 언제 왔어?",
+      "tool": "list_mail",
+      "args": {
+        "query": "홍보요청",
+        "when": true
+      }
+    },
+    {
+      "id": "n3",
+      "cat": "조회",
+      "q": "지난주에 내가 보낸 메일 보여줘",
+      "tool": "list_sent_mail",
+      "why": "실사용: 받은 메일을 보여 줌"
+    },
+    {
+      "id": "n4",
+      "cat": "조회",
+      "q": "마을실험실 주무관이 보낸 메일",
+      "tool": "list_mail",
+      "notTool": [
+        "list_sent_mail"
+      ]
+    },
+    {
+      "id": "n5",
+      "cat": "조회",
+      "q": "예산 관련 결재 문서 찾아줘",
+      "tool": "search_documents",
+      "args": {
+        "query": "예산",
+        "scope": "approval"
+      },
+      "why": "실사용: 예산 과목 조회로 감"
+    },
+    {
+      "id": "n6",
+      "cat": "조회",
+      "q": "내 시간외 신청 승인됐어?",
+      "tool": "list_my_requests",
+      "args": {
+        "kind": "시간외",
+        "latest": true
+      }
+    },
+    {
+      "id": "n7",
+      "cat": "조회",
+      "q": "우리 부서 사람들 명단 알려줘",
+      "tool": "list_members",
+      "why": "실사용: 명단 도구가 없다고 답함"
+    },
+    {
+      "id": "n8",
+      "cat": "조회",
+      "q": "홍보 담당자 누구야?",
+      "tool": "find_owner",
+      "args": {
+        "topic": "홍보"
+      }
+    },
+    {
+      "id": "n9",
+      "cat": "조회",
+      "q": "오늘 몇 시에 퇴근해야 돼?",
+      "tool": "get_work_hours",
+      "args": {
+        "leave_time": true
+      }
     }
   ]
 }
