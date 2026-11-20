@@ -236,7 +236,8 @@ export function cuSynapText(xml = '') {
       if (!h || !ch.trim()) { if (line && !line.endsWith(' ')) line += ' '; continue; }
       // 줄 판단: 글자의 세로 범위가 지금 줄의 범위와 겹치지 않거나, 왼쪽으로 크게 되돌아가면 새 줄(마침표·쉼표처럼 작은 글자는 줄 안에 든다)
       if (top !== null && (t > bot + 1 || t + h < top - 1 || l < pr - 8)) { lines.push(line.trim()); line = ''; top = bot = null; }
-      else if (pr !== null && l - pr > Math.max(4, w * 0.9) && line && !line.endsWith(' ')) line += ' ';
+      // 공백 글자가 따로 오므로, 글자 사이가 글자 높이의 절반(최소 6px)보다 넓을 때만 띄어 쓴다("13"이 "1 3"으로 갈라지지 않게)
+      else if (pr !== null && l - pr > Math.max(6, h * 0.5) && line && !line.endsWith(' ')) line += ' ';
       line += ch; pr = l + w;
       if (top === null) { top = t; bot = t + h; } else if (h >= 6) { top = Math.min(top, t); bot = Math.max(bot, t + h); }
     }
