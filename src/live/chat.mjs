@@ -214,6 +214,7 @@ export function chatIntent(text, now = new Date(), _nested = false) {
     return make('get_staff_status', {date: d0, days, ...(kind ? {kind} : {})});
   }
   if (/(오전|오후|아침|저녁)\s*(?:에|엔|에는)?\s*(?:뭐|무슨|일정|있|할)/.test(t) && !/(신청|등록|예약|반차|외출)/.test(t)) return make('get_schedule', {date: dt ? dt.date : chIso(chUtc(chKst(now).y, chKst(now).m, chKst(now).d)), days: 1, part: /오전|아침/.test(t) ? 'am' : 'pm'});
+  if (/(일정|회의|미팅|약속|면담|간담회|워크숍)/.test(t) && /(잡아|등록해|등록\s*좀|추가해|넣어\s*줘|만들어\s*줘|올려\s*줘)/.test(t) && !/(회의실|차량|자원|휴가|연차|출장|시간외|할\s*일|todo)/i.test(t)) return make('prepare_schedule', chatScheduleRequest(t, now));
   if (!_nested) { const cp = chatCompound(t, now); if (cp) return make('multi_read', {steps: cp}); }
   if (/반려/.test(t) && /(내가|내\s|올린|상신|기안|문서|결재)/.test(t)) return make('list_approvals', {queue: 'submitted', status: '반려'});
   if (/(올린|상신한|기안한|올려\s*둔)\s*(?:거|것|문서|결재|기안)?/.test(t) && /(결재|문서|기안|상신)/.test(t) && /(어떻게|됐|되었|진행|상태|어디까지|결과)/.test(t)) return make('list_approvals', {queue: 'submitted'});
@@ -598,5 +599,22 @@ export function chatRefine(text) {
   if (/교육|연수/.test(t)) return {kind: 'edu'};
   if (/반려/.test(t)) return {status: '반려'};
   return null;
+}
+
+// ---------- v1.0.0: 일정 잡기 ----------
+/** "내일 3시 김소연이랑 회의 잡아줘" → {date, start:'15:00', end:'16:00', title:'회의', memo:'함께: 김소연'}. 시각 1~7시는 오전·새벽이라고 하지 않으면 오후로 본다. */
+export function chatScheduleRequest(text, now = new Date()) {
+  const t = chatNormalize(text);
+  const dt = chatParseDate(t, now), rg = chatParseRange(t.replace(/(\d{1,2})\s*시\s*(?=[~\-–])/g, '$1시'));
+  const pm = h => (/(오전|아침|새벽)/.test(t) || h >= 8 || h === 0 ? h : h + 12);
+  const fix = x => { if (!x) return ''; const [h, m] = x.split(':').map(Number); return String(pm(h)).padStart(2, '0') + ':' + String(m).padStart(2, '0'); };
+  let start = fix(rg.start), end = fix(rg.end);
+  if (start && end && end <= start) end = '';
+  if (start && !end) { const [h, m] = start.split(':').map(Number); end = String(Math.min(h + 1, 23)).padStart(2, '0') + ':' + String(m).padStart(2, '0'); }
+  const who = [...t.matchAll(/([가-힣]{2,4}?)(?:\s*(?:팀장|과장|차장|부장|실장|주임|주무관|선생|대리|사원|님))*\s*(?:이랑|랑|하고|와|과)(?=\s)/g)].map(m => m[1]).filter(n => !CH_STOP.has(n) && !/^(오늘|내일|모레|회의|미팅|일정|점심|저녁)$/.test(n));
+  let title = t.replace(/(다다음|다음|이번|지난)\s*주\s*[월화수목금토일]?(?:요일)?|오늘|내일|모레|글피|\d{1,2}\s*월\s*\d{1,2}\s*일|\d{1,2}\s*일(?!\s*(?:간|동안))|\d{1,2}[/.]\d{1,2}|[월화수목금토일]요일|(?:오전|오후|아침|저녁|새벽)|\d{1,2}\s*시(?:\s*\d{1,2}\s*분|\s*반)?|\d{1,2}:\d{2}|[~\-–]|부터|까지|에서/g, ' ');
+  for (const n of who) title = title.replace(new RegExp(n + '[가-힣\\s]*?(?:이랑|랑|하고|와|과)(?=\\s)'), ' ');
+  title = title.replace(/(일정|으로|로|을|를|에|좀|하나|새로)?\s*(잡아|등록|추가|넣어|만들어|예약|올려)\S*/g, ' ').replace(/\s*일정\s*/g, ' ').replace(/[?.!]/g, ' ').replace(/\s+/g, ' ').trim().replace(/^(?:에서|에는|에|은|는|을|를)\s+/, '');
+  return {date: dt && !dt.end ? dt.date : '', start, end, title: title.slice(0, 60) || '일정', memo: who.length ? '함께: ' + who.join(', ') : ''};
 }
 
