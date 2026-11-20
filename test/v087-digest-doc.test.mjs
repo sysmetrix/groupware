@@ -375,3 +375,30 @@ test('v0.98.0: 묻는 것에 정확히 — 휴가 가능 여부, 반려, 날짜�
   assert.match(m, /c\.name === '반려\/회수문서'/, '반려는 그룹웨어 반려/회수 문서함 건수로 확인한다');
   assert.match(m, /!R\.isNoiseMail\(m\)/);
 });
+
+test('v0.99.0: 줄임말·이어서 거르기·두 가지 함께·오전/오후', async () => {
+  const C5 = await import('../src/live/chat.mjs');
+  const now = new Date('2026-11-20T18:30:00Z'); // 11/21(토) KST
+  assert.equal(C5.chatNormalize('낼 일정 머야'), '내일 일정 뭐야');
+  assert.equal(C5.chatNormalize('메일 보낼 사람'), '메일 보낼 사람', '"보낼"의 "낼"은 그대로');
+  assert.equal(C5.chatNormalize('담주 담달 이번주에 저번주'), '다음 주 다음 달 이번 주에 지난 주');
+  assert.equal(C5.chatParseDate('낼', now).date, '2026-11-22');
+  assert.deepEqual(C5.chatIntent('담주 휴가자 누구', now).args, {date: '2026-11-23', days: 5, kind: 'leave'});
+  assert.equal(C5.chatIntent('오늘 부서에 누구 없어?', now).args.kind, undefined, '부재 전체는 종류로 좁히지 않는다');
+  assert.equal(C5.chatIntent('오후에 뭐 있어?', now).args.part, 'pm');
+  assert.equal(C5.chatIntent('결재 올린거 어케됐어?', now).args.queue, 'submitted');
+  const m = C5.chatIntent('내일 일정이랑 할 일 같이 알려줘', now);
+  assert.equal(m.tool, 'multi_read');
+  assert.deepEqual(m.args.steps.map(x => x.tool), ['get_schedule', 'list_tasks']);
+  assert.equal(m.args.steps[0].args.date, '2026-11-22');
+  assert.equal(C5.chatCompound('회의실이랑 차량 예약 현황', now), null, '같은 도구는 묶지 않는다');
+  assert.equal(C5.chatCompound('김소연이랑 메일 보내줘', now), null, '실행 요청은 묶지 않는다');
+  assert.deepEqual(C5.chatRefine('그중에 안 읽은 거만'), {filter: 'unread'});
+  assert.deepEqual(C5.chatRefine('거기서 출장만'), {kind: 'trip'});
+  assert.equal(C5.chatRefine('안 읽은 메일'), null, '앞말(그중에) 없으면 새 질문');
+  const eng = fs.readFileSync(new URL('../src/live/wc/31-chat-engine.js', import.meta.url), 'utf8');
+  assert.match(eng, /typeof R\.chatRefine === 'function'/);
+  assert.match(eng, /st\.ctx\.lastList = \{tool: it\.tool/);
+  const p = fs.readFileSync(new URL('../src/live/wc/47-chat-precise.js', import.meta.url), 'utf8');
+  assert.match(p, /CHAT_TOOLS\.get\(x\.tool\)\.kind === 'read'/, '함께 확인은 조회 도구만 실행한다');
+});

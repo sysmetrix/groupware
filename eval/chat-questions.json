@@ -1333,6 +1333,87 @@
       "notTool": [
         "check_leave_day"
       ]
+    },
+    {
+      "id": "k1",
+      "cat": "구어",
+      "q": "낼 일정 머야",
+      "tool": "get_schedule",
+      "args": {
+        "days": 1
+      },
+      "why": "실사용: \"낼\"을 몰라 오늘 일정으로 답함"
+    },
+    {
+      "id": "k2",
+      "cat": "구어",
+      "q": "담주 휴가자 누구",
+      "tool": "get_staff_status",
+      "args": {
+        "kind": "leave",
+        "days": 5
+      },
+      "why": "실사용: \"담주\"를 사람 이름으로 찾음"
+    },
+    {
+      "id": "k3",
+      "cat": "구어",
+      "q": "결재 올린거 어케됐어?",
+      "tool": "list_approvals",
+      "args": {
+        "queue": "submitted"
+      },
+      "why": "실사용: 외부 AI 경로 2.9초"
+    },
+    {
+      "id": "k4",
+      "cat": "구어",
+      "q": "오후에 뭐 있어?",
+      "tool": "get_schedule",
+      "args": {
+        "part": "pm"
+      },
+      "why": "실사용: 외부 AI 경로 4.3초"
+    },
+    {
+      "id": "k5",
+      "cat": "구어",
+      "q": "내일 일정이랑 할 일 같이 알려줘",
+      "tool": "multi_read",
+      "why": "실사용: 할 일만 답함"
+    },
+    {
+      "id": "k6",
+      "cat": "구어",
+      "q": "다음주 출장 누구누구 가?",
+      "tool": "get_staff_status",
+      "args": {
+        "kind": "trip"
+      },
+      "why": "실사용: 출장이 아닌 부재 전체"
+    },
+    {
+      "id": "k7",
+      "cat": "구어",
+      "q": "안 읽은 메일하고 공지 보여줘",
+      "tool": "multi_read"
+    },
+    {
+      "id": "k8",
+      "cat": "구어",
+      "q": "회의실이랑 차량 예약 현황",
+      "tool": "get_resource_status",
+      "notTool": [
+        "multi_read"
+      ],
+      "why": "같은 도구 두 번은 묶지 않음"
+    },
+    {
+      "id": "k9",
+      "cat": "넘겨짚지 않기",
+      "q": "한도윤 주무관한테 메일 보낼 거 있어?",
+      "why": "\"보낼\"을 \"내일\"로 바꾸지 않음",
+      "tool": ""
     }
   ]
 }
