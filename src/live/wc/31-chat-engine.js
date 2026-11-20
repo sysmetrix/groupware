@@ -384,7 +384,7 @@
       }
       // 기능 안내를 문장으로 요청한 경우에는 버튼 목록을 재출력하지 않는다. AI 연결 없이도 형식을 지킨다.
       const proseCaps = it.tool === 'get_capabilities' && /(?:문장|서술)(?:으로|형태|식)?/.test(text);
-      const localSure = !!fx || it.tool === 'small_talk' || (['plan_priorities', 'check_risks'].includes(it.tool) && !/(문장|서술|표로|비교)/.test(text)) || (CHAT_LOCAL_FIRST.has(it.tool) && it.confidence >= 1 && ((it.args && it.args.compare) || it.tool === 'multi_read' || !/(?:그리고|그다음|동시에|함께|각각|비교|차이|이유|왜|설명|자세히|서술|문장으로|표로)/.test(text)) && !/(?:방금|직전|앞서|위에)\s*(?:답|말|내용)?/.test(text));
+      const localSure = !!fx || it.tool === 'small_talk' || ((['plan_priorities', 'check_risks'].includes(it.tool) || (['get_weekly_summary', 'get_overview'].includes(it.tool) && /(문단|줄글)/.test(text))) && !/(문장|서술|표로|비교)/.test(text)) || (CHAT_LOCAL_FIRST.has(it.tool) && it.confidence >= 1 && ((it.args && it.args.compare) || it.tool === 'multi_read' || !/(?:그리고|그다음|동시에|함께|각각|비교|차이|이유|왜|설명|자세히|서술|문장으로|표로|문단|줄글)/.test(text)) && !/(?:방금|직전|앞서|위에)\s*(?:답|말|내용)?/.test(text));
       const preferAi = ready && it.tool !== 'get_leave_status' && !auto && !weekday && !proseCaps && !localSure && !(st.ctx && st.ctx.pendingSlot) && R.chatPreferGemini(text);
       const known = !preferAi && it.tool && it.confidence >= (ready ? 0.9 : 0.6) && CHAT_TOOLS.has(it.tool);
       if (known) {

@@ -172,9 +172,9 @@ export function trimIndentLines(src) {
   return inTpl ? src : out.join('\n');
 }
 
-export const CHANGELOG_DETAIL = 6;
+export const CHANGELOG_DETAIL = 5;
 /** 번들에 싣는 업데이트 내역 줄 수(v1.1.0). 나머지는 GitHub 릴리스에서 본다. 전체 개수는 CHANGELOG_ALL로 알린다. */
-export const CHANGELOG_SHIP = 40;
+export const CHANGELOG_SHIP = 20;
 /** 그룹웨어 탭 밖(Aside 스킬, 시험)에서 window.BWYFGW_REPORT로 부르는 함수. 번들 안에서 안 써도 남긴다. */
 export const PUBLIC_REPORT_API = new Set(['analyze', 'renderHtml', 'nextState', 'recommendRouting', 'extractAllDeadlines']);
 /**
