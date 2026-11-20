@@ -161,7 +161,7 @@
   // ---------- 일정 + 준비: "내일 일정 확인하고 준비할 거" → 일정별 관련 메일·문서와 확인 사항 ----------
   { const def = CHAT_TOOLS.get('get_schedule'); if (def) { const run0 = def.run; def.run = async (a, ctx) => {
       const r = await run0(a, ctx);
-      if (!r || !r.ok || !/(준비|챙길|챙겨|필요한\s*(?:거|것)|미리\s*볼|관련\s*자료)/.test((ctx && ctx.userText) || '') || !r.data || !Array.isArray(r.data.days)) return r;
+      if (!r || !r.ok || !/(준비|챙길|챙겨|필요한\s*(?:거|것)|미리\s*볼|관련\s*자료|(?:끝나면|마치면|끝나고|마치고|다녀와서|다녀오면|후에|뒤에)\s*(?:\S+\s*)?(?:뭐|무엇|할\s*일|해야))/.test((ctx && ctx.userText) || '') || !r.data || !Array.isArray(r.data.days)) return r;
       const labels = r.data.days.flatMap(d => d.items.map(i => i.label));
       const titles = labels.filter(l => !/^시간외 근무 신청/.test(l)).map(l => l.replace(/^기한:\s*/, ''));
       const pool = [...mailActions().map(m => ({title: m.title, kind: '메일', key: m.key || ''})), ...cuDocPool().map(d => ({title: d.title, kind: '문서', key: d.key}))];

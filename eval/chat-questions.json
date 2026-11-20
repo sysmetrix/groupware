@@ -131,6 +131,16 @@
     {"id": "u24", "cat": "이해", "q": "그 메일 첨부 내용 정리해줘", "tool": "read_attachment", "why": "첨부(한글·PDF) 글자 읽기(v0.88.0)"},
     {"id": "u25", "cat": "이해", "q": "홍보요청 pdf 첨부 뭐래?", "tool": "read_attachment"},
     {"id": "u26", "cat": "이해", "q": "첨부 받아줘", "tool": "", "notTool": ["read_attachment"]},
-    {"id": "u27", "cat": "이해", "q": "첨부 있는 메일 보여줘", "tool": "list_mail", "notTool": ["read_attachment"]}
+    {"id": "u27", "cat": "이해", "q": "첨부 있는 메일 보여줘", "tool": "list_mail", "notTool": ["read_attachment"]},
+    {"id": "f01", "cat": "자유", "q": "이번 주에 내가 놓치기 쉬운 거 있어?", "tool": "check_risks", "why": "실사용(11/20): 브리핑·기한·할 일 세 결과를 이어 붙이던 질문"},
+    {"id": "f02", "cat": "자유", "q": "다음 주 월요일 대체휴가인데 그 전에 처리해야 할 거 뭐야?", "tool": "check_risks", "args": {"until": "2026-11-23"}, "why": "실사용: 할 일 목록만 나열"},
+    {"id": "f03", "cat": "자유", "q": "이번 달 출장 몇 번 갔어?", "tool": "list_my_requests", "args": {"kind": "출장"}, "why": "실사용: 150일 신청 요약으로 답함"},
+    {"id": "f04", "cat": "자유", "q": "마을실험실에서 요청한 공문 발송 건 마감 언제야?", "tool": "read_mail", "notTool": ["get_staff_status", "list_deadlines"], "why": "실사용: “마감”을 직원 이름으로 오인"},
+    {"id": "f05", "cat": "자유", "q": "요즘 내가 맡은 사업 예산 집행 괜찮아?", "tool": "get_budget", "why": "실사용: 질문 전체를 과목 이름으로 검색(739건)"},
+    {"id": "f06", "cat": "자유", "q": "봉사단 모집 협조 건 어떻게 처리하면 좋을까?", "tool": "read_mail", "why": "실사용: 검색·할 일·메일 목록을 이어 붙임"},
+    {"id": "f07", "cat": "자유", "q": "부서 사람들 다음 주 휴가 일정 정리해줘", "tool": "get_staff_status", "notTool": ["prepare_leave_request"], "why": "실사용: 내 휴가 신청 준비로 오인할 뻔함"},
+    {"id": "f08", "cat": "자유", "q": "지난주 실적이랑 이번 주 실적 비교해줘", "tool": "get_weekly_summary", "args": {"compare": true}},
+    {"id": "f09", "cat": "자유", "q": "내일 시간외 근무 끝나면 뭐 해야 돼?", "tool": "get_schedule", "why": "실사용: 할 일 목록으로 답함"},
+    {"id": "f10", "cat": "자유", "q": "지난달 시간외 몇 번 했어?", "tool": "list_my_requests", "args": {"kind": "시간외"}}
   ]
 }
