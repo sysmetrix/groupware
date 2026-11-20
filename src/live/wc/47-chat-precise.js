@@ -65,6 +65,7 @@
   // v0.99.0: "오후에 뭐 있어?" → 그날 일정 가운데 오전(12시 전)·오후만
   { const def = CHAT_TOOLS.get('get_schedule'); if (def) { const run0 = def.run; def.params.properties.part = {type: 'string', enum: ['am', 'pm']}; def.run = async (a, ctx) => {
     const r = await run0(a, ctx);
+    if (r && r.ok && r.data && !a.part && !a.kw) { const ds = r.data.days || [], n = ds.reduce((k, x) => k + x.items.length, 0); return n && n <= 4 && (+a.days || 1) <= 2 ? {...r, text: r.text.replace(/\n/, '\n' + ds.flatMap(x => x.items.map(i => `• ${ds.length > 1 ? chatMd(x.date) + ' ' : ''}${i.time ? i.time + ' ' : ''}${i.label}`)).join('\n') + '\n')} : r; }
     if (!r || !r.ok || !r.data || !(['am', 'pm'].includes(a.part) || a.kw)) return r;
     const days = r.data.days || [], all = days.flatMap(x => x.items.map(i => ({...i, d: x.date}))), pm = a.part === 'pm', nm = a.part ? (pm ? '오후' : '오전') : '';
     const inPart = i => { const h = /^(\d{1,2}):/.exec(i.time || ''); return !a.part || !h || (pm ? +h[1] >= 12 : +h[1] < 12); };

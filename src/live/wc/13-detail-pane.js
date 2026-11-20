@@ -676,7 +676,7 @@ ${custom.slice(0, 12).map(l => `<p>${esc(String(l).slice(0, 400))}</p>`).join('\
     let injected = put();
     // 그룹웨어가 본문을 뒤늦게 다시 채워 문구가 지워졌으면 한 번 더 넣는다.
     if (injected) { await new Promise(r => setTimeout(r, 900)); if (S.pane.url !== url) return false; if (!has()) injected = put() && has(); }
-    if (injected && templateType === 'custom') toast('AI 초안을 본문 맨 위에 넣었습니다. 사실관계와 (확인 필요) 칸을 고친 뒤 직접 보내세요.');
+    if (injected && templateType === 'custom') toast('초안을 본문 맨 위에 넣었습니다. 사실관계와 (확인 필요) 칸을 확인한 뒤 직접 보내세요.');
     else if (injected) toast(`회신 문구를 본문 맨 위에 넣었습니다. 괄호 칸을 채우고${templateType === 'submit' && !hasAttach ? ' 첨부파일을 붙인 뒤' : ''} 직접 보내세요.`);
     else toast('메일 편집기를 찾지 못했습니다. 답장 화면이 다 뜬 뒤 회신문 버튼을 다시 누르세요.');
     return injected;
