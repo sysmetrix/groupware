@@ -43,10 +43,15 @@
       else bits.push(`오늘 출근 ${chatHm4(td.come) || '기록 없음'}, 퇴근 ${chatHm4(td.leave) || '기록 없음'}입니다.`);
       const monthOk = !mo.error && mo.recognizedMin !== null && mo.recognizedMin !== undefined;
       const mLabel = /^\d{6}/.test(String(mo.from || '')) ? `${Number(String(mo.from).slice(4, 6))}월` : '이번 달';
-      bits.push(monthOk ? `${mLabel} 인정 근무시간은 ${chatMin(mo.recognizedMin)}입니다(기본 ${chatMin(mo.basicMin)}, 시간외 ${chatMin(mo.overtimeMin)}, 야간 ${chatMin(mo.nightMin)}).` : `${mLabel} 근무시간 집계는 읽지 못했습니다.`);
+      // 그룹웨어 월 집계는 확정('승인')된 날만 더한다. 미확정 일수와 승인된 시간외 신청 시간을 함께 보여 준다(v0.87.0).
+      const pend = R.cuWorkPending(Array.isArray(at.days) ? at.days : [], {until: R.kstNow(new Date()).date.replace(/-/g, '')});
+      const ot = at.overtime, otSum = ot && !ot.appsError && Array.isArray(ot.apps) ? R.cuOvertimeSum(ot.apps, {me: ot.me, month: String(mo.from || '').slice(0, 6)}) : null;
+      bits.push(monthOk ? `${mLabel} 그룹웨어 근무시간 집계는 ${chatMin(mo.recognizedMin)}입니다(기본 ${chatMin(mo.basicMin)}, 시간외 ${chatMin(mo.overtimeMin)}, 야간 ${chatMin(mo.nightMin)}).` : `${mLabel} 근무시간 집계는 읽지 못했습니다.`);
+      if (monthOk && pend.pending) bits.push(`다만 지금까지 근무일 ${pend.workdays}일 중 ${pend.pending}일은 아직 집계가 확정되지 않아(대기·이상근태 등) 이 값에 빠져 있습니다. 실제 근무시간보다 적게 보일 수 있습니다.`);
+      if (otSum) bits.push(otSum.count ? `이번 달 승인된 시간외 신청은 ${otSum.count}건, 신청 시간 합계 ${chatMin(otSum.minutes)}입니다${otSum.pending ? `(결재 중 ${otSum.pending}건 별도)` : ''}. 인정 시간은 퇴근 지문과 마감 후 확정됩니다.` : `이번 달 승인된 시간외 신청은 없습니다${otSum.pending ? `(결재 중 ${otSum.pending}건)` : ''}.`);
       bits.push('기록 없음은 지문 기록이 조회되지 않았다는 뜻이며 근태 이상 판정이 아닙니다.');
-      return {ok: true, text: bits.join('\n'), data: {month_recognized: monthOk ? chatMin(mo.recognizedMin) : '', month_overtime: monthOk ? chatMin(mo.overtimeMin) : '', today_recorded: !!(chatHm4(td.come) || chatHm4(td.leave))},
-        cards: [...(monthOk ? [{type: 'kpi', items: [{label: `${mLabel} 인정 근무`, value: chatMin(mo.recognizedMin), tone: 'info'}, {label: '시간외', value: chatMin(mo.overtimeMin), tone: Number(mo.overtimeMin) ? 'todo' : 'info'}, {label: '오늘 출근', value: td.error ? '확인 불가' : chatHm4(td.come) || '기록 없음', tone: 'info'}, {label: '오늘 퇴근', value: td.error ? '확인 불가' : chatHm4(td.leave) || '기록 없음', tone: 'info'}]}] : []), nav]};
+      return {ok: true, text: bits.join('\n'), data: {month_recognized: monthOk ? chatMin(mo.recognizedMin) : '', month_overtime: monthOk ? chatMin(mo.overtimeMin) : '', pending_days: pend.pending, overtime_applied: otSum ? chatMin(otSum.minutes) : '', today_recorded: !!(chatHm4(td.come) || chatHm4(td.leave))},
+        cards: [...(monthOk ? [{type: 'kpi', items: [{label: `${mLabel} 집계(확정분)`, value: chatMin(mo.recognizedMin), tone: 'info'}, ...(otSum ? [{label: '시간외 신청(승인)', value: chatMin(otSum.minutes), tone: otSum.minutes ? 'todo' : 'info'}] : [{label: '시간외', value: chatMin(mo.overtimeMin), tone: Number(mo.overtimeMin) ? 'todo' : 'info'}]), ...(pend.pending ? [{label: '집계 미확정', value: `${pend.pending}일`, tone: 'todo'}] : []), {label: '오늘 출근', value: td.error ? '확인 불가' : chatHm4(td.come) || '기록 없음', tone: 'info'}, {label: '오늘 퇴근', value: td.error ? '확인 불가' : chatHm4(td.leave) || '기록 없음', tone: 'info'}]}] : []), nav]};
     },
   });
 

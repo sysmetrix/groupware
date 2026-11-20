@@ -113,8 +113,8 @@ export function chatReadMailIntent(text) {
   const q = t.replace(new RegExp(CH_READ_RE.source, 'g'), ' ')
     .replace(/(안\s*읽은|받은|온|메일|그거|그것|이거|그\s*건|이\s*건|관련|에서|이야|이에요|인가요|해\s*줘|해줘|줘|좀|알려|내가|제가|나는|저는|뭐야|뭔데|뭔지|무슨|뭐|건지|거야|[?？!.,])/g, ' ')
     .replace(/(?<=[가-힣A-Za-z0-9)\]])(?:은|는|이|가|을|를|의|만)(?=\s|$)/g, ' ').replace(/(?:^|\s)(?:돼|되|될|할|해|요|야|만)(?=\s|$)/g, ' ').replace(/\s+/g, ' ').trim();
-  // 낱말 없이 "안 읽은 메일 요약해줘"처럼 여러 통을 말하면 목록 요약은 AI/목록 도구에 맡긴다.
-  if (!q && /(메일들|안\s*읽은\s*메일|받은\s*메일|메일\s*목록|오늘\s*온)/.test(t)) return null;
+  // 낱말 없이 "안 읽은 메일 요약해줘"처럼 여러 통을 말하면 한꺼번에 정리(v0.87.0)
+  if (/(메일들|메일\s*전부|메일\s*다|안\s*읽은\s*메일|받은\s*메일|메일\s*목록|오늘\s*(?:온|받은)|어제\s*(?:온|받은)|새\s*메일|요청\s*메일들)/.test(t) && !q.replace(/(?:오늘|어제|새|요청|전부|모두|다|들)/g, '').trim()) return {digest: /안\s*읽은|새\s*메일/.test(t) ? 'unread' : /오늘/.test(t) ? 'today' : 'todo'};
   return {query: q.length >= 2 ? q.slice(0, 60) : ''};
 }
 /**
@@ -127,6 +127,20 @@ export function chatScheduleSubject(text) {
   return String(text ?? '').replace(/[?？!.,]/g, ' ').split(/\s+/)
     .map(w => w.replace(/(?:이랑|랑|하고|에는|에서|에|의|은|는|이|가|을|를|과|와|도|만)$/, '').replace(/(?:해\s*줘|해줘|알려줘|보여줘|줘)$/, ''))
     .filter(w => w && /[가-힣A-Za-z]{2,}/.test(w) && !DATE.test(w) && !GEN.test(w)).join(' ');
+}
+/**
+ * 결재문서·공문의 내용을 묻는 말이면 {query}(제목 낱말), 아니면 null. 메일 이야기는 chatReadMailIntent가 맡는다.
+ * 검색·목록·작성 요청("공문 찾아줘", "공문 뭐 왔어", "결과보고 써줘")은 다른 도구가 맡는다.
+ */
+export function chatReadDocIntent(text) {
+  const t = String(text ?? '').replace(/\s+/g, ' ').trim();
+  if (/메일/.test(t) || !/(공문|문서|결재\s*문서|기안문|시행문|보고서|계획서|(?:참가|운영|추진|사업|세부)\s*계획|결과보고|협조전)/.test(t) || !CH_READ_RE.test(t)) return null;
+  const ref = /(부서\s*참고|참고\s*공문|접수\s*공문|부서\s*공문)/.test(t);
+  if (/(검색|찾아|어디\s*있|목록|몇\s*건|뭐\s*왔|왔어|있어\??$|있나|써|작성|만들|올려|상신|기안해|보여\s*줘|보여줘|열어|처리해야|결재해야|반려)/.test(t)) return null;
+  const q = t.replace(new RegExp(CH_READ_RE.source, 'g'), ' ')
+    .replace(/(부서\s*참고|참고|접수|부서|공문|결재\s*문서|문서|기안문|시행문|협조전|그거|그것|이거|관련|에서|이야|이에요|인가요|해\s*줘|해줘|줘|좀|알려|내가|제가|뭐야|뭔데|뭔지|무슨|뭐|건지|거야|[?？!.,])/g, ' ')
+    .replace(/(?<=[가-힣A-Za-z0-9)\]])(?:은|는|이|가|을|를|의|만)(?=\s|$)/g, ' ').replace(/(?:^|\s)(?:돼|되|될|할|해|요|야|만)(?=\s|$)/g, ' ').replace(/\s+/g, ' ').trim();
+  return {query: q.length >= 2 ? q.slice(0, 60) : '', ...(ref ? {scope: 'ref'} : {})};
 }
 /** 문장에 "(이름) 팀장/대리/님"처럼 다른 사람을 가리키는 말이 있는지. 내 것만 조회하는 도구가 남의 것을 묻는 말에 답하지 않게 한다. */
 export function chatMentionsOther(text) {
@@ -155,7 +169,7 @@ export function chatIntent(text, now = new Date()) {
     const ordMap = {첫: 1, 두: 2, 세: 3, 네: 4, 다섯: 5};
     const idx = ordM[1] ? ordMap[ordM[1]] : Number(ordM[2]);
     if (/(답장|회신)/.test(t)) return make('draft_mail_reply', {index: idx, query: t});
-    if (/(내용|요약|요점|핵심|뭐래|읽어|뭘\s*해야|뭐\s*해야)/.test(t)) return make('read_mail', {index: idx});
+    if (/(내용|요약|요점|핵심|뭐래|읽어|뭘\s*해야|뭐\s*해야)/.test(t)) return make(/(문서|공문|결재|보고서|계획)/.test(t) ? 'read_doc' : 'read_mail', {index: idx});
     if (/(보냈|확인)/.test(t) && /메일/.test(t)) return make('check_sent_reply', {index: idx, query: t});
     if (/(열어|자세히|보기|상세|선택)/.test(t)) return make('open_item', {index: idx});
   }
@@ -167,7 +181,8 @@ export function chatIntent(text, now = new Date()) {
   // 비서가 하지 않는 일(상신·결재 승인·반려·삭제)을 시키는 말은 목록 조회로 바꿔 답하지 않는다. AI나 안내에 맡긴다.
   if (chatNotDoing(t)) return none;
   // 특정 메일의 내용·요청을 묻는 말은 목록이 아니라 본문 읽기(v0.86.0)
-  { const rm = chatReadMailIntent(t); if (rm) return make('read_mail', rm.query ? {query: rm.query} : {}); }
+  { const rd = chatReadDocIntent(t); if (rd) return make('read_doc', {...(rd.query ? {query: rd.query} : {}), ...(rd.scope ? {scope: rd.scope} : {})}); }
+  { const rm = chatReadMailIntent(t); if (rm) return rm.digest ? make('digest_mail', {filter: rm.digest}) : make('read_mail', rm.query ? {query: rm.query} : {}); }
   // 보낸메일함 답장 여부 확인
   if (/(보냈는지|보냈나|답장했는지|회신했는지)/.test(t)) return make('check_sent_reply', {query: t.replace(/(보냈는지|보냈나|답장했는지|회신했는지|보낸메일함|확인|해줘|줘)/g, ' ').replace(/\s+/g, ' ').trim()});
   // ---------- v0.65: 자동화·브리핑·전 영역 조회 (실행 동사가 있으면 아래 실행 규칙에 맡긴다) ----------
