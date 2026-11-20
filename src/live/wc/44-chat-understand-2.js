@@ -87,6 +87,10 @@
         if (cuMode() === 'always') { const z = await cuAnalyze(x, det, body); cards.push(...(z.cards || [])); }
         else cards.push({...cuAnalyzeCard(x, det, body), rows: [['보내는 내용', `이 문서의 제목·색인 본문 ${Math.min(body.length, 6000).toLocaleString()}자 (이메일·전화·계좌·주민번호는 가림)`], ['받는 곳', 'Google Gemini (외부)'], ['주의', '이름·기관명은 가려지지 않습니다. 설정에서 끌 수 있습니다']]});
       }
+      // 문서 초점: 이어서 "그 문서 첨부 내용 정리해줘"가 이 문서의 첨부를 가리키게 한다(메모리에만)
+      const files = (Array.isArray(r.files) ? r.files : []).filter(f => f && f.id && f.name);
+      chatState().ctx.docFocus = {title: d.title, docNo: r.docNo || d.docNo || '', drafter: String(r.drafter || ''), files, body, at: Date.now(), owner: S.userKey};
+      if (files.some(f => CU_DOC_EXT.test(String(f.name).split('.').pop() || ''))) cards.push({type: 'chips', title: '이어서', items: ['그 문서 첨부 내용 정리해줘']});
       return {ok: true, text: `“${cuCut(d.title, 50)}” 문서를 읽었습니다(열람 처리 없음). ${needTxt}.${dls.length ? ` 본문에 적힌 날짜·기한: ${dls.map(z => cuMd(z.date)).join(', ')}.` : ''}`, llm: `문서 1건을 읽고 화면에 정리했습니다. 회신 필요: ${need.need}.`, data: {read: true}, cards};
     },
   });

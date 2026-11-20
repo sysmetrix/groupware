@@ -48,8 +48,20 @@
     name: 'read_attachment', label: '첨부 내용 읽기', kind: 'read',
     description: '메일 첨부(한글·PDF·오피스, 최대 3개·각 8쪽)의 글자를 그룹웨어 문서 뷰어로 읽어 핵심 문장과 날짜를 정리한다. query는 파일 이름이나 메일 제목 일부. 앞에서 다룬 메일이 기본 대상.',
     params: {type: 'object', properties: {query: {type: 'string'}, mail_key: {type: 'string'}}},
-    run: async a => {
+    run: async (a, ctx) => {
       if (!S.a || !S.raw) return chatNotReady();
+      // 문서(결재·공문) 첨부: 말에 문서·공문이 있거나, 방금 다룬 것이 메일보다 문서일 때
+      const st = chatState(), df = st.ctx.docFocus && st.ctx.docFocus.owner === S.userKey && Date.now() - st.ctx.docFocus.at < CU_FOCUS_MS ? st.ctx.docFocus : null, mf = cuFocus();
+      const wantDoc = /(문서|공문|결재|기안|보고서|계획서)/.test((ctx && ctx.userText) || '') || (df && (!mf || df.at > mf.at));
+      if (wantDoc) {
+        const q = String(a.query || '').trim();
+        // 낱말이 지금 문서 제목에 없으면 그 낱말로 문서를 먼저 찾는다(파일 이름일 수도 있으니 첨부 이름도 본다)
+        const fits = df && (!q || cmdKeywords(q).some(k => (df.title + ' ' + (df.files || []).map(x => x.name).join(' ')).replace(/\s+/g, '').includes(k)));
+        if (fits) return cuDocAttach(df, q && !cmdKeywords(q).some(k => df.title.replace(/\s+/g, '').includes(k)) ? q : '');
+        if (!q) return {ok: true, text: '어느 문서의 첨부인지 먼저 정해 주세요. 예) “○○ 문서 요약해줘” 다음에 “그 문서 첨부 내용 정리해줘”', data: {count: 0}};
+        const before = st.ctx.docFocus, r0 = await CHAT_TOOLS.get('read_doc').run({query: q}, ctx), now = st.ctx.docFocus;
+        return now && now !== before ? cuDocAttach(now, '') : r0;
+      }
       if (!GW.mailAttachmentPages) return {ok: false, text: '이 버전의 수집기는 첨부 글자 읽기를 지원하지 않습니다. 새로 고침해 주세요.'};
       // 낱말이 파일 이름일 수 있으므로: 초점 메일이 있으면 그 메일에서 먼저 찾고, 없을 때만 낱말로 메일을 고른다
       const f = cuFocus();
@@ -75,3 +87,43 @@
       }
       return r;
     }; } }
+
+  // ---------- 결재문서·공문 첨부 (v0.89.0) ----------
+  // 그룹웨어 파일 미리보기 창(문서관리)이 변환한 결과를 읽는다. 내가 기안한 문서가 아니면 미리보기 기록이 남을 수 있어 먼저 묻는다.
+  async function cuDocAttachRun(df, pick) {
+    const read = [];
+    for (const f of pick) {
+      try { const r = await GW.docAttachmentPages({fileId: f.id, maxPages: CU_ATT_PAGES}); read.push({name: f.name, total: r.total, got: r.pages.length, text: R.cuMaskBody(R.cuSynapText(r.pages.join('\n')), 8000)}); }
+      catch (e) { logError('cu.docAttach', e.message); read.push({name: f.name, error: cuCut(e.message, 70)}); }
+    }
+    const ok = read.filter(r => !r.error && r.text.replace(/\s/g, '').length > 10);
+    df.attach = ok.map(r => ({name: r.name, text: r.text})); // 메모리에만
+    const cards = [];
+    for (const r of read) {
+      if (r.error || !r.text.replace(/\s/g, '').length) { cards.push({type: 'note', tone: 'warn', text: `${r.name}: ${r.error ? `읽지 못했습니다(${r.error})` : '글자가 없습니다(그림으로 된 문서일 수 있음)'}`}); continue; }
+      const hl = R.cuDocHighlights(r.text, 4), dls = R.extractAllDeadlines(r.text, new Date()).slice(0, 3);
+      cards.push({type: 'list', sensitive: true, title: `${r.name} · ${r.got < r.total ? `${r.total}쪽 중 앞 ${r.got}쪽` : `${r.total}쪽`}`, items: [...(hl.length ? hl : r.text.split('\n').filter(l => l.length > 12).slice(0, 3)).slice(0, 4).map(x => ({title: cuCut(x, 160)})), ...(dls.length ? [{title: `본문 날짜·기한: ${dls.map(d => cuMd(d.date)).join(', ')}`, tone: 'todo'}] : [])]});
+    }
+    if (ok.length && cuAiOk()) {
+      const x = {type: 'doc', title: df.title, ref: null};
+      const body = [df.body || '', ...ok.map(r => `[첨부: ${r.name}]\n${r.text}`)].join('\n\n');
+      const meta = {subject: df.title, date: '', files: ok.map(r => ({name: r.name})), bigFiles: []};
+      if (cuMode() === 'always') { const z = await cuAnalyze(x, meta, body); cards.push(...(z.ok ? z.cards || [] : [{type: 'note', tone: 'warn', text: z.text}])); }
+      else cards.push({...cuAnalyzeCard(x, meta, body), title: 'AI로 문서+첨부 요약·할 일 정리', rows: [['보내는 내용', `문서 색인 본문과 첨부 ${ok.length}개의 글자 앞부분 최대 6,000자 (이메일·전화·계좌·주민번호는 가림)`], ['받는 곳', 'Google Gemini (외부)'], ['주의', '이름·기관명은 가려지지 않습니다. 설정에서 끌 수 있습니다']]});
+    }
+    const fail = read.length - ok.length;
+    return {ok: ok.length > 0, text: ok.length ? `“${cuCut(df.title, 40)}” 문서의 첨부 ${ok.length}개를 읽었습니다(${ok.map(r => cuCut(r.name, 30)).join(', ')}).${fail ? ` ${fail}개는 읽지 못했습니다.` : ''}` : '문서 첨부를 글자로 읽지 못했습니다. 그룹웨어에서 첨부 미리보기로 확인해 주세요.',
+      llm: `문서 첨부 ${ok.length}개를 화면에 정리했습니다(외부로 보내지 않음).`, data: {count: ok.length}, cards};
+  }
+  async function cuDocAttach(df, q) {
+    if (!GW.docAttachmentPages) return {ok: false, text: '이 버전의 수집기는 문서 첨부 읽기를 지원하지 않습니다. 새로 고침해 주세요.'};
+    const docs = (df.files || []).filter(f => CU_DOC_EXT.test(String(f.name).split('.').pop() || ''));
+    if (!docs.length) return {ok: true, text: `“${cuCut(df.title, 40)}” 문서에는 글자로 읽을 수 있는 첨부(한글·PDF·오피스)가 없습니다.${(df.files || []).length ? ' 그림 등 다른 첨부는 직접 열어 확인해 주세요.' : ''}`, data: {count: 0}};
+    const toks = cmdKeywords(String(q || '')).filter(t => !/^(pdf|hwp|첨부|파일|문서|공문)$/i.test(t));
+    const named = toks.length ? docs.filter(f => toks.some(k => String(f.name).replace(/\s+/g, '').includes(k.replace(/\s+/g, '')))) : [];
+    const pick = (named.length ? named : docs).slice(0, 3);
+    const me = String((S.raw && S.raw.principal && S.raw.principal.name) || '').trim();
+    if (me && df.drafter && df.drafter.replace(/\s/g, '') === me.replace(/\s/g, '')) return cuDocAttachRun(df, pick);
+    return {ok: true, text: `“${cuCut(df.title, 40)}” 문서의 첨부 ${pick.length}개를 읽으려면 그룹웨어 첨부 미리보기를 거칩니다.`,
+      cards: [{type: 'list', title: '읽을 첨부', items: pick.map(f => ({title: f.name}))}, {type: 'confirm', title: '문서 첨부 읽기', risk: 'low', rows: [['방법', '그룹웨어 첨부 미리보기(문서관리)로 변환된 글자를 읽습니다'], ['바뀌는 것', '그룹웨어에서 첨부를 미리 볼 때와 같은 열람 기록이 남을 수 있습니다'], ['외부 전송', '없음 (이 화면에서만 정리)']], confirmLabel: '첨부 읽고 정리하기', cancelLabel: '취소', onConfirm: async () => cuDocAttachRun(df, pick)}]};
+  }
