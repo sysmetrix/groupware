@@ -65,10 +65,16 @@
   // v0.99.0: "오후에 뭐 있어?" → 그날 일정 가운데 오전(12시 전)·오후만
   { const def = CHAT_TOOLS.get('get_schedule'); if (def) { const run0 = def.run; def.params.properties.part = {type: 'string', enum: ['am', 'pm']}; def.run = async (a, ctx) => {
     const r = await run0(a, ctx);
-    if (!r || !r.ok || !['am', 'pm'].includes(a.part) || !r.data) return r;
-    const day = (r.data.days || [])[0], all = day ? day.items : [], pm = a.part === 'pm', nm = pm ? '오후' : '오전';
-    const its = all.filter(i => { const h = /^(\d{1,2}):/.exec(i.time || ''); return !h || (pm ? +h[1] >= 12 : +h[1] < 12); });
-    const lbl = chatMd(/^\d{4}-\d{2}-\d{2}$/.test(a.date || '') ? a.date : today());
+    if (!r || !r.ok || !r.data || !(['am', 'pm'].includes(a.part) || a.kw)) return r;
+    const days = r.data.days || [], all = days.flatMap(x => x.items.map(i => ({...i, d: x.date}))), pm = a.part === 'pm', nm = a.part ? (pm ? '오후' : '오전') : '';
+    const inPart = i => { const h = /^(\d{1,2}):/.exec(i.time || ''); return !a.part || !h || (pm ? +h[1] >= 12 : +h[1] < 12); };
+    const lbl = chatMd(/^\d{4}-\d{2}-\d{2}$/.test(a.date || '') ? a.date : today()) + ((+a.days || 1) > 1 ? `부터 ${+a.days}일` : '');
+    if (a.kw) { // "○○ 있어?" → 있다/없다로 먼저 답한다
+      const KW = {회의: /회의|미팅|간담회|협의|워크숍/, 미팅: /회의|미팅|간담회|협의/, 출장: /출장|외근/, 외근: /출장|외근/}[a.kw] || new RegExp(a.kw);
+      const hit = all.filter(i => inPart(i) && KW.test(i.label)), rest = all.filter(i => inPart(i) && !KW.test(i.label)), ln = i => `• ${(+a.days || 1) > 1 ? chatMd(i.d) + ' ' : ''}${i.time ? i.time + ' ' : ''}${i.label}`;
+      return {...r, text: `${hit.length ? `네, ${lbl}${nm ? ' ' + nm : ''}에 ${a.kw} 관련 일정이 ${hit.length}건 있습니다.\n${hit.slice(0, 6).map(ln).join('\n')}` : `아니요, ${lbl}${nm ? ' ' + nm : ''}에 ${a.kw} 일정은 없습니다.`}${rest.length ? `\n그 밖의 일정: ${rest.slice(0, 3).map(i => (i.time ? i.time + ' ' : '') + i.label).join(', ')}` : ''}\n(그룹웨어 일정·내 근태 기준, 구글 캘린더 제외)`, cards: (r.cards || []).filter(c => c.type === 'nav')};
+    }
+    const its = all.filter(inPart);
     return {...r, text: its.length ? `${lbl} ${nm} 일정은 ${its.length}건입니다(시간이 없는 일정 포함).\n${its.slice(0, 8).map(i => '• ' + (i.time ? i.time + ' ' : '') + i.label).join('\n')}` : `${lbl} ${nm}에는 일정이 없습니다.${all.length ? ` 그날 다른 시간대 일정은 ${all.length}건입니다.` : ''}`, cards: (r.cards || []).filter(c => c.type === 'nav')};
   }; } }
 
@@ -122,3 +128,11 @@
     const miss = [!got.title && '제목', !got.when && '날짜·시각', sp.memo && !got.memo && '메모'].filter(Boolean);
     return {ok: true, text: `일정 등록 창에 ${miss.length ? `채웠지만 ${miss.join('·')}은 확인하지 못했습니다. 화면에서 확인해 주세요.` : `“${sp.title}” ${chatMd(sp.date)} ${sp.start}~${sp.end}을 채웠습니다.`} 내용을 확인하고 [등록]은 직접 누르세요. 참여자는 직접 추가하세요(추가하면 초대 알림이 갑니다).`};
   }
+
+  // v1.1.0: "오늘 할 일 다 끝났어?" → 끝났는지부터 답한다(표시는 하지 않음)
+  { const def = CHAT_TOOLS.get('list_tasks'); if (def) { const run0 = def.run; def.run = async (a, ctx) => {
+    const r = await run0(a, ctx);
+    if (!a.ask_done || !r || !r.ok || !r.data) return r;
+    const n = r.data.count || 0;
+    return {...r, text: n ? `아직 남아 있습니다. ${r.text}` : '네, 지금 처리할 일이 없습니다.'};
+  }; } }

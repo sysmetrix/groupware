@@ -31,7 +31,8 @@
     params: {type: 'object', properties: {date: {type: 'string'}}},
     run: async a => {
       const iso = chatDateArg(a.date);
-      return iso ? {ok: true, text: `${iso}은 ${R.chatDowName(iso)}요일입니다.`, data: {date: iso, weekday: R.chatDowName(iso)}, cards: []} : {ok: false, text: '날짜를 알아보지 못했습니다.'};
+      const dd = iso ? Math.round((Date.parse(iso) - Date.parse(today())) / 864e5) : 0, rel = {0: '오늘', 1: '내일', 2: '모레', '-1': '어제', '-2': '그제'}[dd] || (dd > 0 ? dd + '일 뒤' : -dd + '일 전');
+      return iso ? {ok: true, text: `${iso}(${R.chatDowName(iso)}), ${rel}입니다.`, data: {date: iso, weekday: R.chatDowName(iso)}, cards: []} : {ok: false, text: '날짜를 알아보지 못했습니다.'};
     },
   });
 

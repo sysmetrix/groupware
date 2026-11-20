@@ -24,7 +24,7 @@ test('복원 대화는 접고 새 대화는 표시하며 펼침 상태를 유지
  assert.match(a.chatView(),/aria-describedby="chInputHelp"/); assert.match(a.chatView(),/Shift\+Enter/);
 });
 test('요일 도구는 날짜와 요일을 제공하고 잘못된 날짜는 거절한다',async()=>{
- const a=harness(), t=a.CHAT_TOOLS.get('get_weekday'); const r=await t.run({date:'2026-11-14'}); assert.equal(r.text,'2026-11-14은 토요일입니다.'); assert.equal((await t.run({date:'2026-02-30'})).ok,false);
+ const a=harness(), t=a.CHAT_TOOLS.get('get_weekday'); const r=await t.run({date:'2026-11-14'}); assert.match(r.text,/^2026-11-14\(토\), .+입니다\.$/); assert.equal((await t.run({date:'2026-02-30'})).ok,false);
 });
 test('가장 먼저 질문은 기존 순서의 첫 항목을 이유와 함께 표시한다(v0.86.0)',async()=>{
  const a=harness(); await a.chatSend('제일 먼저 할 일은 뭐야?'); const m=a.chatState().msgs.at(-1); assert.equal(m.cards[0].items.length,1); assert.equal(m.cards[0].items[0].title,'1. 업무 A'); assert.match(m.text,/가장 먼저 할 일/); assert.match(m.text,/그 밖에 1건/);
@@ -34,7 +34,7 @@ test('일정 조회는 자원 예약을 섞지 않고 제외 사실을 명시한
 });
 
 test('요일 질문은 로컬에서 처리하고 유효하지 않은 날짜를 오늘로 추정하지 않는다',async()=>{
- const a=harness(); await a.chatSend('2026-11-14는 무슨 요일이야?'); assert.equal(a.chatState().msgs.at(-1).text,'2026-11-14은 토요일입니다.');
+ const a=harness(); await a.chatSend('2026-11-14는 무슨 요일이야?'); assert.match(a.chatState().msgs.at(-1).text,/^2026-11-14\(토\), .+입니다\.$/);
  await a.chatSend('2026-02-30은 무슨 요일이야?'); assert.match(a.chatState().msgs.at(-1).text,/날짜를 알아보지 못했습니다/);
 });
 

@@ -425,3 +425,21 @@ test('v1.0.0: 일정 잡기(등록 창 채우기만), 등록 자동 클릭 차�
   for (const n of PUBLIC_REPORT_API) assert.ok(shipped.includes(n), n + ' 공개 API는 남긴다');
   assert.ok(shipped.includes('chatIntent') && shipped.includes('cuWriteLines'));
 });
+
+test('v1.1.0: 있어?에 예/아니요, 날짜 묻기, 다 끝났어?, 업데이트 내역은 최근 40개만 싣기', async () => {
+  const C7 = await import('../src/live/chat.mjs');
+  const now = new Date('2026-11-20T18:30:00Z');
+  assert.deepEqual(C7.chatIntent('다음 주 월요일 오전에 회의 있어?', now).args, {date: '2026-11-23', days: 1, kw: '회의', part: 'am'});
+  assert.deepEqual(C7.chatIntent('이번 주 금요일 몇 일이야?', now), {tool: 'get_weekday', args: {date: '2026-11-20'}, confidence: 1});
+  assert.equal(C7.chatIntent('크리스마스까지 며칠 남았어?', now).tool === 'get_weekday', false);
+  assert.equal(C7.chatIntent('오늘 할 일 다 끝났어?', now).tool, 'list_tasks');
+  assert.equal(C7.chatIntent('2번 다 했어', now).tool, 'mark_task', '번호를 짚은 말은 그대로 표시');
+  const {trimChangelog} = await import('../scripts/live-build.mjs');
+  const rows = Array.from({length: 5}, (_, i) => `  {v: "0.${5 - i}.0", date: "d", old: "", title: "t${i}", items: ["x${i}"]},`).join('\n');
+  const out = trimChangelog('export const CHANGELOG = [\n' + rows + '\n];\nexport const CHANGELOG_ALL = CHANGELOG.length;', 1, 3);
+  assert.equal((out.match(/\{v:/g) || []).length, 3);
+  assert.match(out, /export const CHANGELOG_ALL = 5;/);
+  assert.ok(out.includes('items: ["x0"]') && out.includes('title: "t2", items: []'));
+  const ui = fs.readFileSync(new URL('../src/live/wc/26-changelog.js', import.meta.url), 'utf8');
+  assert.match(ui, /R\.CHANGELOG_ALL/);
+});

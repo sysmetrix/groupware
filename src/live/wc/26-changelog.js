@@ -11,6 +11,6 @@
       <h2 style="margin:0 0 4px;font-size:18px">업데이트 내역</h2>
       <div style="margin-bottom:10px">설치된 버전 <b>v${esc(VERSION)}</b> · 수집기 v${esc(GW.version)}${(() => { const v = versionInfo(); return v.applied ? ` · ${esc(v.applied)} 적용${v.from ? ` (이전 v${esc(v.from)})` : ''}` : ''; })()} ${newer ? `<span class="bdg urgent">새 버전 v${esc(up.latest)} 있음</span>` : upOk ? '<span class="bdg confirm">최신 버전</span>' : '<span class="bdg info">최신 여부 확인 전</span>'}
         <div class="acts" style="margin-top:6px">${newer ? `<button class="btn sm primary" data-act="updateNow">${ic('refresh')}지금 v${esc(up.latest)}(으)로 바꾸기</button>` : ''}<button class="btn sm" data-act="govUpdate">업데이트 확인</button><a class="btn sm" href="https://sysmetrix.github.io/groupware/" target="_blank" rel="noopener">${ic('ext')}시작 페이지 열기</a></div>${newer ? '<div class="muted" style="font-size:12.5px;margin-top:6px">누르면 이 화면에서 바로 새 버전으로 바뀝니다. 설정과 할 일은 그대로 남습니다. 자동 업데이트가 켜져 있으면 GW 비서를 닫았을 때 저절로 바뀝니다.</div>' : ''}</div>
-      <div class="muted" style="font-size:12.5px;margin:4px 0 8px">버전 번호는 0.1.0부터 다시 매겼습니다. 옛 표기(v3·v4·v5)는 각 줄의 “이전”에 남겨 두었습니다. 모두 ${R.CHANGELOG.length}개 버전.</div>
+      <div class="muted" style="font-size:12.5px;margin:4px 0 8px">버전 번호는 0.1.0부터 다시 매겼습니다. 옛 표기(v3·v4·v5)는 각 줄의 “이전”에 남겨 두었습니다. 모두 ${R.CHANGELOG_ALL || R.CHANGELOG.length}개 버전${R.CHANGELOG_ALL > R.CHANGELOG.length ? `, 여기에는 최근 ${R.CHANGELOG.length}개만 싣습니다. 이전 내역: <a href="https://github.com/sysmetrix/groupware/releases" target="_blank" rel="noopener">GitHub 릴리스</a>` : ''}.</div>
       ${rows}</div></div>`;
   }

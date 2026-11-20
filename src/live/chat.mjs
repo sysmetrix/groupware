@@ -213,6 +213,9 @@ export function chatIntent(text, now = new Date(), _nested = false) {
     const kind = /출장|외근/.test(t) ? 'trip' : /교육|연수/.test(t) ? 'edu' : /휴가|연차|반차/.test(t) && !/(없|자리|부재)/.test(t) ? 'leave' : '';
     return make('get_staff_status', {date: d0, days, ...(kind ? {kind} : {})});
   }
+  if (dt && !dt.end && (/(몇\s*일|며칠|날짜)\s*(?:이야|이에요|인가요?|야|지|인지|이지)?\s*\??$/.test(t) || /(무슨|몇)\s*요일/.test(t)) && !/(남았|걸려|동안|간\b|쉬|휴가)/.test(t)) return make('get_weekday', {date: dt.date});
+  { const kw = (t.match(/(회의|미팅|약속|교육|행사|면담|간담회|워크숍|출장|외근)\s*(?:이|가|은|는)?\s*(?:있어|있나|있니|있어요|있습니까|있을까|잡혀|있는지)/) || [])[1];
+    if (kw && !/(누구|누가|몇\s*명|부서|직원)/.test(t)) { const d0 = dt ? dt.date : chIso(chUtc(chKst(now).y, chKst(now).m, chKst(now).d)); return make('get_schedule', {date: d0, days: dt && dt.end ? Math.round((Date.parse(dt.end) - Date.parse(dt.date)) / 864e5) + 1 : 1, kw, ...(/(오전|아침)/.test(t) ? {part: 'am'} : /(오후|저녁)/.test(t) ? {part: 'pm'} : {})}); } }
   if (/(오전|오후|아침|저녁)\s*(?:에|엔|에는)?\s*(?:뭐|무슨|일정|있|할)/.test(t) && !/(신청|등록|예약|반차|외출)/.test(t)) return make('get_schedule', {date: dt ? dt.date : chIso(chUtc(chKst(now).y, chKst(now).m, chKst(now).d)), days: 1, part: /오전|아침/.test(t) ? 'am' : 'pm'});
   if (/(일정|회의|미팅|약속|면담|간담회|워크숍)/.test(t) && /(잡아|등록해|등록\s*좀|추가해|넣어\s*줘|만들어\s*줘|올려\s*줘)/.test(t) && !/(회의실|차량|자원|휴가|연차|출장|시간외|할\s*일|todo)/i.test(t)) return make('prepare_schedule', chatScheduleRequest(t, now));
   if (!_nested) { const cp = chatCompound(t, now); if (cp) return make('multi_read', {steps: cp}); }
@@ -282,6 +285,7 @@ export function chatIntent(text, now = new Date(), _nested = false) {
   if (/(부서\s*참고|참고\s*(공문|문서)|부서\s*공문|접수\s*공문|공문\s*(뭐|목록|현황|왔|있))/.test(t) && !/(검색|찾아|화면|열어)/.test(t)) return make('list_reference', {});
   if (/(공지|게시판|게시글|새\s*글)/.test(t) && !/(검색|찾아|화면|열어)/.test(t) && !doAct) return make('list_notices', {unread: /(안\s*읽|읽지\s*않|새)/.test(t)});
   if (/(알림|새\s*소식)/.test(t) && !/(설정|켜|꺼|검색|찾아)/.test(t) && !doAct) return make('list_alerts', {});
+  if (/(다|모두|전부)\s*(끝났|끝냈|했|처리했)\S*\s*\?$|(남은|남아\s*있는)\s*(할\s*일|일|거)\s*(있|몇|뭐)/.test(t) && !/(\d\s*번|번째|그거|이거|그\s*메일)/.test(t)) return make('list_tasks', {state: 'all', limit: 8, ask_done: true});
   if (/(끝냄|끝났어|끝냈어|완료\s*(표시|처리)|처리\s*완료|다\s*했어|미뤄|미루|나중에\s*다시|내일\s*다시)/.test(t) && !/(메일\s*답장|신청)/.test(t)) {
     const om = t.match(/(?:(첫|두|세|네|다섯)\s*번째|([1-5])\s*번)/), action = /(미뤄|미루|나중에\s*다시|내일\s*다시)/.test(t) ? 'snooze' : 'done';
     return make('mark_task', {action, ...(om ? {index: om[1] ? {첫: 1, 두: 2, 세: 3, 네: 4, 다섯: 5}[om[1]] : Number(om[2])} : {}), query: t.replace(/(첫|두|세|네|다섯)\s*번째|[1-5]\s*번|끝냄|끝났어|끝냈어|완료|표시|처리|다\s*했어|미뤄|미루기?|나중에|내일|다시|알려|해\s*줘|줘|으로|로|은|는|건|항목|업무|할\s*일/g, ' ').replace(/\s+/g, ' ').trim()});
