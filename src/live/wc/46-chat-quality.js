@@ -149,3 +149,40 @@
     return {ok: true, text: pend.length ? `결재를 기다리는 내 근태 신청은 ${pend.length}건입니다.` : '결재를 기다리는 내 근태 신청은 없습니다(최근 150일 신청 기준).', llm: `승인 전 신청 ${pend.length}건.`, data: {count: pend.length},
       cards: pend.length ? [{type: 'list', title: '승인 전 신청', items: pend.slice(0, 8).map(x => ({title: `${md8(x.startDt)}${x.endDt && x.endDt !== x.startDt ? '~' + md8(x.endDt) : ''} ${x.atNm || '신청'}`, badge: '승인 전', tone: 'todo'}))}, {type: 'nav', label: '근태·연차 화면 열기', view: 'attendance'}] : [{type: 'note', tone: 'info', text: '결재문서(상신 문서)의 진행 상황은 “결재 올린 거 중에 안 끝난 거 있어?”로 확인할 수 있습니다.'}]};
   }; } }
+
+  // ---------- v0.97.0: 업무 문장 쓰기 ----------
+  // 앞에서 다룬 메일에서 확인한 사실(요청 문장·기한·첨부, AI 정리가 있으면 그 요약)만으로 상급자 보고 문장·부서 공유 문구를 만든다. 새로 외부로 보내지 않는다.
+  chatRegisterTool({
+    name: 'write_text', label: '업무 문장 쓰기', kind: 'read',
+    description: '앞에서 다룬 메일로 상급자 보고 문장(kind=report)이나 부서 공유 메일 문구(kind=share)를 만든다. 확인된 사실만 쓰고 모르는 칸은 (작성 필요)로 남긴다. 공유는 전달 창에 넣을 수 있다(보내기는 직접).',
+    params: {type: 'object', properties: {kind: {type: 'string', enum: ['report', 'share']}}},
+    run: async a => {
+      if (!S.a || !S.raw) return chatNotReady();
+      const f = cuFocus(), kind = a.kind === 'share' ? 'share' : 'report';
+      if (!f) return {ok: true, text: '어느 메일로 쓸지 먼저 정해 주세요. 예) “○○ 메일 요약해줘” 다음에 “팀장님께 보고할 문장으로 써줘”', data: {count: 0}};
+      const x = {type: 'mail', key: f.key, title: f.title, ref: {box: f.box, uid: f.uid}};
+      const rec = findMail(f.box, f.uid) || findMail('', f.uid);
+      let det = S.mailDet && S.mailDet[f.uid] && !S.mailDet[f.uid].error ? S.mailDet[f.uid] : null;
+      if (!det && rec && rec.seen === true) { try { det = await loadMailDetail(rec, false); } catch { det = null; } }
+      if (!det || det.error) return {ok: true, text: `“${cuCut(f.title, 40)}” 메일 본문을 아직 읽지 않았습니다. 먼저 “그 메일 요약해줘”로 읽은 뒤 다시 말씀해 주세요.`, data: {count: 0}};
+      const body = cuBodyText(det), need = R.cuReplyNeed({subject: det.subject || f.title, text: body});
+      const dls = R.extractAllDeadlines(body, new Date()).map(d => d.date), ai = f.ai || null;
+      const lines = R.cuWriteLines({subject: det.subject || f.title, from: String(det.from || '').replace(/<[^>]*>/g, '').replace(/["']/g, '').trim(), asks: ai && ai.asks.length ? ai.asks.map(q => q.what + (q.due ? ` (${cuMd(q.due)})` : '')) : R.mailHighlights(body).map(h => h.replace(/\s*\/?\s*\[[^\]]{2,20}\]\s*\d*\.?\s*$/, '').trim()).filter(h => h.length >= 15 && !/^\[/.test(h)).slice(0, 2), summary: ai ? ai.summary : [], need: ai ? ai.reply_needed : need.need, deadlines: ai && ai.asks.some(q => q.due) ? ai.asks.map(q => q.due).filter(Boolean) : dls, files: cuFiles(det)}, kind);
+      copyText(lines.join('\n'));
+      const cards = [{type: 'note', sensitive: true, tone: 'info', text: `**${kind === 'share' ? '부서 공유 문구' : '보고 문장'}** (복사해 두었습니다)\n${lines.join('\n')}`}];
+      if (kind === 'share') cards.push({type: 'confirm', title: '전달 창 열고 공유 문구 넣기', risk: 'low', rows: [['대상 메일', f.title], ['동작', '이 메일의 전달 창을 열고 위 문구를 맨 위에 넣습니다'], ['받는 사람·보내기', '직접 정하고 직접 누릅니다']], confirmLabel: '전달 창 열기', cancelLabel: '취소', onConfirm: async () => { const r = await cmdMailReplyTo('공유 메일', 'custom', x, lines, 'fw'); return r === 'filled' ? {ok: true, text: '전달 창에 공유 문구를 넣었습니다. 받는 사람을 정하고 [보내기]는 직접 누르세요.'} : r === 'opened' ? {ok: true, text: '전달 창은 열었지만 문구를 넣지 못했습니다. 복사해 둔 문구를 붙여넣기(Ctrl+V) 하세요.'} : {ok: false, text: '전달 창을 열지 않았습니다.'}; }});
+      return {ok: true, text: `“${cuCut(det.subject || f.title, 40)}” 메일로 ${kind === 'share' ? '부서 공유 문구를' : '보고 문장을'} 만들었습니다. 메일에서 확인한 사실만 썼습니다.${lines.some(l => /작성 필요|확인 필요/.test(l)) ? ' (작성 필요)·(확인 필요) 칸은 직접 채워 주세요.' : ''}${ai ? ' AI 정리 결과를 함께 썼습니다.' : ''}`, llm: `${kind === 'share' ? '공유 문구를' : '보고 문장을'} 화면에 표시했습니다.`, data: {count: lines.length}, cards};
+    },
+  });
+
+  // 주간 실적 "한 문단으로" → 줄글
+  { const def = CHAT_TOOLS.get('get_weekly_summary'); if (def) { const run0 = def.run; def.run = async (a, ctx) => {
+    const r = await run0(a, ctx);
+    if (!r || !r.ok || a.compare || !/(문단|문장으로|줄글|서술|한\s*단락)/.test((ctx && ctx.userText) || '') || typeof r.llm !== 'string') return r;
+    const txt = r.llm, w = txt.match(/기안·보고\s*(\d+)건\s*\(결재완료\s*(\d+),\s*진행\s*(\d+)\)/), m = txt.match(/복무 신청\s*(\d+)건/);
+    const titles = [...txt.matchAll(/^\s+-\s+(.+?)(?:\s+\(.*\))?$/gm)].map(x => x[1].replace(/\s*—.*$/, '')).slice(0, 3);
+    const span = (r.text.match(/^(.+?\))\s*상신/) || [])[1] || '이번 주';
+    const para = `${span}에는 기안·보고 ${w ? w[1] : 0}건(결재완료 ${w ? w[2] : 0}건, 진행 ${w ? w[3] : 0}건)을 처리했습니다.${titles.length ? ` 주요 업무는 ${titles.join(', ')} 등입니다.` : ''}${m ? ` 이 밖에 복무 신청 ${m[1]}건이 있었습니다.` : ''}`;
+    copyText(para);
+    return {...r, text: `${para}\n(복사해 두었습니다. 상신 문서 기준이라 회의·외부 활동은 직접 보태 주세요.)`, cards: (r.cards || []).filter(c => c.type === 'nav')};
+  }; } }

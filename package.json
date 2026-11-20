@@ -1,6 +1,6 @@
 {
   "name": "groupware-assistant",
-  "version": "0.96.0",
+  "version": "0.97.0",
   "private": true,
   "type": "module",
   "description": "Local-first, evidence-grounded groupware assistant",

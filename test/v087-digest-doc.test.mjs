@@ -323,3 +323,32 @@ test('v0.96.0: 대화 이어가기 — 고쳐 말하기 순번, 말투만 바꾸
   assert.match(eng, /R\.chatRefersDay\(text\) && st\.ctx\.lastRead/);
   assert.match(eng, /typeof R\.chatCorrectIndex === 'function'/); // 일부 도우미만 주는 시험 환경에서도 대화가 멈추지 않게
 });
+
+test('v0.97.0: 업무 문장 쓰기 — 보고·공유 문장, 답장 요점', async () => {
+  const U = await import('../src/live/chat-understand.mjs');
+  const C3 = await import('../src/live/chat.mjs');
+  const info = {subject: 'RE: 마을실험실 참여자 모집 협조', from: '한도윤', asks: ['참여자 모집 안내를 게시해 주시기 바랍니다.'], need: 'yes', deadlines: ['2026-11-25', '2026-11-25'], files: ['안내문.hwpx', '포스터.jpg', '신청서.hwpx']};
+  const rep = U.cuWriteLines(info, 'report');
+  assert.equal(rep[0], '[보고] 마을실험실 참여자 모집 협조 건');
+  assert.ok(rep.includes('• 보낸 곳: 한도윤'));
+  assert.ok(rep.some(l => l.includes('참여자 모집 안내') && l.includes('회신·제출 필요')));
+  assert.ok(rep.includes('• 기한: 11/25'));
+  assert.ok(rep.some(l => l.startsWith('• 첨부: 3개')));
+  assert.equal(rep.at(-1), '• 처리 계획: (작성 필요)');
+  const sh = U.cuWriteLines(info, 'share');
+  assert.match(sh[0], /공유드립니다/);
+  assert.equal(sh.at(-1), '업무에 참고하시기 바랍니다.');
+  assert.ok(!sh.some(l => /작성 필요/.test(l)), '공유 문구에는 빈칸이 없다');
+  assert.ok(U.cuWriteLines({}, 'report').some(l => l.includes('(작성 필요)')), '모르는 칸은 지어내지 않는다');
+  assert.equal(U.cuPointSentence('25일까지 게시'), '25일까지 게시하겠습니다.');
+  assert.equal(U.cuPointSentence('참석 어렵다'), '참석 어렵습니다.');
+  assert.equal(U.cuPointSentence('금요일까지 제출하겠습니다'), '금요일까지 제출하겠습니다.');
+  const now = new Date('2026-11-20T18:30:00Z');
+  assert.deepEqual(C3.chatIntent('그 메일 답장 써줘. 25일까지 게시하겠다고', now).args, {query: '그', points: '25일까지 게시'});
+  assert.equal(C3.chatIntent('견적 요청 메일 답장 초안 작성해줘', now).args.points, undefined);
+  assert.equal(C3.chatIntent('그 메일 내용 팀장님께 보고할 문장으로 써줘', now).tool, 'write_text');
+  const q = fs.readFileSync(new URL('../src/live/wc/46-chat-quality.js', import.meta.url), 'utf8');
+  assert.match(q, /name: 'write_text'/);
+  assert.match(q, /cmdMailReplyTo\('공유 메일', 'custom', x, lines, 'fw'\)/, '공유는 전달 창에만 넣고 보내지 않는다');
+  assert.match(q, /sensitive: true, tone: 'info', text: `\*\*\$\{kind === 'share'/, '본문에서 나온 문장 카드는 저장하지 않는다');
+});

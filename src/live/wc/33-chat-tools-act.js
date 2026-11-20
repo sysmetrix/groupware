@@ -102,13 +102,13 @@
       if (typeof cuSetFocus === 'function') cuSetFocus(x);
       // AI 연결 시: 본문을 읽어 맞춤 초안을 쓰는 카드를 먼저 낸다(v0.86.0). 표준 문구 카드는 그대로 남긴다.
       const unread = typeof marksRead === 'function' && marksRead({type: 'mail', ref: x.ref});
-      const aiCard = typeof cuAiOk === 'function' && cuAiOk() ? [{type: 'confirm', title: 'AI 맞춤 초안으로 답장 창 열기', risk: 'low', rows: [['대상 메일', x.title || '(제목 없음)'], ['동작', '메일 본문을 읽어 AI가 답장 본문을 쓰고, 답장 창 맨 위에 넣습니다'], ['외부 전송', '이 메일의 가린 본문을 Google Gemini로 보냅니다'], ...(unread ? [['바뀌는 것', '안 읽은 메일이라 읽음으로 표시됩니다']] : []), ['보내기', '직접 눌러야 합니다']], confirmLabel: 'AI 초안으로 열기', cancelLabel: '취소', onConfirm: async () => cuReplyDraft(x, a.query, points)}] : [];
-      return {ok: true, text: `“${String(x.title).slice(0, 40)}” 메일의 답장 작성창을 열 준비를 했습니다.${aiCard.length ? ' AI 맞춤 초안이나 표준 문구 중에서 고르세요.' : ''} 보내기는 하지 않습니다.`, cards: [...aiCard, {type: 'confirm', title: aiCard.length ? '표준 문구로 답장 창 열기' : '메일 답장 작성창 열기', risk: 'low', rows: [['대상 메일', x.title || '(제목 없음)'], ['동작', `답장 창을 열고 ${tpl === 'submit' ? '자료 제출' : '확인'} 표준 문구를 넣습니다`], ['보내기', '직접 눌러야 합니다']], confirmLabel: '답장 창 열기', cancelLabel: '취소',
+      const aiCard = typeof cuAiOk === 'function' && cuAiOk() ? [{type: 'confirm', title: 'AI 맞춤 초안으로 답장 창 열기', risk: 'low', rows: [['대상 메일', x.title || '(제목 없음)'], ['동작', '메일 본문을 읽어 AI가 답장 본문을 쓰고, 답장 창 맨 위에 넣습니다'], ...(points ? [['답장 요점', points]] : []), ['외부 전송', '이 메일의 가린 본문을 Google Gemini로 보냅니다'], ...(unread ? [['바뀌는 것', '안 읽은 메일이라 읽음으로 표시됩니다']] : []), ['보내기', '직접 눌러야 합니다']], confirmLabel: 'AI 초안으로 열기', cancelLabel: '취소', onConfirm: async () => cuReplyDraft(x, a.query, points)}] : [];
+      return {ok: true, text: `“${String(x.title).slice(0, 40)}” 메일의 답장 작성창을 열 준비를 했습니다.${aiCard.length ? ' AI 맞춤 초안이나 표준 문구 중에서 고르세요.' : ''} 보내기는 하지 않습니다.`, cards: [...aiCard, {type: 'confirm', title: aiCard.length ? '표준 문구로 답장 창 열기' : '메일 답장 작성창 열기', risk: 'low', rows: [['대상 메일', x.title || '(제목 없음)'], ['동작', points ? '답장 창을 열고 말씀하신 요점을 문장으로 넣습니다' : `답장 창을 열고 ${tpl === 'submit' ? '자료 제출' : '확인'} 표준 문구를 넣습니다`], ...(points ? [['넣을 문장', R.cuPointSentence ? R.cuPointSentence(points) : points]] : []), ['보내기', '직접 눌러야 합니다']], confirmLabel: '답장 창 열기', cancelLabel: '취소',
         onConfirm: async () => {
-          const r = await cmdMailReplyTo(String(a.query || '채팅 요청'), tpl, x);
+          const r = await cmdMailReplyTo(String(a.query || '채팅 요청'), points ? 'custom' : tpl, x, points ? ['보내주신 메일 잘 받았습니다.', R.cuPointSentence ? R.cuPointSentence(points) : points] : null);
           if (r !== 'filled' && r !== 'opened') return {ok: false, text: '답장 창을 열지 않았습니다(작성 중인 화면을 그대로 두었거나 취소했습니다).'};
           if (points) copyText(points);
-          return {ok: true, text: `${r === 'filled' ? '답장 창을 열고 표준 문구를 넣었습니다.' : '답장 창은 열었지만 표준 문구는 넣지 못했습니다. 답장 화면 위의 회신문 버튼을 눌러 주세요.'}${points ? ' 말씀하신 요점은 복사해 두었으니 붙여넣기(Ctrl+V)로 쓰세요.' : ''} 내용을 확인하고 [보내기]는 직접 눌러 주세요.`};
+          return {ok: true, text: `${r === 'filled' ? (points ? '답장 창을 열고 말씀하신 요점을 문장으로 넣었습니다.' : '답장 창을 열고 표준 문구를 넣었습니다.') : `답장 창은 열었지만 문구는 넣지 못했습니다.${points ? ' 요점을 복사해 두었으니 붙여넣기(Ctrl+V) 하세요.' : ' 답장 화면 위의 회신문 버튼을 눌러 주세요.'}`} 내용을 확인하고 [보내기]는 직접 눌러 주세요.`};
         }}]};
     },
   });
