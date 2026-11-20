@@ -140,7 +140,8 @@
   // v0.94.0: "놓치기 쉬운 일"을 묻지 않아도 보이게(지난·임박 기한, 하루 넘게 안 읽은 요청 메일, 오래된 답장 확인, 근태 확인, 반려). 누르면 비서가 이유와 함께 답한다.
   function homeRiskSig() {
     if (!S.a || typeof R.cuRisks !== 'function') return '';
-    const items = mineVisible().map(x => ({key: x.key, title: x.title, state: stateOf(x), base: x.base, type: x.type, deadline: x.deadline && x.deadline.date || '', when: x.when || ''}));
+    // 이미 읽어 둔 메일 본문의 기한까지 반영(새로 열지는 않음 — 홈을 그릴 때마다 요청을 보내지 않는다)
+    const items = typeof cuRiskItemsCached === 'function' ? cuRiskItemsCached() : mineVisible().map(x => ({key: x.key, title: x.title, state: stateOf(x), base: x.base, type: x.type, deadline: x.deadline && x.deadline.date || '', when: x.when || ''}));
     const n = R.cuRisks(items, {today: today()}).length;
     return `<button class="hm-sig" data-act="homeTile" data-v="risks" aria-label="${esc('놓치기 쉬운 일 ' + n + '건, 누르면 비서가 이유를 알려 줍니다')}">${typeof ic === 'function' ? ic('alert') : ''}<span class="hm-sig-k">놓치기 쉬운 일</span><b class="hm-sig-v">${n ? n + '건 · 이유 보기' : '없음'}</b></button>`;
   }

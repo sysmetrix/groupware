@@ -341,11 +341,11 @@ export function cuRisks(items = [], {today = '', until = ''} = {}) {
   const age = w => { const g = /(\d{4})[-./]?(\d{2})[-./]?(\d{2})/.exec(String(w || '')); return g && t0 ? Math.round((Date.parse(t0) - Date.UTC(+g[1], +g[2] - 1, +g[3])) / 86400000) : null; };
   for (const x of Array.isArray(items) ? items : []) {
     if (!x || !x.key || x.state === 'info') continue;
-    const dl = cuIso(x.deadline), a = age(x.when), why = [];
+    const dl = cuIso(x.deadline), a = age(x.when), why = [], src = x.dlSource === 'body' ? '본문의 ' : '';
     let level = 3;
-    if (dl && t0 && dl < t0) { why.push(`기한 ${cuMd(dl)}이 지났습니다`); level = 0; }
-    else if (dl && lim && dl <= lim) { why.push(`기한 ${cuMd(dl)}이 ${cuMd(lim)}까지 처리할 범위 안입니다`); level = 0; }
-    else if (dl && t0 && (Date.parse(dl) - Date.parse(t0)) / 86400000 <= 3) { why.push(`기한 ${cuMd(dl)}이 3일 안입니다`); level = 0; }
+    if (dl && t0 && dl < t0) { why.push(`${src}기한 ${cuMd(dl)}이 지났습니다`); level = 0; }
+    else if (dl && lim && dl <= lim) { why.push(`${src}기한 ${cuMd(dl)}이 ${cuMd(lim)}까지 처리할 범위 안입니다`); level = 0; }
+    else if (dl && t0 && (Date.parse(dl) - Date.parse(t0)) / 86400000 <= 3) { why.push(`${src}기한 ${cuMd(dl)}이 3일 안입니다`); level = 0; }
     if (x.base === 'rejected') { why.push('반려되어 다시 올려야 합니다'); level = Math.min(level, 0); }
     if (x.base === 'mailUnreadAsk' && a !== null && a >= 1) { why.push(`요청 메일을 ${a}일째 읽지 않았습니다`); level = Math.min(level, 1); }
     if (x.base === 'mailReply' && a !== null && a >= 2) { why.push(`답장 필요 여부를 ${a}일째 확인하지 않았습니다`); level = Math.min(level, 1); }
@@ -399,3 +399,25 @@ export function cuJosa(word = '', pair = '은는') {
   const has = c >= 0xac00 && c <= 0xd7a3 ? (c - 0xac00) % 28 !== 0 : /[013678]$/.test(w);
   return w + (has ? pair[0] : pair[1]);
 }
+
+// ---------- 메일 본문 속 기한 (v0.95.0) ----------
+/**
+ * 회신·제출을 요구하는 메일 본문에서 내 기한으로 볼 날짜 하나를 고른다. 요구 문장이 없으면 ''(신청 대상자 기한 등은 쓰지 않음).
+ * deadlines: [{date}] (extractAllDeadlines 결과), need: cuReplyNeed 결과. 오늘 7일 전 ~ 미래 중 가장 이른 날짜.
+ */
+export function cuBodyDeadline(deadlines = [], need = {}, today = '', {body = '', self = ''} = {}) {
+  if (!need || need.need !== 'yes') return '';
+  const t0 = cuIso(today), floor = t0 ? new Date(Date.parse(t0) - 7 * 86400000).toISOString().slice(0, 10) : '';
+  const txt = String(body || ''), me = String(self || '').replace(/\s+/g, '');
+  // 답장에 인용된 "내 요청"의 기한은 내 기한이 아니다: 그 날짜 바로 뒤(250자 안)에 내 이름(서명)이 오면 뺀다
+  const mine = iso => {
+    if (!me || me.length < 2 || !txt) return false;
+    const re = new RegExp(`${+iso.slice(5, 7)}\\s*(?:월|[./])\\s*${+iso.slice(8, 10)}(?!\\d)`, 'g');
+    let m, seen = 0, quoted = 0;
+    while ((m = re.exec(txt))) { seen++; if (txt.slice(m.index, m.index + 250).replace(/\s+/g, '').includes(me)) quoted++; }
+    return seen > 0 && quoted === seen;
+  };
+  const ds = (Array.isArray(deadlines) ? deadlines : []).map(d => cuIso(d && d.date)).filter(d => d && (!floor || d >= floor) && !mine(d)).sort();
+  return ds[0] || '';
+}
+
