@@ -12,13 +12,13 @@ const R = {...B, ...C, ...CU, kstNow: () => ({date: '2026-11-20'})};
 const part = n => readFile(new URL(`../src/live/wc/${n}`, import.meta.url), 'utf8');
 const src = (await Promise.all(['30-chat-ui.js', '31-chat-engine.js', '32-chat-tools-read.js', '43-chat-understand.js', '44-chat-understand-2.js', '45-chat-attach.js'].map(part))).join('\n');
 
-function harness({mails = [], details = {}, docs = [], preview = async () => ({found: false}), search = async () => ({groups: {doc: {items: []}}}), events = [], db = {}, attachPages = null} = {}) {
+function harness({mails = [], details = {}, docs = [], preview = async () => ({found: false}), search = async () => ({groups: {doc: {items: []}}}), events = [], db = {}, attachPages = null, docPages = null, me = '홍길동'} = {}) {
   const store0 = {chatHistV: 3, ...db};
   const loads = [];
   const records = mails.map(m => ({box: 'INBOX', ...m}));
   const ctx = {
     R, console, HOME_ACTS: {}, root: {addEventListener() {}}, setInterval() {}, queueMicrotask() {}, setTimeout: (f, n) => { const t = setTimeout(f, n); t.unref(); return t; }, clearTimeout,
-    S: {settings: {}, userKey: 'u1', a: {deadlines: [], actions: [], approval: {lists: {}}}, raw: {data: {mail: {inbox: {records}}, schedule: {start: '20260101', end: '20261231', events}}}, team: {202611: {cal: {byDate: {}}}, 202612: {cal: {byDate: {}}}}},
+    S: {settings: {}, userKey: 'u1', a: {deadlines: [], actions: [], approval: {lists: {}}}, raw: {principal: {name: me}, data: {mail: {inbox: {records}}, schedule: {start: '20260101', end: '20261231', events}}}, team: {202611: {cal: {byDate: {}}}, 202612: {cal: {byDate: {}}}}},
     store: {get: (k, d) => (k in store0 ? store0[k] : d), set: (k, v) => { store0[k] = v; }, del: k => { delete store0[k]; }},
     esc: x => String(x ?? ''), ic: () => '', $: () => null, allowed: () => false, logError() {}, toast() {}, saveLocal() {}, copyText() {},
     today: () => '2026-11-20', ensureTeam() {}, mineVisible: () => [], stateOf: x => x.state || 'todo', STATE_NAME: {todo: '할 일'}, isMine: x => x.scope !== 'ref',
@@ -26,7 +26,7 @@ function harness({mails = [], details = {}, docs = [], preview = async () => ({f
     findMail: (box, uid) => records.find(m => String(m.uid) === String(uid)),
     loadMailDetail: async (m, allow) => { loads.push({uid: m.uid, allow}); return details[m.uid] || {error: 'none'}; },
     cmdKeywords: q => String(q || '').split(/\s+/).filter(t => t.length >= 2),
-    GW: {docPreview: preview, search, ...(attachPages ? {mailAttachmentPages: attachPages} : {})},
+    GW: {docPreview: preview, search, ...(attachPages ? {mailAttachmentPages: attachPages} : {}), ...(docPages ? {docAttachmentPages: docPages} : {})},
   };
   vm.createContext(ctx);
   vm.runInContext(src + '\nthis.api={chatState,chatSend,chatClear,CHAT_TOOLS,cuFocus,cuSetFocus};', ctx);
@@ -165,4 +165,32 @@ test('첨부 읽기: 안 읽은 메일은 확인 전에는 열지 않는다', as
   assert.equal(h.loads.length, 0);
   assert.equal(calls.length, 0);
   assert.ok(r.cards.some(c => c.type === 'confirm'));
+});
+
+// ---------- v0.89.0 결재문서 첨부 ----------
+test('문서 첨부: 문서를 읽으면 첨부를 기억하고, 내가 기안한 문서는 바로 읽는다', async () => {
+  const docs = [{type: 'doc', key: 'doc:submitted:5', title: '마을축제 운영계획', docNo: '전략-5', ref: {kind: 'submitted', docId: '5'}, scope: 'mine'}];
+  const calls = [];
+  const h = harness({docs, preview: async () => ({found: true, docNo: '전략-5', drafter: '홍길동', text: '마을축제를 아래와 같이 운영하고자 합니다.', files: [{id: 'AAAABBBBCCCCDDDD1111', name: '세부계획.hwp'}, {id: 'AAAABBBBCCCCDDDD2222', name: '사진.jpg'}]}),
+    docPages: async a => { calls.push(a.fileId); return {total: 2, pages: [xmlOf(['제목 마을축제 세부 운영계획', '참가 신청은 12월 1일까지 받습니다.'])]}; }});
+  const r0 = await h.api.CHAT_TOOLS.get('read_doc').run({query: '마을축제 운영계획'});
+  assert.ok(r0.cards.some(c => c.type === 'chips' && c.items.includes('그 문서 첨부 내용 정리해줘')));
+  const r = await h.api.CHAT_TOOLS.get('read_attachment').run({}, {userText: '그 문서 첨부 내용 정리해줘'});
+  assert.equal(r.ok, true);
+  assert.deepEqual(calls, ['AAAABBBBCCCCDDDD1111']);
+  assert.equal(r.cards[0].items[0].title, '제목 마을축제 세부 운영계획');
+  assert.ok(r.cards[0].sensitive);
+});
+
+test('문서 첨부: 남이 기안한 문서는 확인 카드 전에는 열지 않는다', async () => {
+  const docs = [{type: 'doc', key: 'doc:deptWaiting:6', title: '협조 요청', docNo: '문화-6', ref: {kind: 'deptWaiting', docId: '6'}, scope: 'ref'}];
+  const calls = [];
+  const h = harness({docs, preview: async () => ({found: true, docNo: '문화-6', drafter: '김민수', text: '협조 바랍니다.', files: [{id: 'AAAABBBBCCCCDDDD3333', name: '붙임.pdf'}]}), docPages: async a => { calls.push(a.fileId); return {total: 1, pages: [xmlOf(['내용'])]}; }});
+  await h.api.CHAT_TOOLS.get('read_doc').run({query: '협조 요청'});
+  const r = await h.api.CHAT_TOOLS.get('read_attachment').run({}, {userText: '그 문서 첨부 내용 정리해줘'});
+  assert.equal(calls.length, 0);
+  const card = r.cards.find(c => c.type === 'confirm');
+  assert.match(card.rows[1][1], /열람 기록/);
+  await card.onConfirm();
+  assert.deepEqual(calls, ['AAAABBBBCCCCDDDD3333']);
 });

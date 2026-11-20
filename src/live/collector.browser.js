@@ -15,7 +15,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '0.88.0';
+  const VERSION = '0.89.0';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
@@ -697,6 +697,11 @@
     try { u = new URL(href); } catch { throw new GwError('BAD_URL', '미리보기 주소를 읽지 못했습니다.'); }
     const key = u.searchParams.get('key') || '';
     if (u.origin !== ORIGIN || !/^\/SynapDocViewServer\//.test(u.pathname) || !/^[A-Za-z0-9_=+-]{10,300}$/.test(key)) throw new GwError('BAD_URL', '이 첨부는 글자로 읽을 수 있는 미리보기 주소가 아닙니다.');
+    return synapPages(key, maxPages);
+  }
+  // Read a converted document by its viewer key: status (page count) then one positioned-character XML per page.
+  async function synapPages(key, maxPages = 8) {
+    if (!/^[A-Za-z0-9_=+-]{10,300}$/.test(String(key || ''))) throw new GwError('BAD_ARG', '문서 뷰어 키가 올바르지 않습니다.');
     const get = async (p, ms = 20000) => {
       const ac = typeof AbortController !== 'undefined' ? new AbortController() : null;
       const tm = setTimeout(() => { try { ac && ac.abort(); } catch {} }, ms);
@@ -720,6 +725,29 @@
     for (let p = 0; p < n; p++) { const x = await get(`thumbnailxml/${key}/${p}?dpi=96&dispAnnot=2&`); pages.push(x.length > 600000 ? '' : x); }
     return {format: str(st.format, 10), total, pages};
   }
+  // Text of an approval-document (ECM) attachment (v0.89.0). The groupware's own file popup converts the file for the
+  // signed-in user's permissions; a hidden frame opens it only until the viewer key appears, then the same page XML is read.
+  async function docAttachmentPages({fileId, maxPages = 8} = {}) {
+    if (!/^[A-Za-z0-9]{16,64}$/.test(String(fileId || ''))) throw new GwError('BAD_ARG', '첨부 식별자가 올바르지 않습니다.');
+    const frame = document.createElement('iframe');
+    frame.setAttribute('aria-hidden', 'true'); frame.tabIndex = -1;
+    frame.style.cssText = 'position:fixed;left:-4000px;top:0;width:900px;height:900px;border:0;opacity:0;pointer-events:none';
+    frame.src = LINKS.file(fileId);
+    document.body.appendChild(frame);
+    let key = '';
+    const scan = (w, depth) => {
+      if (!w || depth > 3 || key) return;
+      try { for (const e of w.performance.getEntriesByType('resource')) { const m = String(e.name).match(/^https:\/\/[^/]+\/SynapDocViewServer\/status\/([A-Za-z0-9_=+-]{10,300})\?/); if (m && new URL(e.name).origin === ORIGIN) { key = m[1]; return; } } } catch {}
+      try { for (const fr of w.document.querySelectorAll('iframe')) { scan(fr.contentWindow, depth + 1); if (key) return; } } catch {}
+    };
+    try {
+      const t0 = Date.now();
+      while (!key && Date.now() - t0 < 25000) { await new Promise(r => setTimeout(r, 300)); scan(frame.contentWindow, 0); }
+    } finally { frame.remove(); }
+    if (!key) throw new GwError('TIMEOUT', '첨부 미리보기를 준비하지 못했습니다(권한이 없거나 변환 시간이 지났습니다).');
+    return synapPages(key, maxPages);
+  }
+
   async function mailAttachment({uid, sn, account = ''} = {}) {
     if (!uid || !sn) throw new GwError('BAD_ARG', '첨부 정보가 없습니다.');
     if (!READ_ONLY.has('/mail/mail002A37')) throw new GwError('NOT_ALLOWED', '허용되지 않은 API입니다.');
@@ -970,7 +998,7 @@
   }
 
   window.BWYFGW = Object.freeze({
-    version: VERSION, collect, call, search, organizationTree, organizationMembers, budgetCatalog, budgetProject, budgetAll, budgetLedger, budgetMonthly, attendanceDays, teamAttendance, teamPlanned, resourceList, resourceBookings, resourceDetail, resourceCheck, reserveResource, routingHistory, submittedRange, approvalPage, approvalFallback, docPreview, frequentForms, findReply, mailDetail, mailInlineImage, mailAttachment, mailAttachmentPreview, mailAttachmentPages, saveBlob,
+    version: VERSION, collect, call, search, organizationTree, organizationMembers, budgetCatalog, budgetProject, budgetAll, budgetLedger, budgetMonthly, attendanceDays, teamAttendance, teamPlanned, resourceList, resourceBookings, resourceDetail, resourceCheck, reserveResource, routingHistory, submittedRange, approvalPage, approvalFallback, docPreview, frequentForms, findReply, mailDetail, mailInlineImage, mailAttachment, mailAttachmentPreview, mailAttachmentPages, docAttachmentPages, saveBlob,
     context: () => { const c = context(); return {name: c.name, deptName: c.deptName, compName: c.compName, duty: c.duty, position: c.position}; },
     readOnlyEndpoints: () => [...READ_ONLY], routes: ROUTES, links: LINKS, searchLabels: SEARCH_LABELS, defaults: DEFAULTS,
   });
