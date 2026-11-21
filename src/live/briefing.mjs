@@ -306,6 +306,21 @@ export function recommendRouting(doc, history = [], {target = 'toDept', limit = 
   return out;
 }
 
+// v1.9.0: 저장된 주간 초안의 기간(머리줄 '□ 주간 업무 실적 (11.1. ~ 11.8.)')과 지난 날수. 끝난 지 7일이 넘으면 stale.
+export function weeklyDraftPeriod(text, now = new Date()) {
+  const m = String(text || '').match(/주간 업무 실적 \((\d{1,2})\.(\d{1,2})\.\s*~\s*(\d{1,2})\.(\d{1,2})\.\)/);
+  if (!m) return null;
+  const k = new Date(now.getTime() + 9 * 3600000), y = k.getUTCFullYear(), t0 = Date.UTC(y, k.getUTCMonth(), k.getUTCDate());
+  let end = Date.UTC(y, +m[3] - 1, +m[4]); if (end > t0) end = Date.UTC(y - 1, +m[3] - 1, +m[4]);
+  const ageDays = Math.round((t0 - end) / 86400000);
+  return {label: `${+m[1]}/${+m[2]}~${+m[3]}/${+m[4]}`, ageDays, stale: ageDays > 7};
+}
+// v1.9.0: 머리글 새 항목 수. 같은 항목이 여러 번 기록돼도 한 번, 이미 사라진(처리·숨김) 항목은 빼고 센다.
+export function unseenActivityCount(activity, seenAt, liveKeys) {
+  const live = liveKeys ? new Set(liveKeys) : null;
+  return new Set((activity || []).filter(x => x && x.at > (seenAt || 0) && (!live || live.has(x.key))).map(x => x.key)).size;
+}
+
 // Plain-text weekly report draft (주간 업무 실적) from my submitted documents and receipts.
 const PERSONAL_FORMS = /연차휴가신청서|출장신청서|근무일대체신청서|연장근무신청서|시간외근무신청서/;
 export function weeklyReport({submitted = [], receipts = [], me = '', from = '', to = '', now = new Date()} = {}) {

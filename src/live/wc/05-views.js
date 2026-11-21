@@ -69,8 +69,8 @@
     m.innerHTML = S.loading ? '<span class="spin"></span> 읽는 중' : S.lastRefresh ? `${ic('refresh')}${hhmm(S.lastRefresh)} 기준${age ? ` · ${age}분 전` : ''}` : `${ic('refresh')}새로고침`;
     // 기관명: 관리자 정책 > 로그인한 사용자의 소속 기관 > 기본 문구
     try { const on = $('#orgName'), nm = POLICY.orgName || (S.raw && S.raw.principal && S.raw.principal.compName) || ''; if (on && nm) on.textContent = nm; } catch {}
-    const unseen = S.activity.filter(x => x.at > S.seenActivity).length;
-    $('#bell').innerHTML = `${ic('bell')}${unseen ? `<span class="dot">${unseen > 99 ? '99+' : unseen}</span>` : ''}`;
+    const unseen = R.unseenActivityCount(S.activity, S.seenActivity, S.a ? (typeof visibleActions === 'function' ? visibleActions() : S.a.actions).map(x => x.key) : null);
+    { const bl = $('#bell'); bl.innerHTML = `${ic('bell')}${unseen ? `<span class="dot" aria-hidden="true">${unseen > 99 ? '99+' : unseen}</span>` : ''}`; bl.setAttribute('aria-label', unseen ? `비서가 찾은 새 항목 ${unseen}건` : '비서가 찾은 새 항목'); bl.title = '비서가 찾은 새 항목 (그룹웨어 통합알림과 별도)'; }
     const urgent = S.a ? mineVisible().filter(x => ['overdue', 'urgent'].includes(stateOf(x))).length : 0;
     const total = S.a ? mineVisible().length : 0;
     { const st = !S.a ? 'idle' : urgent ? 'urgent' : total ? 'todo' : 'ok'; const sum = !S.a ? '불러오는 중' : urgent ? `급한 일 ${urgent}건 · 전체 ${total}건` : total ? `처리할 일 ${total}건` : '오늘 처리할 일 없음'; fab.dataset.st = st;
@@ -111,13 +111,14 @@
     const urgent = mine.filter(x => ['overdue', 'urgent'].includes(stateOf(x))).length;
     const byArea = a => mine.filter(x => x.area === a).length;
     const counts = {
-      today: S.a ? {n: mine.length, cls: urgent ? 'hot' : mine.length ? 'mine' : '', tip: '내 전체 처리할 일'} : null,
-      approval: S.a ? (u.approval ? {n: '?'} : (() => { const n = S.a.approval?.lists?.pending?.total ?? byArea('결재'); return {n, cls: n ? 'mine' : '', tip: '결재·문서 대기'}; })()) : null,
+      today: S.a ? {n: mine.length, cls: urgent ? 'hot' : mine.length ? 'mine' : '', tip: '처리할 일 ' + mine.length + '건'} : null,
+      approval: S.a ? (u.approval ? {n: '?'} : (() => { const n = S.a.approval?.lists?.pending?.total ?? byArea('결재'); return {n, cls: n ? 'mine' : '', tip: '대기 ' + n + '건'}; })()) : null,
       mail: S.a ? (() => { const n = mailSnapshot().unread; return {n: n ?? '?', cls: n ? 'mine' : '', tip: n == null ? '안 읽은 메일 확인 불가' : '안 읽은 메일 조회분 ' + n + '건'}; })() : null,
-      attendance: S.a ? {n: byArea('근태'), cls: byArea('근태') ? 'mine' : '', tip: '퇴근 지문 확인'} : null,
-      calendar: S.a ? (() => { const n = mine.filter(x => x.deadline && x.deadline.dday >= 0 && x.deadline.dday <= 7).length; return {n, cls: n ? 'mine' : '', tip: '7일 내 기한'}; })() : null,
+      attendance: S.a ? {n: byArea('근태'), cls: byArea('근태') ? 'mine' : '', tip: '퇴근 지문 확인 ' + byArea('근태') + '건'} : null,
+      calendar: S.a ? (() => { const n = mine.filter(x => x.deadline && x.deadline.dday >= 0 && x.deadline.dday <= 7).length; return {n, cls: n ? 'mine' : '', tip: '7일 안 기한 ' + n + '건'}; })() : null,
     };
-    const item = (v) => { const i = VIEWS.indexOf(v); const c = counts[v.id]; return `<a data-act="view" data-v="${v.id}" class="${navView() === v.id ? 'on' : ''}" role="link" tabindex="0" aria-current="${navView() === v.id ? 'page' : 'false'}" title="${esc(v.label)}${i < 9 ? ` (Alt+${i + 1})` : ''}">${ic(VIEW_ICON[v.id])}<span class="lb">${esc(v.label)}</span>${c && c.n !== '' && c.n !== 0 ? `<span class="n ${c.cls || ''}" title="${esc(c.tip || v.label)}">${c.n}</span>` : ''}</a>`; };
+    // 읽히는 이름은 보이는 메뉴 이름으로 시작한다(WCAG 2.5.3). 숫자 뜻은 뒤에 붙인다.
+    const item = (v) => { const i = VIEWS.indexOf(v); const c = counts[v.id]; const shown = c && c.n !== '' && c.n !== 0; return `<a data-act="view" data-v="${v.id}" class="${navView() === v.id ? 'on' : ''}" role="link" tabindex="0" aria-current="${navView() === v.id ? 'page' : 'false'}" aria-label="${esc(v.label)}${shown ? ', ' + esc(c.tip || (c.n === '?' ? '확인 불가' : c.n + '건')) : ''}" title="${esc(v.label)}${i < 9 ? ` (Alt+${i + 1})` : ''}">${ic(VIEW_ICON[v.id])}<span class="lb">${esc(v.label)}</span>${shown ? `<span class="n ${c.cls || ''}" title="${esc(c.tip || v.label)}" aria-hidden="true">${c.n}</span>` : ''}</a>`; };
     const topViews = VIEWS.filter(v => !VIEW_PARENT[v.id] && v.id !== 'settings');
     const settingsView = VIEWS.find(v => v.id === 'settings');
     // 메뉴 묶음: 매일 보는 것 → 처리하는 업무 → 찾아보는 자료 → 사람. 어디에도 없는 화면은 마지막 묶음에 붙는다.
@@ -140,7 +141,11 @@
     { const vt = viewTabs(); if (vt) { const ph = el.querySelector(':scope > .pgh'); if (ph) ph.insertAdjacentHTML('afterend', vt); else el.insertAdjacentHTML('afterbegin', vt); } }
     el.scrollTop = scroll;
     if (S.view === 'notifications' && NTF.items === null && !NTF.loading && !NTF.error) { loadNotifications(); return; }
-    if (S.view === 'report') { const f = $('#briefFrame'); if (f) f.srcdoc = R.renderHtml(S.a); }
+    if (S.view === 'report') { const f = $('#briefFrame'); if (f) { // v1.9.0: 내려받기용 브리핑을 GW 비서 글꼴·색으로 보여 주고, 틀 안 스크롤 없이 내용 높이만큼 펼친다(스크립트는 여전히 막힘)
+      const cs = getComputedStyle(wcEl), v = n => cs.getPropertyValue(n).trim();
+      const skin = `<style>:root{--bg:transparent;--card:transparent;--fg:${v('--fg')};--muted:${v('--muted')};--line:${v('--line')};--accent:${v('--accent')};--hi:${v('--hi')};--md:${v('--md')};--ok:${v('--ok')};color-scheme:${wcEl.classList.contains('dark') ? 'dark' : 'light'}}html{overflow:hidden}body{font-family:"Pretendard Variable",Pretendard,"Malgun Gothic",system-ui,sans-serif}main{max-width:none;padding:0 0 8px}h1{display:none}h2{font-size:15px}.card,table{border-radius:8px}.pill{border:0;padding:1px 0;margin-right:8px;font-weight:600}.pill.new{color:var(--muted)}</style>`;
+      f.onload = () => { try { f.style.height = Math.max(200, f.contentDocument.documentElement.scrollHeight + 4) + 'px'; } catch {} };
+      f.srcdoc = R.renderHtml(S.a).replace('</head>', skin + '</head>'); } }
     if (S.view === 'budget' && !S.budget.table && !S.budget.busy) loadBudget();
     if (S.view === 'attendance' && !S.att.rows && !S.att.busy && !S.att.error) loadAttendance();
     if (S.view === 'attendance' && GW.teamPlanned) loadApps().catch(() => {});

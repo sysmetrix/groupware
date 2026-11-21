@@ -347,7 +347,7 @@
     else if (t.id === 'peopleQuery') { PEOPLE.query = t.value; }
     else if (t.id === 'notificationsQuery') { NTF.query = t.value; }
     else if (t.id === 'sq') { S.search.kw = t.value; }
-    else if (t.id === 'weekly') { const shown = t.dataset.prev ?? t.defaultValue; if (S.weekly && S.weekly !== shown) store.set('weeklyRecovery', {at: Date.now(), text: S.weekly}); /* 다른 탭에서 바뀐 초안을 덮기 전에 보관 */ S.weekly = t.value; t.dataset.prev = t.value; const saved = saveLocal(); const w = $('#wkSaved'); if (w) { w.classList.toggle('on', saved); w.textContent = saved ? '자동 저장됨' : '저장 실패 · 내용을 복사하세요'; } }
+    else if (t.id === 'weekly') { const shown = t.dataset.prev ?? t.defaultValue; if (S.weekly && S.weekly !== shown) store.set('weeklyRecovery', {at: Date.now(), text: S.weekly}); /* 다른 탭에서 바뀐 초안을 덮기 전에 보관 */ S.weekly = t.value; t.dataset.prev = t.value; const saved = saveLocal(); const w = $('#wkSaved'); if (w) { w.classList.toggle('on', saved); w.textContent = saved ? '이 브라우저에 저장됨' : '저장 실패 · 내용을 복사하세요'; } }
     else if (t.id === 'palq') palRender(t.value);
   });
   root.addEventListener('compositionend', e => { const t = e.composedPath()[0]; if (t.id === 'peopleFilter') { PEOPLE.localFilter = t.value; peopleFilterRows(); return; } if (t.id === 'qfilter') { S.filter.q = t.value; refreshQueue(); } else if (t.id === 'dfIn') { dfState().filter.q = t.value; dfRefreshList(); } });

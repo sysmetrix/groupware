@@ -147,6 +147,7 @@
   }
   function vPeople() {
     if (currentKey !== getUserKey()) return pgh('조직·사람') + '<div class="box warn">계정이 변경되었습니다. 새로고침 후 확인하세요.</div>';
+    if (!PEOPLE.tree && !PEOPLE.orgLoading && !PEOPLE.treeError && !PEOPLE.autoTree && typeof setTimeout === 'function') { PEOPLE.autoTree = true; setTimeout(() => { if (S.view === 'people') peopleLoadTree(); else PEOPLE.autoTree = false; }, 0); } // v1.9.0: 부서별 찾아보기를 한 번 더 누르지 않게
     const rows = (PEOPLE.items || []).map((p,i)=>({p,i}));
     const matches = p => !PEOPLE.localFilter.trim() || [p.name,peopleDisplayDept(p.dept),p.duty,p.position,p.tel,p.extension,p.email,p.work].some(v => String(v || '').toLowerCase().includes(PEOPLE.localFilter.trim().toLowerCase()));
     const visibleCount = rows.filter(({p}) => matches(p)).length;
