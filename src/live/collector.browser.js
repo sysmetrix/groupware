@@ -15,7 +15,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '1.19.0';
+  const VERSION = '1.19.1';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
@@ -139,7 +139,7 @@
 
   // 쓰기는 이 목록의 주소만, 전용 함수(reserveResource)에서만 허용한다. 상신·결재·삭제·발송 계열은 여기에 절대 넣지 않는다.
   // v1.17: 개인 ToDo 만들기(A01)·고치기(A02)·지우기(A03)·완료(A07). todo* 전용 함수에서만, 내가 만든 내 개인 ToDo에만 쓴다.
-  const WRITE_ALLOWED = new Set(['/schres/rs121A06', '/kiss/APIHandler/prj001A01', '/kiss/APIHandler/prj001A02', '/kiss/APIHandler/prj001A03', '/kiss/APIHandler/prj001A07']);
+  const WRITE_ALLOWED = new Set(['/schres/rs121A06', '/kiss/APIHandler/prj001A01', '/kiss/APIHandler/prj001A02', '/kiss/APIHandler/prj001A03', '/kiss/APIHandler/prj001A07', '/event/event02A03']);
   const INTERNAL_CALL = Symbol('internalCall');
   async function call(path, body = {}, opts = {}) {
     if (!READ_ONLY.has(path)) throw new GwError('NOT_ALLOWED', `읽기 전용 허용 목록에 없는 API입니다: ${path}`);
@@ -509,6 +509,15 @@
     return {ok: true, id, done: String(r.todoStatus) === '2'};
   }
   // 지우기: 화면에서 직접 누른 경우에만(확인 창을 거친 뒤). AI·자동 실행은 지우지 못한다.
+  // v1.19.1: 알림 하나를 읽음으로 표시한다(그룹웨어 종 목록에서 알림을 누를 때 부르는 것과 같은 호출). 메일·문서 자체의 읽음과는 별개다.
+  async function readAlert(id) {
+    const alertId = String(id || '');
+    if (!/^[\w-]{6,60}$/.test(alertId)) throw new GwError('BAD_ID', '알림 ID가 올바르지 않습니다');
+    if (!WRITE_ALLOWED.has('/event/event02A03')) throw new GwError('NOT_ALLOWED', '쓰기 허용 목록 오류');
+    const ctx = context();
+    const r = await transport('/event/event02A03', {header: {groupSeq: ctx.groupSeq, empSeq: ctx.empSeq, pid: '', tid: ''}, body: {companyInfo: {compSeq: ctx.compSeq, bizSeq: ctx.bizSeq, deptSeq: ctx.deptSeq, emailAddr: ctx.emailAddr, emailDomain: ctx.emailDomain}, alertIds: [alertId]}}, {timeoutMs: 10000, retries: 0});
+    return {ok: true, id: alertId, result: r == null ? null : true};
+  }
   async function todoDelete(id) {
     if (!(navigator.userActivation && navigator.userActivation.isActive)) throw new GwError('NO_GESTURE', '화면에서 직접 누른 경우에만 지울 수 있습니다');
     await todoOwned(id);
@@ -610,8 +619,14 @@
     const alerts = arr(d && d.alertList).map(a => {
       let data = {};
       try { data = typeof a.data === 'string' ? JSON.parse(a.data) : (a.data || {}); } catch { data = {}; }
-      const msg = a.message || {};
-      return {type: str(a.eventType, 20), subType: str(a.eventSubType, 20), head: str(msg.alertTitle, 80), title: mask(data.title || msg.alertContent || a.title, 200), docNo: str(data.doc_no, 60), who: str(data.drafter_nm || data.userName || a.senderName, 40), dept: str(data.deptName, 60), time: str(data.rep_dt || a.createDate, 25), read: !!a.readDate, url: a.url && String(a.url).startsWith('/#') ? ORIGIN + a.url : ''};
+      const msg = a.message || {}, mail = a.eventType === 'MAIL';
+      // v1.19.1: 메일 알림의 주소는 {0}~{3} 자리표시자라 그대로는 못 연다. 그룹웨어가 종 목록에서 여는 것과 같은 값으로 채운다.
+      const recv = (Array.isArray(data.recvList) && data.recvList[0]) || {};
+      const mailUrl = mail && /^\d+$/.test(String(a.mailUid || '')) && recv.email ? ORIGIN + '/#/popup?' + [['muid', a.mailUid], ['email', recv.email], ['mbodSeq', a.mailBoxSeq || recv.mboxSeq || ''], ['boxName', recv.boxName || ''], ['MicroModuleCode', 'mail'], ['print', 'false'], ['rejectFromEmail', data.sendEmail || ''], ['callComp', 'UDAP006']].map(([k, v]) => k + '=' + encodeURIComponent(String(v))).join('&') : '';
+      const plain = a.url && String(a.url).startsWith('/#') && !/[{}]/.test(a.url) ? ORIGIN + a.url : '';
+      const firstLine = v => String(v || '').split(/\r?\n/)[0].trim();
+      const title = mail ? (data.title || '(제목 없음)') : (data.title || data.titleNm || firstLine(msg.alertContent) || a.title);
+      return {id: str(a.alertId, 60), type: str(a.eventType, 20), subType: str(a.eventSubType, 20), head: str(msg.alertTitle, 80), title: mask(title, 200), docNo: str(data.doc_no, 60), who: str((mail ? data.senderName || data.sendName : data.drafter_nm || data.userName || data.senderName || data.empName) || a.senderName, 40), dept: str(data.deptName, 60), time: str(data.rep_dt || a.createDate, 25), read: !!a.readDate, url: mail ? mailUrl : plain};
     });
     return {alerts};
   }
@@ -1157,7 +1172,7 @@
   }
 
   window.BWYFGW = Object.freeze({
-    version: VERSION, collect, call, search, organizationTree, organizationMembers, sentMail, budgetCatalog, budgetProject, budgetAll, budgetLedger, budgetMonthly, attendanceDays, teamAttendance, teamPlanned, resourceList, resourceBookings, resourceDetail, resourceCheck, reserveResource, todoList, todoDetail, todoCreate, todoUpdate, todoSetDone, todoDelete, todoLink, routingHistory, submittedRange, approvalPage, approvalFallback, docPreview, frequentForms, findReply, mailDetail, mailInlineImage, mailAttachment, mailAttachmentPreview, mailAttachmentPages, docAttachmentPages, synapPageImages, saveBlob,
+    version: VERSION, collect, call, search, organizationTree, organizationMembers, sentMail, budgetCatalog, budgetProject, budgetAll, budgetLedger, budgetMonthly, attendanceDays, teamAttendance, teamPlanned, resourceList, resourceBookings, resourceDetail, resourceCheck, reserveResource, todoList, todoDetail, todoCreate, todoUpdate, todoSetDone, todoDelete, todoLink, readAlert, routingHistory, submittedRange, approvalPage, approvalFallback, docPreview, frequentForms, findReply, mailDetail, mailInlineImage, mailAttachment, mailAttachmentPreview, mailAttachmentPages, docAttachmentPages, synapPageImages, saveBlob,
     context: () => { const c = context(); return {name: c.name, deptName: c.deptName, compName: c.compName, duty: c.duty, position: c.position}; },
     readOnlyEndpoints: () => [...READ_ONLY], routes: ROUTES, links: LINKS, searchLabels: SEARCH_LABELS, defaults: DEFAULTS,
   });

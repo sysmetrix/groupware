@@ -93,7 +93,7 @@ test('v1.10.0: 홈 오른쪽 묶음 제목은 h3, 예산 빼기 버튼은 무엇
 
 test('v1.10.0: 통합알림 원문을 열면 종 숫자에서 바로 빠진다', () => {
   const n = read('wc/38-notifications-people.js');
-  assert.match(n, /if \(wasUnread\) \{ x\.read = true; if \(typeof renderHead === 'function'\) renderHead\(\);/);
+  assert.match(n, /if \(!wasUnread \|\| opened === false\) return;\s*x\.read = true; if \(typeof renderHead === 'function'\) renderHead\(\);/);
   assert.match(n, /visibilitychange/);
 });
 

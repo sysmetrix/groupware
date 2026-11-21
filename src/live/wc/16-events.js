@@ -169,9 +169,8 @@
       case 'peopleTree': peopleLoadTree(); break;
       case 'peopleDept': peopleDept(v); break;
       case 'personMail': personMail(Number(el.dataset.i)); break;
-      case 'nativeNotifications':
-      case 'nativeOrganization': {
-        const target = document.querySelector(act === 'nativeNotifications' ? '#intergratedNotificationBtn .btn.alert' : '.newPortalHeader .btn.org');
+      case 'nativeNotifications': {
+        const target = document.querySelector('#intergratedNotificationBtn .btn.alert');
         if (!target) { toast('그룹웨어 메뉴를 찾을 수 없습니다. 그룹웨어 상단에서 직접 열어 주세요.'); break; }
         if (!leavePane()) break;
         closeOverlay(); close(); target.click(); break;

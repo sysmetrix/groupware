@@ -223,7 +223,7 @@
     add('그룹웨어 자료 모양', !S.contract || S.contract.ok, !S.contract ? '아직 자료를 읽지 않았습니다' : S.contract.ok ? '읽은 자료의 제목·날짜·번호가 예전 모양 그대로입니다' : S.contract.issues.slice(0, 4).map(i => `${R.CONTRACT_AREA_LABEL[i.area] || i.area} ${i.where}: ${i.detail}`).join(' / '));
     const au = auditState();
     add('감사 기록 무결성', au.ok, au.ok ? `${au.checked}건 검증` : `이상 감지: ${au.reason}`);
-    add('그룹웨어 연결', true, `읽기 전용 ${GW.readOnlyEndpoints().length}개 + 사용자 직접 확인 시 자원예약(/schres/rs121A06)`);
+    add('그룹웨어 연결', true, `읽기 전용 ${GW.readOnlyEndpoints().length}개 + 사용자 동작 시 자원예약(/schres/rs121A06)·개인 ToDo(/kiss prj001A01·02·03·07)·알림 읽음 표시(/event/event02A03)`);
     const up = store.get('updateInfo', null);
     if (up && up.latest) { const c = R.compareVersions(up.latest, VERSION); add('최신 버전', c <= 0, c > 0 ? `새 버전 ${up.latest} 이 있습니다` : '최신입니다'); }
     else add('최신 버전', !(up && up.err) && allowed('updateCheck'), !allowed('updateCheck') ? '업데이트 확인이 관리자 설정으로 꺼져 있습니다' : up && up.err ? `확인하지 못함(${up.err})` : '아직 확인 전');

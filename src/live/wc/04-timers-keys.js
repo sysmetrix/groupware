@@ -31,6 +31,10 @@
         if (els.length) { const i = els.indexOf(root.activeElement); if (i < 0 || (e.shiftKey && i === 0) || (!e.shiftKey && i === els.length - 1)) { e.preventDefault(); els[e.shiftKey ? els.length - 1 : 0].focus(); } }
       }
     }
+    if (S.menuOpen === 'bell' && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Home' || e.key === 'End')) {
+      const items = [...root.querySelectorAll('#overlay .ntf-pop .ntf-pi')];
+      if (items.length) { e.preventDefault(); const i = items.indexOf(root.activeElement); const n = e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1 : i < 0 ? (e.key === 'ArrowDown' ? 0 : items.length - 1) : Math.max(0, Math.min(items.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1))); items[n].focus(); return; }
+    }
     if ((e.ctrlKey || e.metaKey) && e.code === 'KeyK') { e.preventDefault(); openPalette(typing && t.id === 'gsearch' ? t.value : ''); return; }
     if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ' && !typing) { e.preventDefault(); undo(); return; }
     if (e.key === 'Escape') {
