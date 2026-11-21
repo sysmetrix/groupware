@@ -1458,3 +1458,5 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .bm-mine-tbl .bm-name{white-space:nowrap}
 .wc .bm-mine-tbl td,.wc .bm-mine-tbl th{padding-left:10px;padding-right:10px}
 .wc .bm-note{margin:8px 0 0}
+.wc .bm-scroll{overflow-x:auto;max-width:100%}
+@media (max-width:1100px){.wc .bm-mine-tbl th:nth-child(2),.wc .bm-mine-tbl td:nth-child(2),.wc .bm-mine-tbl th:nth-child(5),.wc .bm-mine-tbl td:nth-child(5),.wc .bm-all-tbl th:nth-child(4),.wc .bm-all-tbl td:nth-child(4){display:none}.wc .bm-mine-tbl td:first-child{min-width:160px}.wc .bm-mine-tbl .bm-name{white-space:normal}.wc .bm-rate>span:last-child{min-width:44px;margin-left:6px}.wc .bm-mine-tbl td,.wc .bm-mine-tbl th{padding-left:6px;padding-right:6px}}
