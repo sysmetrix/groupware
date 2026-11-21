@@ -16,7 +16,8 @@
       if (i !== -1 && !labels.has(i)) labels.set(i, names[i].find(s => s.replace(/\s+/g, '') === label));
     }
     const borrowed = labels.size;
-    names.forEach(([name], i) => { if (!labels.has(i)) labels.set(i, name); });
+    const bodyName = ['일시', '장소', /참가\s*(계획|결과)/.test(String(plan?.title || '')) ? '참가 인원' : '참여 인원', '집행 금액', '주요 성과·특이사항'];
+    names.forEach((_, i) => { if (!labels.has(i)) labels.set(i, bodyName[i]); });
     const docNo = clean(plan?.docNo), title = clean(plan?.title);
     const kind = /참가\s*(계획|결과)/.test(title) ? '참가' : /운영\s*(계획|결과)/.test(title) ? '운영' : '추진';
     const name = title.replace(/\s*(운영|참가)\s*(계획|결과보고)(\(안\)|\(변경\))?\s*$/, '').replace(/\s*(시행|추진|실시)?계획(\(안\))?\s*$/, '').trim();

@@ -433,7 +433,7 @@
     });
     await run('공개·긴급·보안·문서구분', async () => {
       const keys = ['open', 'urgent', 'sec', 'docKind'];
-      if (!confirmed) return {ok: false, detail: '분류 미확인: 기존 값을 유지했습니다. 공개·보안 등을 직접 확인하세요.'};
+      if (!confirmed) return {ok: true, detail: '그룹웨어 기본값 유지(이어받기 선택 안 함) · 공개·보안은 상신 전에 확인하세요.'};
       const r = keys.map(k => classification.includes(k) && setRadioByLabel(d, m[k]));
       return {ok: r.every(Boolean), detail: keys.map(k => m[k] || '확인 불가').join(' · ')};
     });
