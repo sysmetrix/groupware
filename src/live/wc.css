@@ -1343,3 +1343,5 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 /* v1.10.0 좁은 화면·큰 글자에서 가로로 넘치지 않게(WCAG 1.4.10 리플로) */
 .wc main .seg,.wc main .tools,.wc main .cal-nav,.wc main .acts,.wc main .bar{flex-wrap:wrap}.wc main .seg{max-width:100%}.wc main select.f,.wc main .inp{max-width:100%}.wc main .chip{max-width:100%;white-space:normal;text-align:left}.wc main .card2{min-width:0}.wc main .cards{grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr))}.wc .cal .h,.wc .cal .c,.wc .att>*{min-width:0}.wc .att{grid-template-columns:repeat(7,minmax(0,1fr))}.wc .att .c{overflow:hidden;overflow-wrap:anywhere}.wc .ch-chips{flex-wrap:wrap}
 @media (max-width:640px){.wc main .set .si{grid-template-columns:minmax(0,1fr);display:grid;gap:6px}.wc main .btn{white-space:normal;height:auto;min-height:32px}.wc .att .c{padding:4px 3px}.wc main table:not(.apt){display:block;max-width:100%;overflow-x:auto}}
+/* v1.10.1 큰 글자에서 머리글 시각 표시가 줄어들며 옆 버튼과 겹치지 않게(검색칸이 대신 줄어듦) */
+.wc header .stat,.wc header .hb{flex-shrink:0;white-space:nowrap}.wc header .srch{min-width:0;flex-shrink:1}

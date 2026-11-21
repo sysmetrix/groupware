@@ -103,3 +103,6 @@ test('v1.10.0: 좁은 화면 리플로 규칙(카드 격자·근태 달력·표)
   assert.match(css, /\.wc \.att\{grid-template-columns:repeat\(7,minmax\(0,1fr\)\)\}/);
   assert.match(css, /\.wc main table:not\(\.apt\)\{display:block;max-width:100%;overflow-x:auto\}/);
 });
+test('v1.10.1: 큰 글자에서 머리글 시각·버튼은 줄어들지 않고 검색칸이 줄어든다', () => {
+  assert.match(read('wc.css'), /\.wc header \.stat,\.wc header \.hb\{flex-shrink:0;white-space:nowrap\}\.wc header \.srch\{min-width:0;flex-shrink:1\}/);
+});
