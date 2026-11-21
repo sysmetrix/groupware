@@ -20,7 +20,7 @@
     const selOpt = (v, cur) => opts.map(o => `<option value="${o}" ${o === cur ? 'selected' : ''}>${o}</option>`).join('');
     const upcoming = (s.bookings || []).filter(b => b.end.slice(0, 8) >= resToday()).sort((a, b) => a.start.localeCompare(b.start)).slice(0, 12);
     const me = (S.raw && S.raw.principal && S.raw.principal.name) || '';
-    const fmtB = b => `${b.start.slice(4, 6)}/${b.start.slice(6, 8)} ${b.start.slice(8, 10)}:${b.start.slice(10)}~${b.end.slice(8, 10)}:${b.end.slice(10)}`;
+    const fmtB = b => `${b.start.slice(4, 6)}/${b.start.slice(6, 8)}${b.end.slice(0, 8) !== b.start.slice(0, 8) ? `~${b.end.slice(4, 6)}/${b.end.slice(6, 8)}` : ''} ${b.start.slice(8, 10)}:${b.start.slice(10)}~${b.end.slice(8, 10)}:${b.end.slice(10)}`;
     const body = s.err ? `<div class="box warn">자원 정보를 읽지 못했습니다: ${esc(s.err)} <button class="btn sm" data-act="resReload">다시 시도</button></div>`
       : !s.list ? '<div class="sk" style="height:120px"></div>'
       : !s.list.length ? '<div class="empty"><b>예약할 수 있는 자원이 없습니다</b></div>'

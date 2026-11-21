@@ -163,6 +163,7 @@
     if (!VIEWS.some(x => x.id === view)) return;
     if (view === 'search' && param) { if (go('search')) { S.search.kw = param; runSearch(); } return; }
     if (view === 'approval' && ['pending', 'deptWaiting', 'distWaiting', 'sendWaiting', 'submitted', 'viewing'].includes(param)) { if (go('approval') !== false) { S.apTab = param; S.apTabPinned = true; renderMain(); } return; }
+    if (view === 'resource' && /^[\w-]+,\d{8}$/.test(param || '') && typeof resState === 'function') { const [seq, d8] = param.split(','), rs = resState(); if (rs.sel !== seq || rs.date !== d8) { rs.sel = seq; rs.date = d8; rs.bookings = null; } go('resource'); return; }
     if (view === 'today' && param === 'ref') { S.filter = {...S.filter, level: 'all', area: 'all', q: '', onlyNew: false, showHidden: false}; S.todayTab = 'ref'; go('today'); return; }
     go(view);
   };
