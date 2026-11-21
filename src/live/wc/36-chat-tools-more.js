@@ -112,7 +112,7 @@
     name: 'list_approvals', label: '결재함 확인', kind: 'read',
     description: '결재·문서유통 목록의 내용을 대화로 보여준다. queue: pending(내가 결재할 문서) | deptWaiting(부서 접수 대기) | distWaiting(배부 대기) | sendWaiting(발송 대기) | submitted(내가 올린 문서와 진행 상태) | viewing(열람문서) | all(전체 건수). 결재·접수·배부는 하지 않는다.',
     params: {type: 'object', properties: {queue: {type: 'string', enum: ['pending', 'deptWaiting', 'distWaiting', 'sendWaiting', 'submitted', 'viewing', 'all']}, status: {type: 'string', description: '상태 낱말로 좁히기(예: 반려)'}, limit: {type: 'number'}}},
-    run: async a => {
+    run: async (a, ctx) => {
       if (!S.a || !S.raw) return chatNotReady();
       const lists = (S.a.approval && S.a.approval.lists) || {};
       if (!chatModuleOk('approval')) return {ok: false, text: '결재 자료를 읽지 못해 결재함을 확인할 수 없습니다.', cards: [{type: 'nav', label: '결재·문서유통 화면 열기', view: 'approval'}]};
@@ -136,7 +136,24 @@
       } else if (queue === 'pending') head = total ? `내가 결재할 문서는 ${total}건입니다.${partial}` : `내가 결재할 문서는 없습니다. 내가 올려 결재를 기다리는 문서는 ${lists.submitted && !lists.submitted.error ? inProg.length + '건' : '확인 불가'}입니다.`;
       else if (queue === 'viewing') { const un = docs.filter(d => d.unread).length; head = `열람문서는 ${total}건이고, 읽은 범위에서 안 읽은 것은 ${un}건입니다.${partial}`; docs = [...docs.filter(d => d.unread), ...docs.filter(d => !d.unread)]; }
       else head = `${label}는 부서 전체 기준 ${total}건입니다.${partial}`;
-      const scope = l.from && l.to ? `\n조회 기간: ${ymd8(String(l.from))} ~ ${ymd8(String(l.to))}` : '';
+      let scope = l.from && l.to ? `\n조회 기간: ${ymd8(String(l.from))} ~ ${ymd8(String(l.to))}` : '';
+      // v1.11.0: "이번 주 내가 올린 문서", "접수 대기 중 급한 거"처럼 물은 범위에 맞춰 답한다(전체 목록부터 늘어놓지 않음).
+      { const ut = String((ctx && ctx.userText) || ''), td = R.kstNow(new Date()).date, d8 = d => String(d.date || '').replace(/\D/g, '').slice(0, 8);
+        const explicit = /(이번|금|지난|저번)\s*주|(이번|지난|저번)\s*달|\d{1,2}\s*월|오늘|어제/.test(ut);
+        if (explicit && typeof R.cuPeriod === 'function') {
+          const t8 = td.replace(/-/g, ''), y8 = new Date(Date.parse(td + 'T00:00:00Z') - 86400000).toISOString().slice(0, 10).replace(/-/g, '');
+          const p = /오늘/.test(ut) ? {from: t8, to: t8, label: '오늘'} : /어제/.test(ut) ? {from: y8, to: y8, label: '어제'} : R.cuPeriod(ut, td);
+          const n0 = docs.length; docs = docs.filter(d => d8(d) && d8(d) >= p.from && d8(d) <= p.to);
+          const prog = docs.filter(d => inProg.some(x => x.docId === d.docId)).length;
+          head = `${p.label} ${queue === 'submitted' ? '내가 올린 문서' : label}는 ${docs.length}건입니다${queue === 'submitted' && docs.length ? (prog ? `(결재 진행 중 ${prog}건)` : '(모두 결재가 끝났거나 진행 중인 건이 없습니다)') : ''}.${total > n0 ? ` 최근 ${n0}건 범위에서 찾았습니다.` : ''}`;
+          scope = `\n기간: ${ymd8(p.from)} ~ ${ymd8(p.to)}`;
+        }
+        if (/급한|급해|긴급|시급|마감|기한/.test(ut) && queue !== 'submitted') {
+          const now = new Date(), urgentOf = d => { const t = String(d.title || ''); if (/긴급|시급|즉시|오늘\s*까지/.test(t)) return '긴급 표시'; const dl = R.extractDeadline(t, now); if (dl) { const dd = R.dday(dl); if (dd != null && dd <= 3) return dd < 0 ? '기한 지남 ' + dl.slice(5) : '기한 ' + dl.slice(5); } return ''; };
+          const hot = docs.map(d => ({d, why: urgentOf(d)})).filter(x => x.why);
+          head = (hot.length ? `${label} ${total}건 가운데 제목에 긴급 표시나 3일 안 기한이 있는 것은 ${hot.length}건입니다: ${hot.slice(0, 5).map(x => `${chatCut(x.d.title, 30)}(${x.why})`).join(', ')}.` : `${label} ${total}건 가운데 제목에 긴급 표시나 3일 안 기한이 적힌 문서는 없습니다.`) + ' 본문의 기한은 문서를 열어야 알 수 있습니다.' + partial;
+          docs = [...hot.map(x => x.d), ...docs.filter(d => !hot.some(x => x.d === d))];
+        } }
       if (!docs.length) return {ok: true, text: head + scope, data: {queue, count: total, items: []}, cards: [nav]};
       const items = docs.slice(0, lim).map(d => ({title: d.title || '(제목 없음)', sub: [d.sender || d.drafterDept || d.drafter, d.docNo, String(d.date || '').slice(0, 10)].filter(Boolean).join(' · '), badge: chatCut(d.status, 14), tone: /반려/.test(d.status || '') ? 'urgent' : inProg.some(p => p.docId === d.docId) ? 'todo' : 'info', ...(d.url ? {act: {act: 'chatOpenUrl', v: d.url}} : {})}));
       return {ok: true, text: head + scope, llm: head, data: {queue, count: total, shown: items.length, items: docs.slice(0, lim).map(d => ({itemId: '', title: d.title || '', url: d.url || '', type: 'doc'}))}, cards: [{type: 'list', title: label, items, more: Math.max(0, total - items.length)}, nav]};

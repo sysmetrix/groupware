@@ -22,7 +22,8 @@
   // v1.9.1: 머리글 종 숫자용. 화면을 다시 그리지 않고 최근 100건을 받아 두며, 3분에 한 번만 묻는다(통합알림 화면에서는 그 화면의 새로고침에 맡김).
   function ntfUnread() { try { return NTF.items ? NTF.items.filter(x => !x.read).length : null; } catch { return null; } }
   let ntfBgAt = 0;
-  if (typeof document === 'object' && document && document.addEventListener) document.addEventListener('visibilitychange', () => { if (!document.hidden) ntfBgAt = Math.min(ntfBgAt, Date.now() - 150000); }); // 다른 탭에서 돌아오면 30초 안에 다시 확인
+  // 다른 탭에서 돌아오면 30초 안에 다시 확인
+  if (typeof document === 'object' && document && document.addEventListener) document.addEventListener('visibilitychange', () => { if (!document.hidden) ntfBgAt = Math.min(ntfBgAt, Date.now() - 150000); });
   async function notificationsBackground() {
     try { if (NTF.loading || S.view === 'notifications' || Date.now() - ntfBgAt < 180000) return; } catch { return; }
     ntfBgAt = Date.now(); const seq = NTF.seq, owner = currentKey;
@@ -66,7 +67,8 @@
     if (currentKey !== getUserKey()) return;
     const x = NTF.items?.[i], url = notificationUrl(x); if (!url) return;
     const wasUnread = !x.read; openUrl(url, {title:x.title || x.head || '알림', unread:wasUnread, what:'알림'});
-    if (wasUnread) { x.read = true; if (typeof renderHead === 'function') renderHead(); if (S.view === 'notifications') renderMain(); } // v1.10.0: 연 알림은 곧바로 숫자에서 뺀다
+    // v1.10.0: 연 알림은 곧바로 숫자에서 뺀다
+    if (wasUnread) { x.read = true; if (typeof renderHead === 'function') renderHead(); if (S.view === 'notifications') renderMain(); }
   }
   // 홈페이지 기준 공식 순서다. 이름을 비슷하게 고쳐 맞추지 않고, GW의 정확한 정식 명칭·키만 연결한다.
   const PEOPLE_OFFICIAL_ORG = [
@@ -161,7 +163,8 @@
   }
   function vPeople() {
     if (currentKey !== getUserKey()) return pgh('조직·사람') + '<div class="box warn">계정이 변경되었습니다. 새로고침 후 확인하세요.</div>';
-    if (!PEOPLE.tree && !PEOPLE.orgLoading && !PEOPLE.treeError && !PEOPLE.autoTree && typeof setTimeout === 'function') { PEOPLE.autoTree = true; setTimeout(() => { if (S.view === 'people') peopleLoadTree(); else PEOPLE.autoTree = false; }, 0); } // v1.9.0: 부서별 찾아보기를 한 번 더 누르지 않게
+    // v1.9.0: 부서별 찾아보기를 한 번 더 누르지 않게
+    if (!PEOPLE.tree && !PEOPLE.orgLoading && !PEOPLE.treeError && !PEOPLE.autoTree && typeof setTimeout === 'function') { PEOPLE.autoTree = true; setTimeout(() => { if (S.view === 'people') peopleLoadTree(); else PEOPLE.autoTree = false; }, 0); }
     const rows = (PEOPLE.items || []).map((p,i)=>({p,i}));
     const matches = p => !PEOPLE.localFilter.trim() || [p.name,peopleDisplayDept(p.dept),p.duty,p.position,p.tel,p.extension,p.email,p.work].some(v => String(v || '').toLowerCase().includes(PEOPLE.localFilter.trim().toLowerCase()));
     const visibleCount = rows.filter(({p}) => matches(p)).length;

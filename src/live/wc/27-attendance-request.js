@@ -36,14 +36,16 @@
         const inp = (id, v, ph = '', typ = 'text') => '<input class="inp" id="' + id + '" type="' + typ + '" value="' + esc(v || '') + '" placeholder="' + esc(ph) + '" autocomplete="off" style="height:40px;font-size:14px;color:var(--fg)">';
         const sel = (id, opts, cur) => '<select class="inp" id="' + id + '" style="height:40px;font-size:14px;color:var(--fg)">' + opts.map(([v, t]) => '<option value="' + esc(v) + '"' + (v === cur ? ' selected' : '') + '>' + esc(t) + '</option>').join('') + '</select>';
         const w = {trip: '출장', leave: '휴가', overtime: '근무'}[st.type];
-        const note = fixed ? '“' + st.kind + '”은 신청서에서 시간이 ' + ts + '~' + te + '로 정해집니다(날짜만 반영).' : st.type === 'trip' ? '여러 날이면 시각은 매일 같은 시작·종료 시각으로 들어갑니다.' : st.type === 'overtime' ? '종료 일시를 비우면 신청서의 작성기준(태깅 시간 등)대로 둡니다.' : '';
+        const josa = (w, a, b) => { const c = String(w).charCodeAt(String(w).length - 1); return c >= 0xAC00 && c <= 0xD7A3 && (c - 0xAC00) % 28 ? a : b; };
+        const wkWarn = st.type !== 'overtime' && [st.s, st.e].some(v => /^\d{4}-\d{2}-\d{2}/.test(v || '') && [0, 6].includes(new Date(String(v).slice(0, 10) + 'T00:00:00Z').getUTCDay())) ? '고른 날짜에 토·일요일이 들어 있습니다. 날짜를 확인하세요. ' : '';
+        const note = wkWarn + (fixed ? '“' + st.kind + '”' + josa(st.kind, '은', '는') + ' 신청서에서 시간이 ' + ts + '~' + te + '로 정해집니다(날짜만 반영).' : st.type === 'trip' ? '여러 날이면 시각은 매일 같은 시작·종료 시각으로 들어갑니다.' : st.type === 'overtime' ? '종료 일시를 비우면 신청서의 작성기준(태깅 시간 등)대로 둡니다.' : '');
         ov.innerHTML = '<div class="modal" data-act="closeOverlay"><div class="dlg" data-stop="1" style="width:min(600px,94vw);padding:22px 24px;max-height:92vh;overflow:auto" role="dialog" aria-label="근태 신청 준비"><h2 style="margin:0 0 6px;font-size:17px">근태 신청 준비</h2>'
           + '<div class="muted" style="margin-bottom:8px">구분과 일시를 고르면 신청서를 채우고 [신청완료] 직전에서 멈춥니다.</div>'
           + '<div role="radiogroup" aria-label="신청 구분" style="display:flex;gap:8px;margin:6px 0 2px">' + ATT_TYPES.map(([v, t]) => '<button type="button" class="btn' + (v === st.type ? ' primary' : '') + '" role="radio" aria-checked="' + (v === st.type) + '" data-atype="' + v + '">' + t + '</button>').join('') + '</div>'
           + lab('종류', sel('att_kind', ATT_KINDS[st.type].map(k => [k, k]), st.kind))
           + (st.type === 'overtime' ? lab('신청 구분 (수당 / 보상)', sel('att_pay', [['수당', '수당'], ['보상', '보상']], st.pay)) : '')
           + lab(w + ' 시작 일시', inp('att_s', st.s, '', 'datetime-local')) + lab(w + ' 종료 일시' + (st.type === 'overtime' ? ' (선택)' : ''), inp('att_e', st.e, '', 'datetime-local'))
-          + (note ? '<div class="muted" style="font-size:12.5px;margin-top:4px">' + esc(note) + '</div>' : '')
+          + '<div class="muted" id="att_note" role="status" style="font-size:13px;margin-top:4px">' + esc(note) + '</div>'
           + (st.type === 'trip' ? lab('방문처', inp('att_visit', st.visit, '예) 부천시청')) + lab('출장목적', inp('att_purpose', st.purpose, '예) 업무 협의')) + lab('업무내용', inp('att_content', st.content, '예) 청소년 정책 협의 회의 참석 (비우면 출장목적과 같게)')) + lab('교통수단', sel('att_tr', [['', '선택 안 함'], ...ATT_TRANSPORTS.map(t => [t, t])], st.transport)) : lab('비고(사유)', inp('att_reason', st.reason, '예) 결과보고서 작성')))
           + lab('제목 (내 지난 근태 문서 형식으로 자동 결정 · 직접 고칠 수 있음)', inp('att_title', st.title, '')) + '<div class="muted" id="att_basis" style="font-size:12.5px;margin-top:4px">' + esc(st.basis || '') + '</div>'
           + '<div id="att_err" role="alert" style="color:var(--hi);font-size:13px;margin-top:8px;min-height:1em"></div>'
@@ -60,6 +62,7 @@
           if (!fx && (st.s.slice(11, 16) !== a || (st.e && st.e.slice(11, 16) !== b))) st.timeTouched = true;
           const e2 = $('#att_e'); if (e2) e2.value = st.e || '';
           retitle();
+          { const n = $('#att_note'), wk = st.type !== 'overtime' && [st.s, st.e].some(v => /^\d{4}-\d{2}-\d{2}/.test(v || '') && [0, 6].includes(new Date(String(v).slice(0, 10) + 'T00:00:00Z').getUTCDay())), msg = '고른 날짜에 토·일요일이 들어 있습니다. 날짜를 확인하세요. '; if (n) n.textContent = (wk ? msg : '') + n.textContent.replace(msg, ''); }
         });
         on('#att_title', 'input', () => { const v = ($('#att_title').value || '').trim(); st.titleTouched = !!v; if (!v) retitle(); });
         let settled = false;
@@ -105,7 +108,9 @@
     const selDate = sel && sel.type === 'attendance' ? String(sel.when || '').slice(0, 10) : '';
     // 근태 달력에서 날짜를 고른 뒤 신청하면 그 날짜를 기본값으로 쓴다(오늘로 되돌아가지 않게).
     const pickedDay = S.view === 'attendance' && S.att && /^\d{8}$/.test(S.att.day || '') ? `${S.att.day.slice(0, 4)}-${S.att.day.slice(4, 6)}-${S.att.day.slice(6)}` : '';
-    const d0 = attYmd(preset.date) || selDate || pickedDay || today, d1 = attYmd(preset.to) || d0;
+    // v1.11.0: 주말엔 다음 평일
+    const wkNext = type !== 'overtime' && typeof R.homeDayInfo === 'function' ? (d => d.weekend ? d.next : '')(R.homeDayInfo({date: today})) : '';
+    const d0 = attYmd(preset.date) || selDate || pickedDay || wkNext || today, d1 = attYmd(preset.to) || d0;
     // 내 지난 근태 신청 제목에서 제목 형식을 배운다(목록을 못 읽으면 기본 형식)
     const ap = GW.teamPlanned ? await Promise.race([loadApps().catch(() => null), wait(4000).then(() => null)]) : null;
     const model = ap ? R.learnAttendanceTitles(ap.apps, ap.me) : null;

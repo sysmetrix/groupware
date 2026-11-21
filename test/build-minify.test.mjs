@@ -24,7 +24,7 @@ test('work90 minifier is local and deterministic; shortens only function-local n
   assert.equal(TERSER_VERSION, '5.44.1');
 });
 
-test('work90 ships reproducible minified bundle within exact 1100KB limit', async () => {
+test('work90 ships reproducible minified bundle within exact shipped bundle limit', async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'work90-minify-test-'));
   try {
     const [first, second] = await Promise.all([
@@ -34,7 +34,7 @@ test('work90 ships reproducible minified bundle within exact 1100KB limit', asyn
     const [a, b] = await Promise.all([fs.readFile(first.bundle), fs.readFile(second.bundle)]);
     assert.ok(a.length <= MAX_SHIPPED_BUNDLE_BYTES, `${a.length} exceeds ${MAX_SHIPPED_BUNDLE_BYTES}`);
     assert.equal(a.toString('hex'), b.toString('hex'));
-    assert.ok(a.length < 1100 * 1024);
+    assert.ok(a.length <= MAX_SHIPPED_BUNDLE_BYTES);
     assert.equal(first.bundleBytes, a.length);
     assert.equal(first.terser, '5.44.1');
   } finally {

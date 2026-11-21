@@ -39,7 +39,7 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
       if (S.pane.url) {
         const f = document.createElement('iframe'); f.src = S.pane.url; f.title = '그룹웨어 원래 화면'; if (S.pane.previewBack) f.dataset.panePreview = '1'; const u = S.pane.url;
         f.addEventListener('error', () => { if (S.pane.url !== u) return; if (f.dataset.panePreview === '1') { toast('미리보기를 불러오지 못했습니다. 이전 메일 화면으로 돌아가 다시 시도하세요.'); return; } frame.innerHTML = `<div class="fe"><div>${ic('alert', 'style="width:28px;height:28px"')}</div><div>그룹웨어 화면을 불러오지 못했습니다.</div><a class="btn primary" href="${esc(u)}" target="_blank" rel="noopener">${ic('ext')}새 창으로 열기</a></div>`; });
-        f.addEventListener('load', () => { hookFrameWindow(f, u); scanFrame(f, u); watchDirty(f, u); }); frame.append(f);
+        f.addEventListener('load', () => { hookFrameWindow(f, u); scanFrame(f, u); watchDirty(f, u); if (typeof roomyDocFrame === 'function') roomyDocFrame(f, u); }); frame.append(f);
       }
       S.pane.mounted = S.pane.url;
     }
@@ -715,4 +715,20 @@ ${custom.slice(0, 12).map(l => `<p>${esc(String(l).slice(0, 400))}</p>`).join('\
       return `<div class="autofill-bar"><span class="lbl">${ic('star')} 신청서 채우기:</span><button class="btn sm" data-act="quickAtt" data-t="trip">출장</button><button class="btn sm" data-act="quickAtt" data-t="leave">휴가</button><button class="btn sm" data-act="quickAtt" data-t="overtime">시간외·휴일근무</button><button class="btn sm ghost" data-act="autoFillAtt">대체휴무 사유 복사</button></div>`;
     }
     return '';
+  }
+
+  // v1.11.0: 노트북(세로 900px 미만) 원문 틀에서는 전자결재 문서 본문이 150px 남짓만 보였다. 첨부 목록(약 170px)을 한 번 접어 본문을 두 배로 보이게 한다.
+  function roomyDocFrame(f, u) {
+    if (!/MicroModuleCode=ea/.test(u)) return;
+    let tries = 0;
+    const tick = () => {
+      if (!f.isConnected || S.pane.url !== u || ++tries > 20) return;
+      if (f.getBoundingClientRect().height >= 760) return;
+      try {
+        const acc = f.contentDocument && f.contentDocument.querySelector('#accordionSingle');
+        if (!acc) { setTimeout(tick, 300); return; }
+        if (/Accordion2_opened/.test(acc.className)) { const h = acc.querySelector('[class*="OBTAccordion2_accordion"]'); if (h) h.click(); }
+      } catch {}
+    };
+    if (typeof setTimeout === 'function') setTimeout(tick, 300);
   }
