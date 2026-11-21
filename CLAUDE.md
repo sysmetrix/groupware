@@ -32,7 +32,7 @@
 | L4 | 안전·데이터 경계(아래 파일) | 가장 높은 모델 | high~xhigh | 전체 하네스, 다른 모델의 읽기 전용 검토, 사람 확인 |
 | L5 | 설계, 평가, 릴리스 전 종합 검토 | 가장 높은 모델, 계획 모드 | xhigh | 승인 뒤 L2~L3로 내려 실행 |
 
-L4 파일(한 줄 수정이어도 L4): `src/live/wc/01-storage.js`, `19-draft-engine.js`, `20-recorder.js`, `21-governance.js`, `23-ai.js`, `31-chat-engine.js`, `33-chat-tools-act.js`, `src/live/collector.browser.js`, `src/live/ext/`, `scripts/live-build.mjs`.
+L4 파일(한 줄 수정이어도 L4): `src/live/wc/01-storage.js`, `19-draft-engine.js`, `19b-payment-goods.js`, `20-recorder.js`, `21-governance.js`, `23-ai.js`, `31-chat-engine.js`, `33-chat-tools-act.js`, `src/live/collector.browser.js`, `src/live/ext/`, `scripts/live-build.mjs`.
 
 하위 에이전트에 일을 넘길 때 이 표로 모델과 effort를 정한다. max effort와 다중 에이전트 전면 검토는 릴리스 묶음마다 한 번만 한다. 병렬로 쓰게 할 때는 파일 소유권 표를 먼저 만든다(`docs/design/home/00-CONTRACT.md` 방식).
 
