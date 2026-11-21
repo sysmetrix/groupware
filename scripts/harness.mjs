@@ -152,11 +152,11 @@ await stage('안전 규칙', async () => {
   for (const e of eps) if (/save|insert|update|delete|remove|submit|approve|send|regist|create|modify|apply/i.test(e)) fails.push(`읽기 전용 목록에 쓰기로 보이는 주소: ${e}`);
   // call('/주소', '/다른주소' ...) 처럼 인자가 오염된 호출 검출 (문자열 치환 사고 방지)
   for (const m of col.matchAll(/call\('(\/[\w/]+)',\s*'\//g)) fails.push('수집기 call 인자 오염: ' + m[1]);
-  // 쓰기 허용 목록은 자원 예약 한 개와 개인 ToDo 네 개(v1.17)뿐이어야 한다
-  const WRITE_EXPECT = ['/schres/rs121A06', '/kiss/APIHandler/prj001A01', '/kiss/APIHandler/prj001A02', '/kiss/APIHandler/prj001A03', '/kiss/APIHandler/prj001A07'];
+  // 쓰기 허용 목록은 자원 예약 한 개, 개인 ToDo 네 개(v1.17), 알림 읽음 표시 하나(v1.19.1)뿐이어야 한다
+  const WRITE_EXPECT = ['/schres/rs121A06', '/kiss/APIHandler/prj001A01', '/kiss/APIHandler/prj001A02', '/kiss/APIHandler/prj001A03', '/kiss/APIHandler/prj001A07', '/event/event02A03'];
   const wm = col.match(/const WRITE_ALLOWED = new Set\(\[([^\]]*)\]/);
   const wl = wm ? [...wm[1].matchAll(/'([^']+)'/g)].map(x => x[1]) : [];
-  if (wl.length !== WRITE_EXPECT.length || WRITE_EXPECT.some(e => !wl.includes(e))) fails.push('쓰기 허용 목록이 자원 예약과 개인 ToDo 네 개가 아님: ' + wl.join(','));
+  if (wl.length !== WRITE_EXPECT.length || WRITE_EXPECT.some(e => !wl.includes(e))) fails.push('쓰기 허용 목록이 자원 예약·개인 ToDo 네 개·알림 읽음 표시가 아님: ' + wl.join(','));
   for (const e of eps) if (WRITE_EXPECT.includes(e)) fails.push('쓰기 주소가 읽기 전용 목록에 있음: ' + e);
   // ToDo 고치기·완료·지우기는 반드시 내 ToDo 확인(todoOwned)을 거친다. 지우기는 사용자 동작이 있어야 한다.
   for (const fn of ['todoUpdate', 'todoSetDone', 'todoDelete']) { const body = (col.match(new RegExp(`async function ${fn}\\([\\s\\S]*?\\n  }\\n`)) || [''])[0]; if (!/await todoOwned\(/.test(body)) fails.push(`${fn}가 내 ToDo 확인(todoOwned)을 거치지 않음`); }

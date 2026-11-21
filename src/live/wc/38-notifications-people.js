@@ -1,7 +1,9 @@
 // GW 비서 · 그룹웨어 알림과 사람 찾기 (read-only until the user opens a compose screen)
   const NTF = {items: null, loading: false, error: '', filter: 'all', type: 'all', query: '', search: '', page: 1, at: '', seq: 0};
   const PEOPLE = {query: '', items: null, total: null, loading: false, error: '', seq: 0, tree: null, treeError: '', orgLoading: false, orgSeq: 0, org: '', orgNote: '', localFilter: ''};
-  const notificationLabel = type => ({EAPPROVAL:'전자결재', MAIL:'메일', BOARD:'게시판', RESOURCE:'자원', SCHEDULE:'일정', WORK:'업무관리'}[type] || type || '기타');
+  const notificationLabel = type => ({EAPPROVAL:'전자결재', MAIL:'메일', BOARD:'게시판', RESOURCE:'자원', SCHEDULE:'일정', WORK:'업무관리', HPD:'급여·인사', TALK:'대화', REPORT:'보고', KISS:'업무관리'}[type] || type || '기타');
+  // '[과접수도착] 발송처:…' → '과접수도착'. 메일은 머리글이 제목과 같아 빼고, 대괄호가 없으면 비운다.
+  const notificationTag = x => { const m = String(x?.head || '').match(/^\[([^\]]{1,20})\]/); return m && x.type !== 'MAIL' ? m[1].replace(/\s*알림$/, '') : ''; };
   function notificationTime(value) {
     const s = String(value || '');
     if (/^\d{12}/.test(s)) return s.slice(0,4)+'.'+s.slice(4,6)+'.'+s.slice(6,8)+' '+s.slice(8,10)+':'+s.slice(10,12);
@@ -43,7 +45,7 @@
     const d = new Date(), today = d.getFullYear() + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.' + String(d.getDate()).padStart(2, '0');
     const when = x => { const t = notificationTime(x.time); return /^\d{4}\.\d{2}\.\d{2} \d{2}:\d{2}/.test(t) ? (t.slice(0, 10) === today ? t.slice(11) : t.slice(5, 10).replace('.', '/')) : ''; };
     const row = ({x, i}) => {
-      const title = x.title || x.head || '(제목 없음)', meta = [notificationLabel(x.type), x.who || x.dept].filter(Boolean).join(' · ');
+      const title = x.title || x.head || '(제목 없음)', meta = [notificationLabel(x.type), notificationTag(x), x.who || x.dept].filter(Boolean).join(' · ');
       const act = notificationUrl(x) ? `data-act="bellOpen" data-i="${i}"` : 'data-act="nativeNotifications"';
       const hint = notificationUrl(x) ? '원문 열기' : '그룹웨어 알림 목록에서 보기';
       return `<button type="button" class="ntf-pi${x.read ? '' : ' unread'}" ${act} title="${esc(title)} · ${hint}"><i class="ntf-dot${x.read ? ' off' : ''}" aria-hidden="true"></i><span class="ntf-pc"><b>${esc(title)}</b><small>${x.read ? '' : '<span class="vh">안 읽음 · </span>'}${esc(meta)}</small></span><span class="ntf-pt">${esc(when(x))}</span></button>`;
@@ -107,9 +109,11 @@
   function openNotification(i) {
     if (currentKey !== getUserKey()) return;
     const x = NTF.items?.[i], url = notificationUrl(x); if (!url) return;
-    const wasUnread = !x.read; openUrl(url, {title:x.title || x.head || '알림', unread:wasUnread, what:'알림'});
-    // v1.10.0: 연 알림은 곧바로 숫자에서 뺀다
-    if (wasUnread) { x.read = true; if (typeof renderHead === 'function') renderHead(); if (S.view === 'notifications') renderMain(); }
+    const wasUnread = !x.read, opened = openUrl(url, {title:x.title || x.head || '알림', unread:wasUnread, what:'알림'});
+    // v1.10.0: 연 알림은 곧바로 숫자에서 뺀다. v1.19.1: 열기를 취소했으면 그대로 두고, 열었으면 그룹웨어에도 알림 읽음을 남긴다.
+    if (!wasUnread || opened === false) return;
+    x.read = true; if (typeof renderHead === 'function') renderHead(); if (S.view === 'notifications') renderMain();
+    if (x.id && typeof GW.readAlert === 'function') GW.readAlert(x.id).catch(() => { if (typeof toast === 'function') toast('그룹웨어 알림 목록에는 아직 안 읽음으로 남아 있을 수 있습니다.'); });
   }
   // 홈페이지 기준 공식 순서다. 이름을 비슷하게 고쳐 맞추지 않고, GW의 정확한 정식 명칭·키만 연결한다.
   const PEOPLE_OFFICIAL_ORG = [

@@ -310,6 +310,7 @@
     todoCreate: async ({title, due = '', contents = '', important = false, parent = ''} = {}) => { await wait(150); const t = {todoSeq: 'td' + (++tdSeq), todoName: String(title), endDate: due, startDate: due, todoStatus: '0', importDegree: important ? '1' : '0', contents, createDate: ymd8(0), children: []}; if (parent) { const p = TODOS.find(x => x.todoSeq === parent); if (p) p.children.push({...t, todoLevel: 2}); } else TODOS.unshift(t); return {ok: true, id: t.todoSeq}; },
     todoUpdate: async (id, p = {}) => { await wait(120); const t = tdAll().find(x => x.todoSeq === id); if (!t) throw new Error('없음'); if ('title' in p) t.todoName = p.title; if ('due' in p) { t.endDate = p.due; t.startDate = p.due; } if ('contents' in p) t.contents = p.contents; if ('important' in p) t.importDegree = p.important ? '1' : '0'; return {ok: true, id}; },
     todoSetDone: async (id, done = true) => { await wait(100); const t = tdAll().find(x => x.todoSeq === id); if (!t) throw new Error('없음'); t.todoStatus = done ? '2' : '0'; t.completeDate = done ? ymd8(0) : ''; return {ok: true, id, done}; },
+    readAlert: async id => { await wait(50); return {ok: true, id: String(id || '')}; },
     todoDelete: async id => { await wait(100); const i = TODOS.findIndex(x => x.todoSeq === id); if (i >= 0) TODOS.splice(i, 1); else for (const t of TODOS) t.children = t.children.filter(c => c.todoSeq !== id); return {ok: true, id}; },
     todoLink: id => '#demo-todo-' + id,
   };
