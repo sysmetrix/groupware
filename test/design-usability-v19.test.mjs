@@ -210,3 +210,8 @@ test('v1.15.0 실제 실행 점검: 나에게 메일, 시제, 인사말, 내 일
   assert.match(hab, /mails\.size === 1/);
   assert.match(hab, /OBTAutoCompleteChips_uncorrect/);
 });
+test('v1.15.1: 자원 현황 답의 화면 이동은 그 자원·날짜로, 여러 날 예약은 기간으로 표시', () => {
+  assert.match(read('wc/32-chat-tools-read.js'), /view: 'resource', v: `\$\{car\.resSeq\},\$\{d8\}`/);
+  assert.match(read('wc/30-chat-ui.js'), /view === 'resource' && \/\^\[\\w-\]\+,\\d\{8\}\$\/\.test\(param/);
+  assert.match(read('wc/24-resource.js'), /b\.end\.slice\(0, 8\) !== b\.start\.slice\(0, 8\)/);
+});
