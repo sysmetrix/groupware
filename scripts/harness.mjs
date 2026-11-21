@@ -169,7 +169,7 @@ await stage('안전 규칙', async () => {
   for (const f of ['src/live/collector.browser.js', 'src/live/workcenter.browser.js', ...(await fs.readdir(path.join(root, 'src/live/wc'))).map(n => 'src/live/wc/' + n)]) {
     for (const x of (await read(f)).matchAll(/https?:\/\/([\w.-]+)/g)) hosts.add(x[1]);
   }
-  const okHosts = /^(gw\.bwyf\.or\.kr|api\.github\.com|github\.com|www\.w3\.org|localhost|127\.0\.0\.1|generativelanguage\.googleapis\.com|aistudio\.google\.com|calendar\.google\.com|sysmetrix\.github\.io)$/;
+  const okHosts = /^(gw\.bwyf\.or\.kr|api\.github\.com|github\.com|www\.w3\.org|localhost|127\.0\.0\.1|generativelanguage\.googleapis\.com|aistudio\.google\.com|calendar\.google\.com|sysmetrix\.github\.io|cdn\.jsdelivr\.net)$/; // cdn.jsdelivr.net: Pretendard 글꼴 파일만 받는다(02-shell.js, 자료 전송 없음)
   for (const h of hosts) if (!okHosts.test(h)) warns.push(`허용 목록에 없는 외부 주소: ${h}`);
   // 글자 크기 12px 미만 금지 (접근성)
   const css = await read('src/live/wc.css');

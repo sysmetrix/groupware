@@ -94,7 +94,7 @@
 운영 규칙:
 
 - **레벨은 파일 크기가 아니라 닿는 경계로 정한다.** 아래 파일을 건드리면 한 줄 수정이어도 L4다.
-  `src/live/wc/01-storage.js`, `19-draft-engine.js`, `20-recorder.js`, `21-governance.js`, `23-ai.js`, `31-chat-engine.js`, `33-chat-tools-act.js`, `src/live/collector.browser.js`, `src/live/ext/`, `scripts/live-build.mjs`(확장의 `mount.js`와 배포 묶음을 만든다).
+  `src/live/wc/01-storage.js`, `19-draft-engine.js`, `19b-payment-goods.js`, `20-recorder.js`, `21-governance.js`, `23-ai.js`, `31-chat-engine.js`, `33-chat-tools-act.js`, `src/live/collector.browser.js`, `src/live/ext/`, `scripts/live-build.mjs`(확장의 `mount.js`와 배포 묶음을 만든다).
 - **독립 검토는 작성한 모델과 다른 모델로 한다.** L4와 릴리스 전 검토에만 쓰고, 검토자는 읽기 전용으로 둔다.
 - **max effort와 다중 에이전트 전면 검토는 릴리스 묶음마다 한 번만 한다.** 버전마다 돌리면 수정 버전이 또 생긴다.
 - **병렬 작성에는 파일 소유권 표를 먼저 만든다**([홈 구현 계약](../design/home/00-CONTRACT.md) 방식). 버전, 업데이트 내역, `16-events.js`는 메인 에이전트만 만진다.
