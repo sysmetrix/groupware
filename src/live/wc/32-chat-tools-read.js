@@ -414,11 +414,11 @@
         const mon = chatAddDays(t0, -dow - (a.week === 'last' ? 7 : 0)), end = a.week === 'last' ? chatAddDays(mon, 6) : t0;
         const sub = await GW.submittedRange({size: 100, from: mon.replace(/-/g, ''), to: end.replace(/-/g, '')});
         const docs = sub.docs || [];
-        const txt = R.weeklyReport({submitted: docs, receipts: [], me: `${S.raw.principal?.deptName || ''} ${S.raw.principal?.name || ''}`.trim(), from: sub.from, to: sub.to});
+        const txt = R.weeklyReport({submitted: docs, receipts: [], me: `${S.raw.principal?.deptName || ''} ${S.raw.principal?.name || ''}`.trim(), from: sub.from, to: sub.to, extraLines: typeof todoWeeklyFor === 'function' ? todoWeeklyFor(sub.from, sub.to) : []});
         const span = `${a.week === 'last' ? '지난주' : '이번 주'}(${+mon.slice(5, 7)}/${+mon.slice(8, 10)}~${+end.slice(5, 7)}/${+end.slice(8, 10)})`;
         const cards = [...(a.draft && docs.length ? [{type: 'note', tone: 'info', text: txt}] : []), {type: 'nav', label: '보고서 화면에서 초안 편집', view: 'report'}];
         if (a.draft && docs.length) copyText(txt);
-        return {ok: true, text: `${span} 상신 문서는 ${docs.length}건입니다.${a.draft && docs.length ? ' 아래 초안을 복사해 두었습니다. 상신 문서 목록만으로 만든 초안이라 회의·외부 활동 같은 실적은 직접 보태야 합니다.' : ''}\n` + (a.draft ? '' : docs.slice(0, 6).map(d => `• ${d.title} (${d.status || ''})`).join('\n')), llm: txt.slice(0, 1200), data: {count: docs.length, from: mon, to: end}, cards};
+        return {ok: true, text: `${span} 상신 문서는 ${docs.length}건입니다.${a.draft && docs.length ? (/○ 처리한 할 일/.test(txt) ? ' 아래 초안을 복사해 두었습니다. 상신 문서와 끝낸 내 할 일로 만든 초안이라 회의·외부 활동 같은 실적은 직접 보태야 합니다.' : ' 아래 초안을 복사해 두었습니다. 상신 문서 목록만으로 만든 초안이라 회의·외부 활동 같은 실적은 직접 보태야 합니다.') : ''}\n` + (a.draft ? '' : docs.slice(0, 6).map(d => `• ${d.title} (${d.status || ''})`).join('\n')), llm: txt.slice(0, 1200), data: {count: docs.length, from: mon, to: end}, cards};
       } catch (e) { return {ok: false, text: '주간 실적을 읽지 못했습니다: ' + String(e.message || e).slice(0, 80)}; }
     },
   });

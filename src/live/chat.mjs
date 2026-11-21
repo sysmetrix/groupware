@@ -270,6 +270,10 @@ export function chatIntent(text, now = new Date(), _nested = false) {
   if (/(보냈는지|보냈나|답장했는지|회신했는지)/.test(t)) return make('check_sent_reply', {query: t.replace(/(보냈는지|보냈나|답장했는지|회신했는지|보낸메일함|확인|해줘|줘)/g, ' ').replace(/\s+/g, ' ').trim()});
   // ---------- v0.65: 자동화·브리핑·전 영역 조회 (실행 동사가 있으면 아래 실행 규칙에 맡긴다) ----------
   const doAct = /신청|올려|올릴|등록|내줘|내 줘|써줘|써 줘|잡아|예약해|작성|보내줘|보내 줘/.test(t);
+  // v1.17: 내 할 일(그룹웨어 ToDo) 조회와 예상 집행률. 추가는 아래 add_todo 규칙이 맡는다.
+  if (/(내\s*할\s*일|투두|to\s*-?do)/i.test(t) && !/(추가|등록|넣어|적어|메모해)/.test(t)) return make('list_todos', {scope: /(밀린|지난|늦은|오늘까지|오늘)/.test(t) ? 'due' : /(이번\s*주|7일|일주일)/.test(t) ? 'week' : /중요/.test(t) ? 'important' : /(끝낸|완료한|해치운)/.test(t) ? 'done' : /(예산|집행\s*계획)/.test(t) ? 'plan' : 'open'});
+  if (/(예상|전망|예측|연말에|될까|될지)/.test(t) && /집행/.test(t) && !doAct) return make('budget_forecast', {project: t.slice(0, 60)});
+  if (/집행\s*계획/.test(t) && /(보여|알려|목록|어떻게|현황|뭐)/.test(t) && !doAct) return make('list_todos', {scope: 'plan'});
   // v0.91.0: 자유 질문 — 놓치기 쉬운 일·휴가 전 처리, 신청 횟수, ○○ 건 마감·처리 방법, 부서 부재, 근무 끝난 뒤 할 일
   // v0.93.0: 자유 질문 2차 — 예산 과목 사용액, 문서 금액, 연차 쓴 날, 결재 기다리는 내 신청, 공지 관련성
   if (/(수당|여비|출장비|운영비|사업비|보상금|홍보비|인건비|용역비|구입비|사무용품|예산|과목|[가-힣]{1,6}비(?=\s|$|[를을은는이가도]))/.test(t) && /(얼마|썼|쓴|남았|남은|잔액|집행)/.test(t) && !/(문서|공문|기안|결의서)/.test(t) && !doAct) return make('get_budget', {project: t.replace(/(이번|지난|저번)\s*달|이번\s*년|올해|지금까지/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60), ...(/(이번|지난|저번)\s*달/.test(t) ? {month: true} : {})});
@@ -358,11 +362,12 @@ export function chatIntent(text, now = new Date(), _nested = false) {
   if (/출장/.test(t) && /신청|올려|내줘|내 줘|가야|갈래|갑니다|가려/.test(t) && !/언제|누가|있어|있나/.test(t)) return make('prepare_trip_request', {date: dt ? dt.date : '', end_date: dt && dt.end ? dt.end : '', scope: /관외/.test(t) ? '관외' : '관내'});
   if (/(연차|반차|휴가|대체휴가|보상휴가|쉬고|쉴래|쉬려)/.test(t) && (want || /쉬고|쉴래|쉬려|쓸래|쓸게|쓰고|쓰려|내고|낼래/.test(t)) && !/잔여|남은|몇 ?일|몇 개|누가|언제 가/.test(t)) return make('prepare_leave_request', {date: dt ? dt.date : '', end_date: dt && dt.end ? dt.end : '', kind: /대체/.test(t) ? '대체휴가' : /보상/.test(t) ? '보상휴가' : /반차/.test(t) ? (/오후/.test(t) ? '오후반차' : '오전반차') : '연차'});
   if (/(결과보고|계획서|운영계획|기안|지급 ?건의|물품)/.test(t) && /(작성|써|만들|기안|시작|올려)/.test(t)) return make('prepare_draft', {kind: /결과/.test(t) ? 'result' : /계획/.test(t) ? 'plan' : /지급|지출/.test(t) ? 'payment' : /물품/.test(t) ? 'goods' : 'result', hint: ''});
-  if (/(할 ?일|메모|리마인드|알려줘야)/.test(t) && /(추가|등록|넣어|적어|메모)/.test(t)) return make('add_todo', {title: t.replace(/(할 ?일|추가|등록|넣어줘|넣어 줘|해줘|해 줘|메모|적어줘|적어 줘)/g, ' ').replace(/\s+/g, ' ').trim(), due: dt ? dt.date : ''});
+  // v1.17: 할 일이 그룹웨어 ToDo로 저장되므로 '메모'라는 낱말만으로는 추가하지 않는다(조회·찾기 말은 제외)
+  if (/(할 ?일|메모|리마인드|알려줘야)/.test(t) && /(추가|등록|넣어|적어\s*줘|적어\s*둬|적어\s*놔|메모해)/.test(t) && !/(보여|어디|찾아|찾을|열어|있어|있나|뭐였|뭐야)/.test(t)) return make('add_todo', {title: t.replace(/(할 ?일(?:으?로)?|추가|등록|넣어줘|넣어 줘|해줘|해 줘|메모|적어줘|적어 줘|(?:오늘|내일|모레)\s*까지)/g, ' ').replace(/\s+/g, ' ').trim(), due: dt ? dt.date : ''});
   // --- 읽기 ---
   if (/(구글|캘린더)/.test(t) && /(동기화|올려|올릴|등록|연동|반영)/.test(t) && !/(신청|예약)/.test(t)) return make('get_gcal_sync', {});
   if (/(열어|이동|가줘|가 줘|보여|띄워|켜줘|화면)/.test(t) && !/(일정|스케줄|급한|할 ?일|누가|언제)/.test(t) && !(/예산/.test(t) && /(집행|잔액|현황|얼마|남았|남은)/.test(t) && !/화면/.test(t))) { for (const [re, view] of CH_VIEWS) if (re.test(t)) return make('open_view', {view}); }
-  if (/(어디\s*있|어딨)/.test(t) && /(문서|건의|공문|보고|계획서|결의|파일|견적|자료|서류)/.test(t)) return make('search_documents', {query: t.replace(/(어디\s*있[가-힣]*|어딨[가-힣]*|\?)/g, ' ').replace(/\s+/g, ' ').trim(), scope: /메일/.test(t) ? 'mail' : 'all'});
+  if (/(어디\s*있|어딨)/.test(t) && /(문서|건의|공문|보고|계획서|결의|파일|견적|자료|서류|메모)/.test(t)) return make('search_documents', {query: t.replace(/(어디\s*있[가-힣]*|어딨[가-힣]*|\?)/g, ' ').replace(/\s+/g, ' ').trim(), scope: /메일/.test(t) ? 'mail' : 'all'});
   const name = chatExtractName(t);
   // 행사·사업명도 한글 2~4자이므로 'OO 일정'만으로 직원이라고 단정하지 않는다.
   // 직함/호칭이나 명시적인 근태 표현이 없으면 모델에 문맥 해석을 맡긴다.

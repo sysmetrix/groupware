@@ -323,6 +323,8 @@
         if (d.timeline.length) cards.push({type: 'timeline', title: '오늘 일정', items: R.homeTimelineCompact(d.timeline, 6).rows});
         cards.push(...((dl.cards) || []));
       }
+      // v1.17: 내 할 일(그룹웨어 ToDo) 줄과 카드
+      try { const tb = typeof todoBriefLines === 'function' ? await todoBriefLines(kind) : null; if (tb) { lines.splice(1, 0, ...tb.lines); if (tb.card) cards.unshift(tb.card); } } catch (e) { logError('brief.todo', e.message); }
       if (d.taskGaps) lines.push('확인 제한: 일부 자료를 읽지 못해 확인된 범위만 알려 드립니다.');
       return {ok: true, text: lines.join('\n'), llm: lines.join(' '), data: {kind, urgent: d.urgent, total, deadlines_7d: dlN, events_today: d.scheduleUnknown ? null : d.events.length, items: top.map(x => ({itemId: x.key, title: x.title, area: x.area}))}, cards: cards.slice(0, 4)};
     },

@@ -113,7 +113,7 @@ ${res && !s.busy ? [
     return `${pgh('할 일', '카드를 끌어 계획 칸을 옮깁니다 · 실제 기한은 그대로')}
 <div class="bar"><input class="inp grow" id="tdTitle" placeholder="새 할 일을 쓰고 Enter" aria-label="새 할 일"><input class="inp" id="tdDue" placeholder="기한 (예: 11/12)" style="width:140px" aria-label="기한"><button class="btn primary" data-act="addTodo">${ic('plus')}추가</button></div>
 <div class="board">${BUCKETS.map(([b, n]) => { const cs = cards.filter(c => c.b === b); return `<div class="col" ${b === 'wait' ? '' : `data-drop="${b}"`}><div class="col-h"><span>${n}</span><span class="muted">${cs.length}</span></div>${cs.map(c => `<div class="card ${c.kind} ${c.pri || ''}" draggable="${c.b !== 'wait'}" data-drag="${esc(c.id)}" data-act="boardCard" data-k="${esc(c.id)}" tabindex="0" title="누르면 내용 보기 · 계획 이동 버튼으로 칸 변경"><div>${esc(c.title)}</div><div class="d">${esc(c.sub)}</div>${c.b !== 'wait' ? `<button class="btn sm" data-act="boardMove" data-k="${esc(c.id)}" aria-label="${esc(c.title)} 계획 이동">계획 이동</button>` : ''}${c.kind === 'todo' ? `<div class="acts" style="margin-top:6px"><button class="btn sm" data-act="todoEdit" data-id="${esc(c.id.slice(5))}">고치기</button><button class="btn sm danger" data-act="todoDel" data-id="${esc(c.id.slice(5))}">지우기</button></div>` : ''}</div>`).join('') || `<div class="hint">${b === 'wait' ? '결재 대기 항목이 없습니다' : '여기로 끌어다 놓으세요'}</div>`}</div>`; }).join('')}</div>
-<p class="muted" style="margin-top:12px">파란 줄 카드는 그룹웨어 업무라 그룹웨어에서 처리해야 사라집니다. 노란 줄 카드는 내가 적은 할 일이며 이 PC에만 저장됩니다.</p>`;
+<p class="muted" style="margin-top:12px">파란 줄 카드는 그룹웨어 업무라 그룹웨어에서 처리해야 사라집니다. 노란 줄 카드는 내가 적은 할 일입니다${S.todosGw ? '(그룹웨어 개인 ToDo에 저장, 칸 이동은 이 PC의 계획 표시)' : '(이 PC에만 저장)'}.</p>`;
   }
   function boardMove(id) {
     const t = id.startsWith('todo:') ? S.todos.find(x => 'todo:' + x.id === id) : S.a.actions.find(x => x.key === id);
@@ -127,6 +127,12 @@ ${res && !s.busy ? [
     const t = id.startsWith('todo:') ? S.todos.find(x => 'todo:' + x.id === id) : null;
     const x = t ? null : S.a.actions.find(x => x.key === id);
     if ((!t && !x) || (x && bucketOfAction(x) === 'wait')) return;
+    if (t && /^td\d+$/.test(t.id) && typeof todoToggle === 'function') {
+      // 그룹웨어 ToDo: '끝냄' 칸은 완료로 저장, 다른 칸은 이 PC의 계획 표시만 바꾼다(기한은 그대로)
+      if (bucket === 'done') { delete S.plan[id]; saveLocal(); todoToggle(t.id, true).then(r => toast(r.ok ? '끝냄으로 표시했습니다(그룹웨어 ToDo 완료).' : r.text)); return; }
+      if (t.status === 'done') todoToggle(t.id, false);
+      S.plan[id] = bucket; saveLocal(); render(); toast(`"${BUCKET_NAME[bucket]}" 칸으로 옮겼습니다. 실제 기한은 유지됩니다.`); return;
+    }
     pushUndo('보드 이동');
     if (t) {
       t.status = bucket === 'done' ? 'done' : 'todo';

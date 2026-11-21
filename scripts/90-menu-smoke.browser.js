@@ -9,7 +9,7 @@
     ['report', '보고·현황'], ['notifications', '통합알림'], ['people', '조직·사람'], ['settings', '설정'],
   ];
   const SUBTABS = [
-    ['today', 'board', '보드'], ['calendar', 'resource', '자원 예약'], ['calendar', 'gcal', '구글 일정'],
+    ['today', 'mytodo', '내 할 일'], ['today', 'board', '보드'], ['calendar', 'resource', '자원 예약'], ['calendar', 'gcal', '구글 일정'],
     ['calendar', 'gsync', '구글 동기화'], ['search', 'docs', '문서 찾기 (기안·접수·발송)'], ['report', 'overview', '현황 차트'],
   ];
   const wait = ms => new Promise(resolve => setTimeout(resolve, ms));

@@ -332,7 +332,7 @@ export function planFacts(body = '') {
 }
 // Plain-text weekly report draft (주간 업무 실적) from my submitted documents and receipts.
 const PERSONAL_FORMS = /연차휴가신청서|출장신청서|근무일대체신청서|연장근무신청서|시간외근무신청서/;
-export function weeklyReport({submitted = [], receipts = [], me = '', from = '', to = '', now = new Date()} = {}) {
+export function weeklyReport({submitted = [], receipts = [], me = '', from = '', to = '', now = new Date(), extraLines = []} = {}) {
   const md = s => s ? `${Number(s.slice(4, 6))}.${Number(s.slice(6, 8))}.` : '';
   const clean = t => String(t || '').replace(/^\(\d{2}-\d{2}\)/, '').trim();
   const isPersonal = d => PERSONAL_FORMS.test(d.form || '') || (/^\(\d{2}-\d{2}\)/.test(d.title || '') && /휴가|외출|반차|출장|시간외|대체|근무일대체|연장근무|조퇴/.test(d.title || ''));
@@ -355,6 +355,7 @@ export function weeklyReport({submitted = [], receipts = [], me = '', from = '',
     if (receipts.length > 15) lines.push(`  - 외 ${receipts.length - 15}건`);
   }
   if (personal.length) { const kinds = new Map(); for (const d of personal) { const k = clean(d.title).replace(/\s*\([^)]*\)\s*$/, '').replace(/신청$/, '') || '기타'; kinds.set(k, (kinds.get(k) || 0) + 1); } lines.push('', `○ 복무 신청 ${personal.length}건: ${[...kinds].map(([k, n]) => n > 1 ? `${k} ${n}건` : k).join(', ')}`); }
+  if (Array.isArray(extraLines) && extraLines.length) lines.push('', ...extraLines.map(String)); // v1.17: 끝낸 내 할 일(그룹웨어 ToDo)
   lines.push('', `※ 그룹웨어 목록 기준 자동 초안(${kstNow(now).date}). 제출 전 내용을 확인·보완하세요.`);
   return lines.join('\n');
 }

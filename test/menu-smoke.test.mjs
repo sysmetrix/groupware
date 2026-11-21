@@ -9,7 +9,7 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const scriptPath = path.join(root, 'scripts', '90-menu-smoke.browser.js');
 const viewsPath = path.join(root, 'src', 'live', 'wc', '05-views.js');
 const sidebar = ['home', 'today', 'approval', 'mail', 'calendar', 'attendance', 'search', 'budget', 'report', 'notifications', 'people', 'settings'];
-const subtabs = ['board', 'resource', 'gcal', 'gsync', 'docs', 'overview'];
+const subtabs = ['board', 'mytodo', 'resource', 'gcal', 'gsync', 'docs', 'overview'];
 
 test('work90 menu smoke is syntactically valid and read-only', async () => {
   const source = await fs.readFile(scriptPath, 'utf8');
@@ -21,7 +21,7 @@ test('work90 menu smoke is syntactically valid and read-only', async () => {
   }
 });
 
-test('work90 menu smoke matches the 12 sidebar and six embedded-view contracts', async () => {
+test('work90 menu smoke matches the 12 sidebar and seven embedded-view contracts', async () => {
   const views = await fs.readFile(viewsPath, 'utf8');
   const declared = [...views.matchAll(/\{id: '([^']+)', label: '([^']+)'\}/g)].map(match => match[1]);
   const parentBlock = views.match(/const VIEW_PARENT = \{([^}]+)\}/)?.[1] ?? '';
@@ -29,5 +29,5 @@ test('work90 menu smoke matches the 12 sidebar and six embedded-view contracts',
   const visibleSidebar = declared.filter(id => !parents[id]);
   assert.deepEqual(visibleSidebar, sidebar);
   assert.deepEqual(Object.keys(parents), subtabs);
-  assert.deepEqual(parents, {board: 'today', resource: 'calendar', gcal: 'calendar', gsync: 'calendar', docs: 'search', overview: 'report'});
+  assert.deepEqual(parents, {board: 'today', mytodo: 'today', resource: 'calendar', gcal: 'calendar', gsync: 'calendar', docs: 'search', overview: 'report'});
 });

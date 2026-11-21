@@ -58,6 +58,7 @@
       if (t.id === 'cmdPrompt') { e.preventDefault(); executeCommandWorkflow(t.value); return; }
       if (t.id === 'gsearch') { e.preventDefault(); const v = t.value.trim(); if (!v) return; if (R.looksLikeCommand(v) && allowed('aiConsole')) { t.blur(); t.value = ''; go('home'); setTimeout(() => chatSend(v), 60); } else { t.blur(); S.search.kw = v; runSearch(); } return; }
       if (t.id === 'aiQ') { e.preventDefault(); aiAsk(); return; }
+      if (/^(tdQuick|tdeSub|tdeLinkQ)$/.test(t.id || '') && typeof todoEnter === 'function') { e.preventDefault(); todoEnter(t); return; }
       if (/^ask_\d+$/.test(t.id || '')) { e.preventDefault(); const nx = $('#ask_' + (Number(t.id.slice(4)) + 1)); if (nx) nx.focus(); else $('#askOk')?.click(); return; }
       if (t.id === 'aiKey') { e.preventDefault(); aiSaveKey(); return; }
       else if (t.id === 'sq') { e.preventDefault(); searchFromInputs(); }
