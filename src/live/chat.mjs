@@ -232,8 +232,10 @@ export function chatIntent(text, now = new Date(), _nested = false) {
   if (/^(고마워|고맙|감사|땡큐|thx|thanks|thank you|수고)/i.test(t) && t.length <= 20) return make('small_talk', {kind: 'thanks'});
   if (/^(응|어|네|넹|넵|예|ㅇㅇ|ㅇㅋ|오케이|ok|okay|그래|알겠어|알았어|좋아)[.!?\s]*$/i.test(t)) return make('small_talk', {kind: 'ack'});
   if (/(방금|아까)\s*(?:거|것|한\s*거|건)?\s*(?:취소|되돌려|없던\s*일|무르)/.test(t)) return make('small_talk', {kind: 'undo'});
-  { const mm = t.match(/^([가-힣]{2,4}?)\s*(?:팀장|과장|차장|부장|실장|주임|주무관|선생|대리|사원|님)*\s*(?:한테|에게|께)\s+(.{3,80}?)(?:다고|라고|이라고|고)\s*메일\s*(?:좀\s*)?(?:보내|써|작성)/);
-    if (mm && !CH_STOP.has(mm[1])) { const r = chatMailFromPoint(mm[2], now); return make('compose_mail', {to: mm[1], subject: r.subject, body: r.body}); } }
+  { const sm = t.match(/^(?:(?:나|저)\s*(?:한테|에게)|내게)\s+["“'‘]?(.{2,200}?)["”'’]?\s*(?:이라고|라고|다고)\s*메일\s*(?:좀\s*)?(?:보내|써|작성)/);
+    if (sm) { const q = /^["“'‘]/.test(t.replace(/^(?:(?:나|저)\s*(?:한테|에게)|내게)\s+/, '')); const r = q ? {subject: '[메모] ' + sm[1].replace(/[.!?]+$/, '').slice(0, 40), body: /[.!?]$/.test(sm[1]) ? sm[1] : sm[1] + '.'} : chatMailFromPoint(sm[1], now); return make('compose_mail', {to: '나', subject: r.subject, body: r.body}); } }
+  { const mm = t.match(/^([가-힣]{2,4}?)\s*(?:팀장|과장|차장|부장|실장|주임|주무관|선생|대리|사원|님)*\s*(?:한테|에게|께)\s+(.{3,80}?)(다고|라고|이라고|고)\s*메일\s*(?:좀\s*)?(?:보내|써|작성)/);
+    if (mm && !CH_STOP.has(mm[1])) { const r = chatMailFromPoint(mm[3] === '다고' && /[한된]$/.test(mm[2]) ? mm[2] + '다' : mm[2], now); return make('compose_mail', {to: mm[1], subject: r.subject, body: r.body}); } }
   // v1.2.0: 찾고 확인하기 — 보낸 메일, ○○한테 온 메일, 메일 언제 왔어, 문서 찾기, 신청 결과, 명단, 담당자, 퇴근 시각
   if (/(내가|제가|내)?\s*보낸\s*(메일|편지)|보낸\s*메일함/.test(t) && !/(답장|회신)\s*(했|보냈)|보냈는지|보냈나/.test(t) && !/[가-힣]{2,4}\s*(?:팀장|과장|차장|부장|실장|주임|주무관|선생|대리|사원|님)*\s*(?:이|가|께서|에서)\s*보낸/.test(t.replace(/(내가|제가)\s*보낸/, ''))) { const q = t.replace(/(다다음|다음|이번|지난)\s*주|오늘|어제|그제|\d{1,2}\s*월\s*\d{1,2}\s*일|\d{1,2}[/.]\d{1,2}|내가|제가|내|보낸\s*메일함?|보낸\s*편지|메일|중에|중|보여\s*줘|알려\s*줘|목록|있어|뭐야|들어간|들어있는|포함된|있는|거|것|[?.!]/g, ' ').replace(/\s+/g, ' ').trim(); return make('list_sent_mail', {...(dt ? {date: dt.date, end: dt.end || dt.date} : {}), ...(q.length >= 2 ? {query: q} : {})}); }
   { const fm = t.match(/([가-힣]{2,4}?)\s*(?:팀장|과장|차장|부장|실장|주임|주무관|선생|대리|사원|님)*\s*(?:한테서|한테|에게서|께서|이|가)\s*(?:온|보낸|준)\s*(?:메일|편지)/); if (fm && !/^(내가|제가|누가|어디|오늘|어제)$/.test(fm[1]) && !CH_STOP.has(fm[1])) return make('list_mail', {filter: 'recent', from: fm[1], ...(dt && !dt.end ? {date: dt.date} : {})}); }
@@ -670,9 +672,11 @@ export function chatMailFromPoint(point, now = new Date()) {
   const josa = w => /[가은는을를]$|[가-힣]이$/.test(w) && w.length > 2 ? w : w + ((w.charCodeAt(w.length - 1) - 0xac00) % 28 ? '이' : '가');
   let body;
   if (/(부탁|요청)\s*한$|(부탁|요청)\s*하는$/.test(x)) body = stem.replace(/\s*(부탁|요청)$/, '') + ' 부탁드립니다.';
+  else if (/한다$/.test(x)) body = stem + '합니다.';
+  else if (/된다$/.test(x)) body = stem + '됩니다.';
   else if (/(됐|되었)$/.test(x)) body = stem.replace(/(\S+)\s+(\S+)$/, (m, n, v) => josa(n) + ' ' + v) + (/\s/.test(stem) ? '' : '') + '되었습니다.';
   else if (/(했|한)$/.test(x)) body = stem + '했습니다.';
-  else body = /(니다|요)$/.test(x) ? x + '.' : x + '는 점 알려드립니다.';
+  else body = /(니다|요)$/.test(x) ? x + '.' : /다$/.test(x) ? x + '는 점 알려드립니다.' : x + '입니다.'; // v1.15.0: '테스트라고' 같은 명사는 '테스트입니다.'
   return {subject: '[안내] ' + stem.replace(/\s*(부탁|요청)$/, '').slice(0, 40), body: body.replace(/\s+/g, ' ')};
 }
 
