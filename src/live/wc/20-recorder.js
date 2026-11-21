@@ -277,7 +277,7 @@
     m.unshift({version: '1.0', id: 'm' + Date.now().toString(36), name, createdAt: Date.now(), vars: {}, steps});
     macroSave(m);
     const saved = macroLoad().some(x => x.id === m[0].id); // 실제로 다시 읽혀야 저장된 것
-    if (!saved) { toast(`“${name}”을(를) 저장하지 못했습니다. 기록은 이 화면을 닫지 않는 동안 보관됩니다.`); openRecorder(); return; }
+    if (!saved) { toast(`“${name}”${typeof R === 'object' && R && typeof R.cuJosa === 'function' ? R.cuJosa(String(name), '을를').slice(-1) : '을(를)'} 저장하지 못했습니다. 기록은 이 화면을 닫지 않는 동안 보관됩니다.`); openRecorder(); return; }
     pendingRecording = null;
     toast(`“${name}” ${steps.length}단계를 저장했습니다.`);
     openRecorder();

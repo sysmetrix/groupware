@@ -190,10 +190,10 @@
   }
   function govDel(k) {
     const lab = (DATA_LABEL[k] || [k])[0];
-    if (!confirm(`“${lab}”을(를) 지울까요? 되돌릴 수 없습니다.`)) return;
+    if (!confirm(`“${lab}”${typeof R === 'object' && R && typeof R.cuJosa === 'function' ? R.cuJosa(String(lab), '을를').slice(-1) : '을(를)'} 지울까요? 되돌릴 수 없습니다.`)) return;
     store.del(k);
     if (k === 'weekly') S.weekly = ''; else if (k === 'errors') S.errors = []; else if (k === 'routing') S.routing = null; else if (k === 'forms') S.forms = null; else if (k === 'history') S.history = [];
-    if (k === 'macros') toast('기록기 기록을 지웠습니다.'); else toast(`${lab}을(를) 지웠습니다.`);
+    if (k === 'macros') toast('기록기 기록을 지웠습니다.'); else toast(`${lab}${typeof R === 'object' && R && typeof R.cuJosa === 'function' ? R.cuJosa(String(lab), '을를').slice(-1) : '을(를)'} 지웠습니다.`);
     openDataCenter();
   }
   function govExportAudit() {

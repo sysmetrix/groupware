@@ -34,7 +34,7 @@
     if (R.chatAutoDue(rule, Date.now())) rule.last = R.kstNow(new Date()).date;
     list.push(rule);
     if (autoSave(list) === false) return {ok: false, text: '저장 공간이 부족해 자동화를 저장하지 못했습니다.'};
-    return {ok: true, rule, text: `자동화 “${rule.name}”을(를) 등록했습니다. ${R.chatScheduleLabel(rule.days, rule.time)}에 실행합니다.`};
+    return {ok: true, rule, text: `자동화 “${rule.name}”${typeof R === 'object' && R && typeof R.cuJosa === 'function' ? R.cuJosa(String(rule.name), '을를').slice(-1) : '을(를)'} 등록했습니다. ${R.chatScheduleLabel(rule.days, rule.time)}에 실행합니다.`};
   }
   const autoCardRefresh = () => { try { if (S.view === 'home' && typeof homePartialRefresh === 'function') homePartialRefresh(); } catch (e) { logError('auto.card', e.message); } };
   let autoBusy = false;
@@ -120,7 +120,7 @@
   HOME_ACTS.autoPreset = (el, v) => { const p = AUTO_PRESETS.find(x => x.id === v); if (!p) return; const r = autoAdd(p); toast(r.text); autoCardRefresh(); };
   HOME_ACTS.autoToggle = (el, v) => { const list = autoList(), r = list.find(x => x.id === v); if (!r) return; r.on = r.on === false; if (r.on && R.chatAutoDue(r, Date.now())) r.last = R.kstNow(new Date()).date; autoSave(list); toast(`“${r.name}” 자동 실행을 ${r.on ? '켰습니다' : '껐습니다'}.`); autoCardRefresh(); };
   HOME_ACTS.autoRun = (el, v) => { autoRun(v, true); };
-  HOME_ACTS.autoDel = (el, v) => { const list = autoList(), r = list.find(x => x.id === v); if (!r) return; if (!confirm(`자동화 “${r.name}”을(를) 삭제할까요?`)) return; autoSave(list.filter(x => x.id !== v)); toast(`자동화 “${r.name}”을(를) 삭제했습니다.`); autoCardRefresh(); };
+  HOME_ACTS.autoDel = (el, v) => { const list = autoList(), r = list.find(x => x.id === v); if (!r) return; if (!confirm(`자동화 “${r.name}”${typeof R === 'object' && R && typeof R.cuJosa === 'function' ? R.cuJosa(String(r.name), '을를').slice(-1) : '을(를)'} 삭제할까요?`)) return; autoSave(list.filter(x => x.id !== v)); toast(`자동화 “${r.name}”${typeof R === 'object' && R && typeof R.cuJosa === 'function' ? R.cuJosa(String(r.name), '을를').slice(-1) : '을(를)'} 삭제했습니다.`); autoCardRefresh(); };
   HOME_ACTS.autoNew = () => { const i = $('#chInput'); if (!i) return; if (!i.value.trim()) { i.value = '매일 9시에 '; chatState().draft = i.value; chatAutosize(i); } i.focus(); i.setSelectionRange(i.value.length, i.value.length); toast('언제, 무엇을 알려 드릴지 이어서 적어 주세요. 예) 매일 9시에 안 읽은 메일 알려줘'); };
 
   // ---------- 대화 도구 ----------
@@ -172,7 +172,7 @@
         else { t.on = action === 'on'; if (t.on && R.chatAutoDue(t, Date.now())) t.last = R.kstNow(new Date()).date; saved = autoSave(cur); }
         if (saved === false) return {ok: false, text: '저장하지 못했습니다. 다시 시도해 주세요.'};
         autoCardRefresh();
-        return {ok: true, text: `자동화 “${r.name}”을(를) ${action === 'delete' ? '삭제했습니다' : action === 'on' ? '켰습니다' : '껐습니다'}.`};
+        return {ok: true, text: `자동화 “${r.name}”${typeof R === 'object' && R && typeof R.cuJosa === 'function' ? R.cuJosa(String(r.name), '을를').slice(-1) : '을(를)'} ${action === 'delete' ? '삭제했습니다' : action === 'on' ? '켰습니다' : '껐습니다'}.`};
       }}]};
     },
   });

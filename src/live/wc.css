@@ -1346,3 +1346,4 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc header .stat,.wc header .hb{flex-shrink:0;white-space:nowrap}.wc header .srch{min-width:0;flex-shrink:1}
 .wc .toast{left:calc(var(--navW,172px) + 20px);transform:none;max-width:min(560px,44vw)}
 .wc .dlg.rpt-review textarea#rptBody{min-height:240px;height:auto}
+.wc.expanded .toast{left:calc(var(--navW,172px) + 240px)}

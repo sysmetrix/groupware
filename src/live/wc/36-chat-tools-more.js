@@ -360,7 +360,7 @@
       if (!hit.length) return {ok: false, text: '어느 항목인지 찾지 못했습니다. “할 일 보여줘”로 목록을 본 뒤 “2번 끝냄 표시해줘”처럼 말씀해 주세요.', cards: list.length ? [{type: 'list', title: '처리할 일', items: list.slice(0, 6).map((x, i) => ({...chatTaskItem(x), title: `${i + 1}. ${x.title}`}))}] : []};
       if (hit.length > 1) return {ok: false, text: `일치하는 항목이 ${hit.length}건입니다. 더 구체적인 제목이나 번호로 알려 주세요.`, cards: [{type: 'list', title: '일치하는 항목', items: hit.slice(0, 8).map(chatTaskItem)}]};
       const x = hit[0], key = x.key, title = x.title || '(제목 없음)', what = action === 'done' ? '끝냄 표시' : '내일 오전 8시까지 미루기';
-      return {ok: true, text: `“${chatCut(title, 40)}”을(를) ${what} 할 준비를 했습니다. 그룹웨어 자료는 바뀌지 않습니다.`, cards: [{type: 'confirm', title: what, risk: 'low', rows: [['항목', title], ['적용 범위', 'GW 비서 목록에서만'], ['되돌리기', '적용 뒤 알림의 [되돌리기] 또는 Ctrl+Z']], confirmLabel: action === 'done' ? '끝냄으로 표시' : '내일로 미루기', cancelLabel: '취소', onConfirm: async () => {
+      return {ok: true, text: `“${chatCut(title, 40)}”${typeof R === 'object' && R && typeof R.cuJosa === 'function' ? R.cuJosa(String(chatCut(title, 40)), '을를').slice(-1) : '을(를)'} ${what} 할 준비를 했습니다. 그룹웨어 자료는 바뀌지 않습니다.`, cards: [{type: 'confirm', title: what, risk: 'low', rows: [['항목', title], ['적용 범위', 'GW 비서 목록에서만'], ['되돌리기', '적용 뒤 알림의 [되돌리기] 또는 Ctrl+Z']], confirmLabel: action === 'done' ? '끝냄으로 표시' : '내일로 미루기', cancelLabel: '취소', onConfirm: async () => {
         if (!S.a || !visibleActions().some(t => t.key === key)) return {ok: false, text: '항목이 이미 목록에서 사라졌습니다.'};
         if (action === 'done') markDoneKeys([key]); else snooze([key]);
         return {ok: true, text: action === 'done' ? '끝냄으로 표시했습니다. 그룹웨어에 아직 남아 있으면 다시 보여 드립니다.' : '내일 오전 8시까지 미뤘습니다.'};

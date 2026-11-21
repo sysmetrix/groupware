@@ -72,6 +72,12 @@ export function chatParseTime(text) {
 export function chatParseRange(text) {
   const t = String(text ?? '');
   const parts = t.split(/~|부터|에서|-|–|까지/).map(s => chatParseTime(s)).filter(Boolean);
+  // v1.14.0: "오후 2시부터 5시까지"의 5시는 오후다. 끝이 시작보다 이르고 12시 전이면 12시간을 더한다.
+  //          오전·오후를 하나도 말하지 않은 "2시부터 5시까지"는 업무 시간으로 보아 1~7시를 오후로 본다.
+  const marked = /(오전|오후|아침|저녁|밤|새벽)/.test(t) || /\d{1,2}\s*:\s*\d{2}/.test(t);
+  const add12 = x => { const [h, m] = x.split(':').map(Number); return String(h + 12).padStart(2, '0') + ':' + String(m).padStart(2, '0'); };
+  if (!marked && parts[0] && +parts[0].slice(0, 2) >= 1 && +parts[0].slice(0, 2) <= 7) parts[0] = add12(parts[0]);
+  if (parts.length >= 2 && parts[1] <= parts[0] && +parts[1].slice(0, 2) < 12 && add12(parts[1]) > parts[0]) parts[1] = add12(parts[1]);
   return parts.length >= 2 ? {start: parts[0], end: parts[1]} : parts.length === 1 ? {start: parts[0], end: ''} : {start: '', end: ''};
 }
 

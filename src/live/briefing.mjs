@@ -329,6 +329,9 @@ export function weeklyReport({submitted = [], receipts = [], me = '', from = '',
   const lines = [`□ 주간 업무 실적 (${md(from)} ~ ${md(to)})${me ? ` — ${me}` : ''}`, ''];
   lines.push(`○ 기안·보고 ${work.length}건 (결재완료 ${done.length}, 진행 ${going.length})`);
   const grouped = new Map();
+  const projOf = t => { const m = String(t || '').replace(/\s+/g, '').match(/[『「]([^』」]{2,40})[』」]/); return m ? m[1].replace(/[‘’'"]/g, '') : ''; };
+  const firstSeen = new Map(); done.forEach((d, i) => { const p = projOf(d.title) || '\u0000' + i; if (!firstSeen.has(p)) firstSeen.set(p, i); });
+  done.sort((a, b) => { const pa = projOf(a.title) || '\u0000' + done.indexOf(a), pb = projOf(b.title) || '\u0000' + done.indexOf(b); return firstSeen.get(pa) - firstSeen.get(pb); });
   for (const d of done) { const k = clean(d.title); const g = grouped.get(k) || {title: k, nos: []}; if (d.docNo) g.nos.push(d.docNo); grouped.set(k, g); }
   for (const g of grouped.values()) lines.push(`  - ${g.title}${g.nos.length > 1 ? ` (${g.nos.length}건: ${g.nos.join(', ')})` : g.nos[0] ? ` (${g.nos[0]})` : ''}`);
   for (const d of going) lines.push(`  - ${clean(d.title)} — ${d.status || '진행 중'}`);
@@ -337,7 +340,7 @@ export function weeklyReport({submitted = [], receipts = [], me = '', from = '',
     for (const r of receipts.slice(0, 15)) lines.push(`  - ${clean(r.title)}${r.sendOrg || r.sendDept ? ` (${[r.sendOrg, r.sendDept].filter(Boolean).join(' ')})` : ''}`);
     if (receipts.length > 15) lines.push(`  - 외 ${receipts.length - 15}건`);
   }
-  if (personal.length) lines.push('', `○ 복무 신청 ${personal.length}건: ${personal.map(d => clean(d.title)).join(', ')}`);
+  if (personal.length) { const kinds = new Map(); for (const d of personal) { const k = clean(d.title).replace(/\s*\([^)]*\)\s*$/, '').replace(/신청$/, '') || '기타'; kinds.set(k, (kinds.get(k) || 0) + 1); } lines.push('', `○ 복무 신청 ${personal.length}건: ${[...kinds].map(([k, n]) => n > 1 ? `${k} ${n}건` : k).join(', ')}`); }
   lines.push('', `※ 그룹웨어 목록 기준 자동 초안(${kstNow(now).date}). 제출 전 내용을 확인·보완하세요.`);
   return lines.join('\n');
 }
