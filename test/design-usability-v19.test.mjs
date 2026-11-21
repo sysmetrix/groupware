@@ -108,7 +108,7 @@ test('v1.10.1: 큰 글자에서 머리글 시각·버튼은 줄어들지 않고 
 });
 test('v1.11.0: 노트북 화면 결재 연속 처리 — 원문을 넓게 열고 첨부 목록을 접어 본문을 키운다', () => {
   assert.match(read('wc/14-hide-snooze-undo-to-do.js'), /innerWidth < 1600\)\)\);/);
-  const pane = read('wc/13-detail-pane.js');
+  const pane = (read('wc/13-detail-pane.js') + read('wc/13b-mail-compose.js'));
   assert.match(pane, /roomyDocFrame\(f, u\)/);
   assert.match(pane, /function roomyDocFrame\(f, u\) \{\n    if \(!\/MicroModuleCode=ea\/\.test\(u\)\) return;/);
   assert.match(pane, /getBoundingClientRect\(\)\.height >= 760\) return;/);
@@ -187,7 +187,7 @@ test('v1.14.0 실업무 흐름: 주간 실적 묶기, 메일 쓰기 넓게, 시�
   assert.deepEqual(chatParseRange('2시부터 4시 반까지'), {start: '14:00', end: '16:30'});
   assert.deepEqual(chatParseRange('오전 10시부터 12시'), {start: '10:00', end: '12:00'});
   assert.deepEqual(chatParseRange('9시부터 6시'), {start: '09:00', end: '18:00'});
-  const pane = read('wc/13-detail-pane.js');
+  const pane = (read('wc/13-detail-pane.js') + read('wc/13b-mail-compose.js'));
   assert.match(pane, /isMailCompose\(url\) && typeof innerWidth === 'number' && innerWidth < 1600/);
   assert.match(pane, /function fitFrameWidth\(f, u\)/);
   assert.match(pane, /if \(injected && typeof markPaneDirty === 'function'\)/);
@@ -201,7 +201,7 @@ test('v1.15.0 실제 실행 점검: 나에게 메일, 시제, 인사말, 내 일
   assert.equal(a.tool, 'compose_mail'); assert.equal(a.args.to, '나'); assert.equal(a.args.body, '점검 메일입니다.');
   assert.equal(chatIntent('김지은에게 내일 회의 참석한다고 메일 보내줘', now).args.body, '11/22 회의 참석합니다.');
   assert.equal(chatIntent('나한테 테스트라고 메일 써줘', now).args.body, '테스트입니다.');
-  const pane = read('wc/13-detail-pane.js');
+  const pane = (read('wc/13-detail-pane.js') + read('wc/13b-mail-compose.js'));
   assert.match(pane, /<p>안녕하세요\.<\/p>\n<p>\$\{esc\(greetMe\)\}입니다\.<\/p>/);
   assert.doesNotMatch(pane, /안녕하십니까/);
   assert.match(pane, /function clearDirtyWhenGone\(stillOpen\)/);
@@ -214,4 +214,25 @@ test('v1.15.1: 자원 현황 답의 화면 이동은 그 자원·날짜로, 여�
   assert.match(read('wc/32-chat-tools-read.js'), /view: 'resource', v: `\$\{car\.resSeq\},\$\{d8\}`/);
   assert.match(read('wc/30-chat-ui.js'), /view === 'resource' && \/\^\[\\w-\]\+,\\d\{8\}\$\/\.test\(param/);
   assert.match(read('wc/24-resource.js'), /b\.end\.slice\(0, 8\) !== b\.start\.slice\(0, 8\)/);
+});
+test('v1.16.0: 결과보고 실적 칸은 계획서 값으로 먼저 채우고 표시한다', async () => {
+  const {planFacts} = await import('../src/live/briefing.mjs');
+  assert.deepEqual(planFacts('  나. 참가일시: 2026. 10. 27.(화) 14:00 ~ 16:30\n  다. 참가장소: 모의 도서관\n  마. 참가인원: 총 9명\n  사. 소요예산: 금50,000원 ※ 실비\n  바. 주요내용: 발제와 토론'), ['2026. 10. 27.(화) 14:00 ~ 16:30', '모의 도서관', '총 9명', '금50,000원', '발제와 토론']);
+  assert.deepEqual(planFacts('  가. 일 시: 11. 22.\n  다. 대 상: 청소년'), ['11. 22.', '', '', '', '']);
+  assert.deepEqual(planFacts(''), ['', '', '', '', '']);
+  const rv = read('wc/42-result-review.js');
+  assert.match(rv, /R\.planFacts\(plan\.body\)/);
+  assert.match(rv, /계획서 값으로 먼저 채웠습니다/);
+  assert.match(rv, /계획서 값 그대로인 칸 '\+fromPlan\+'개/);
+});
+
+test('v1.16.0 유지보수: 자동 업데이트 즉시 적용·짧은 재확인, 보안메일 안내, 죽은 코드 정리', () => {
+  const gov = read('wc/21-governance.js');
+  assert.match(gov, /const updIdle = \(\) =>/);
+  assert.match(gov, /if \(S\.open && !reopen && typeof updIdle === 'function' && updIdle\(\)\) reopen = true;/);
+  assert.match(gov, /setInterval\(onUpdateVisible, 5 \* 60e3\)/);
+  assert.match(gov, /autoUpdate\(true\)/);
+  assert.match(gov, /Date\.now\(\) - cached\.at < 3 \* 60e3/);
+  assert.match((read('wc/13-detail-pane.js') + read('wc/13b-mail-compose.js')), /보안메일은 대용량 첨부만/);
+  assert.doesNotMatch(read('wc/19-draft-engine.js'), /buildConfirmedResultBody/);
 });

@@ -19,7 +19,7 @@ test('Windows controller owns its launch tree, refuses port conflicts and stale 
 import http from 'node:http'; import fs from 'node:fs'; import {spawn} from 'node:child_process';
 const child=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{windowsHide:true,stdio:'ignore'});
 fs.writeFileSync('data/dummy-child.json',JSON.stringify({pid:child.pid}));
-http.createServer((q,r)=>r.end('isolated')).listen(Number(process.env.PORT),'127.0.0.1');
+const s=http.createServer((q,r)=>r.end('isolated')); s.on('error',e=>{fs.writeFileSync('data/server-error.txt',String(e.code||e.message));process.exit(1);}); s.listen(Number(process.env.PORT),'127.0.0.1');
 `);
   const occupied = http.createServer((q,r) => r.end('unmanaged'));
   occupied.listen(0, '127.0.0.1'); await once(occupied, 'listening');
@@ -46,7 +46,13 @@ http.createServer((q,r)=>r.end('isolated')).listen(Number(process.env.PORT),'127
   await run('Stop');
   assert.equal(await (await fetch(`http://127.0.0.1:${port}`)).text(), 'unmanaged');
   await new Promise(resolve => occupied.close(resolve));
-  await run('Start');
+  try { await run('Start'); }
+  catch (e) {
+    const why = await fs.readFile(path.join(dir, 'data/server-error.txt'), 'utf8').catch(() => '');
+    if (why !== 'EADDRINUSE' || !/Owned child exited/.test(e.message)) { e.message += '\nTest server: ' + (why || 'no error recorded'); throw e; }
+    t.diagnostic('port was taken by a parallel test; retrying once');
+    await fs.rm(path.join(dir, 'data/server-error.txt'), {force: true}); await new Promise(r => setTimeout(r, 1500)); await run('Start');
+  }
   const status = JSON.parse((await run('Status')).stdout)[0];
   assert.equal(status.status, 'running-owned');
   assert.equal(await (await fetch(`http://127.0.0.1:${port}`)).text(), 'isolated');
