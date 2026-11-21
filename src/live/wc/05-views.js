@@ -69,8 +69,8 @@
     m.innerHTML = S.loading ? '<span class="spin"></span> 읽는 중' : S.lastRefresh ? `${ic('refresh')}${hhmm(S.lastRefresh)} 기준${age ? ` · ${age}분 전` : ''}` : `${ic('refresh')}새로고침`;
     // 기관명: 관리자 정책 > 로그인한 사용자의 소속 기관 > 기본 문구
     try { const on = $('#orgName'), nm = POLICY.orgName || (S.raw && S.raw.principal && S.raw.principal.compName) || ''; if (on && nm) on.textContent = nm; } catch {}
-    const unseen = R.unseenActivityCount(S.activity, S.seenActivity, S.a ? (typeof visibleActions === 'function' ? visibleActions() : S.a.actions).map(x => x.key) : null);
-    { const bl = $('#bell'); bl.innerHTML = `${ic('bell')}${unseen ? `<span class="dot" aria-hidden="true">${unseen > 99 ? '99+' : unseen}</span>` : ''}`; bl.setAttribute('aria-label', unseen ? `비서가 찾은 새 항목 ${unseen}건` : '비서가 찾은 새 항목'); bl.title = '비서가 찾은 새 항목 (그룹웨어 통합알림과 별도)'; }
+    // v1.9.1: 종은 통합알림 화면을 연다. 숫자도 통합알림의 안 읽음 수(조회한 최근 100건 기준)로 맞춘다.
+    { const unread = typeof ntfUnread === 'function' ? ntfUnread() : null, bl = $('#bell'); bl.innerHTML = `${ic('bell')}${unread ? `<span class="dot" aria-hidden="true">${unread > 99 ? '99+' : unread}</span>` : ''}`; bl.setAttribute('aria-label', unread ? `통합알림, 안 읽음 ${unread}건` : '통합알림'); bl.title = unread ? `통합알림 · 최근 100건 중 안 읽음 ${unread}건` : '통합알림'; if (S.a && typeof notificationsBackground === 'function') notificationsBackground(); }
     const urgent = S.a ? mineVisible().filter(x => ['overdue', 'urgent'].includes(stateOf(x))).length : 0;
     const total = S.a ? mineVisible().length : 0;
     { const st = !S.a ? 'idle' : urgent ? 'urgent' : total ? 'todo' : 'ok'; const sum = !S.a ? '불러오는 중' : urgent ? `급한 일 ${urgent}건 · 전체 ${total}건` : total ? `처리할 일 ${total}건` : '오늘 처리할 일 없음'; fab.dataset.st = st;

@@ -15,9 +15,21 @@
       const result = await GW.collect({modules:['alerts'], alertCount:100});
       if (seq !== NTF.seq || owner !== currentKey || owner !== getUserKey()) return;
       if (!result.status?.alerts?.ok || !Array.isArray(result.data?.alerts?.alerts)) throw new Error(result.status?.alerts?.message || '알림 응답을 확인할 수 없습니다.');
-      NTF.items = result.data.alerts.alerts; NTF.page = 1; NTF.at = result.collectedAt; if (NTF.type !== 'all' && !NTF.items.some(x => x.type === NTF.type)) NTF.type = 'all';
+      NTF.items = result.data.alerts.alerts; NTF.page = 1; NTF.at = result.collectedAt; if (typeof renderHead === 'function') renderHead(); if (NTF.type !== 'all' && !NTF.items.some(x => x.type === NTF.type)) NTF.type = 'all';
     } catch (e) { if (seq === NTF.seq && owner === currentKey) { NTF.items = null; NTF.error = String(e.message || e); } }
     finally { if (seq === NTF.seq) { NTF.loading = false; if (S.view === 'notifications') renderMain(); } }
+  }
+  // v1.9.1: 머리글 종 숫자용. 화면을 다시 그리지 않고 최근 100건을 받아 두며, 3분에 한 번만 묻는다(통합알림 화면에서는 그 화면의 새로고침에 맡김).
+  function ntfUnread() { try { return NTF.items ? NTF.items.filter(x => !x.read).length : null; } catch { return null; } }
+  let ntfBgAt = 0;
+  async function notificationsBackground() {
+    try { if (NTF.loading || S.view === 'notifications' || Date.now() - ntfBgAt < 180000) return; } catch { return; }
+    ntfBgAt = Date.now(); const seq = NTF.seq, owner = currentKey;
+    try {
+      const result = await GW.collect({modules:['alerts'], alertCount:100});
+      if (seq !== NTF.seq || NTF.loading || S.view === 'notifications' || owner !== currentKey || owner !== getUserKey()) return;
+      if (result.status?.alerts?.ok && Array.isArray(result.data?.alerts?.alerts)) { NTF.items = result.data.alerts.alerts; NTF.at = result.collectedAt; NTF.error = ''; renderHead(); }
+    } catch {}
   }
   function notificationsSearch() {
     NTF.query = String($('#notificationsQuery')?.value ?? NTF.query); NTF.search = NTF.query.trim().toLowerCase(); NTF.page = 1; renderMain();

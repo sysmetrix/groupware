@@ -48,7 +48,7 @@
       const r = byDate.get(d8);
       const worked = r && (!!r.come || (/정상/.test(r.result) && !/휴일/.test(r.result)));
       const cls = leaveDays.has(d8) ? 'lv' : !r ? 'off' : bad.has(d8) ? 'bad' : worked ? (/정상/.test(r.result) ? 'okd' : 'part') : r.holiday || /휴일/.test(r.result) ? 'off' : 'part';
-      const label = leaveDays.has(d8) ? '휴가' : !r ? '' : bad.has(d8) ? '퇴근 지문 확인 필요' : worked ? '근무' : r.holiday || /휴일/.test(r.result) ? '휴일' : r.item ? '' : String(r.result || '').trim().slice(0, 8); // v1.9.0: 뜻 없는 '그룹웨어 기록' 대신 원본 결과(항목이 있으면 아래 줄이 대신 말한다)
+      const label = leaveDays.has(d8) ? '휴가' : !r ? '' : bad.has(d8) ? '퇴근 지문 확인 필요' : worked ? '근무' : r.holiday || /휴일/.test(r.result) ? '휴일' : r.item ? '' : !r.come && !r.leave ? '출퇴근 기록 없음' : String(r.result || '').trim().slice(0, 8); // v1.9.1: '그룹웨어 기록' 대신 사실(지문 기록 유무). 그룹웨어 판정(결근 등)은 칸에 띄우지 않고 제목(원본)으로만
       cells.push(`<div class="c ${cls} ${st.day === d8 ? 'sel' : ''} ${d8 === t8 ? 'today' : ''}" role="button" tabindex="0" data-act="attDay" data-v="${d8}" title="${esc(r ? `그룹웨어 원본: ${r.result} ${r.item || ''} ${r.status || ''}${cellInfo(d8) ? ' · ' + cellInfo(d8) : ''}` : '')}"><b>${dnum}</b>${d8 === t8 ? ' <span class="muted">오늘</span>' : ''}<div class="muted" style="font-size:12px">${esc(label)}</div>${r && r.item ? `<div style="font-size:12px">${esc(r.item)}${cellTime(d8) ? ' <span class="muted">' + esc(cellTime(d8)) + '</span>' : ''}</div>` : ''}</div>`);
     }
     const selRow = st.day ? byDate.get(st.day) : null;

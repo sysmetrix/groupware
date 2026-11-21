@@ -22,7 +22,7 @@
     const teamSoon = [];
     for (let i = 0; i < 7; i++) { const dt = new Date(Date.parse(t0 + 'T00:00:00Z') + i * 86400000).toISOString().slice(0, 10), d8 = dt.replace(/-/g, ''); const l = (teamEntries(d8.slice(0, 6)).byDate[d8] || []).filter(x => x.kind === 'leave' || x.kind === 'trip'); if (l.length) teamSoon.push({date: dt, d8, l: l.sort((a, b) => (b.mine ? 1 : 0) - (a.mine ? 1 : 0))}); }
     const teamRows = teamSoon.map(g => ({date: g.date, html: `<div class="row" role="button" tabindex="0" data-act="calDay" data-v="${g.d8}" style="grid-template-columns:110px 1fr auto"><span class="bdg tag">직원 근태</span><div class="mn"><div class="t">${esc(g.l.slice(0, 3).map(x => `${x.name}${x.mine ? '(나)' : ''} ${x.label}`).join(' · '))}${g.l.length > 3 ? ` 외 ${g.l.length - 3}명` : ''}</div></div><div class="w">${esc(g.date.slice(5).replace('-', '/'))} · ${ddayText(R.dday(g.date))}</div></div>`}));
-    const legend = [['e', '일정'], ['l', '내 휴가'], ['d', '기한'], ['a', '근태 확인·출장'], ['t', '내 할 일(끌어서 날짜 변경)'], ['h', '휴일'], ['tl', '직원 휴가'], ['tt', '직원 출장·교육'], ['to', '내 시간외 퇴근 확인됨'], ['tw', '내 시간외 퇴근 지문 확인 필요'], ['n', '칩 기호: ✓ 퇴근 지문 확인 · ✗ 지문 없음 · … 확인 대기']];
+    const legend = [['e', '일정'], ['l', '내 휴가'], ['d', '기한'], ['a', '근태 확인·출장'], ['t', '내 할 일(끌어서 날짜 변경)'], ['h', '휴일'], ['tl', '직원 휴가'], ['tt', '직원 출장·교육'], ['to', '내 시간외 퇴근 확인됨'], ['tw', '내 시간외 퇴근 지문 확인 필요'], ['n', '칩 기호: ✓ 퇴근 지문 확인 · ✗ 지문 없음 · 예정 확인 전']];
     return `${pgh('일정·예약', '', `<span class="cal-nav" role="group" aria-label="보는 달"><button class="btn sm icon" data-act="calPrev" aria-label="이전 달">${ic('back')}</button><b class="cal-month" aria-live="polite">${y}년 ${mo + 1}월</b><button class="btn sm icon" data-act="calNext" aria-label="다음 달" style="transform:scaleX(-1)">${ic('back')}</button><button class="btn sm" data-act="calToday">이번 달</button></span><button class="btn sm ${S.cal.opts ? 'on' : ''}" data-act="calOpts" aria-expanded="${!!S.cal.opts}" title="표시할 종류·부서와 색 설명">${ic('eye')}보기 설정</button><button class="btn sm" data-act="openUrl" data-url="${esc(S.raw.data.schedule?.url || '')}" data-title="그룹웨어 일정">${ic('ext')}그룹웨어 일정</button>`)}
 ${teamBar(y, mo)}
 ${S.cal.opts ? `<div class="legend">${legend.map(([c, n]) => `<span><i class="ev ${c}" style="display:inline-block;margin:0;padding:0;width:12px;height:12px"></i>${n}</span>`).join('')}</div>` : ''}
@@ -46,7 +46,7 @@ ${S.cal.opts ? `<div class="legend">${legend.map(([c, n]) => `<span><i class="ev
   }
 
   // ----- 직원 근태 레이어 (휴가·출장·시간외 퇴근 지문) -----
-  const TEAM_STATE = {ok: ['✓', '퇴근 지문 확인'], miss: ['✗', '지문 없음'], short: ['!', '신청 종료 전 퇴근'], wait: ['…', '아직 진행 전'], info: ['', '']};
+  const TEAM_STATE = {ok: ['✓', '퇴근 지문 확인'], miss: ['✗', '지문 없음'], short: ['!', '신청 종료 전 퇴근'], wait: ['예정', '아직 진행 전'], info: ['', '']};
   function teamCfg() { const cs = S.cal; cs.layers = cs.layers || {leave: true, trip: true, ot: true}; cs.day = cs.day || ''; return cs; }
   function monthKey() { const b = new Date(); b.setDate(1); b.setMonth(b.getMonth() + S.cal.offset); return `${b.getFullYear()}${String(b.getMonth() + 1).padStart(2, '0')}`; }
   // 근태·출장 신청 내역(시간·장소·사유)을 한 번만 읽어 10분 동안 모든 화면이 같이 쓴다.
