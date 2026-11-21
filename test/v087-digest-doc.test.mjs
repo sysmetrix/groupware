@@ -533,3 +533,20 @@ test('v1.7.0: 직원의 그날 근태, 오늘 출근 시각, 지문 날짜, 이�
   assert.match(rd, /퇴근 지문 확인이 필요한 날은 \$\{an\.length\}일입니다/);
   assert.match(rd, /nn = name && !a\.exact \? Math\.max\(n, 14\) : n/);
 });
+
+test('v1.8.0: 이름으로 열기, 공지 번호, 이번 주 근무시간, 여러 날 휴가, 행사 날짜, 다시 알려 줘', async () => {
+  const C14 = await import('../src/live/chat.mjs');
+  const now = new Date('2026-11-20T18:30:00Z');
+  assert.deepEqual(C14.chatIntent('홍보요청 메일 열어줘', now).args, {query: '홍보요청', kind: 'mail'});
+  assert.equal(C14.chatIntent('메일 열어줘', now).tool, 'open_view', '이름 없이 메일 열어줘는 메일 화면');
+  assert.deepEqual(C14.chatIntent('공지 2번 열어줘', now).args, {kind: 'board', index: 2});
+  assert.deepEqual(C14.chatIntent('다음 주 월~수 휴가 가능해?', now).args, {date: '2026-11-23', end: '2026-11-25', amount: 'full'});
+  assert.equal(C14.chatIntent('청년 포럼 언제야?', now).tool, 'find_when');
+  assert.equal(C14.chatIntent('김소연 휴가 언제야?', now).tool, 'get_staff_status');
+  assert.equal(C14.chatIntent('다음 주 바쁜 날이 언제야?', now).tool, 'busy_days');
+  assert.equal(C14.chatIntent('세 번째는 내일 다시 알려줘', now).tool, 'mark_task');
+  assert.equal(C14.chatIntent('가을 축제 일정 알려줘', now).tool, '');
+  const o = fs.readFileSync(new URL('../src/live/wc/50-chat-open.js', import.meta.url), 'utf8');
+  assert.match(o, /열면 그룹웨어에서 읽음으로 바뀝니다/, '안 읽은 메일·공지는 열기 전에 묻는다');
+  assert.match(o, /출근·퇴근 지문이 함께 남은 날이 없어/, '기록이 없으면 0시간이라고 하지 않는다');
+});

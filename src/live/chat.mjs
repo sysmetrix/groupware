@@ -185,6 +185,7 @@ export function chatIntent(text, now = new Date(), _nested = false) {
   const dt = chatParseDate(t, now), rg = chatParseRange(t);
   const want = /신청|올려|내줘|내 줘|해줘|하고 싶|할래|써줘|쓸게|등록|잡아|예약/.test(t);
   const make = (tool, args, confidence = 1) => ({tool, args, confidence});
+  if (/공지/.test(t) && /(\d+\s*번|첫|두|세|네|다섯)\s*(?:번째)?/.test(t) && /(열어|내용|보여|뭐래|읽어)/.test(t)) { const m = t.match(/(\d+)\s*번|(첫|두|세|네|다섯)\s*번째/); return make('open_item', {kind: 'board', index: m ? (+m[1] || {첫: 1, 두: 2, 세: 3, 네: 4, 다섯: 5}[m[2]]) : 1}); }
   // 순서 참조("첫 번째 열어줘", "2번 메일 답장")
   const ordM = t.match(/(?:(첫|두|세|네|다섯)\s*번째|([1-5])\s*번)/);
   if (ordM) {
@@ -206,6 +207,13 @@ export function chatIntent(text, now = new Date(), _nested = false) {
   // v0.97.0: 업무 문장 쓰기 — 상급자 보고 문장, 부서 공유 메일(앞에서 다룬 메일 기준)
   if (/(보고\s*(?:할|드릴|용|하는)?\s*(?:문장|내용|글|메모|요약|문구)|보고\s*(?:문장|글)으로|(?:팀장|실장|과장|부장|국장|상급자|윗분)\S*\s*(?:께|에게|한테)\s*보고)/.test(t) && /(써|작성|정리|만들|뽑아)/.test(t) && !/(결과\s*보고|주간|실적|기안)/.test(t)) return make('write_text', {kind: 'report'});
   if (/(공유|전달|알리|안내)\S*\s*(?:하는|할|하기|용)?\s*(?:메일|문구|글|공지)/.test(t) && /(써|작성|만들|보내|초안)/.test(t) && !/(답장|회신)/.test(t)) return make('write_text', {kind: 'share'});
+  // v1.8.0: 이름으로 열기, 공지 번호로 열기, 이번 주 근무시간, 여러 날 휴가, 행사 날짜, 다시 알려 줘
+  if (/(메일|문서|공문|결재)\S*\s*(?:좀\s*)?(?:열어|띄워|펼쳐)/.test(t)) { const q = t.replace(/(메일|문서|공문|결재문서|결재)\S*|(?:좀\s*)?(?:열어|띄워|펼쳐)\S*|[?.!]/g, ' ').replace(/\s+/g, ' ').trim(); if (q.length >= 2 && !/^(\d+\s*번|첫|두|세|그|이)/.test(q)) return make('open_item', {query: q, kind: /(문서|공문|결재)/.test(t) ? 'doc' : 'mail'}); }
+  if (/(몇\s*시간|얼마나)\s*(?:일했|근무했|일한|근무한)/.test(t) && /(이번\s*주|금주)/.test(t)) return make('get_work_hours', {week: true});
+  { const mw = t.match(/(다음|이번|다다음)\s*주\s*([월화수목금]{2,5})(?:요일)?/) || t.match(/(다음|이번|다다음)\s*주\s*([월화수목금])\s*[~\-부터]+\s*([월화수목금])/);
+    if (mw && /(연차|휴가|반차)/.test(t) && /(써도|쓸\s*수|내도|가능|괜찮|될까|되나|돼)/.test(t)) { const k = chKst(now), off = {다음: 7, 이번: 0, 다다음: 14}[mw[1]], mon = chUtc(k.y, k.m, k.d) - ((k.dow + 6) % 7) * 864e5 + off * 864e5, idx = ch => '월화수목금'.indexOf(ch); const a0 = idx(mw[2][0]), a1 = mw[3] ? idx(mw[3]) : idx(mw[2][mw[2].length - 1]); return make('check_leave_day', {date: chIso(mon + a0 * 864e5), end: chIso(mon + a1 * 864e5), amount: /반반차/.test(t) ? 'quarter' : /반차/.test(t) ? 'half' : 'full'}); } }
+  if (/(언제야|언제\s*(?:해|하지|열려|있어|이지|였지)|며칠이야|날짜가?\s*(?:언제|뭐))/.test(t) && (() => { const nm = chatExtractName(t.replace(/(언제야|언제|며칠이야|날짜)/g, ' ')); return !nm || /(포럼|행사|축제|워크숍|캠프|간담회|설명회|세미나|박람회|공모전|발표회|공유회|총회|위원회|대회|회의|교육)$/.test(nm); })() && !/(휴가|연차|출장|반차|기한|마감|월급|퇴근|출근|메일|결재|바쁜|한가|여유|비는)/.test(t)) { const q = t.replace(/(언제야|언제\s*(?:해|하지|열려|있어|이지|였지)?|며칠이야|날짜가?|이|가|은|는|[?.!])/g, ' ').replace(/\s+/g, ' ').trim(); if (q.length >= 2) return make('find_when', {query: q}); }
+  if (/(다시|나중에|내일|이따)\s*(?:아침에|오전에|오후에)?\s*(?:다시\s*)?알려\s*줘/.test(t) && !/(일정|휴가|메일|결재|기한|번째|\d\s*번)/.test(t)) return make('small_talk', {kind: 'remind'});
   // v1.7.0: "김소연 내일 뭐 해?" → 그 직원의 그날 근태, "오늘 출근 몇 시에 했어?" → 오늘 출퇴근 기록
   { const nm = chatExtractName(t); if (nm && /^[김이박최정강조윤장임한오서신권황안송류전홍고문양손배백허유남심노하곽성차주우구민진나지엄채원천방공현함변염여추도소석선설마길연위표명기반왕금옥육인맹제모탁국어은편용예봉경]/.test(nm) && (() => { const titled = new RegExp(nm + '\\s*(?:팀장|과장|차장|부장|실장|주임|주무관|선생|대리|사원|님)').test(t); return (t.indexOf(nm) === 0 || titled) && (/(뭐\s*해|뭐\s*하|어디\s*(?:가|있|계)|출근|자리)/.test(t) || (titled && /일정/.test(t))); })() && !/(메일|문서|결재|연락처|전화|번호|담당)/.test(t)) return make('get_staff_status', {name: nm, date: dt ? dt.date : chIso(chUtc(chKst(now).y, chKst(now).m, chKst(now).d)), days: dt && dt.end ? Math.round((Date.parse(dt.end) - Date.parse(dt.date)) / 864e5) + 1 : 1, exact: true}); }
   if (/(출근|퇴근)\s*(?:은|는)?\s*(?:몇\s*시|언제)/.test(t) && /(오늘|내가|나|제가)/.test(t) && !/(해야|하면|가능)/.test(t)) return make('get_work_hours', {today_only: true});

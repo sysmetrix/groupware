@@ -3,9 +3,10 @@
   chatRegisterTool({
     name: 'small_talk', label: '대화', kind: 'read',
     description: '감사·짧은 대답·되돌리기 요청에 답한다(외부 전송 없음). kind: thanks | ack | undo',
-    params: {type: 'object', properties: {kind: {type: 'string', enum: ['thanks', 'ack', 'undo', 'send']}}},
+    params: {type: 'object', properties: {kind: {type: 'string', enum: ['thanks', 'ack', 'undo', 'send', 'remind']}}},
     run: async a => {
       const st = chatState(), pend = Object.values(st.pending || {}).filter(p => p && p.card && !p.card.state).pop(), btn = pend ? `[${pend.card.confirmLabel || '확인'}]` : '';
+      if (a.kind === 'remind') return {ok: true, text: '정해진 시각에 한 번만 알려 주는 기능은 아직 없습니다. “○○ 할 일로 추가해줘”라고 하면 할 일 목록과 아침 브리핑에 나오고, 매일 같은 시각이면 “매일 9시에 ○○ 알려줘”로 자동화를 등록할 수 있습니다.'};
       if (a.kind === 'send') return {ok: true, text: '메일 [보내기]는 비서가 대신 누르지 않습니다. 답장이면 “그 메일 답장 써줘”, 새 메일이면 “○○한테 …라고 메일 보내줘”라고 하시면 창을 열어 내용을 채워 드리고, [보내기]는 직접 누르시면 됩니다.'};
       if (a.kind === 'thanks') return {ok: true, text: '천만에요. 더 필요한 일이 있으면 말씀해 주세요.'};
       if (a.kind === 'ack') return {ok: true, text: pend ? `실행하려면 위 확인 카드의 ${btn} 버튼을 눌러 주세요. 말로 대답하는 것만으로는 실행하지 않습니다.` : '네. 다른 필요한 일이 있으면 말씀해 주세요.'};
