@@ -72,10 +72,14 @@
   }
   // 홈페이지 기준 공식 순서다. 이름을 비슷하게 고쳐 맞추지 않고, GW의 정확한 정식 명칭·키만 연결한다.
   const PEOPLE_OFFICIAL_ORG = [
-    {name:'이사장', level:0}, {name:'이사회', level:1, missingLabel:'그룹웨어 연결 없음'}, {name:'대표이사', level:1}, {name:'윤리감사', level:2},
-    {name:'전략경영실', level:2}, {name:'전략기획부', level:3, optional:true}, {name:'경영지원부', level:3, optional:true},
+    {name:'이사장', level:0}, {name:'대표이사', level:1}, {name:'윤리감사', level:2},
+    {name:'전략경영실', level:2},
     {name:'부천시여성회관', level:2}, {name:'부천여성청소년센터', level:2}, {name:'부천시청소년센터', level:2}, {name:'산울림청소년센터', level:2}, {name:'소사청소년센터', level:2}, {name:'부천시청소년상담복지센터', level:2}, {name:'부천시건강가정지원센터', level:2}, {name:'고리울청소년센터', level:2}, {name:'부천시일쉼지원센터', level:2}
   ];
+  // 조직도에서 뺀 조직. '기타 그룹웨어 조직'에도 다시 나타나지 않게 한다.
+  const PEOPLE_HIDDEN_ORG = new Set(['이사회', '전략기획부', '경영지원부']);
+  // 조직·사람 화면을 처음 열면 대표이사가 선택된 상태로 시작한다.
+  const PEOPLE_DEFAULT_ORG = '대표이사';
   const peopleIsBranchNode = x => /[（(]\s*지점\s*[)）]/.test(String(x?.name || ''));
   const peopleDisplayDept = value => String(value || '—').replace(/[（(]\s*지점\s*[)）]/g, '· 별도 조직키');
   const PEOPLE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -94,8 +98,14 @@
   }
   const peopleOrgListItem = (entry, children = '') => `<li>${peopleOrgButton(entry)}${children ? `<ul>${children}</ul>` : ''}</li>`;
   function peopleOfficialTree(official) {
-    const [chair, board, ceo, ethics, strategy, plan, support, ...facilities] = official;
-    return `<ul class="org-chart" aria-label="공식 조직 계층">${peopleOrgListItem(chair, peopleOrgListItem(board) + peopleOrgListItem(ceo, peopleOrgListItem(ethics) + peopleOrgListItem(strategy, peopleOrgListItem(plan) + peopleOrgListItem(support)) + facilities.map(x => peopleOrgListItem(x)).join('')))}</ul>`;
+    const [chair, ceo, ethics, strategy, ...facilities] = official;
+    return `<ul class="org-chart" aria-label="공식 조직 계층">${peopleOrgListItem(chair, peopleOrgListItem(ceo, peopleOrgListItem(ethics) + peopleOrgListItem(strategy) + facilities.map(x => peopleOrgListItem(x)).join('')))}</ul>`;
+  }
+  async function peopleAutoStart() {
+    if (!PEOPLE.tree) await peopleLoadTree();
+    if (S.view !== 'people' || !Array.isArray(PEOPLE.tree) || PEOPLE.org || PEOPLE.items || PEOPLE.loading) return;
+    const ceo = peopleOfficialOrganization(PEOPLE.tree).find(x => x.name === PEOPLE_DEFAULT_ORG);
+    if (ceo?.item) await peopleDept(ceo.item.key);
   }
   async function peopleLoadTree() {
     if (PEOPLE.orgLoading) return; const seq = ++PEOPLE.orgSeq, owner = currentKey; PEOPLE.orgLoading = true; PEOPLE.treeError = ''; renderMain();
@@ -163,8 +173,8 @@
   }
   function vPeople() {
     if (currentKey !== getUserKey()) return pgh('조직·사람') + '<div class="box warn">계정이 변경되었습니다. 새로고침 후 확인하세요.</div>';
-    // v1.9.0: 부서별 찾아보기를 한 번 더 누르지 않게
-    if (!PEOPLE.tree && !PEOPLE.orgLoading && !PEOPLE.treeError && !PEOPLE.autoTree && typeof setTimeout === 'function') { PEOPLE.autoTree = true; setTimeout(() => { if (S.view === 'people') peopleLoadTree(); else PEOPLE.autoTree = false; }, 0); }
+    // v1.9.0: 부서별 찾아보기를 한 번 더 누르지 않게. 처음 열면 대표이사가 선택된 상태로 시작한다.
+    if (!PEOPLE.tree && !PEOPLE.orgLoading && !PEOPLE.treeError && !PEOPLE.autoTree && typeof setTimeout === 'function') { PEOPLE.autoTree = true; setTimeout(() => { if (S.view === 'people') peopleAutoStart(); else PEOPLE.autoTree = false; }, 0); }
     const rows = (PEOPLE.items || []).map((p,i)=>({p,i}));
     const matches = p => !PEOPLE.localFilter.trim() || [p.name,peopleDisplayDept(p.dept),p.duty,p.position,p.tel,p.extension,p.email,p.work].some(v => String(v || '').toLowerCase().includes(PEOPLE.localFilter.trim().toLowerCase()));
     const visibleCount = rows.filter(({p}) => matches(p)).length;
@@ -173,8 +183,8 @@
     const tree = PEOPLE.tree ? (() => {
       if (!PEOPLE.tree.length) return '<div class="box" role="status">조회된 부서가 없습니다.</div>';
       const official = peopleOfficialOrganization(PEOPLE.tree), officialKeys = new Set(official.flatMap(x => x.item ? [x.item.key] : []));
-      const other = PEOPLE.tree.filter(x => !peopleIsBranchNode(x) && !officialKeys.has(x.key));
-      return `<section aria-label="공식 조직도"><p class="muted">홈페이지 기준 공식 순서와 계층입니다. 정식 조직을 선택하면 연결된 분리 조직도 함께 조회합니다.</p>${peopleOfficialTree(official)}<p class="muted">비활성 항목은 현재 그룹웨어에서 독립 조회 키를 확인하지 못한 상태입니다. 이사회는 조직도 연결이 없을 때 연결 없음으로 표시합니다. 숫자가 아닌 키의 노사협의회 등은 현재 조직도 API 조회 대상이 아닙니다.</p>${other.length ? `<h3>기타 그룹웨어 조직</h3><ul class="org-other">${other.map(x => `<li><button class="chip ${PEOPLE.org === x.name ? 'on' : ''}" aria-pressed="${PEOPLE.org === x.name}" ${PEOPLE.loading ? 'disabled' : ''} data-act="peopleDept" data-v="${esc(x.key)}">${esc(x.name)} <span class="muted">${esc(x.count)}</span></button></li>`).join('')}</ul>` : ''}<p class="muted">분리된 조직 키는 선택지에 보이지 않습니다. 대응 키가 있으면 공식 부서 선택 시 함께 읽고, 이름 검색 소속은 ‘별도 조직키’로 표시합니다.</p></section>`;
+      const other = PEOPLE.tree.filter(x => !peopleIsBranchNode(x) && !officialKeys.has(x.key) && !PEOPLE_HIDDEN_ORG.has(x.name));
+      return `<section aria-label="공식 조직도"><p class="muted">홈페이지 기준 공식 조직입니다. 정식 조직을 선택하면 연결된 분리 조직도 함께 조회합니다.</p>${peopleOfficialTree(official)}<p class="muted">비활성 항목은 현재 그룹웨어에서 독립 조회 키를 확인하지 못한 상태입니다. 숫자가 아닌 키의 노사협의회 등은 현재 조직도 API 조회 대상이 아닙니다.</p>${other.length ? `<h3>기타 그룹웨어 조직</h3><ul class="org-other">${other.map(x => `<li><button class="chip ${PEOPLE.org === x.name ? 'on' : ''}" aria-pressed="${PEOPLE.org === x.name}" ${PEOPLE.loading ? 'disabled' : ''} data-act="peopleDept" data-v="${esc(x.key)}">${esc(x.name)} <span class="muted">${esc(x.count)}</span></button></li>`).join('')}</ul>` : ''}<p class="muted">분리된 조직 키는 선택지에 보이지 않습니다. 대응 키가 있으면 공식 부서 선택 시 함께 읽고, 이름 검색 소속은 ‘별도 조직키’로 표시합니다.</p></section>`;
     })() : `<div class="box" role="${PEOPLE.treeError ? 'alert' : 'status'}" aria-busy="${PEOPLE.orgLoading}">${PEOPLE.orgLoading ? '조직도를 읽고 있습니다…' : PEOPLE.treeError ? '조직도를 불러오지 못했습니다: '+esc(PEOPLE.treeError) : '부서별로 찾아보세요.'} <button class="btn sm" data-act="peopleTree" ${PEOPLE.orgLoading ? 'disabled' : ''}>${PEOPLE.treeError ? '다시 시도' : '조직도 불러오기'}</button></div>`;
     return pgh('조직·사람', '') + `<div class="bar"><input class="inp grow" id="peopleQuery" aria-label="직원 이름" placeholder="직원 이름 두 글자 이상" value="${esc(PEOPLE.query)}"><button class="btn primary" data-act="peopleSearch" ${PEOPLE.loading?'disabled':''}>검색</button></div><h2>부서별 찾아보기</h2>${tree}${PEOPLE.org ? `<h2>${esc(PEOPLE.org)} 구성원</h2>` : ''}${PEOPLE.loading ? '<div class="box" role="status" aria-busy="true">직원을 찾는 중입니다…</div>' : PEOPLE.error ? `<div class="box errb" role="alert">직원 조회 실패: ${esc(PEOPLE.error)} · 이름 검색 또는 부서를 선택해 다시 시도하세요.</div>` : PEOPLE.items ? `<p class="muted" role="status">조회 결과 ${PEOPLE.total == null ? PEOPLE.items.length+'건 조회됨' : PEOPLE.total+'건 중 '+PEOPLE.items.length+'건 조회됨'} · 동명이인은 소속을 확인하세요 · 메일은 작성 화면만 열립니다</p>${!PEOPLE.org && (PEOPLE.items.length >= 50 || PEOPLE.total > PEOPLE.items.length) ? '<div class="box warn" role="status">이름 검색은 최대 50건까지 조회합니다. 전체 결과가 아닐 수 있습니다. 이름을 더 구체적으로 입력하거나 부서별 찾아보기를 이용하세요.</div>' : ''}${PEOPLE.orgNote ? `<div class="box warn" role="status">${esc(PEOPLE.orgNote)}</div>` : ''}${PEOPLE.items.length === 0 ? '<div class="box" role="status">조회된 직원이 없습니다. 이름을 바꾸거나 다른 부서를 선택하세요.</div>' : ''}<div class="bar"><label for="peopleFilter" class="muted">표 안에서 찾기</label><input id="peopleFilter" class="inp grow" aria-label="표 안에서 이름 부서 담당업무 연락처 찾기" placeholder="이름, 부서, 담당업무, 연락처" value="${esc(PEOPLE.localFilter)}"></div><div id="peopleRows">${table}</div><p class="muted" id="peopleFilterCount" role="status" aria-live="polite">${visibleCount}명 표시</p>` : '<div class="box">이름을 입력해 그룹웨어 조직도에서 직원을 찾아보세요.</div>'}<p class="muted">쪽지·대화는 현재 그룹웨어 메뉴에서 사용할 수 없어 제공하지 않습니다.</p>`;
   }
