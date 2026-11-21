@@ -145,7 +145,7 @@
           const p = /오늘/.test(ut) ? {from: t8, to: t8, label: '오늘'} : /어제/.test(ut) ? {from: y8, to: y8, label: '어제'} : R.cuPeriod(ut, td);
           const n0 = docs.length; docs = docs.filter(d => d8(d) && d8(d) >= p.from && d8(d) <= p.to);
           const prog = docs.filter(d => inProg.some(x => x.docId === d.docId)).length;
-          head = `${p.label} ${queue === 'submitted' ? '내가 올린 문서' : label}는 ${docs.length}건입니다${queue === 'submitted' && docs.length ? (prog ? `(결재 진행 중 ${prog}건)` : '(모두 결재가 끝났거나 진행 중인 건이 없습니다)') : ''}.${total > n0 ? ` 최근 ${n0}건 범위에서 찾았습니다.` : ''}`;
+          head = `${p.label} ${queue === 'submitted' ? '내가 올린 문서' : label}는 ${docs.length}건입니다${queue === 'submitted' && docs.length ? (prog ? `(결재 진행 중 ${prog}건)` : docs.every(d => /완료|종결/.test(d.status || '')) ? '(모두 결재 완료)' : '(결재 진행 중인 건은 없음)') : ''}.${total > n0 ? ` 최근 ${n0}건 범위에서 찾았습니다.` : ''}`;
           scope = `\n기간: ${ymd8(p.from)} ~ ${ymd8(p.to)}`;
         }
         if (/급한|급해|긴급|시급|마감|기한/.test(ut) && queue !== 'submitted') {

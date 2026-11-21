@@ -129,3 +129,8 @@ test('v1.11.0: 결재함 답은 물은 기간(이번 주 등)과 급한 것부�
   assert.match(t, /R\.cuPeriod\(ut, td\)/);
   assert.match(t, /제목에 긴급 표시나 3일 안 기한/);
 });
+test('v1.11.1: 연속 처리 안내는 위쪽 알림이 아니라 진행 막대에(처리 창 버튼을 가리지 않게)', () => {
+  const s = read('wc/14-hide-snooze-undo-to-do.js');
+  assert.doesNotMatch(s, /toast\('연속 처리: 그룹웨어 원래 화면에서/);
+  assert.match(s, /원래 화면에서 처리한 뒤 초록 버튼을 누르면 처리됐는지 확인합니다/);
+});
