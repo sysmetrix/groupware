@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {weeklyDraftPeriod, unseenActivityCount, isNoiseMail} from '../src/live/briefing.mjs';
+import {weeklyDraftPeriod, isNoiseMail} from '../src/live/briefing.mjs';
 
 const read = p => readFileSync(new URL('../src/live/' + p, import.meta.url), 'utf8');
 const NOW = new Date('2026-11-21T02:00:00Z'); // 11/21(토) 11:00 KST
@@ -20,14 +20,15 @@ test('주간 초안 기간: 오늘보다 뒤의 날짜는 지난해로 본다(1�
   assert.equal(p.ageDays, 10); assert.equal(p.stale, true);
 });
 
-test('머리글 새 항목 수: 같은 항목은 한 번, 사라진 항목과 이미 본 항목은 빼고 센다', () => {
-  const act = [{at: 5, key: 'a'}, {at: 6, key: 'a'}, {at: 7, key: 'b'}, {at: 8, key: 'gone'}, {at: 1, key: 'c'}];
-  assert.equal(unseenActivityCount(act, 2, ['a', 'b', 'c']), 2);
-  assert.equal(unseenActivityCount(act, 2, null), 3);
-  assert.equal(unseenActivityCount(act, 10, ['a']), 0);
-  assert.equal(unseenActivityCount(null, 0, []), 0);
+test('머리글 종은 통합알림을 열고, 숫자도 통합알림의 안 읽음 수다', () => {
+  assert.match(read('wc/16-events.js'), /case 'menuBell': closeOverlay\(\); if \(go\('notifications'\)\)/);
+  const head = read('wc/05-views.js');
+  assert.match(head, /ntfUnread\(\)/);
+  assert.doesNotMatch(head, /S\.activity\.filter\(x => x\.at > S\.seenActivity\)/);
+  const ntf = read('wc/38-notifications-people.js');
+  assert.match(ntf, /function ntfUnread\(\) \{ try \{ return NTF\.items \? NTF\.items\.filter\(x => !x\.read\)\.length/);
+  assert.match(ntf, /Date\.now\(\) - ntfBgAt < 180000/);
 });
-
 test('왼쪽 메뉴: 읽히는 이름이 보이는 메뉴 이름으로 시작하고 숫자 배지는 따로 읽히지 않는다', () => {
   const src = read('wc/05-views.js');
   assert.match(src, /aria-label="\$\{esc\(v\.label\)\}/);
@@ -59,4 +60,13 @@ test('자동화 켜기 스위치는 24px 이상, 좁은 화면 머리글은 한 
   const css = read('wc.css');
   assert.match(css, /\.wc \.hm-sw\{width:40px;height:24px\}/);
   assert.match(css, /@media \(max-width:640px\)\{\.wc header\{flex-wrap:nowrap/);
+});
+
+test('v1.9.1 검수: 근태 칸은 그룹웨어 판정 대신 지문 기록 유무, 시간외 예정은 말줄임표로 보이지 않는다', () => {
+  const att = read('wc/11-attendance.js');
+  assert.match(att, /'출퇴근 기록 없음'/);
+  assert.doesNotMatch(att, /: '그룹웨어 기록';/);
+  const cal = read('wc/10-calendar-budget.js');
+  assert.match(cal, /wait: \['예정', '아직 진행 전'\]/);
+  assert.match(read('wc/08-approval-mail.js'), /· \$\{r\.of\}건 중 \$\{r\.count\}건<\/span>/);
 });

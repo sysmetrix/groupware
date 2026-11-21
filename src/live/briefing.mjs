@@ -315,11 +315,6 @@ export function weeklyDraftPeriod(text, now = new Date()) {
   const ageDays = Math.round((t0 - end) / 86400000);
   return {label: `${+m[1]}/${+m[2]}~${+m[3]}/${+m[4]}`, ageDays, stale: ageDays > 7};
 }
-// v1.9.0: 머리글 새 항목 수. 같은 항목이 여러 번 기록돼도 한 번, 이미 사라진(처리·숨김) 항목은 빼고 센다.
-export function unseenActivityCount(activity, seenAt, liveKeys) {
-  const live = liveKeys ? new Set(liveKeys) : null;
-  return new Set((activity || []).filter(x => x && x.at > (seenAt || 0) && (!live || live.has(x.key))).map(x => x.key)).size;
-}
 
 // Plain-text weekly report draft (주간 업무 실적) from my submitted documents and receipts.
 const PERSONAL_FORMS = /연차휴가신청서|출장신청서|근무일대체신청서|연장근무신청서|시간외근무신청서/;
