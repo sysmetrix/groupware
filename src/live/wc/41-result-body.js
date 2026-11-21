@@ -18,9 +18,15 @@
     const borrowed = labels.size;
     names.forEach(([name], i) => { if (!labels.has(i)) labels.set(i, name); });
     const docNo = clean(plan?.docNo), title = clean(plan?.title);
-    const lines = ['1. 관련: ' + (docNo || '[근거 문서번호 확인 필요]') + (title ? ` 「${title}」` : ''), '2. 위 계획과 관련한 실제 추진 결과를 다음과 같이 보고합니다.'];
+    const kind = /참가\s*(계획|결과)/.test(title) ? '참가' : /운영\s*(계획|결과)/.test(title) ? '운영' : '추진';
+    const name = title.replace(/\s*(운영|참가)\s*(계획|결과보고)(\(안\)|\(변경\))?\s*$/, '').replace(/\s*(시행|추진|실시)?계획(\(안\))?\s*$/, '').trim();
+    const ref = (typeof R === 'object' && typeof R.formatRunRef === 'function' && plan?.runday ? R.formatRunRef(plan.runday) : '') || docNo;
+    const lines = [ref ? `1. ${ref}호와 관련입니다.` : '1. [근거 문서번호 확인 필요]호와 관련입니다.', `2. ${name || '위 계획'} ${kind} 결과를 다음과 같이 보고합니다.`];
+    if (kind !== '운영') for (const [i, l] of labels) labels.set(i, l.replace(/^운영(?=\s)/, kind));
     const missing = [];
-    for (const [i, label] of labels) {
+    const order = [...labels.keys()].slice(0, borrowed);
+    for (const i of [0, 1, 2, 3, 4]) if (!order.includes(i)) { const at = order.findIndex(j => j > i); if (at < 0) order.push(i); else order.splice(at, 0, i); }
+    for (const i of order) { const label = labels.get(i);
       const value = clean(facts?.[i]);
       if (!value) missing.push(label);
       lines.push(`  ${'가나다라마'[lines.length - 2]}. ${label}: ${value || '[실적 확인 필요]'}`);

@@ -8,6 +8,18 @@
   const ATT_LEAVE_KINDS = ['연차', '오전반차', '오후반차', '외출', '조퇴', '대체휴가', '보상휴가', '오전반차(보상)', '오후반차(보상)'];
   const ATT_KINDS = {trip: ['관내출장', '관외출장'], leave: ATT_LEAVE_KINDS, overtime: ['연장근무', '휴일근무', '조기근무']};
   const ATT_TRANSPORTS = ['대중교통', '자가용', '관용차량'];
+  // v1.12.0: 고른 기간(최대 14일)에 이미 낸 내 근태 신청을 찾아 한 줄로 알린다. 자료가 없으면 말하지 않는다.
+  function attOverlapNote(st) {
+    if (typeof myAppInfos !== 'function') return '';
+    const a = String(st.s || '').slice(0, 10), b = String(st.e || st.s || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(a)) return '';
+    const out = [];
+    for (let i = 0, t = Date.parse(a + 'T00:00:00Z'), end = Date.parse((/^\d{4}-\d{2}-\d{2}$/.test(b) ? b : a) + 'T00:00:00Z'); i < 14 && t <= end; i++, t += 86400000) {
+      const d = new Date(t).toISOString().slice(0, 10), l = myAppInfos(d.replace(/-/g, '')) || [];
+      for (const x of l) if (x && x.item) out.push(`${Number(d.slice(5, 7))}/${Number(d.slice(8))} ${x.item}${x.time ? ' ' + x.time : ''}`);
+    }
+    return out.length ? '같은 기간에 이미 낸 신청이 있습니다: ' + [...new Set(out)].slice(0, 3).join(', ') + '. ' : '';
+  }
   // 종류별 기본 시각 [시작, 종료, 신청서에서 시간이 고정되는가]. 고정 종류는 신청서의 시간칸이 잠겨 있어 날짜만 반영한다.
   const ATT_TIMES = {trip: ['09:00', '18:00', false], 연차: ['09:00', '18:00', true], 오전반차: ['09:00', '14:00', true], 오후반차: ['14:00', '18:00', true], 대체휴가: ['09:00', '18:00', true], 보상휴가: ['09:00', '18:00', true], '오전반차(보상)': ['09:00', '14:00', true], '오후반차(보상)': ['14:00', '18:00', true], 외출: ['09:00', '10:00', false], 조퇴: ['16:00', '18:00', false], 연장근무: ['18:00', '21:00', false], 휴일근무: ['09:00', '18:00', false], 조기근무: ['07:00', '09:00', false]};
   const attTimesOf = (type, kind) => ATT_TIMES[type === 'trip' ? 'trip' : kind] || ['09:00', '18:00', false];
@@ -38,7 +50,7 @@
         const w = {trip: '출장', leave: '휴가', overtime: '근무'}[st.type];
         const josa = (w, a, b) => { const c = String(w).charCodeAt(String(w).length - 1); return c >= 0xAC00 && c <= 0xD7A3 && (c - 0xAC00) % 28 ? a : b; };
         const wkWarn = st.type !== 'overtime' && [st.s, st.e].some(v => /^\d{4}-\d{2}-\d{2}/.test(v || '') && [0, 6].includes(new Date(String(v).slice(0, 10) + 'T00:00:00Z').getUTCDay())) ? '고른 날짜에 토·일요일이 들어 있습니다. 날짜를 확인하세요. ' : '';
-        const note = wkWarn + (fixed ? '“' + st.kind + '”' + josa(st.kind, '은', '는') + ' 신청서에서 시간이 ' + ts + '~' + te + '로 정해집니다(날짜만 반영).' : st.type === 'trip' ? '여러 날이면 시각은 매일 같은 시작·종료 시각으로 들어갑니다.' : st.type === 'overtime' ? '종료 일시를 비우면 신청서의 작성기준(태깅 시간 등)대로 둡니다.' : '');
+        const note = attOverlapNote(st) + wkWarn + (fixed ? '“' + st.kind + '”' + josa(st.kind, '은', '는') + ' 신청서에서 시간이 ' + ts + '~' + te + '로 정해집니다(날짜만 반영).' : st.type === 'trip' ? '여러 날이면 시각은 매일 같은 시작·종료 시각으로 들어갑니다.' : st.type === 'overtime' ? '종료 일시를 비우면 신청서의 작성기준(태깅 시간 등)대로 둡니다.' : '');
         ov.innerHTML = '<div class="modal" data-act="closeOverlay"><div class="dlg" data-stop="1" style="width:min(600px,94vw);padding:22px 24px;max-height:92vh;overflow:auto" role="dialog" aria-label="근태 신청 준비"><h2 style="margin:0 0 6px;font-size:17px">근태 신청 준비</h2>'
           + '<div class="muted" style="margin-bottom:8px">구분과 일시를 고르면 신청서를 채우고 [신청완료] 직전에서 멈춥니다.</div>'
           + '<div role="radiogroup" aria-label="신청 구분" style="display:flex;gap:8px;margin:6px 0 2px">' + ATT_TYPES.map(([v, t]) => '<button type="button" class="btn' + (v === st.type ? ' primary' : '') + '" role="radio" aria-checked="' + (v === st.type) + '" data-atype="' + v + '">' + t + '</button>').join('') + '</div>'
@@ -62,7 +74,7 @@
           if (!fx && (st.s.slice(11, 16) !== a || (st.e && st.e.slice(11, 16) !== b))) st.timeTouched = true;
           const e2 = $('#att_e'); if (e2) e2.value = st.e || '';
           retitle();
-          { const n = $('#att_note'), wk = st.type !== 'overtime' && [st.s, st.e].some(v => /^\d{4}-\d{2}-\d{2}/.test(v || '') && [0, 6].includes(new Date(String(v).slice(0, 10) + 'T00:00:00Z').getUTCDay())), msg = '고른 날짜에 토·일요일이 들어 있습니다. 날짜를 확인하세요. '; if (n) n.textContent = (wk ? msg : '') + n.textContent.replace(msg, ''); }
+          { const n = $('#att_note'), wk = st.type !== 'overtime' && [st.s, st.e].some(v => /^\d{4}-\d{2}-\d{2}/.test(v || '') && [0, 6].includes(new Date(String(v).slice(0, 10) + 'T00:00:00Z').getUTCDay())), msg = '고른 날짜에 토·일요일이 들어 있습니다. 날짜를 확인하세요. '; if (n) { const base = n.textContent.replace(/^같은 기간에 이미 낸 신청이 있습니다: [^.]*\. /, '').replace(msg, ''); n.textContent = attOverlapNote(st) + (wk ? msg : '') + base; } }
         });
         on('#att_title', 'input', () => { const v = ($('#att_title').value || '').trim(); st.titleTouched = !!v; if (!v) retitle(); });
         let settled = false;
@@ -239,7 +251,7 @@
         else step('제목(예상)', true, spec.title + ' — 근태신청서에는 제목 칸이 없어, 신청완료 때 그룹웨어가 정하는 제목입니다(내 지난 신청 형식 기준)');
       }
     } catch (e) { step('중단', false, e.message); }
-    finally { AUTO.running = false; }
+    finally { AUTO.running = false; try { const pf = $('#frame iframe'), pd = pf && pf.contentDocument, done = pd && [...pd.querySelectorAll('button')].find(x => /신청완료/.test(x.textContent || '')); if (done) done.scrollIntoView({block: 'center', inline: 'nearest'}); } catch {} if (typeof markPaneDirty === 'function') { const pf = $('#frame iframe'); if (pf) markPaneDirty(pf); } }
     step('안전장치', AUTO.blocked.length === 0, AUTO.blocked.length ? `자동 실행 중 ${AUTO.blocked.join(', ')} 클릭을 막았습니다` : '[신청완료]는 누르지 않았습니다. 화면에서 확인한 뒤 직접 누르세요');
     const bad = steps.filter(s => !s.ok).length;
     logActionRecord({command: `근태신청 준비: ${ATT_FORM[spec.type]}`, type: '근태', target: `${spec.from} ${spec.kind || ''}`, summary: bad ? `${steps.length - bad}/${steps.length} 항목을 채웠습니다. 신청은 하지 않았습니다.` : '모든 항목을 채웠습니다. 신청은 하지 않았습니다.', steps: steps.map(s => `${s.ok ? '✓' : '✗'} ${s.name}: ${s.detail}`), status: bad ? 'partial' : 'success', verified: !bad});
