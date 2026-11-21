@@ -156,3 +156,10 @@ test('v1.12.0: 날짜를 물은 내 근태 신청 질문은 그날 것부터 답
   assert.match(t, /name: 'list_my_requests'[\s\S]*?run: async \(a, ctx\) =>/);
   assert.match(t, /에 올린 내 근태 신청은 없습니다\./);
 });
+test('v1.12.2: 결과보고는 계획서의 기록물철을 이어받고, 제목 칸은 떠날 때까지 입력해 그룹웨어가 읽게 한다', () => {
+  const de = read('wc/19-draft-engine.js');
+  assert.match(de, /if \(plan\.binder && !\/\^접수문서\/\.test\(plan\.binder\)\) \{ meta\.binder = plan\.binder;/);
+  assert.match(de, /const ks = keys\.filter\(k => classification\.includes\(k\)\);\n      if \(!ks\.length\) return \{ok: true/);
+  assert.match(de, /setNative\(w, inp, spec\.title\);\n      try \{ inp\.blur\(\);/);
+  assert.match(read('wc/42-result-review.js'), /기록물철은 계획서와 같게 이어받음/);
+});

@@ -424,7 +424,9 @@
     try {
     await run('제목', async () => {
       const inp = d.querySelector('input[placeholder="제목을 입력해주세요"]');
+      try { inp.focus(); } catch {}
       setNative(w, inp, spec.title);
+      try { inp.blur(); inp.dispatchEvent(new w.FocusEvent('focusout', {bubbles: true})); } catch {}
       await wait(300);
       if (!live()) return {ok: false, detail: '계정 또는 기안 화면이 변경되어 중단했습니다'};
       let hwpTitle = ''; try { const ctrl = d.querySelector('iframe[src*="hwpBuild"], #formCtrl_1').contentWindow.HwpCtrl; ctrl.PutFieldText('doc_name', spec.title); for (let i = 0; i < 10; i++) { hwpTitle = String((await ctrl.GetFieldText('doc_name')) || '').trim(); if (hwpTitle === spec.title) break; await wait(300); } } catch {}
@@ -434,6 +436,8 @@
     await run('공개·긴급·보안·문서구분', async () => {
       const keys = ['open', 'urgent', 'sec', 'docKind'];
       if (!confirmed) return {ok: true, detail: '그룹웨어 기본값 유지(이어받기 선택 안 함) · 공개·보안은 상신 전에 확인하세요.'};
+      const ks = keys.filter(k => classification.includes(k));
+      if (!ks.length) return {ok: true, detail: '그룹웨어 기본값 유지 · 공개·보안은 상신 전에 확인하세요.'};
       const r = keys.map(k => classification.includes(k) && setRadioByLabel(d, m[k]));
       return {ok: r.every(Boolean), detail: keys.map(k => m[k] || '확인 불가').join(' · ')};
     });
@@ -499,6 +503,7 @@
     if (!reviewed || owner !== currentKey || owner !== getUserKey()) return;
     const {title,body} = reviewed;
     const meta = reviewed.useMeta ? R.predictDraftMeta(patModel(), {title, sourceDocNo: plan.docNo, sourceTitle: plan.title}) : {};
+    if (plan.binder && !/^접수문서/.test(plan.binder)) { meta.binder = plan.binder; meta.basis = `계획서(${plan.docNo || '선택한 계획서'})와 같은 기록물철`; }
     const f = await openDraftFrame('mg_20160303185413307', '일반기안문', `결과보고: ${plan.title}`);
     if (!f) { toast('기안 열기를 취소했거나 화면이 아직 준비되지 않았습니다. 기존 내용은 그대로 두었습니다.'); return; }
     const steps = await fillDraft(f, {title, meta, body, ref: {title: plan.title, docNo: plan.docNo}});
