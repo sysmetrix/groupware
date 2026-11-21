@@ -155,7 +155,10 @@
       case 'help': toggleHelp(); break;
       case 'closeHelp': case 'closeOverlay': closeOverlay(); break;
       case 'menuNew': openMenu('new'); break;
-      case 'menuBell': closeOverlay(); if (go('notifications')) loadNotifications(); break;
+      case 'menuBell': if (S.menuOpen === 'bell') closeOverlay(); else { closeOverlay(); openMenu('bell', el); } break;
+      case 'bellOpen': { const i = Number(el.dataset.i); closeOverlay(); openNotification(i); break; }
+      case 'bellAll': closeOverlay(); if (go('notifications')) { NTF.filter = el.dataset.v === 'unread' ? 'unread' : 'all'; NTF.page = 1; loadNotifications(); } break;
+      case 'bellRefresh': ntfPopRefresh(true); break;
       case 'notificationsLoad': loadNotifications(); break;
       case 'notificationsFilter': NTF.filter = v; NTF.page = 1; renderMain(); break;
       case 'notificationsType': NTF.type = v; NTF.page = 1; renderMain(); break;
@@ -173,7 +176,6 @@
         if (!leavePane()) break;
         closeOverlay(); close(); target.click(); break;
       }
-      case 'bellItem': closeOverlay(); if (go('today')) selectAction(el.dataset.k); break;
       case 'fsUp': fontStep(1); if (S.menuOpen === 'view') { S.menuOpen = ''; openMenu('view'); } break;
       case 'fsDown': fontStep(-1); if (S.menuOpen === 'view') { S.menuOpen = ''; openMenu('view'); } break;
       case 'theme': toggleTheme(); toast(S.settings.theme === 'dark' ? '다크 모드' : '라이트 모드'); if (S.menuOpen === 'view') { S.menuOpen = ''; openMenu('view'); } break;

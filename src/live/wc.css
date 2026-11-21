@@ -1460,3 +1460,12 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .bm-note{margin:8px 0 0}
 .wc .bm-scroll{overflow-x:auto;max-width:100%}
 @media (max-width:1100px){.wc .bm-mine-tbl th:nth-child(2),.wc .bm-mine-tbl td:nth-child(2),.wc .bm-mine-tbl th:nth-child(5),.wc .bm-mine-tbl td:nth-child(5),.wc .bm-all-tbl th:nth-child(4),.wc .bm-all-tbl td:nth-child(4){display:none}.wc .bm-mine-tbl td:first-child{min-width:160px}.wc .bm-mine-tbl .bm-name{white-space:normal}.wc .bm-rate>span:last-child{min-width:44px;margin-left:6px}.wc .bm-mine-tbl td,.wc .bm-mine-tbl th{padding-left:6px;padding-right:6px}}
+/* v1.19.0 머리글 종 팝업 */
+.wc .menu.ntf-pop{width:min(400px,calc(100vw - 24px));min-width:0;max-width:400px;max-height:min(72vh,620px);padding:0;display:flex;flex-direction:column;overflow:hidden}
+.wc .ntf-ph{display:flex;align-items:center;gap:8px;padding:12px 12px 10px 16px;border-bottom:1px solid var(--line)}.wc .ntf-ph strong{font-size:15px;color:var(--fg)}.wc .ntf-ph span{font-size:13px;color:var(--accent);font-weight:600;flex:1}
+.wc .ntf-pl{overflow:auto;padding:4px 6px;flex:1;min-height:0}.wc .ntf-ps{padding:10px 10px 4px;font-size:12px;font-weight:700;color:var(--muted)}.wc .ntf-pe{padding:18px 10px;font-size:13px;color:var(--muted);text-align:center}
+.wc .ntf-pi{display:grid;grid-template-columns:14px minmax(0,1fr) auto;align-items:start;gap:0 4px;width:100%;border:0;border-radius:8px;padding:8px 10px;background:transparent;text-align:left;color:var(--fg);cursor:pointer;font:inherit}
+.wc .ntf-pi:hover{background:var(--soft)}.wc .ntf-pi:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}.wc .ntf-pi .ntf-dot{margin:6px 0 0}
+.wc .ntf-pc{display:grid;gap:2px;min-width:0}.wc .ntf-pc b{font-size:13px;font-weight:500;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}.wc .ntf-pi.unread .ntf-pc b{font-weight:700}
+.wc .ntf-pc small{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.wc .ntf-pt{font-size:12px;color:var(--muted);padding-top:1px;font-variant-numeric:tabular-nums}
+.wc .ntf-pf{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-top:1px solid var(--line)}.wc .ntf-pf .muted{font-size:12px}

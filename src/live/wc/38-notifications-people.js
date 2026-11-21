@@ -33,6 +33,47 @@
       if (result.status?.alerts?.ok && Array.isArray(result.data?.alerts?.alerts)) { NTF.items = result.data.alerts.alerts; NTF.at = result.collectedAt; NTF.error = ''; renderHead(); }
     } catch {}
   }
+  // v1.19.0: 머리글 종 팝업. 안 읽은 알림(최대 8건)을 먼저, 모자라면 최근 알림으로 5건까지 채운다. 여기서는 읽음 처리하지 않는다.
+  let ntfPopBusy = false;
+  function ntfPopHtml() {
+    const list = NTF.items || [], unread = list.filter(x => !x.read).length;
+    const key = x => { const t = notificationTime(x.time); return /^\d{4}\.\d{2}\.\d{2}/.test(t) ? t.replace(/\D/g, '').padEnd(12, '0') : ''; };
+    const sorted = list.map((x, i) => ({x, i, k: key(x)})).sort((a, b) => (a.k ? 0 : 1) - (b.k ? 0 : 1) || (a.k < b.k ? 1 : a.k > b.k ? -1 : a.i - b.i));
+    const fresh = sorted.filter(({x}) => !x.read).slice(0, 8), rest = sorted.filter(({x}) => x.read).slice(0, Math.max(0, 5 - fresh.length));
+    const d = new Date(), today = d.getFullYear() + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.' + String(d.getDate()).padStart(2, '0');
+    const when = x => { const t = notificationTime(x.time); return /^\d{4}\.\d{2}\.\d{2} \d{2}:\d{2}/.test(t) ? (t.slice(0, 10) === today ? t.slice(11) : t.slice(5, 10).replace('.', '/')) : ''; };
+    const row = ({x, i}) => {
+      const title = x.title || x.head || '(제목 없음)', meta = [notificationLabel(x.type), x.who || x.dept].filter(Boolean).join(' · ');
+      const act = notificationUrl(x) ? `data-act="bellOpen" data-i="${i}"` : 'data-act="nativeNotifications"';
+      const hint = notificationUrl(x) ? '원문 열기' : '그룹웨어 알림 목록에서 보기';
+      return `<button type="button" class="ntf-pi${x.read ? '' : ' unread'}" ${act} title="${esc(title)} · ${hint}"><i class="ntf-dot${x.read ? ' off' : ''}" aria-hidden="true"></i><span class="ntf-pc"><b>${esc(title)}</b><small>${x.read ? '' : '<span class="vh">안 읽음 · </span>'}${esc(meta)}</small></span><span class="ntf-pt">${esc(when(x))}</span></button>`;
+    };
+    const body = NTF.items === null ? (NTF.error && !ntfPopBusy ? `<div class="ntf-pe" role="alert">알림을 불러오지 못했습니다. <button class="btn sm" data-act="bellRefresh">다시 시도</button></div>` : '<div class="ntf-pe" role="status">그룹웨어 알림을 읽고 있습니다…</div>')
+      : (fresh.length ? '<div class="ntf-ps">안 읽음</div>' + fresh.map(row).join('') : '<div class="ntf-pe">새 알림이 없습니다.</div>') + (rest.length ? '<div class="ntf-ps">최근 알림</div>' + rest.map(row).join('') : '');
+    const more = unread > fresh.length ? ` · 안 읽음 ${unread - fresh.length}건 더` : '';
+    return `<div class="menu ntf-pop" data-stop="1" role="dialog" aria-label="통합알림 미리보기" style="${NTF.popPos || ''}"><div class="ntf-ph"><strong>통합알림</strong><span aria-live="polite">${NTF.items === null ? '' : unread ? '안 읽음 ' + unread + '건' : '모두 읽음'}</span><button type="button" class="btn sm ghost" data-act="bellRefresh" ${ntfPopBusy ? 'disabled' : ''} aria-label="알림 새로고침">${ntfPopBusy ? '확인 중…' : '새로고침'}</button></div><div class="ntf-pl">${body}</div><div class="ntf-pf"><span class="muted">${NTF.at ? '조회 ' + esc(hhmm(new Date(NTF.at))) + more : ''}</span><button type="button" class="btn sm" data-act="bellAll" data-v="${unread ? 'unread' : 'all'}">통합알림 전체 보기</button></div></div>`;
+  }
+  function ntfPopDraw() {
+    if (S.menuOpen !== 'bell') return;
+    const focused = root.activeElement, fi = focused?.dataset?.i, fa = focused?.dataset?.act;
+    $('#overlay').innerHTML = ntfPopHtml();
+    const back = fa && ($(`#overlay .ntf-pop [data-act="${fa}"]${fi != null ? `[data-i="${fi}"]` : ''}`));
+    if (back) back.focus(); else if (focused && !focused.isConnected) ($('#overlay .ntf-pop .ntf-pi') || $('#overlay .ntf-pop button'))?.focus();
+  }
+  // 1분 안에 받은 목록이면 그대로 쓰고, 오래됐거나 새로고침을 누르면 다시 읽는다.
+  async function ntfPopRefresh(force) {
+    if (ntfPopBusy || NTF.loading) return;
+    const age = NTF.at ? Date.now() - Date.parse(NTF.at) : Infinity;
+    if (!force && NTF.items && age < 60000) return;
+    const seq = NTF.seq, owner = currentKey; ntfPopBusy = true; ntfBgAt = Date.now(); ntfPopDraw();
+    try {
+      const result = await GW.collect({modules:['alerts'], alertCount:100});
+      if (seq !== NTF.seq || NTF.loading || owner !== currentKey || owner !== getUserKey()) return;
+      if (!result.status?.alerts?.ok || !Array.isArray(result.data?.alerts?.alerts)) throw new Error(result.status?.alerts?.message || '알림 응답을 확인할 수 없습니다.');
+      NTF.items = result.data.alerts.alerts; NTF.at = result.collectedAt; NTF.error = '';
+    } catch (e) { if (owner === currentKey) { NTF.error = String(e.message || e); if (NTF.items && force) toast('알림을 새로 읽지 못했습니다. 이전에 받은 목록을 보여 줍니다.'); } }
+    finally { ntfPopBusy = false; if (owner === currentKey) { renderHead(); ntfPopDraw(); } }
+  }
   function notificationsSearch() {
     NTF.query = String($('#notificationsQuery')?.value ?? NTF.query); NTF.search = NTF.query.trim().toLowerCase(); NTF.page = 1; renderMain();
   }
