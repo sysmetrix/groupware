@@ -244,7 +244,6 @@
       case 'calToday': S.cal.offset = 0; teamCfg().day = ''; renderMain(); break;
       case 'calItem': if (el.dataset.k && S.a.actions.some(x => x.key === el.dataset.k)) { if (go('today')) selectAction(el.dataset.k); } else if (el.dataset.url) openUrl(el.dataset.url, {title: el.textContent.trim()}); break;
       case 'goBudgetPick': S.budget.pickOpen = true; go('budget'); break;
-      case 'budgetMonthClear': S.budget.month = ''; renderMain(); break;
       case 'bTogglePick': S.budget.pickOpen = !S.budget.pickOpen; renderMain(); break;
       case 'bPick': e.stopPropagation(); S.budget.pickOpen = false; S.budget.project = el.dataset.p; S.budget.filter = el.dataset.f || ''; loadBudget(); break;
       case 'bPin': { e.stopPropagation(); const p = el.dataset.p, f = el.dataset.f || '', l = el.dataset.l || f || p; const list = S.settings.budget, before = list.slice(); const i = list.findIndex(x => x && x.project === p && (x.filter || '') === f); if (i >= 0) list.splice(i, 1); else list.push({project: p, filter: f, label: l}); if (!saveLocal()) { list.splice(0, list.length, ...before); toast('저장하지 못했습니다. 관심 사업 변경을 취소했습니다.'); } else toast(i >= 0 ? '내 관심 사업에서 뺐습니다.' : '내 관심 사업에 추가했습니다.'); renderMain(); break; }

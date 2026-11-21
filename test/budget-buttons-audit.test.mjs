@@ -48,7 +48,7 @@ test('tabs, month chart, ledger filters and pagination handle valid and invalid 
   const f=fixture(), b=f.S.budget; await f.click('budgetTab',{},'ledger'); assert.equal(b.budgetTab,'ledger'); await f.click('budgetTab',{},'bogus'); assert.equal(b.budgetTab,'ledger');
   await f.click('budgetMonth',{},'02'); assert.equal(b.month,'02'); assert.equal(b.ledgerPage,1); assert.equal(f.calls.some(x=>x[0]==='loadLedgerAll'),false);
   await f.click('budgetMonth',{},'02'); assert.equal(b.month,''); b.ledger=null; await f.click('budgetMonth',{},'01'); assert.ok(f.calls.some(x=>x[0]==='loadLedgerAll')); assert.equal(b.month,'01');
-  await f.click('ledgerMonth',{},'03'); assert.equal(b.month,'03'); assert.equal(b.ledgerPage,1); await f.click('budgetMonthClear'); assert.equal(b.month,'');
+  await f.click('ledgerMonth',{},'03'); assert.equal(b.month,'03'); assert.equal(b.ledgerPage,1); await f.click('ledgerMonth',{},''); assert.equal(b.month,''); // 화면의 '전체' 월 버튼
   await f.click('ledgerSort',{},'amountDesc'); assert.equal(b.ledgerSort,'amountDesc'); await f.click('ledgerSort',{},'bogus'); assert.equal(b.ledgerSort,'amountDesc');
   await f.click('ledgerPage',{},'-4'); assert.equal(b.ledgerPage,1); await f.click('ledgerPage',{},'2'); assert.equal(b.ledgerPage,2);
   await f.click('ledgerSearch'); assert.equal(b.ledgerQuery,'홍길동'); assert.equal(b.ledgerPage,1); await f.click('ledgerSearchClear'); assert.equal(b.ledgerQuery,''); assert.ok(f.calls.some(x=>x[0]==='focus'&&x[1]==='ledgerQuery'));
