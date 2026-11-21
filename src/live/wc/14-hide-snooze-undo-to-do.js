@@ -37,7 +37,7 @@
     S.focus = {keys: list, i: 0, results: {}, busy: false};
     if (S.view !== 'today' && S.view !== 'approval') S.view = 'today';
     focusOpen();
-    toast('연속 처리: 그룹웨어 원래 화면에서 처리한 뒤 아래 초록 버튼을 누르세요. 실제로 처리됐는지 확인해 드립니다.');
+    // v1.11.1: 안내를 위쪽 알림 대신 아래 진행 막대에 둔다(알림이 처리 창의 닫기·이전 버튼을 가렸음).
   }
   // Items that would record a read are not opened automatically: the pane shows a gate instead.
   function focusOpen() {
@@ -65,7 +65,7 @@
     const label = x && x.type === 'doc' ? '처리했음 → 확인하고 다음' : x && x.type === 'mail' ? '답장했음 → 보낸메일 확인하고 다음' : '직접 확인했음 → 다음';
     const gate = f.gate ? `<div class="box warn" style="margin:0 10px 6px">이 항목은 열면 그룹웨어에 읽음(열람)으로 기록됩니다. <button class="btn sm primary" data-act="focusOpenGate">열고 처리하기</button> <button class="btn sm" data-act="focusSkip">열지 않고 건너뛰기</button></div>` : '';
     const summary = [cnt('done') ? `처리 확인 ${cnt('done')}` : '', cnt('manual') ? `직접 확인 ${cnt('manual')}` : '', cnt('remain') ? `아직 남음 ${cnt('remain')}` : '', cnt('hadReply') ? `이전 답장만 ${cnt('hadReply')}` : '', cnt('unsent') ? `답장 못 찾음 ${cnt('unsent')}` : '', cnt('unknown') ? `확인 불가 ${cnt('unknown')}` : ''].filter(Boolean).join(' · ');
-    return `${gate}<div class="fbar"><span class="prog">연속 처리 ${f.i + 1} / ${f.keys.length}${summary ? ' · ' + summary : ''}</span><button class="btn sm" data-act="focusPrev" ${f.i === 0 || f.busy ? 'disabled' : ''}>◀ 이전</button><button class="btn sm" data-act="focusSkip" ${f.busy ? 'disabled' : ''}>건너뛰기</button><button class="btn ok" data-act="focusNext" ${f.busy ? 'disabled' : ''}>${f.busy ? '<span class="spin"></span> 확인 중…' : label}</button><button class="btn sm" data-act="focusStop" ${f.busy ? 'disabled' : ''}>끝내기</button></div>`;
+    return `${gate}<div class="fbar"><span class="prog">연속 처리 ${f.i + 1} / ${f.keys.length}${summary ? ' · ' + summary : ''}${!summary && f.i === 0 ? '<small class="muted" style="display:block;font-weight:500">원래 화면에서 처리한 뒤 초록 버튼을 누르면 처리됐는지 확인합니다</small>' : ''}</span><button class="btn sm" data-act="focusPrev" ${f.i === 0 || f.busy ? 'disabled' : ''}>◀ 이전</button><button class="btn sm" data-act="focusSkip" ${f.busy ? 'disabled' : ''}>건너뛰기</button><button class="btn ok" data-act="focusNext" ${f.busy ? 'disabled' : ''}>${f.busy ? '<span class="spin"></span> 확인 중…' : label}</button><button class="btn sm" data-act="focusStop" ${f.busy ? 'disabled' : ''}>끝내기</button></div>`;
   }
   async function focusNext(verify = true) {
     const f = S.focus;
