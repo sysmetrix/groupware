@@ -113,7 +113,7 @@
     const urgent = mine.filter(x => ['overdue', 'urgent'].includes(stateOf(x))).length;
     const byArea = a => mine.filter(x => x.area === a).length;
     const counts = {
-      today: S.a ? {n: mine.length, cls: urgent ? 'hot' : mine.length ? 'mine' : '', tip: '처리할 일 ' + mine.length + '건'} : null,
+      today: S.a ? (() => { const td = typeof todoNavDue === 'function' ? todoNavDue() : [], late = td.some(t => R.dday(t.due) < 0), n = mine.length + td.length; return {n, cls: urgent || late ? 'hot' : n ? 'mine' : '', tip: '처리할 일 ' + mine.length + '건' + (td.length ? ` · 오늘까지인 내 할 일 ${td.length}건` : '')}; })() : null,
       approval: S.a ? (u.approval ? {n: '?'} : (() => { const n = S.a.approval?.lists?.pending?.total ?? byArea('결재'); return {n, cls: n ? 'mine' : '', tip: '대기 ' + n + '건'}; })()) : null,
       mail: S.a ? (() => { const n = mailSnapshot().unread; return {n: n ?? '?', cls: n ? 'mine' : '', tip: n == null ? '안 읽은 메일 확인 불가' : '안 읽은 메일 조회분 ' + n + '건'}; })() : null,
       attendance: S.a ? {n: byArea('근태'), cls: byArea('근태') ? 'mine' : '', tip: '퇴근 지문 확인 ' + byArea('근태') + '건'} : null,
