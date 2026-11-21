@@ -316,6 +316,20 @@ export function weeklyDraftPeriod(text, now = new Date()) {
   return {label: `${+m[1]}/${+m[2]}~${+m[3]}/${+m[4]}`, ageDays, stale: ageDays > 7};
 }
 
+// v1.16.0: 결과보고 검토 창의 실적 칸을 계획서 값으로 먼저 채운다(운영자 요청). 순서: [일시, 장소, 인원, 금액, 주요내용].
+// "  나. 참가일시: 2026. 10. 27.(화) 14:00 ~ 16:30" 같은 줄에서 항목명(띄어쓰기 무시)으로 찾는다. 못 찾은 칸은 ''.
+export function planFacts(body = '') {
+  const out = ['', '', '', '', ''];
+  const KEYS = [/^(?:운영|참가|행사|교육|회의|추진|사업)?(?:일시|일정|기간|날짜)$/, /^(?:운영|참가|행사|교육|회의|추진)?(?:장소|위치)$/, /^(?:참가|참여|참석|운영|교육)?(?:인원|대상인원)$/, /^(?:소요)?(?:예산|금액|사업비|비용)$/, /^(?:주요)?(?:내용|프로그램|일정내용)$/];
+  for (const raw of String(body || '').split(/\r?\n/)) {
+    const m = raw.match(/^\s*(?:[가-하]|\d{1,2})[.)]\s*([가-힣 ·]{1,14}?)\s*[:：]\s*(.+)$/);
+    if (!m) continue;
+    const label = m[1].replace(/[\s·]/g, ''), value = m[2].replace(/\s*※.*$/, '').replace(/\s+/g, ' ').trim();
+    const i = KEYS.findIndex(k => k.test(label));
+    if (i >= 0 && !out[i] && value) out[i] = value.slice(0, 300);
+  }
+  return out;
+}
 // Plain-text weekly report draft (주간 업무 실적) from my submitted documents and receipts.
 const PERSONAL_FORMS = /연차휴가신청서|출장신청서|근무일대체신청서|연장근무신청서|시간외근무신청서/;
 export function weeklyReport({submitted = [], receipts = [], me = '', from = '', to = '', now = new Date()} = {}) {

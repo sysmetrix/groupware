@@ -150,12 +150,19 @@ public static class RuntimeConfigProbe {
     await fs.copyFile(path.join(root, 'desktop/runtime-config.mjs'), path.join(dir, 'desktop/runtime-config.mjs'));
     await fs.copyFile(path.join(root, 'scripts/windows-services.ps1'), path.join(dir, 'scripts/windows-services.ps1'));
     await fs.mkdir(path.join(dir, 'src'));
-    await fs.writeFile(path.join(dir, 'src/server.mjs'), "import http from 'node:http'; http.createServer((q,r)=>r.end('isolated-desktop')).listen(Number(process.env.PORT),'127.0.0.1');");
-    const reservation = http.createServer(); reservation.listen(0, '127.0.0.1'); await once(reservation, 'listening');
-    const port = reservation.address().port; await new Promise(resolve => reservation.close(resolve));
-    await config(`PORT=${port}\nOLLAMA_BASE_URL=http://127.0.0.1:${port === 11434 ? 11435 : 11434}`);
+    await fs.writeFile(path.join(dir, 'src/server.mjs'), "import http from 'node:http'; import fs from 'node:fs'; const s=http.createServer((q,r)=>r.end('isolated-desktop')); s.on('error',e=>{fs.writeFileSync('server-error.txt',String(e.code||e.message));process.exit(1);}); s.listen(Number(process.env.PORT),'127.0.0.1');");
+    let port, started;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const reservation = http.createServer(); reservation.listen(0, '127.0.0.1'); await once(reservation, 'listening');
+      port = reservation.address().port; await new Promise(resolve => reservation.close(resolve));
+      await config(`PORT=${port}\nOLLAMA_BASE_URL=http://127.0.0.1:${port === 11434 ? 11435 : 11434}`);
+      started = await run('Start', 'App');
+      const why = await fs.readFile(path.join(dir, 'server-error.txt'), 'utf8').catch(() => '');
+      if (!(started.error && /Owned child exited|already in use/.test(String(started.error)) && (why === 'EADDRINUSE' || /already in use/.test(String(started.error))))) break;
+      await fs.rm(path.join(dir, 'server-error.txt'), {force: true}); await run('Stop', 'App');
+    }
     try {
-      const started = await run('Start', 'App'); assert.equal(started.error, null);
+      assert.equal(started.error, null, 'test server: ' + (await fs.readFile(path.join(dir, 'server-error.txt'), 'utf8').catch(() => 'no error recorded')));
       const state = JSON.parse((await run('Status')).result).find(x => x.service === 'App');
       assert.equal(state.port, port); assert.equal(state.status, 'running-owned');
       assert.equal(await (await fetch(`http://127.0.0.1:${port}`, {signal: AbortSignal.timeout(5000)})).text(), 'isolated-desktop');

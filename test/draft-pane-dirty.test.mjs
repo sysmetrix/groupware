@@ -57,12 +57,6 @@ test('detail rejection releases busy on stale epochs', async () => {
   const h = mailHarness(), p = h.load({uid: '1'}); await Promise.resolve(); h.S.apEpoch++; h.pending[0].reject(new Error('offline'));
   assert.equal((await p).error, 'offline'); assert.equal(h.S.mailDetBusy['1'], undefined);
 });
-test('result body uses actual facts, never planned figures', () => {
-  const make = runInNewContext(chunk(draft, '  function buildConfirmedResultBody', '  // ---------- 결과보고:') + ';buildConfirmedResultBody');
-  const body = make({docNo: 'A-12', body: 'planned 100명 999,000원'}, ['today', '', '32명', '450,000원']);
-  assert.match(body.text, /32명/); assert.match(body.text, /450,000원/); assert.match(body.text, /실적 확인 필요/);
-  assert.doesNotMatch(body.text, /100명|999,000원/); assert.equal(body.lines.length, body.hang.length);
-});
 function fillHarness(confirmValue, failDialog = false) {
   const S = {pane: {url: '/draft'}}, calls = [], input = {value: ''};
   const ctrl = {PutFieldText() {}};

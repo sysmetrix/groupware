@@ -80,7 +80,7 @@ test('update check never reports "최신" when it could not check, and stays on 
   assert.match(newer.g.toast.calls[0][0], /새 버전 v0\.53\.0/);
   for (const t of [off, fail]) assert.doesNotMatch(t.g.toast.calls[0][0], /최신 버전입니다/);
   const gov = read('21-governance.js');
-  assert.match(gov, /Date\.now\(\) - cached\.at < 10 \* 60e3 && R\.compareVersions\(cached\.latest, VERSION\) >= 0/); // hourly, and re-check right after an update
+  assert.match(gov, /Date\.now\(\) - cached\.at < 3 \* 60e3 && R\.compareVersions\(cached\.latest, VERSION\) >= 0/); // hourly, and re-check right after an update
 });
 
 // ---------- mail: read view vs compose ----------
@@ -112,7 +112,7 @@ test('paneMailRef resolves the mail from a list pick, a to-do and a search resul
 });
 
 test('reply-template bar: opens the reply first on the read view, hidden when there is nothing to reply to', () => {
-  const bar = (url, sel) => { const g = mailEnv({ic: () => '', esc}); g.S.pane.url = url; g.S.sel = sel; return run(g, [...MAILREF, pick('13-detail-pane.js', 'function autoFillBar(')], 'autoFillBar')(); };
+  const bar = (url, sel) => { const g = mailEnv({ic: () => '', esc}); g.S.pane.url = url; g.S.sel = sel; return run(g, [...MAILREF, pick('13b-mail-compose.js', 'function autoFillBar(')], 'autoFillBar')(); };
   const picked = {type: 'mail', box: 'INBOX', uid: '7'};
   assert.match(bar(READ, picked), /답장 화면을 열고 회신문 넣기:/);
   assert.match(bar(READ, picked), /data-act="autoFillMail" data-v="confirm"/);
@@ -174,7 +174,7 @@ test('when the embedded groupware screen closes itself the pane closes and the l
 });
 
 // ---------- mail: template buttons work from the read view ----------
-const FILL = [...MAILREF, pick('13-detail-pane.js', 'function mailEditorBody('), pick('13-detail-pane.js', 'async function waitMailEditorSettled('), pick('13-detail-pane.js', 'async function autoFillMail('), pick('13-detail-pane.js', 'async function autoFillMailRun(')];
+const FILL = [...MAILREF, pick('13b-mail-compose.js', 'function mailEditorBody('), pick('13b-mail-compose.js', 'async function waitMailEditorSettled('), pick('13b-mail-compose.js', 'async function autoFillMail('), pick('13b-mail-compose.js', 'async function autoFillMailRun(')];
 
 function editorBody(text = '원문 인용') {
   const body = {isContentEditable: true, innerHTML: `<p>${text}</p>`, innerText: text, tpl: null, events: 0,

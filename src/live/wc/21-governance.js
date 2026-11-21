@@ -91,9 +91,11 @@
    * - 열어서 쓰는 중: 건드리지 않는다. 닫는 순간(또는 다음에 열 때) 바뀐다. 급하면 업데이트 내역의 "지금 바꾸기".
    * 같은 묶음은 한 탭에서 한 번만 시도한다(문제가 있는 배포가 화면을 계속 다시 그리지 않게).
    */
-  async function autoUpdate() {
+  const updBootAt = Date.now();
+  const updIdle = () => { try { const inp = $('#chInput'); return Date.now() - updBootAt < 90e3 && !S.pane.url && !S.pane.dirty && !S.focus && !(inp && inp.value.trim()) && !($('#overlay') && $('#overlay').childElementCount); } catch { return false; } };
+  async function autoUpdate(force) {
     if (S.updBusy || window.BWYFGW_DEMO || !allowed('updateCheck') || S.settings.autoUpdate === false) return;
-    const i = await checkUpdate(false);
+    const i = await checkUpdate(!!force);
     if (!i || !i.latest || R.compareVersions(i.latest, VERSION) <= 0) return;
     if (!S.updReady || R.compareVersions(i.latest, S.updReady.version) > 0) {
       S.updBusy = true;
@@ -111,6 +113,7 @@
     if (!u) return false;
     let tried = ''; try { tried = sessionStorage.getItem(UPDATE_META) || ''; } catch {}
     if (tried === u.sha256) return false;
+    if (S.open && !reopen && typeof updIdle === 'function' && updIdle()) reopen = true;
     if (S.open && !reopen) {
       if (S.updNoted !== u.version) { S.updNoted = u.version; renderNav(); toast(`새 버전 v${u.version} 을 받아 두었습니다. GW 비서를 닫으면 자동으로 바뀝니다.`); }
       return false;
@@ -121,14 +124,14 @@
   }
   // 10분마다, 그리고 다른 탭을 보다가 돌아왔을 때 확인한다(보이지 않는 탭에서는 확인하지 않는다).
   const onUpdateVisible = () => { if (document.visibilityState !== 'hidden') autoUpdate().catch(() => {}); };
-  const updateTimer = setInterval(onUpdateVisible, 10 * 60e3);
-  const updateFirst = setTimeout(onUpdateVisible, 5000);
+  const updateTimer = setInterval(onUpdateVisible, 5 * 60e3);
+  const updateFirst = setTimeout(() => { if (document.visibilityState !== 'hidden') autoUpdate(true).catch(() => {}); }, 3000);
   document.addEventListener('visibilitychange', onUpdateVisible);
   function updateStop() { clearInterval(updateTimer); clearTimeout(updateFirst); document.removeEventListener('visibilitychange', onUpdateVisible); }
   async function checkUpdate(force) {
     if (!allowed('updateCheck')) return null;
     const cached = store.get('updateInfo', null);
-    if (!force && cached && /^\d+\.\d+\.\d+$/.test(cached.latest || '') && Date.now() - cached.at < 10 * 60e3 && R.compareVersions(cached.latest, VERSION) >= 0) return cached; // 10분. 방금 갱신돼 설치본이 더 새것이면 다시 확인한다
+    if (!force && cached && /^\d+\.\d+\.\d+$/.test(cached.latest || '') && Date.now() - cached.at < 3 * 60e3 && R.compareVersions(cached.latest, VERSION) >= 0) return cached; // 10분. 방금 갱신돼 설치본이 더 새것이면 다시 확인한다
     // 실패한 확인도 10분은 다시 요청하지 않는다(접속이 막힌 곳에서 열 때마다 기다리지 않게, 요청 한도도 아끼게).
     if (!force && cached && !cached.latest && cached.err && Date.now() - cached.at < 10 * 60e3) return cached;
     // ① 배포 사이트(북마크 "GW 비서 열기"가 실제로 받아 오는 곳)의 버전이 기준이다. 릴리스를 따로 만들지 않아도 맞는다.
