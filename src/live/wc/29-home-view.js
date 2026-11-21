@@ -133,7 +133,7 @@
     const resourceHtml = `<section class="hm-card hm-today hm-res" aria-label="오늘 자원 예약"><div class="hm-card-h"><h3 class="hm-card-k hm-today-k">오늘 자원 예약 (직원 전체)</h3></div>${resources.rows.length ? `<ul class="hm-tl">${resources.rows.map(r => `<li class="hm-tl-car"><span class="hm-tl-t">${esc(r.from)}${r.to ? '~' + esc(r.to) : ''}</span><span class="hm-tl-l">${esc(r.label)}</span></li>`).join('')}</ul>${resources.more ? `<div class="hm-more">외 ${resources.more}건</div>` : ''}` : resourceGaps.length ? '' : '<div class="hm-empty">조회된 자원 예약이 없습니다.</div>'}${resourceGaps.map(x => `<div class="hm-empty">${esc(x)}</div>`).join('')}</section>`;
     const sum = (S.a && S.a.summary) || {};
     const sig = (id, icon, k, v) => `<button class="hm-sig" data-act="homeTile" data-v="${id}" aria-label="${esc(k + ' ' + v)}">${typeof ic === 'function' ? ic(icon) : ''}<span class="hm-sig-k">${esc(k)}</span><b class="hm-sig-v">${esc(v)}</b></button>`;
-    const signals = `<section class="hm-card hm-sigs" aria-label="업무 참고 현황"><div class="hm-card-h"><h3 class="hm-card-k hm-today-k">챙겨 둘 것</h3></div><div class="hm-sig-l">${homeRiskSig()}${sig('mail', 'mail', '안 읽은 메일', d.unread == null ? '확인 불가' : '조회분 ' + d.unread + '건')}${sum.pending !== undefined ? sig('approval', 'doc', '내가 결재할 문서', sum.pending == null ? '확인 불가' : sum.pending + '건') : ''}${sig('ref', 'inbox', '부서 참고', (d.taskGaps ? '확인된 ' : '') + d.refN + '건')}<button class="hm-sig" data-act="homeTile" data-v="leave" aria-label="남은 연차 합계 ${esc(d.leave || '확인 불가')} · ${esc(d.leaveTypes)}"><span class="hm-sig-k">남은 연차 합계 <b>${esc(d.leave || '확인 불가')}</b><br><small>${esc(d.leaveTypes)}${S.raw.collectedAt ? '<br>' + leaveStamp() : ''}</small></span></button></div></section>`;
+    const signals = `<section class="hm-card hm-sigs" aria-label="업무 참고 현황"><div class="hm-card-h"><h3 class="hm-card-k hm-today-k">챙겨 둘 것</h3></div><div class="hm-sig-l">${homeRiskSig()}${typeof todoHomeSig === 'function' ? todoHomeSig() : ''}${sig('mail', 'mail', '안 읽은 메일', d.unread == null ? '확인 불가' : '조회분 ' + d.unread + '건')}${sum.pending !== undefined ? sig('approval', 'doc', '내가 결재할 문서', sum.pending == null ? '확인 불가' : sum.pending + '건') : ''}${sig('ref', 'inbox', '부서 참고', (d.taskGaps ? '확인된 ' : '') + d.refN + '건')}<button class="hm-sig" data-act="homeTile" data-v="leave" aria-label="남은 연차 합계 ${esc(d.leave || '확인 불가')} · ${esc(d.leaveTypes)}"><span class="hm-sig-k">남은 연차 합계 <b>${esc(d.leave || '확인 불가')}</b><br><small>${esc(d.leaveTypes)}${S.raw.collectedAt ? '<br>' + leaveStamp() : ''}</small></span></button></div></section>`;
     return tlHtml + signals + (typeof autoCardHtml === 'function' ? autoCardHtml() : '') + resourceHtml;
   }
 
@@ -186,6 +186,7 @@
     else if (v === 'mail') openUnreadMail();
     else if (v === 'approval') { if (go('approval')) { S.apTab = 'pending'; S.apTabPinned = true; renderMain(); } } // 이동한 뒤 고정해야 빈 목록이어도 '결재 대기'가 열린다
     else if (v === 'leave') go('attendance');
+    else if (v === 'mytodo') go('mytodo');
     else if (v === 'ref') { S.filter = {...S.filter, level: 'all', area: 'all', q: '', onlyNew: false, showHidden: false}; S.todayTab = 'ref'; go('today'); }
   };
   HOME_ACTS.homeNext = (el, v) => { if (!v) return; el.focus({preventScroll:true}); selectAction(v); };

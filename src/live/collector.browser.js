@@ -15,7 +15,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '1.16.1';
+  const VERSION = '1.17.0';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
@@ -33,6 +33,8 @@
     '/event/event02A01',
     '/gw/APIHandler/gw018A02', '/gw/APIHandler/gw102A01', '/gw/APIHandler/gw102A02',
     '/ea/ea059A02',
+    // v1.17 개인 ToDo(업무관리) 목록·상세. 그룹웨어 일정 화면의 ToDo 패널이 부르는 조회 주소(2026-11-21 확인).
+    '/kiss/APIHandler/prj001A12', '/kiss/APIHandler/prj001A05',
   ]);
 
   // Left-menu ids of 전자결재(비영리) observed in getMenuCountInfo (2026-11-08).
@@ -136,7 +138,8 @@
   }
 
   // 쓰기는 이 목록의 주소만, 전용 함수(reserveResource)에서만 허용한다. 상신·결재·삭제·발송 계열은 여기에 절대 넣지 않는다.
-  const WRITE_ALLOWED = new Set(['/schres/rs121A06']);
+  // v1.17: 개인 ToDo 만들기(A01)·고치기(A02)·지우기(A03)·완료(A07). todo* 전용 함수에서만, 내가 만든 내 개인 ToDo에만 쓴다.
+  const WRITE_ALLOWED = new Set(['/schres/rs121A06', '/kiss/APIHandler/prj001A01', '/kiss/APIHandler/prj001A02', '/kiss/APIHandler/prj001A03', '/kiss/APIHandler/prj001A07']);
   const INTERNAL_CALL = Symbol('internalCall');
   async function call(path, body = {}, opts = {}) {
     if (!READ_ONLY.has(path)) throw new GwError('NOT_ALLOWED', `읽기 전용 허용 목록에 없는 API입니다: ${path}`);
@@ -402,6 +405,119 @@
     if (!r || Number(r.successTf) !== 1) throw new GwError('SAVE_FAILED', '서버가 예약을 저장하지 못했습니다');
     return {ok: true, resSeq: String(resSeq), start, end, title: name, needsApproval: detail.apprYn === 'Y'};
   }
+  // ---------- v1.17 개인 ToDo (그룹웨어 업무관리 ToDo) ----------
+  // 읽기: 전체 목록(완료 포함, 하위 ToDo는 children). 쓰기: 아래 전용 함수만. 고치기·완료·지우기 전에 상세를 읽어
+  // 내가 담당자이자 만든 사람인 개인 ToDo(프로젝트 없음)인지 확인한다. 폭주를 막으려고 1분에 40번까지만 쓴다.
+  const TODO_P = '/kiss/APIHandler/';
+  const todoWrites = [];
+  function todoBudget() {
+    const now = Date.now();
+    while (todoWrites.length && now - todoWrites[0] > 60000) todoWrites.shift();
+    if (todoWrites.length >= 40) throw new GwError('RATE', 'ToDo를 너무 자주 바꾸고 있어 잠시 멈췄습니다. 1분 뒤 다시 시도하세요');
+    todoWrites.push(now);
+  }
+  const todoYmd = v => { const s = String(v || '').replace(/[^0-9]/g, ''); if (!s) return ''; if (!/^\d{8}$/.test(s)) throw new GwError('BAD_INPUT', '날짜가 올바르지 않습니다'); const d = new Date(Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8))); if (d.toISOString().slice(0, 10).replace(/-/g, '') !== s) throw new GwError('BAD_INPUT', '존재하지 않는 날짜입니다'); return s; };
+  const todoName = v => { const s = String(v || '').replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim(); if (!s) throw new GwError('BAD_INPUT', '할 일 제목을 입력하세요'); if (s.length > 100) throw new GwError('BAD_INPUT', '제목은 100자까지 쓸 수 있습니다'); return s; };
+  const todoText = v => { const s = String(v ?? '').replace(/\r\n/g, '\n'); if (s.length > 1500) throw new GwError('BAD_INPUT', '메모와 정보가 1,500자를 넘습니다'); return s; };
+  const todoId = v => { const s = String(v || ''); if (!/^td\d{1,12}$/.test(s)) throw new GwError('BAD_INPUT', 'ToDo 번호가 올바르지 않습니다'); return s; };
+  function todoRow(r) {
+    return {todoSeq: str(r.todoSeq, 20), todoName: str(r.todoName, 200), startDate: str(r.startDate, 8), endDate: str(r.endDate, 8), completeDate: str(r.completeDate, 8), createDate: str(r.createDate, 8), modifyDate: str(r.modifyDate, 8),
+      todoStatus: str(r.todoStatus, 2), processRate: num(r.processRate), importDegree: str(r.importDegree, 2), contents: String(r.contents || '').slice(0, 4000), todoLevel: num(r.todoLevel) || 1, prtSeq: str(r.prtSeq, 20), prjSeq: str(r.prjSeq, 30),
+      ownerEmpSeq: str(r.ownerEmpSeq, 20), createEmpSeq: str(r.createEmpSeq, 20), loginUserTodoOwnerYn: str(r.loginUserTodoOwnerYn, 1), loginUserTodoCreateYn: str(r.loginUserTodoCreateYn, 1), fileCount: num(r.fileCount),
+      children: (Array.isArray(r.children) ? r.children : []).map(todoRow)};
+  }
+  async function todoList() {
+    context();
+    const d = await call(TODO_P + 'prj001A12', {startDate: '20000101', endDate: '20991231', todoName: ''}, {timeoutMs: 15000});
+    const list = Array.isArray(d && d.todoList) ? d.todoList : null;
+    if (!list) throw new GwError('API_ERROR', 'ToDo 목록 형식이 바뀌었습니다');
+    const total = Number(d.totalCnt);
+    return {todos: list.map(todoRow), total: Number.isFinite(total) ? total : list.length, complete: !Number.isFinite(total) || total <= list.length, at: new Date().toISOString(), url: LINKS.route(ROUTES.schedule)};
+  }
+  async function todoDetail(id) {
+    const d = await call(TODO_P + 'prj001A05', {todoSeq: todoId(id)});
+    if (!d || String(d.todoSeq) !== String(id)) throw new GwError('NOT_FOUND', '그룹웨어에서 이 ToDo를 찾지 못했습니다(다른 곳에서 지웠을 수 있습니다)');
+    return d;
+  }
+  async function todoOwned(id) {
+    const ctx = context();
+    if (!ctx.empSeq || String(ctx.empSeq) !== String(loadedEmpSeq)) throw new GwError('IDENTITY', '로그인 정보가 바뀌었습니다. 새로고침 후 다시 시도하세요');
+    const d = await todoDetail(id);
+    if (d.loginUserTodoOwnerYn !== 'Y' || d.loginUserTodoCreateYn !== 'Y' || String(d.ownerEmpSeq) !== String(ctx.empSeq) || String(d.createEmpSeq) !== String(ctx.empSeq) || d.prjSeq) throw new GwError('NOT_MINE', '내가 만든 개인 ToDo만 GW 비서에서 바꿀 수 있습니다');
+    return {ctx, d};
+  }
+  const todoWrite = async (path, body) => {
+    if (!WRITE_ALLOWED.has(path)) throw new GwError('NOT_ALLOWED', '쓰기 허용 목록 오류');
+    todoBudget();
+    return transport(path, body, {timeoutMs: 20000, retries: 0});
+  };
+  // 만들기. parent가 있으면 하위 ToDo(체크리스트 한 줄). 응답이 늦으면 목록을 다시 읽어 같은 제목의 새 항목이 있는지 본다(중복 생성 방지).
+  async function todoCreate({title, start = '', due = '', contents = '', important = false, parent = ''} = {}) {
+    const ctx = context();
+    if (!ctx.empSeq || String(ctx.empSeq) !== String(loadedEmpSeq)) throw new GwError('IDENTITY', '로그인 정보가 바뀌었습니다. 새로고침 후 다시 시도하세요');
+    const name = todoName(title), end = todoYmd(due), st = todoYmd(start) || end, text = todoText(contents);
+    if (st && end && st > end) throw new GwError('BAD_INPUT', '시작일이 기한보다 뒤입니다');
+    if (parent) await todoOwned(parent);
+    // 응답이 늦을 때 되찾기용 '만들기 전 목록'(상위 ToDo만). 읽지 못했으면 되찾기를 하지 않는다(엉뚱한 같은 이름 ToDo를 성공으로 보지 않게).
+    const before = parent ? null : await todoList().then(r => new Set(r.todos.map(t => t.todoSeq))).catch(() => null);
+    const body = {prjSeq: '', prtSeq: parent ? todoId(parent) : '', todoLevel: parent ? '2' : '1', todoName: name, startDate: st, endDate: end, contents: text, processRate: '0', importDegree: important ? '1' : '0', file: [], linkYn: 'N', moduleSeq: 'kiss_prj', relWorkSeq: '', uid: '', paramData: '',
+      ownerUserList: [{compSeq: ctx.compSeq, deptSeq: ctx.deptSeq, empSeq: ctx.empSeq, unitType: 'E'}], ownerCompSeq: ctx.compSeq, ownerDeptSeq: ctx.deptSeq, ownerEmpSeq: ctx.empSeq, dDayYn: 'N', portletYn: 'N', modifyYn: 'Y', deleteYn: 'Y', proccessYn: 'Y'};
+    let id;
+    try { id = await todoWrite(TODO_P + 'prj001A01', body); }
+    catch (e) {
+      if (e && e.code === 'TIMEOUT' && before) {
+        const after = await todoList().catch(() => null);
+        const hit = (after ? after.todos : []).find(t => !before.has(t.todoSeq) && t.todoName === name && t.createDate === ymd());
+        if (hit) return {ok: true, id: hit.todoSeq, recovered: true};
+        throw new GwError('UNKNOWN', '응답이 늦어 저장 여부를 확인하지 못했습니다. 목록을 새로 고친 뒤 확인하세요');
+      }
+      throw e;
+    }
+    if (typeof id !== 'string' || !/^td\d+$/.test(id)) throw new GwError('SAVE_FAILED', '그룹웨어가 ToDo를 저장하지 못했습니다');
+    return {ok: true, id};
+  }
+  // 고치기: 지금 값을 읽어 바뀐 칸만 덮어 전체를 보낸다. 첨부가 있는 ToDo는 첨부를 지울 수 있어 고치지 않는다.
+  // base: 화면이 알고 있던 내용 칸. 그 사이 다른 PC·모바일에서 바뀌었으면 덮어쓰지 않고 CONFLICT로 멈춘다.
+  async function todoUpdate(id, patch = {}, {base} = {}) {
+    const {ctx, d} = await todoOwned(id);
+    if (base !== undefined && String(d.contents || '').replace(/\r\n/g, '\n') !== String(base || '').replace(/\r\n/g, '\n')) throw new GwError('CONFLICT', '그 사이 다른 곳에서 이 ToDo의 내용이 바뀌었습니다. 새로 읽은 뒤 다시 고쳐 주세요');
+    if (Number(d.fileCount) > 0) throw new GwError('HAS_FILE', '첨부파일이 있는 ToDo는 그룹웨어에서 고쳐 주세요');
+    const has = k => Object.prototype.hasOwnProperty.call(patch, k);
+    const name = has('title') ? todoName(patch.title) : String(d.todoName || ''); // 고치지 않은 칸은 그대로 돌려보낸다(그룹웨어에서 만든 긴 제목도 막지 않게)
+    const end = has('due') ? todoYmd(patch.due) : todoYmd(d.endDate);
+    let st = has('start') ? todoYmd(patch.start) : todoYmd(d.startDate);
+    // 기한만 바꾸면: 하루짜리(시작=기존 기한)는 시작도 같이 옮기고, 기간이 있던 ToDo는 시작이 새 기한보다 늦을 때만 맞춘다
+    if (has('due') && !has('start')) st = end ? (st && st !== todoYmd(d.endDate) && st <= end ? st : end) : '';
+    if (st && !end) st = '';
+    if (st && end && st > end) throw new GwError('BAD_INPUT', '시작일이 기한보다 뒤입니다');
+    const text = has('contents') ? todoText(patch.contents) : String(d.contents ?? '');
+    // 상세(A05)에는 중요도(importDegree)가 없다(2026-11-21 확인). 바꾸지 않을 때는 목록에서 지금 값을 읽어 그대로 보낸다(안 그러면 '즉시'가 '일반'으로 바뀜).
+    let impNow = d.importDegree;
+    if (!has('important') && (impNow === undefined || impNow === null || impNow === '')) { const l = await todoList(); const row = l.todos.flatMap(t => [t, ...t.children]).find(t => t.todoSeq === String(id)); if (!row) throw new GwError('NOT_FOUND', '목록에서 이 ToDo를 찾지 못해 중요도를 지킬 수 없습니다'); impNow = row.importDegree; }
+    const imp = has('important') ? (patch.important ? '1' : '0') : (String(impNow || '0') === '1' ? '1' : '0');
+    const rate = String(d.todoStatus) === '2' ? '100' : String(Number.isFinite(Number(d.processRate)) ? Number(d.processRate) : 0);
+    const body = {todoSeq: todoId(id), prjSeq: '', prtSeq: str(d.prtSeq, 20), todoLevel: String(Number(d.todoLevel) || 1), startDate: st, endDate: end, relWorkSeq: str(d.relWorkSeq, 40), todoName: name, contents: text, processRate: rate, uid: '', file: [], paramData: '', dDayYn: d.dDayYn === 'Y' ? 'Y' : 'N', importDegree: imp,
+      ownerCompSeq: ctx.compSeq, ownerDeptSeq: ctx.deptSeq, ownerEmpSeq: ctx.empSeq};
+    const r = await todoWrite(TODO_P + 'prj001A02', body);
+    if (!r || String(r.todoSeq) !== String(id)) throw new GwError('SAVE_FAILED', '그룹웨어가 변경을 저장하지 못했습니다');
+    return {ok: true, id, status: str(r.todoStatus, 2)};
+  }
+  async function todoSetDone(id, done = true) {
+    await todoOwned(id);
+    const r = await todoWrite(TODO_P + 'prj001A07', {prjSeq: '', todoSeq: todoId(id), processRate: done ? '100' : '0'});
+    if (!r || String(r.todoSeq) !== String(id)) throw new GwError('SAVE_FAILED', '그룹웨어가 완료 표시를 저장하지 못했습니다');
+    return {ok: true, id, done: String(r.todoStatus) === '2'};
+  }
+  // 지우기: 화면에서 직접 누른 경우에만(확인 창을 거친 뒤). AI·자동 실행은 지우지 못한다.
+  async function todoDelete(id) {
+    if (!(navigator.userActivation && navigator.userActivation.isActive)) throw new GwError('NO_GESTURE', '화면에서 직접 누른 경우에만 지울 수 있습니다');
+    await todoOwned(id);
+    const r = await todoWrite(TODO_P + 'prj001A03', {todoSeq: todoId(id), prjSeq: ''});
+    if (!r || String(r.todoSeq) !== String(id)) throw new GwError('SAVE_FAILED', '그룹웨어가 지우지 못했습니다');
+    return {ok: true, id};
+  }
+  const todoLink = id => `${ORIGIN}/#/popup?${qs({callComp: 'UGAP012', MicroModuleCode: 'kiss', todoSeq: id})}`;
+
   // 앞으로 예정된 휴가·출장·연장근무: 근태/출장 신청 현황(결재 중 포함)을 읽는다. 신청일 기준 최근 150일 안의 신청만 본다.
   async function teamPlanned() {
     const ctx = context();
@@ -1041,7 +1157,7 @@
   }
 
   window.BWYFGW = Object.freeze({
-    version: VERSION, collect, call, search, organizationTree, organizationMembers, sentMail, budgetCatalog, budgetProject, budgetAll, budgetLedger, budgetMonthly, attendanceDays, teamAttendance, teamPlanned, resourceList, resourceBookings, resourceDetail, resourceCheck, reserveResource, routingHistory, submittedRange, approvalPage, approvalFallback, docPreview, frequentForms, findReply, mailDetail, mailInlineImage, mailAttachment, mailAttachmentPreview, mailAttachmentPages, docAttachmentPages, synapPageImages, saveBlob,
+    version: VERSION, collect, call, search, organizationTree, organizationMembers, sentMail, budgetCatalog, budgetProject, budgetAll, budgetLedger, budgetMonthly, attendanceDays, teamAttendance, teamPlanned, resourceList, resourceBookings, resourceDetail, resourceCheck, reserveResource, todoList, todoDetail, todoCreate, todoUpdate, todoSetDone, todoDelete, todoLink, routingHistory, submittedRange, approvalPage, approvalFallback, docPreview, frequentForms, findReply, mailDetail, mailInlineImage, mailAttachment, mailAttachmentPreview, mailAttachmentPages, docAttachmentPages, synapPageImages, saveBlob,
     context: () => { const c = context(); return {name: c.name, deptName: c.deptName, compName: c.compName, duty: c.duty, position: c.position}; },
     readOnlyEndpoints: () => [...READ_ONLY], routes: ROUTES, links: LINKS, searchLabels: SEARCH_LABELS, defaults: DEFAULTS,
   });

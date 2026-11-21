@@ -30,7 +30,7 @@ async function stage(name, fn) {
 // Standalone files. The src/live/wc fragments are bodies of boot(), so checkLiveSyntax parses them in that shape
 // and also parses the assembled bundle.
 const liveFiles = async () => {
-  return [path.join(root, 'src', 'live', 'collector.browser.js'), path.join(root, 'src', 'live', 'workcenter.browser.js'), path.join(root, 'src', 'live', 'briefing.mjs'), path.join(root, 'src', 'live', 'home-model.mjs'), path.join(root, 'src', 'live', 'chat.mjs'), path.join(root, 'src', 'live', 'chat-understand.mjs'), path.join(root, 'src', 'live', 'gcal-sync.mjs'), path.join(root, 'src', 'live', 'settings-transfer.mjs'), path.join(root, 'src', 'live', 'doc-find.mjs'), path.join(root, 'src', 'live', 'usage.mjs'), path.join(root, 'src', 'live', 'contract.mjs'), path.join(root, 'src', 'live', 'changelog.mjs'),
+  return [path.join(root, 'src', 'live', 'collector.browser.js'), path.join(root, 'src', 'live', 'workcenter.browser.js'), path.join(root, 'src', 'live', 'briefing.mjs'), path.join(root, 'src', 'live', 'home-model.mjs'), path.join(root, 'src', 'live', 'chat.mjs'), path.join(root, 'src', 'live', 'chat-understand.mjs'), path.join(root, 'src', 'live', 'gcal-sync.mjs'), path.join(root, 'src', 'live', 'settings-transfer.mjs'), path.join(root, 'src', 'live', 'doc-find.mjs'), path.join(root, 'src', 'live', 'usage.mjs'), path.join(root, 'src', 'live', 'contract.mjs'), path.join(root, 'src', 'live', 'todo-plan.mjs'), path.join(root, 'src', 'live', 'changelog.mjs'),
     path.join(root, 'scripts', 'live-build.mjs'), path.join(root, 'scripts', 'harness.mjs'), path.join(root, 'scripts', 'graph.mjs'),
     path.join(root, 'scripts', 'check.mjs'), path.join(root, 'scripts', 'lib', 'test-results.mjs')];
 };
@@ -152,11 +152,16 @@ await stage('안전 규칙', async () => {
   for (const e of eps) if (/save|insert|update|delete|remove|submit|approve|send|regist|create|modify|apply/i.test(e)) fails.push(`읽기 전용 목록에 쓰기로 보이는 주소: ${e}`);
   // call('/주소', '/다른주소' ...) 처럼 인자가 오염된 호출 검출 (문자열 치환 사고 방지)
   for (const m of col.matchAll(/call\('(\/[\w/]+)',\s*'\//g)) fails.push('수집기 call 인자 오염: ' + m[1]);
-  // 쓰기 허용 목록은 자원 예약 한 개뿐이어야 한다
+  // 쓰기 허용 목록은 자원 예약 한 개와 개인 ToDo 네 개(v1.17)뿐이어야 한다
+  const WRITE_EXPECT = ['/schres/rs121A06', '/kiss/APIHandler/prj001A01', '/kiss/APIHandler/prj001A02', '/kiss/APIHandler/prj001A03', '/kiss/APIHandler/prj001A07'];
   const wm = col.match(/const WRITE_ALLOWED = new Set\(\[([^\]]*)\]/);
   const wl = wm ? [...wm[1].matchAll(/'([^']+)'/g)].map(x => x[1]) : [];
-  if (wl.length !== 1 || wl[0] !== '/schres/rs121A06') fails.push('쓰기 허용 목록이 자원 예약(rs121A06) 한 개가 아님: ' + wl.join(','));
-  for (const e of eps) if (/rs121A06/.test(e)) fails.push('쓰기 주소가 읽기 전용 목록에 있음: ' + e);
+  if (wl.length !== WRITE_EXPECT.length || WRITE_EXPECT.some(e => !wl.includes(e))) fails.push('쓰기 허용 목록이 자원 예약과 개인 ToDo 네 개가 아님: ' + wl.join(','));
+  for (const e of eps) if (WRITE_EXPECT.includes(e)) fails.push('쓰기 주소가 읽기 전용 목록에 있음: ' + e);
+  // ToDo 고치기·완료·지우기는 반드시 내 ToDo 확인(todoOwned)을 거친다. 지우기는 사용자 동작이 있어야 한다.
+  for (const fn of ['todoUpdate', 'todoSetDone', 'todoDelete']) { const body = (col.match(new RegExp(`async function ${fn}\\([\\s\\S]*?\\n  }\\n`)) || [''])[0]; if (!/await todoOwned\(/.test(body)) fails.push(`${fn}가 내 ToDo 확인(todoOwned)을 거치지 않음`); }
+  if (!/async function todoDelete\([^)]*\) \{\n\s*if \(!\(navigator\.userActivation/.test(col)) fails.push('todoDelete가 사용자 동작 확인 없이 실행될 수 있음');
+  for (const m of col.matchAll(/transport\(\s*(TODO_P \+ '[^']+'|'[^']+')/g)) { const p = m[1].replace(/TODO_P \+ '([^']+)'/, '/kiss/APIHandler/$1').replace(/'/g, ''); if (/prj001A0[1237]/.test(p)) fails.push('ToDo 쓰기 주소를 todoWrite 밖에서 부름: ' + p); }
   const eng = await read('src/live/wc/19-draft-engine.js');
   const deny = (eng.match(/const DENY_BTN = .*/) || [''])[0];
   for (const w of ['상신', '결재', '임시저장', '삭제', '발송']) if (!deny.includes(w)) fails.push(`비가역 버튼 차단 목록에 '${w}' 없음`);

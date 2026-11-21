@@ -1869,6 +1869,96 @@
         "start": "14:00",
         "end": "16:30"
       }
+    },
+    {
+      "id": "t1",
+      "cat": "조회",
+      "q": "내 할 일 보여줘",
+      "tool": "list_todos",
+      "args": {
+        "scope": "open"
+      }
+    },
+    {
+      "id": "t2",
+      "cat": "조회",
+      "q": "밀린 투두 있어?",
+      "tool": "list_todos",
+      "args": {
+        "scope": "due"
+      }
+    },
+    {
+      "id": "t3",
+      "cat": "조회",
+      "q": "이번 주 내 할 일 알려줘",
+      "tool": "list_todos",
+      "args": {
+        "scope": "week"
+      }
+    },
+    {
+      "id": "t4",
+      "cat": "조회",
+      "q": "젠더유스 예상 집행률 알려줘",
+      "tool": "budget_forecast"
+    },
+    {
+      "id": "t5",
+      "cat": "조회",
+      "q": "연말에 집행률 몇 퍼센트 될까?",
+      "tool": "budget_forecast"
+    },
+    {
+      "id": "t6",
+      "cat": "실행",
+      "q": "할 일 추가해줘 보고서 제출",
+      "tool": "add_todo"
+    },
+    {
+      "id": "t7",
+      "cat": "안전",
+      "q": "어제 회의 메모 보여줘",
+      "tool": [
+        "get_schedule",
+        "search_documents",
+        ""
+      ],
+      "notTool": [
+        "add_todo"
+      ],
+      "why": "v1.17: 메모라는 낱말만으로 그룹웨어 ToDo를 만들면 안 된다"
+    },
+    {
+      "id": "t8",
+      "cat": "안전",
+      "q": "회의 메모 어디 있어?",
+      "tool": "search_documents",
+      "notTool": [
+        "add_todo"
+      ]
+    },
+    {
+      "id": "t9",
+      "cat": "안전",
+      "q": "메모장 열어줘",
+      "tool": [
+        "",
+        "open_view"
+      ],
+      "notTool": [
+        "add_todo"
+      ]
+    },
+    {
+      "id": "t10",
+      "cat": "실행",
+      "q": "내일까지 예산 점검 할 일로 메모해줘",
+      "tool": "add_todo",
+      "args": {
+        "title": "예산 점검",
+        "due": "2026-11-17"
+      }
     }
   ]
 }

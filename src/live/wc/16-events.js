@@ -197,7 +197,7 @@
       case 'boardMoveTo': closeOverlay(); dropTo(el.dataset.k, v); break;
       case 'batchHide': hide([...S.multi]); break;
       case 'batchSnooze': snooze([...S.multi]); break;
-      case 'batchTodo': { const keys = [...S.multi]; pushUndo(`${keys.length}건 할 일로`); for (const k of keys) { const x = S.a.actions.find(a => a.key === k); if (x) { if (!S.todos.some(t => t.key === k && t.status !== 'done')) S.todos.unshift({id: uid(), title: x.title, due: x.deadline && x.deadline.date || '', status: 'todo', source: x.kind, url: x.url, key: k, at: Date.now()}); S.plan[k] = S.plan[k] || 'today'; } } S.multi.clear(); saveLocal(); refreshQueue(); toastUndo(`${keys.length}건을 할 일에 넣었습니다.`); break; }
+      case 'batchTodo': if (typeof todoGwOk === 'function' && todoGwOk() && typeof todoAddFrom === 'function') { const keys = [...S.multi]; S.multi.clear(); (async () => { let ok = 0; for (const k of keys) { const x = S.a.actions.find(a => a.key === k); if (!x) continue; const r = await todoAddFrom({title: x.title, due: x.deadline && x.deadline.date || '', source: x.kind, url: x.url, key: k, link: {t: x.type === 'mail' ? 'mail' : 'doc', k, ti: String(x.title || '').slice(0, 80), u: x.url || undefined}}); if (r.ok) { ok++; S.plan[k] = S.plan[k] || 'today'; } } saveLocal(); refreshQueue(); toast(`${ok}건을 그룹웨어 ToDo에 넣었습니다${ok < keys.length ? ` (${keys.length - ok}건 실패)` : ''}.`); })(); break; } else { const keys = [...S.multi]; pushUndo(`${keys.length}건 할 일로`); for (const k of keys) { const x = S.a.actions.find(a => a.key === k); if (x) { if (!S.todos.some(t => t.key === k && t.status !== 'done')) S.todos.unshift({id: uid(), title: x.title, due: x.deadline && x.deadline.date || '', status: 'todo', source: x.kind, url: x.url, key: k, at: Date.now()}); S.plan[k] = S.plan[k] || 'today'; } } S.multi.clear(); saveLocal(); refreshQueue(); toastUndo(`${keys.length}건을 할 일에 넣었습니다.`); break; }
       case 'batchCsv': { const rows = S.a.actions.filter(x => S.multi.has(x.key)); download(`선택항목_${today()}.csv`, R.toCsv(rows, csvCols), 'text/csv;charset=utf-8'); break; }
       case 'batchFocus': startFocus([...S.multi]); S.multi.clear(); break;
       case 'batchClear': S.multi.clear(); refreshQueue(); break;
@@ -229,10 +229,10 @@
       case 'closePane': if (S.focus) { stopFocus(); break; } if (!leavePane()) break; S.pane.dirty = false; S.sel = null; S.pane.url = ''; S.pane.expanded = false; render(); break;
       case 'todoFromSel': { const t = selInfo(); const x = selectedAction(); addTodo(t.title, x && x.deadline && x.deadline.date || '', x ? x.kind : 'GW 비서 항목', t.url, x ? x.key : ''); break; }
       case 'todoFromExtract': { const nx = S.pane.extract && R.nextDeadline(S.pane.extract.deadlines); const t = selInfo(); if (nx) addTodo(t.title, nx.date, '원문 기한 자동 추출', t.url); break; }
-      case 'boardCard': { const k = el.dataset.k; if (path.some(n => n && n.tagName === 'BUTTON')) break; if (k.startsWith('todo:')) { const t = S.todos.find(x => `todo:${x.id}` === k); if (t && t.url) { S.sel = {type: 'frame', title: t.title, url: t.url}; openUrl(t.url, {title: t.title}); } } else { if (go('today')) selectAction(k); } break; }
+      case 'boardCard': { const k = el.dataset.k; if (path.some(n => n && n.tagName === 'BUTTON')) break; if (k.startsWith('todo:') && /^td\d+$/.test(k.slice(5)) && typeof todoOpen === 'function') { todoOpen(k.slice(5)); break; } if (k.startsWith('todo:')) { const t = S.todos.find(x => `todo:${x.id}` === k); if (t && t.url) { S.sel = {type: 'frame', title: t.title, url: t.url}; openUrl(t.url, {title: t.title}); } } else { if (go('today')) selectAction(k); } break; }
       case 'addTodo': addTodoFromInput(); break;
-      case 'todoDel': { const t = S.todos.find(x => x.id === el.dataset.id); if (!t) break; pushUndo('할 일 삭제'); S.todos = S.todos.filter(x => x.id !== t.id); delete S.plan[`todo:${t.id}`]; saveLocal(); renderMain(); renderNav(); toastUndo(`"${t.title.slice(0, 20)}" 할 일을 지웠습니다.`); break; }
-      case 'todoEdit': { const t = S.todos.find(x => x.id === el.dataset.id); if (!t) break; (async () => { let values = [t.title, t.due || '']; while (true) { const v = await askForm({title: '할 일 고치기', fields: [{label: '할 일 내용', value: values[0]}, {label: '기한 (예: 11/20 또는 2026-11-20, 비우면 없음)', value: values[1]}]}); if (!v || !v[0]) return; const cur = S.todos.find(x => x.id === t.id); if (!cur) { toast('다른 탭에서 지워진 할 일입니다.'); return; } const due = parseDue(v[1]); if (due === null) { toast(dueError); values = v; continue; } pushUndo('할 일 수정'); cur.title = v[0]; cur.due = due; saveLocal(); renderMain(); renderNav(); toastUndo('할 일을 고쳤습니다.'); return; } })(); break; }
+      case 'todoDel': { if (/^td\d+$/.test(el.dataset.id || '') && HOME_ACTS.tdDel) { HOME_ACTS.tdDel(el); break; } const t = S.todos.find(x => x.id === el.dataset.id); if (!t) break; pushUndo('할 일 삭제'); S.todos = S.todos.filter(x => x.id !== t.id); delete S.plan[`todo:${t.id}`]; saveLocal(); renderMain(); renderNav(); toastUndo(`"${t.title.slice(0, 20)}" 할 일을 지웠습니다.`); break; }
+      case 'todoEdit': { if (/^td\d+$/.test(el.dataset.id || '') && typeof todoOpen === 'function') { todoOpen(el.dataset.id); break; } const t = S.todos.find(x => x.id === el.dataset.id); if (!t) break; (async () => { let values = [t.title, t.due || '']; while (true) { const v = await askForm({title: '할 일 고치기', fields: [{label: '할 일 내용', value: values[0]}, {label: '기한 (예: 11/20 또는 2026-11-20, 비우면 없음)', value: values[1]}]}); if (!v || !v[0]) return; const cur = S.todos.find(x => x.id === t.id); if (!cur) { toast('다른 탭에서 지워진 할 일입니다.'); return; } const due = parseDue(v[1]); if (due === null) { toast(dueError); values = v; continue; } pushUndo('할 일 수정'); cur.title = v[0]; cur.due = due; saveLocal(); renderMain(); renderNav(); toastUndo('할 일을 고쳤습니다.'); return; } })(); break; }
       case 'calLayer': { const cf = teamCfg(); cf.layers[el.dataset.v] = !cf.layers[el.dataset.v]; renderMain(); break; }
     case 'calDept': teamCfg().dept = el.dataset.v; renderMain(); break;
     case 'calOpts': S.cal.opts = !S.cal.opts; renderMain(); break;
@@ -248,7 +248,7 @@
       case 'bPick': e.stopPropagation(); S.budget.pickOpen = false; S.budget.project = el.dataset.p; S.budget.filter = el.dataset.f || ''; loadBudget(); break;
       case 'bPin': { e.stopPropagation(); const p = el.dataset.p, f = el.dataset.f || '', l = el.dataset.l || f || p; const list = S.settings.budget, before = list.slice(); const i = list.findIndex(x => x && x.project === p && (x.filter || '') === f); if (i >= 0) list.splice(i, 1); else list.push({project: p, filter: f, label: l}); if (!saveLocal()) { list.splice(0, list.length, ...before); toast('저장하지 못했습니다. 관심 사업 변경을 취소했습니다.'); } else toast(i >= 0 ? '내 관심 사업에서 뺐습니다.' : '내 관심 사업에 추가했습니다.'); renderMain(); break; }
       case 'bUnpin': { e.stopPropagation(); const list = S.settings.budget, i = Number(el.dataset.i); if (!Number.isInteger(i) || i < 0 || i >= list.length) break; const before = list.slice(); list.splice(i, 1); if (!saveLocal()) { list.splice(0, list.length, ...before); toast('저장하지 못했습니다. 관심 사업 변경을 취소했습니다.'); } else toast('내 관심 사업에서 뺐습니다.'); renderMain(); break; }
-      case 'budgetTab': if (['subjects', 'ledger'].includes(v)) { S.budget.budgetTab = v; renderMain(); } break;
+      case 'budgetTab': if (['subjects', 'ledger', 'plan'].includes(v)) { S.budget.budgetTab = v; renderMain(); } break;
       case 'ledger': { const b = S.budget, code = el.dataset.code; if (!b || b.busy || !b.table || b.table.error || !b.table.rows?.some(r => r.code === code)) { toast('예산 자료가 바뀌었습니다. 다시 조회해 주세요.'); break; } loadLedger(code); break; }
       case 'bSearchRetry': loadBudgetAll(true); break;
       case 'bSearch': { const input = root.querySelector('#bq'); if (input) S.budget.q = input.value; S.budget.pickOpen = false; budgetQuery(); break; }
@@ -328,7 +328,11 @@
       case 'usageCopy':
       case 'usageToggle':
       case 'usageClear':
-        HOME_ACTS[act](actEl, v, e); break; // 홈·채팅 화면의 처리기 등록소(29~30번 조각)
+      case 'tdReload': case 'tdFilter': case 'tdAdd': case 'tdNew': case 'tdSel': case 'tdClose': case 'tdSave': case 'tdToggle': case 'tdDel': case 'tdDelYes':
+      case 'tdSubAdd': case 'tdSubToggle': case 'tdSubDel': case 'tdLinkFind': case 'tdLinkAdd': case 'tdLinkDel': case 'tdLinkOpen':
+      case 'tdWrap': case 'tdWrapDone': case 'tdWrapNext': case 'tdWrapPick': case 'tdWrapAll': case 'tdMigrate': case 'tdMigrateSkip':
+      case 'bpAdd': case 'bpImport': case 'bpImportAdd': case 'bpConfirm': case 'bpReject': case 'bpEdit': case 'bpReload': case 'bpDropRest':
+        if (HOME_ACTS[act]) HOME_ACTS[act](actEl, v, e); break; // 홈·채팅 화면의 처리기 등록소(29~30번 조각)
       default: break;
     }
   });
@@ -340,6 +344,7 @@
     if (t.id === 'qfilter') { S.filter.q = t.value; if (!e.isComposing) refreshQueue(); }
     else if (t.id === 'dfIn') { dfState().filter.q = t.value; if (!e.isComposing) dfRefreshList(); }
     else if (t.id === 'bq') { S.budget.q = t.value; }
+    else if ((t.id === 'tdQ' || /^tde/.test(t.id || '')) && typeof todoInput === 'function') todoInput(t, !!e.isComposing);
     else if (t.id === 'ledgerQuery') { S.budget.ledgerQuery = t.value; }
     else if (t.id === 'bPickFilter') { const q = t.value.trim().toLowerCase(); root.querySelectorAll('[data-budget-picker-row]').forEach(row => { row.hidden = !!q && !row.dataset.search.includes(q); }); }
     else if (t.id === 'peopleFilter') { PEOPLE.localFilter = t.value; if (!e.isComposing) peopleFilterRows(); }
@@ -353,6 +358,7 @@
   root.addEventListener('change', e => {
     const t = e.composedPath()[0];
     if (t.id && t.id.startsWith('df') && dfChange(t)) return;
+    if (t.id && /^(tde\w*|tdQ|bpTarget|bpClose)$/.test(t.id) && typeof todoChange === 'function') { todoChange(t); return; }
     if (t.id === 'speriod') S.search.period = t.value;
     if (t.id === 'bproj' && t.value === '__custom') { S.budget.custom = true; renderMain(); }
     if (t.id === 'bproj' && t.value !== '__custom') { S.budget.custom = false; const [p, f] = t.value.split('|'); S.budget.project = p; S.budget.filter = f; loadBudget(); }
@@ -386,6 +392,7 @@
     const id = e.dataTransfer.getData('text/plain');
     if (!id) return;
     if (z.dataset.drop) dropTo(id, z.dataset.drop);
+    else if (z.dataset.dropDate && id.startsWith('todo:') && /^td\d+$/.test(id.slice(5)) && typeof todoSave === 'function') { const due = z.dataset.dropDate; delete S.plan[id]; todoSave(id.slice(5), {due}).then(r => toast(r.ok ? `기한을 ${due.slice(5)}로 바꿨습니다(그룹웨어 ToDo).` : r.text)); }
     else if (z.dataset.dropDate && id.startsWith('todo:')) { const t = S.todos.find(x => `todo:${x.id}` === id); if (t) { pushUndo('기한 변경'); t.due = z.dataset.dropDate; delete S.plan[id]; saveLocal(); renderMain(); toastUndo(`기한을 ${t.due.slice(5)}로 바꿨습니다.`); } }
   });
   // Resizable pane (pointer + keyboard).

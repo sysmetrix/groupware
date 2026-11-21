@@ -294,9 +294,28 @@
 
   const notHere = what => async () => { await wait(60); throw Object.assign(new Error(`둘러보기에서는 ${what} 수 없습니다. 실제 그룹웨어에서 사용하세요.`), {code: 'DEMO'}); };
 
+  // v1.17 둘러보기용 개인 ToDo(이 탭의 메모리에만 남는다, 지어낸 자료)
+  let tdSeq = 900;
+  const ymd8 = off => day(off).replace(/-/g, '');
+  const TODOS = [
+    {todoSeq: 'td901', todoName: '주간 업무 실적 정리', endDate: ymd8(0), startDate: ymd8(0), todoStatus: '0', importDegree: '1', contents: '', createDate: ymd8(-3), children: []},
+    {todoSeq: 'td902', todoName: '자문회의 다과 결의', endDate: ymd8(5), startDate: ymd8(5), todoStatus: '0', importDegree: '0', contents: '견적 2곳 비교\n\n— GW 비서 정보(이 아래는 고치지 마세요) —\n⟦gwb:{"b":{"p":"Y101","h":"사111","c":"사1111110","n":"회의비","a":150000,"d":"' + day(5) + '","st":"plan"},"v":1}⟧', createDate: ymd8(-1), children: [{todoSeq: 'td903', todoName: '견적 받기', todoStatus: '2', todoLevel: 2}, {todoSeq: 'td904', todoName: '품의', todoStatus: '0', todoLevel: 2}]},
+    {todoSeq: 'td905', todoName: '월간 예산 점검', endDate: ymd8(-1), startDate: ymd8(-1), todoStatus: '0', importDegree: '0', contents: '\n\n— GW 비서 정보(이 아래는 고치지 마세요) —\n반복: 매월 말일\n⟦gwb:{"rp":{"f":"m","md":-1},"sid":"sdemo","v":1}⟧', createDate: ymd8(-30), children: []},
+  ];
+  const tdAll = () => TODOS.flatMap(t => [t, ...(t.children || [])]);
+  const tdRow = t => ({processRate: t.todoStatus === '2' ? 100 : 0, todoLevel: 1, prtSeq: '', prjSeq: '', ownerEmpSeq: 'demo', createEmpSeq: 'demo', loginUserTodoOwnerYn: 'Y', loginUserTodoCreateYn: 'Y', fileCount: 0, completeDate: t.todoStatus === '2' ? ymd8(0) : '', ...t, children: (t.children || []).map(tdRow)});
+  const todoApi = {
+    todoList: async () => { await wait(120); return {todos: TODOS.map(tdRow), total: TODOS.length, complete: true, at: new Date().toISOString(), url: ''}; },
+    todoDetail: async id => { await wait(40); const t = tdAll().find(x => x.todoSeq === id); if (!t) throw new Error('없음'); return tdRow(t); },
+    todoCreate: async ({title, due = '', contents = '', important = false, parent = ''} = {}) => { await wait(150); const t = {todoSeq: 'td' + (++tdSeq), todoName: String(title), endDate: due, startDate: due, todoStatus: '0', importDegree: important ? '1' : '0', contents, createDate: ymd8(0), children: []}; if (parent) { const p = TODOS.find(x => x.todoSeq === parent); if (p) p.children.push({...t, todoLevel: 2}); } else TODOS.unshift(t); return {ok: true, id: t.todoSeq}; },
+    todoUpdate: async (id, p = {}) => { await wait(120); const t = tdAll().find(x => x.todoSeq === id); if (!t) throw new Error('없음'); if ('title' in p) t.todoName = p.title; if ('due' in p) { t.endDate = p.due; t.startDate = p.due; } if ('contents' in p) t.contents = p.contents; if ('important' in p) t.importDegree = p.important ? '1' : '0'; return {ok: true, id}; },
+    todoSetDone: async (id, done = true) => { await wait(100); const t = tdAll().find(x => x.todoSeq === id); if (!t) throw new Error('없음'); t.todoStatus = done ? '2' : '0'; t.completeDate = done ? ymd8(0) : ''; return {ok: true, id, done}; },
+    todoDelete: async id => { await wait(100); const i = TODOS.findIndex(x => x.todoSeq === id); if (i >= 0) TODOS.splice(i, 1); else for (const t of TODOS) t.children = t.children.filter(c => c.todoSeq !== id); return {ok: true, id}; },
+    todoLink: id => '#demo-todo-' + id,
+  };
   window.BWYFGW_DEMO = true;
   window.BWYFGW = Object.freeze({
-    version: VERSION, collect, search,
+    version: VERSION, collect, search, ...todoApi,
     organizationTree: async () => [{key:"d1", parent:"", name:"청소년사업팀 (예시)", count:2, orgGubun:"d"}],
     organizationMembers: async key => key === "d1" ? [{name:"정민재", dept:"청소년사업팀 (예시)", duty:"팀장", position:"", tel:"", email:""}, {name:"김하늘", dept:"청소년사업팀 (예시)", duty:"직원", position:"", tel:"", email:""}] : [],
     call: notHere('그룹웨어 API를 부를'),

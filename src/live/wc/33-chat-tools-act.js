@@ -169,15 +169,18 @@
 
   chatRegisterTool({
     name: 'add_todo', label: '할 일 추가', kind: 'act',
-    description: '내 할 일 목록(이 PC에만 저장되는 메모)에 항목을 추가한다. 그룹웨어에는 아무것도 보내지 않는다. due는 YYYY-MM-DD.',
+    description: '내 할 일(그룹웨어 개인 ToDo, 나만 보임)에 항목을 추가한다. 사용자가 직접 쓴 문장일 때만. due는 YYYY-MM-DD.',
     params: {type: 'object', properties: {title: {type: 'string'}, due: {type: 'string'}}, required: ['title']},
     run: async a => {
       const title = String(a.title || '').trim().slice(0, 80);
       if (title.length < 2) return {ok: false, text: '추가할 할 일의 내용을 알려 주세요.'};
       const due = a.due ? chatDateArg(a.due) : '';
       if (a.due && !due) return {ok: false, text: '기한 날짜를 알아보지 못했습니다.'};
-      addTodo(title, due, '채팅');
-      return {ok: true, text: `“${title}”${typeof R === 'object' && R && typeof R.cuJosa === 'function' ? R.cuJosa(String(title), '을를').slice(-1) : '을(를)'} 내 할 일에 추가했습니다${due ? ` (기한 ${chatMd(due)})` : ''}. 그룹웨어에는 보내지 않는 이 PC의 메모입니다.`, cards: [{type: 'nav', label: '할 일 보드에서 보기', view: 'board'}]};
+      // v1.17: 그룹웨어 개인 ToDo에 저장하고 실제 결과로 답한다(저장하지 못했으면 그대로 알린다).
+      const r = (await (typeof todoAddFrom === 'function' && typeof todoGwOk === 'function' && todoGwOk() ? todoAddFrom({title, due, source: '채팅'}) : addTodo(title, due, '채팅'))) || {ok: false, text: '할 일을 저장하지 못했습니다.'};
+      if (!r.ok) return {ok: false, text: r.text || '할 일을 저장하지 못했습니다.'};
+      const josa = typeof R === 'object' && R && typeof R.cuJosa === 'function' ? R.cuJosa(String(title), '을를').slice(-1) : '을(를)';
+      return {ok: true, text: r.local ? `“${title}”${josa} 내 할 일에 추가했습니다${due ? ` (기한 ${chatMd(due)})` : ''}. 그룹웨어 ToDo에 연결하지 못해 이 PC에만 저장했습니다.` : r.dup ? `“${title}”은(는) 이미 내 할 일에 있습니다.` : `“${title}”${josa} 그룹웨어 ToDo에 추가했습니다${due ? ` (기한 ${chatMd(due)})` : ''}. 다른 PC와 모바일에서도 보입니다.`, cards: [{type: 'nav', label: '내 할 일에서 보기', view: r.local ? 'board' : 'mytodo'}]};
     },
   });
 
