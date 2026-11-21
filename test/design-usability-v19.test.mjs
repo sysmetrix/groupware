@@ -20,8 +20,8 @@ test('주간 초안 기간: 오늘보다 뒤의 날짜는 지난해로 본다(1�
   assert.equal(p.ageDays, 10); assert.equal(p.stale, true);
 });
 
-test('머리글 종은 통합알림을 열고, 숫자도 통합알림의 안 읽음 수다', () => {
-  assert.match(read('wc/16-events.js'), /case 'menuBell': closeOverlay\(\); if \(go\('notifications'\)\)/);
+test('머리글 종은 통합알림 팝업을 열고, 숫자도 통합알림의 안 읽음 수다', () => {
+  assert.match(read('wc/16-events.js'), /case 'menuBell': if \(S\.menuOpen === 'bell'\) closeOverlay\(\); else \{ closeOverlay\(\); openMenu\('bell', el\); \}/);
   const head = read('wc/05-views.js');
   assert.match(head, /ntfUnread\(\)/);
   assert.doesNotMatch(head, /S\.activity\.filter\(x => x\.at > S\.seenActivity\)/);
