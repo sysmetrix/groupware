@@ -65,7 +65,8 @@
       else if (t.id === 'mailq') runMailSearch(t.value.trim());
       else if (t.id === 'dfq') dfRun(t.value);
       else if (t.id === 'tdTitle') addTodoFromInput();
-      else if (t.id === 'bcode' || t.id === 'bfilter') { S.budget.project = $('#bcode').value.trim(); S.budget.filter = $('#bfilter').value.trim(); loadBudget(); }
+      else if (t.id === 'bAllFilter') { if (typeof bmFilterRows === 'function') bmFilterRows(t.value); }
+      else if (t.id === 'bcode' || t.id === 'bfilter') { S.budget.mode = 'detail'; S.budget.project = $('#bcode').value.trim(); S.budget.filter = $('#bfilter').value.trim(); loadBudget(); }
       return;
     }
     if (S.paletteOpen || S.helpOpen) return; // 대화상자(AI·지급·기록기·명령 콘솔 등) 위에서는 전역 단축키를 쓰지 않는다

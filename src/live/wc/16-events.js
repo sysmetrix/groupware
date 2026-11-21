@@ -180,7 +180,7 @@
       case 'openPalette': closeOverlay(); openPalette(''); break;
       case 'palRun': palExec(palItems[Number(el.dataset.i)]); break;
       case 'goApproval': if (go('approval') && v) { S.apTab = v; S.apTabPinned = true; renderMain(); } break;
-      case 'goBudgetCode': { const b = S.budget, pj = el.dataset.p || ''; if (S.view !== 'budget' && !S.focus && !leavePane()) break; if (pj && pj !== b.project) { b.seq++; b.busy = false; b.project = pj; b.filter = ''; b.table = null; b.full = null; } if (v && !(b.table && !b.table.error && !b.busy && (!pj || b.table.project === pj))) b.pendingLedger = v; if (!go('budget')) break; if (v && b.table && !b.table.error && !b.busy && (!pj || b.table.project === pj)) { b.pendingLedger = ''; loadLedger(v); } else renderMain(); break; }
+      case 'goBudgetCode': { const b = S.budget, pj = el.dataset.p || ''; b.mode = 'detail'; if (S.view !== 'budget' && !S.focus && !leavePane()) break; if (pj && pj !== b.project) { b.seq++; b.busy = false; b.project = pj; b.filter = ''; b.table = null; b.full = null; } if (v && !(b.table && !b.table.error && !b.busy && (!pj || b.table.project === pj))) b.pendingLedger = v; if (!go('budget')) break; if (v && b.table && !b.table.error && !b.busy && (!pj || b.table.project === pj)) { b.pendingLedger = ''; loadLedger(v); } else renderMain(); break; }
       case 'goAttendanceDay': if (!go('attendance')) break; S.att.day = v; if (S.att.month !== v.slice(0, 6)) { S.att.rows = null; S.att.month = v.slice(0, 6); loadAttendance(v.slice(0, 6)); } else renderMain(); break;
       case 'selDeadline': if (el.dataset.k && S.a.actions.some(x => x.key === el.dataset.k)) { if (go('today')) selectAction(el.dataset.k); } else { S.search.kw = relatedQ(el.dataset.title); runSearch(['doc', 'mail', 'board', 'file']); } break;
       case 'area': S.filter.area = v; renderMain(); break;
@@ -243,17 +243,17 @@
       case 'calNext': S.cal.offset++; teamCfg().day = ''; renderMain(); break;
       case 'calToday': S.cal.offset = 0; teamCfg().day = ''; renderMain(); break;
       case 'calItem': if (el.dataset.k && S.a.actions.some(x => x.key === el.dataset.k)) { if (go('today')) selectAction(el.dataset.k); } else if (el.dataset.url) openUrl(el.dataset.url, {title: el.textContent.trim()}); break;
-      case 'goBudgetPick': S.budget.pickOpen = true; go('budget'); break;
-      case 'bTogglePick': S.budget.pickOpen = !S.budget.pickOpen; renderMain(); break;
-      case 'bPick': e.stopPropagation(); S.budget.pickOpen = false; S.budget.project = el.dataset.p; S.budget.filter = el.dataset.f || ''; loadBudget(); break;
-      case 'bPin': { e.stopPropagation(); const p = el.dataset.p, f = el.dataset.f || '', l = el.dataset.l || f || p; const list = S.settings.budget, before = list.slice(); const i = list.findIndex(x => x && x.project === p && (x.filter || '') === f); if (i >= 0) list.splice(i, 1); else list.push({project: p, filter: f, label: l}); if (!saveLocal()) { list.splice(0, list.length, ...before); toast('저장하지 못했습니다. 관심 사업 변경을 취소했습니다.'); } else toast(i >= 0 ? '내 관심 사업에서 뺐습니다.' : '내 관심 사업에 추가했습니다.'); renderMain(); break; }
+      case 'goBudgetPick': S.budget.mode = 'all'; go('budget'); break;
+      case 'bTogglePick': S.budget.mode = 'all'; renderMain(); break;
+      case 'bPick': e.stopPropagation(); S.budget.pickOpen = false; S.budget.mode = 'detail'; S.budget.project = el.dataset.p; S.budget.filter = el.dataset.f || ''; loadBudget(); break;
+      case 'bPin': { e.stopPropagation(); const p = el.dataset.p, f = el.dataset.f || '', l = el.dataset.l || f || p; const list = S.settings.budget, before = list.slice(); const i = list.findIndex(x => x && x.project === p && (x.filter || '') === f); if (i >= 0) list.splice(i, 1); else list.push({project: p, filter: f, label: l}); if (!saveLocal()) { list.splice(0, list.length, ...before); toast('저장하지 못했습니다. 관심 사업 변경을 취소했습니다.'); } else toast(i >= 0 ? '내 사업에서 뺐습니다.' : '내 사업에 추가했습니다. “내 사업 한눈에”에서 함께 봅니다.'); renderMain(); break; }
       case 'bUnpin': { e.stopPropagation(); const list = S.settings.budget, i = Number(el.dataset.i); if (!Number.isInteger(i) || i < 0 || i >= list.length) break; const before = list.slice(); list.splice(i, 1); if (!saveLocal()) { list.splice(0, list.length, ...before); toast('저장하지 못했습니다. 관심 사업 변경을 취소했습니다.'); } else toast('내 관심 사업에서 뺐습니다.'); renderMain(); break; }
       case 'budgetTab': if (['subjects', 'ledger', 'plan'].includes(v)) { S.budget.budgetTab = v; renderMain(); } break;
       case 'ledger': { const b = S.budget, code = el.dataset.code; if (!b || b.busy || !b.table || b.table.error || !b.table.rows?.some(r => r.code === code)) { toast('예산 자료가 바뀌었습니다. 다시 조회해 주세요.'); break; } loadLedger(code); break; }
       case 'bSearchRetry': loadBudgetAll(true); break;
       case 'bSearch': { const input = root.querySelector('#bq'); if (input) S.budget.q = input.value; S.budget.pickOpen = false; budgetQuery(); break; }
       case 'bSearchClear': S.budget.q = ''; budgetQuery(); root.querySelector('#bq')?.focus(); break;
-      case 'bHit': { const d = el.dataset; if (d.empty) { toast('이 과목은 올해 예산·집행이 없습니다(공통 과목표에만 있는 과목).'); break; } const b = S.budget; b.project = d.p; b.filter = d.h || ''; b.q = ''; b.pendingLedger = d.lv === '세' ? d.code : ''; loadBudget(); break; }
+      case 'bHit': { const d = el.dataset; if (d.empty) { toast('이 과목은 올해 예산·집행이 없습니다(공통 과목표에만 있는 과목).'); break; } const b = S.budget; b.mode = 'detail'; b.project = d.p; b.filter = d.h || ''; b.q = ''; b.pendingLedger = d.lv === '세' ? d.code : ''; loadBudget(); break; }
       case 'loadMonthly': loadMonthly(); break;
       case 'budgetMonth': { const b = S.budget, m = b.month === v ? '' : v; if (!b.ledger || b.ledger.bgtCd !== '__ALL') loadLedgerAll(); b.budgetTab = 'ledger'; b.month = m; b.ledgerPage = 1; renderMain(); break; }
       case 'ledgerAll': loadLedgerAll(); break;
@@ -328,6 +328,7 @@
       case 'usageCopy':
       case 'usageToggle':
       case 'usageClear':
+      case 'bMode': case 'bOpen': case 'bMineReload': case 'bAllReload':
       case 'tdReload': case 'tdFilter': case 'tdAdd': case 'tdNew': case 'tdSel': case 'tdClose': case 'tdSave': case 'tdToggle': case 'tdDel': case 'tdDelYes':
       case 'tdSubAdd': case 'tdSubToggle': case 'tdSubDel': case 'tdLinkFind': case 'tdLinkAdd': case 'tdLinkDel': case 'tdLinkOpen':
       case 'tdWrap': case 'tdWrapDone': case 'tdWrapNext': case 'tdWrapPick': case 'tdWrapAll': case 'tdMigrate': case 'tdMigrateSkip':
@@ -344,6 +345,7 @@
     if (t.id === 'qfilter') { S.filter.q = t.value; if (!e.isComposing) refreshQueue(); }
     else if (t.id === 'dfIn') { dfState().filter.q = t.value; if (!e.isComposing) dfRefreshList(); }
     else if (t.id === 'bq') { S.budget.q = t.value; }
+    else if (t.id === 'bAllFilter' && typeof bmFilterRows === 'function') { if (!e.isComposing) bmFilterRows(t.value); else BM.q = t.value; }
     else if ((t.id === 'tdQ' || /^tde/.test(t.id || '')) && typeof todoInput === 'function') todoInput(t, !!e.isComposing);
     else if (t.id === 'ledgerQuery') { S.budget.ledgerQuery = t.value; }
     else if (t.id === 'bPickFilter') { const q = t.value.trim().toLowerCase(); root.querySelectorAll('[data-budget-picker-row]').forEach(row => { row.hidden = !!q && !row.dataset.search.includes(q); }); }
@@ -360,9 +362,10 @@
     if (t.id && t.id.startsWith('df') && dfChange(t)) return;
     if (t.id && /^(tde\w*|tdQ|bpTarget|bpClose)$/.test(t.id) && typeof todoChange === 'function') { todoChange(t); return; }
     if (t.id === 'speriod') S.search.period = t.value;
+    if ((t.id === 'bSel' || t.id === 'bAllSort') && typeof bmChange === 'function') { bmChange(t); return; }
     if (t.id === 'bproj' && t.value === '__custom') { S.budget.custom = true; renderMain(); }
-    if (t.id === 'bproj' && t.value !== '__custom') { S.budget.custom = false; const [p, f] = t.value.split('|'); S.budget.project = p; S.budget.filter = f; loadBudget(); }
-    if (t.id === 'bCatProj') { S.budget.project = t.value; S.budget.filter = ''; loadBudget(); }
+    if (t.id === 'bproj' && t.value !== '__custom') { S.budget.custom = false; S.budget.mode = 'detail'; const [p, f] = t.value.split('|'); S.budget.project = p; S.budget.filter = f; loadBudget(); }
+    if (t.id === 'bCatProj') { S.budget.mode = 'detail'; S.budget.project = t.value; S.budget.filter = ''; loadBudget(); }
     if (t.id === 'budgetChartSort' && ['executed', 'rate', 'balance', 'name'].includes(t.value)) { S.budget.chartSort = t.value; renderMain(); root.querySelector('#budgetChartSort')?.focus(); }
     if (t.id === 'resDate') resGo();
     if (t.id === 'payPlan') payPlanChanged();
