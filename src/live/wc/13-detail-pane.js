@@ -63,6 +63,12 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
     const af = $('#autofill'); if (af) af.innerHTML = autoFillBar();
   }
   // Trusted edits and silent editor/autofill changes must both survive navigation.
+  // v1.15.0: 비서가 채운 입력 창이 사라지면(등록·보내기·취소 뒤) '입력 중' 표시를 거둔다. stillOpen()이 거짓이 될 때까지 2초마다 본다(최대 30분).
+  function clearDirtyWhenGone(stillOpen) {
+    const f = $('#frame iframe'), url = S.pane.url; let n = 0;
+    const tick = () => { if (!f || !f.isConnected || S.pane.url !== url || ++n > 900) return; let open = true; try { open = !!stillOpen(f.contentDocument); } catch {} if (open) { setTimeout(tick, 2000); return; } S.pane.dirty = false; const b = $('#dirtyNote'); if (b) b.style.display = 'none'; };
+    if (typeof setTimeout === 'function') setTimeout(tick, 2000);
+  }
   function markPaneDirty(f, url = S.pane.url) {
     if (!f || !f.isConnected || S.pane.url !== url) return;
     S.pane.dirty = true;
@@ -623,13 +629,16 @@ ${mailFilesBox(m)}
     const myDept = (S.raw && S.raw.principal && S.raw.principal.deptName) || '';
     const myDuty = (S.raw && S.raw.principal && (S.raw.principal.duty || S.raw.principal.position)) || '';
     const me = [myDept, myName, myDuty].filter(Boolean).join(' ') || '담당자';
+    // 인사말은 직위 없이 두 줄: '안녕하세요.' / '전략경영실 서원하입니다.'
+    const greetMe = [myDept, myName].filter(Boolean).join(' ') || '담당자';
     const hasAttach = (() => { try { const fd = f.contentDocument; return !!(fd && fd.querySelector('[class*=attach] li, [class*=file] li, .fileName, .file-name')); } catch { return false; } })();
     if ((() => { let hit = false; const look = doc => { if (!doc || hit) return; if (doc.querySelector('[data-bwyfgw-tpl]')) { hit = true; return; } for (const i of doc.querySelectorAll('iframe')) { try { look(i.contentDocument); } catch {} } }; look(d); return hit; })()) { if (!confirm('이미 넣은 회신 문구가 있습니다. 새 문구로 바꿀까요?')) return; }
     const todayStr = R.kstNow(new Date()).date;
 
     let bodyText = '';
     if (templateType === 'confirm') {
-      bodyText = `<p>안녕하십니까, ${esc(me)}입니다.</p>
+      bodyText = `<p>안녕하세요.</p>
+<p>${esc(greetMe)}입니다.</p>
 <p><br></p>
 <p>보내주신 <b>“${esc(originTitle)}”</b> 건과 관련하여 담당 사항에 대한 확인 및 검토를 완료하였음을 회신드립니다.</p>
 <p>&nbsp; 1. 확인 일자: ${esc(todayStr)}</p>
@@ -637,7 +646,8 @@ ${mailFilesBox(m)}
 <p><br></p>
 <p>감사합니다.</p><p><br></p>`;
     } else if (templateType === 'submit') {
-      bodyText = `<p>안녕하십니까, ${esc(me)}입니다.</p>
+      bodyText = `<p>안녕하세요.</p>
+<p>${esc(greetMe)}입니다.</p>
 <p><br></p>
 <p>요청하신 <b>“${esc(originTitle)}”</b> 관련 자료를 아래와 같이 작성하여 제출합니다.</p>
 <p>&nbsp; 1. 제출 건명: ${esc(originTitle)}</p>
@@ -648,13 +658,15 @@ ${mailFilesBox(m)}
 <p>감사합니다.</p><p><br></p>`;
     } else if (templateType === 'custom' && Array.isArray(custom) && custom.length) {
       // AI 초안(v0.86.0): 인사·맺음은 여기서 붙이고, 초안 문단은 글자로만 넣는다(HTML로 해석하지 않음).
-      bodyText = `<p>안녕하십니까, ${esc(me)}입니다.</p>
+      bodyText = `<p>안녕하세요.</p>
+<p>${esc(greetMe)}입니다.</p>
 <p><br></p>
 ${custom.slice(0, 12).map(l => `<p>${esc(String(l).slice(0, 400))}</p>`).join('\n')}
 <p><br></p>
 <p>감사합니다.</p><p><br></p>`;
     } else if (templateType === 'extend') {
-      bodyText = `<p>안녕하십니까, ${esc(me)}입니다.</p>
+      bodyText = `<p>안녕하세요.</p>
+<p>${esc(greetMe)}입니다.</p>
 <p><br></p>
 <p>보내주신 <b>“${esc(originTitle)}”</b> 건과 관련하여, 부서 내 추가 검토 및 자료 취합 일정으로 인하여 부득이하게 제출 기한의 조정을 요청드리고자 합니다.</p>
 <p>&nbsp; - 기존 기한: (공지된 기한)</p>
@@ -676,7 +688,7 @@ ${custom.slice(0, 12).map(l => `<p>${esc(String(l).slice(0, 400))}</p>`).join('\
     let injected = put();
     // 그룹웨어가 본문을 뒤늦게 다시 채워 문구가 지워졌으면 한 번 더 넣는다.
     if (injected) { await new Promise(r => setTimeout(r, 900)); if (S.pane.url !== url) return false; if (!has()) injected = put() && has(); }
-    if (injected && typeof markPaneDirty === 'function') { const pf = $('#frame iframe'); if (pf) markPaneDirty(pf); }
+    if (injected && typeof markPaneDirty === 'function') { const pf = $('#frame iframe'); if (pf) markPaneDirty(pf); clearDirtyWhenGone(doc => !!mailEditorBody(doc)); }
     if (injected && templateType === 'custom') toast('초안을 본문 맨 위에 넣었습니다. 사실관계와 (확인 필요) 칸을 확인한 뒤 직접 보내세요.');
     else if (injected) toast(`회신 문구를 본문 맨 위에 넣었습니다. 괄호 칸을 채우고${templateType === 'submit' && !hasAttach ? ' 첨부파일을 붙인 뒤' : ''} 직접 보내세요.`);
     else toast('메일 편집기를 찾지 못했습니다. 답장 화면이 다 뜬 뒤 회신문 버튼을 다시 누르세요.');

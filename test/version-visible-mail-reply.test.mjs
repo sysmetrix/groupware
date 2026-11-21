@@ -214,7 +214,7 @@ test('template is inserted only after the editor has settled, with the mail titl
   const {g, fn} = fillEnv({url: READ, sel: {type: 'mail', box: 'INBOX', uid: '7'}, body});
   assert.equal(await fn('confirm'), true);
   assert.match(body.tpl, /data-bwyfgw-tpl="1"/);
-  assert.match(body.tpl, /기획팀 홍길동 대리/);
+  assert.match(body.tpl, /<p>안녕하세요\.<\/p>\n<p>기획팀 홍길동입니다\.<\/p>/);
   assert.match(body.tpl, /“자료 요청”/);
   assert.match(body.tpl, /확인 일자: 2026-11-14/);
   assert.equal(body.events, 1);

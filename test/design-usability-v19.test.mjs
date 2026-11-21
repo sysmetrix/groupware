@@ -194,3 +194,19 @@ test('v1.14.0 실업무 흐름: 주간 실적 묶기, 메일 쓰기 넓게, 시�
   assert.match(read('wc/47-chat-precise.js'), /그날 내 신청이 있습니다/);
   assert.doesNotMatch(read('wc/33-chat-tools-act.js'), /\}을\(를\)/);
 });
+test('v1.15.0 실제 실행 점검: 나에게 메일, 시제, 인사말, 내 일정 수집, 입력 중 표시 해제', async () => {
+  const {chatIntent} = await import('../src/live/chat.mjs');
+  const now = new Date('2026-11-21T11:00:00Z');
+  const a = chatIntent('나에게 "점검 메일입니다."라고 메일 보내줘', now);
+  assert.equal(a.tool, 'compose_mail'); assert.equal(a.args.to, '나'); assert.equal(a.args.body, '점검 메일입니다.');
+  assert.equal(chatIntent('김지은에게 내일 회의 참석한다고 메일 보내줘', now).args.body, '11/22 회의 참석합니다.');
+  assert.equal(chatIntent('나한테 테스트라고 메일 써줘', now).args.body, '테스트입니다.');
+  const pane = read('wc/13-detail-pane.js');
+  assert.match(pane, /<p>안녕하세요\.<\/p>\n<p>\$\{esc\(greetMe\)\}입니다\.<\/p>/);
+  assert.doesNotMatch(pane, /안녕하십니까/);
+  assert.match(pane, /function clearDirtyWhenGone\(stillOpen\)/);
+  assert.match(read('collector.browser.js'), /const events = arr\(rows && rows\.resultList\)\.map\(r => \(\{/);
+  const hab = read('wc/49-chat-habits.js');
+  assert.match(hab, /mails\.size === 1/);
+  assert.match(hab, /OBTAutoCompleteChips_uncorrect/);
+});

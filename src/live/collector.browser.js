@@ -15,7 +15,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '1.14.0';
+  const VERSION = '1.15.0';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
@@ -298,7 +298,8 @@
       calList.length ? call('/schres/sc111A03', {companyInfo, startDate: start, endDate: end, mySchYn: 'N', calList, tcalList: [], acalList: [], searchEmpSeq: '', excelYn: null, abUID: '', sortDate: 'Y', langCode: ctx.langCode}) : {resultList: []},
       call('/gw/APIHandler/gw114A14', {startDate: start, endDate: end, compSeq: ctx.compSeq}).catch(() => []),
     ]);
-    const events = arr(rows && rows.resultList).filter(r => r.delYn !== 'Y').map(r => ({
+    // delYn은 '내가 지울 수 있음'(내 일정은 'Y')이다. 지운 일정은 휴지통으로 가 목록에 오지 않으므로 거르지 않는다.
+    const events = arr(rows && rows.resultList).map(r => ({
       id: str(r.schSeq, 20), title: mask(r.schTitle, 200), calendar: str(r.calTitle, 60), start: str(r.startDate, 12), end: str(r.endDate, 12),
       allDay: r.alldayYn === 'Y', place: str(r.schPlace, 100), people: str(r.schUserList, 200),
     })).sort((a, b) => a.start.localeCompare(b.start));

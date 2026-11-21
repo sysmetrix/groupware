@@ -129,7 +129,7 @@
       got.when = dates().map(i => i.value).join() === [sp.date, sp.date].join() && times().map(i => i.value).join() === [sp.start, sp.end].join();
     } finally { AUTO.running = false; }
     const miss = [!got.title && '제목', !got.when && '날짜·시각', sp.memo && !got.memo && '메모'].filter(Boolean);
-    if (typeof markPaneDirty === 'function') { const pf = $('#frame iframe'); if (pf) markPaneDirty(pf); }
+    if (typeof markPaneDirty === 'function') { const pf = $('#frame iframe'); if (pf) markPaneDirty(pf); if (typeof clearDirtyWhenGone === 'function') clearDirtyWhenGone(doc => [...doc.querySelectorAll('*')].some(e => e.children.length === 0 && (e.textContent || '').trim() === '일정 등록' && e.getBoundingClientRect().left > 300)); }
     return {ok: true, text: `일정 등록 창에 ${miss.length ? `채웠지만 ${miss.join('·')}은 확인하지 못했습니다. 화면에서 확인해 주세요.` : `“${sp.title}” ${chatMd(sp.date)} ${sp.start}~${sp.end}을 채웠습니다.`} 내용을 확인하고 [등록]은 직접 누르세요. 참여자는 직접 추가하세요(추가하면 초대 알림이 갑니다).`};
   }
 
