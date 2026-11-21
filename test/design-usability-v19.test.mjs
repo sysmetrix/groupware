@@ -70,3 +70,36 @@ test('v1.9.1 검수: 근태 칸은 그룹웨어 판정 대신 지문 기록 유�
   assert.match(cal, /wait: \['예정', '아직 진행 전'\]/);
   assert.match(read('wc/08-approval-mail.js'), /<div class="nowrap">\$\{esc\(r\.name\)\} <span class="muted"[^>]*>· \$\{r\.of\}건 중 \$\{r\.count\}건<\/span>/);
 });
+test('v1.10.0: 글자 크기 설정은 화면 전체 배율로, 분할창 끌기는 배율을 나눠 계산', () => {
+  const css = read('wc.css');
+  assert.match(css, /\.wc\[data-fs="xl"\]\{zoom:1\.28\}/);
+  assert.match(css, /\.wc\[data-fs\]\{--fs:14px\}/);
+  assert.match(read('wc/16-events.js'), /getComputedStyle\(wcEl\)\.zoom\) \|\| 1;[^\n]*\/ z\)\)/);
+});
+
+test('v1.10.0: 메뉴로 화면을 바꾸면 포커스를 같은 메뉴에 돌려주고 화면 이름을 읽어 준다', () => {
+  const v = read('wc/05-views.js');
+  assert.match(v, /fromNav = !!\(root\.activeElement/);
+  assert.match(v, /\$\('#srAnnounce'\)/);
+  assert.match(read('wc/02-shell.js'), /<div class="vh" id="srAnnounce" role="status" aria-live="polite"><\/div>/);
+});
+
+test('v1.10.0: 홈 오른쪽 묶음 제목은 h3, 예산 빼기 버튼은 무엇을 빼는지 읽히고 24px', () => {
+  const home = read('wc/29-home-view.js');
+  assert.match(home, /<h3 class="hm-card-k hm-today-k">챙겨 둘 것<\/h3>/);
+  assert.match(read('wc/37-automation.js'), /<h3 class="hm-card-k">자동화<\/h3>/);
+  assert.match(read('wc/10-calendar-budget.js'), /style="height:24px;width:24px;margin-left:2px" data-act="bUnpin"[^>]*관심 사업에서 빼기'\)\}"/);
+});
+
+test('v1.10.0: 통합알림 원문을 열면 종 숫자에서 바로 빠진다', () => {
+  const n = read('wc/38-notifications-people.js');
+  assert.match(n, /if \(wasUnread\) \{ x\.read = true; if \(typeof renderHead === 'function'\) renderHead\(\);/);
+  assert.match(n, /visibilitychange/);
+});
+
+test('v1.10.0: 좁은 화면 리플로 규칙(카드 격자·근태 달력·표)', () => {
+  const css = read('wc.css');
+  assert.match(css, /\.wc main \.cards\{grid-template-columns:repeat\(auto-fit,minmax\(min\(320px,100%\),1fr\)\)\}/);
+  assert.match(css, /\.wc \.att\{grid-template-columns:repeat\(7,minmax\(0,1fr\)\)\}/);
+  assert.match(css, /\.wc main table:not\(\.apt\)\{display:block;max-width:100%;overflow-x:auto\}/);
+});

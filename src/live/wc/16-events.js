@@ -395,7 +395,7 @@
     e.preventDefault(); split.classList.add('drag');
     try { split.setPointerCapture(e.pointerId); } catch {}
     const shield = document.createElement('div'); shield.style.cssText = 'position:fixed;inset:0;z-index:2147483647;cursor:col-resize'; document.body.append(shield);
-    const move = ev => { S.settings.paneWidth = Math.max(360, Math.min(window.innerWidth * 0.75, window.innerWidth - ev.clientX)); applyLook(); };
+    const move = ev => { const z = parseFloat(getComputedStyle(wcEl).zoom) || 1; S.settings.paneWidth = Math.round(Math.max(360, Math.min(window.innerWidth * 0.75, window.innerWidth - ev.clientX) / z)); applyLook(); };
     const up = () => { split.classList.remove('drag'); shield.remove(); document.removeEventListener('pointermove', move, true); document.removeEventListener('pointerup', up, true); document.removeEventListener('pointercancel', up, true); saveLocal(); };
     document.addEventListener('pointermove', move, true); document.addEventListener('pointerup', up, true); document.addEventListener('pointercancel', up, true);
   });

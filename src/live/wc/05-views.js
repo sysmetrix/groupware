@@ -20,7 +20,8 @@
   }
   // Charts: shown on big screens, folded on laptops unless the user chose otherwise.
   const showCharts = () => S.settings.showCharts ?? (window.innerHeight >= 860 && window.innerWidth >= 1500);
-  const go = v => { if (S.view !== v && !S.focus) { if (!leavePane()) return false; S.sel = null; S.pane.url = ''; } if (S.view !== v) S.apTabPinned = false; S.view = v; S.multi.clear(); S.pane.expanded = false; render(); const mm = $('#main'); if (mm) mm.scrollTop = 0; return true; };
+  // v1.10.0: 메뉴를 다시 그리면 키보드 포커스가 사라져 화면낭독기 사용자가 위치를 잃었다. 같은 메뉴로 포커스를 돌려 주고, 바뀐 화면 이름을 읽어 준다.
+  const go = v => { if (S.view !== v && !S.focus) { if (!leavePane()) return false; S.sel = null; S.pane.url = ''; } const changed = S.view !== v, fromNav = !!(root.activeElement && root.activeElement.closest && root.activeElement.closest('#nav')); if (changed) S.apTabPinned = false; S.view = v; S.multi.clear(); S.pane.expanded = false; render(); const mm = $('#main'); if (mm) mm.scrollTop = 0; if (changed) { const nv = typeof navView === 'function' ? navView() : v; if (fromNav) { const a = root.querySelector(`#nav a[data-v="${nv}"]`); if (a) a.focus({preventScroll: true}); } const sr = $('#srAnnounce'), h = mm && mm.querySelector('h1'); if (sr) { sr.textContent = ''; setTimeout(() => { sr.textContent = (h ? h.textContent.trim() : '') + ' 화면'; }, 60); } } return true; };
   // Home: back to a clean "오늘 할 일" (asks first if something is being typed in the pane).
   function goHome() {
     if (S.focus) { stopFocus(); if (S.focus) return; }
@@ -143,7 +144,7 @@
     if (S.view === 'notifications' && NTF.items === null && !NTF.loading && !NTF.error) { loadNotifications(); return; }
     if (S.view === 'report') { const f = $('#briefFrame'); if (f) { // v1.9.0: 내려받기용 브리핑을 GW 비서 글꼴·색으로 보여 주고, 틀 안 스크롤 없이 내용 높이만큼 펼친다(스크립트는 여전히 막힘)
       const cs = getComputedStyle(wcEl), v = n => cs.getPropertyValue(n).trim();
-      const skin = `<style>:root{--bg:transparent;--card:transparent;--fg:${v('--fg')};--muted:${v('--muted')};--line:${v('--line')};--accent:${v('--accent')};--hi:${v('--hi')};--md:${v('--md')};--ok:${v('--ok')};color-scheme:${wcEl.classList.contains('dark') ? 'dark' : 'light'}}html{overflow:hidden}body{font-family:"Pretendard Variable",Pretendard,"Malgun Gothic",system-ui,sans-serif}main{max-width:none;padding:0 0 8px}h1{display:none}h2{font-size:15px}.card,table{border-radius:8px}.pill{border:0;padding:1px 0;margin-right:8px;font-weight:600}.pill.new{color:var(--muted)}</style>`;
+      const skin = `<style>:root{--bg:transparent;--card:transparent;--fg:${v('--fg')};--muted:${v('--muted')};--line:${v('--line')};--accent:${v('--accent')};--hi:${v('--hi')};--md:${v('--md')};--ok:${v('--ok')};color-scheme:${wcEl.classList.contains('dark') ? 'dark' : 'light'}}html{overflow:hidden;background:${getComputedStyle(el).backgroundColor}}body{background:transparent;font-family:"Pretendard Variable",Pretendard,"Malgun Gothic",system-ui,sans-serif}main{max-width:none;padding:0 0 8px}h1{display:none}h2{font-size:15px}.card,table{border-radius:8px}.pill{border:0;padding:1px 0;margin-right:8px;font-weight:600}.pill.new{color:var(--muted)}</style>`;
       f.onload = () => { try { f.style.height = Math.max(200, f.contentDocument.documentElement.scrollHeight + 4) + 'px'; } catch {} };
       f.srcdoc = R.renderHtml(S.a).replace('</head>', skin + '</head>'); } }
     if (S.view === 'budget' && !S.budget.table && !S.budget.busy) loadBudget();
