@@ -39,7 +39,7 @@
   }
   function chatPush(role, text, extra = {}) {
     const st = chatState();
-    const m = {id: 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), role, text: text || '', at: Date.now(), state: 'done', cards: [], tools: [], ...extra};
+    const m = {id: 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), role, text: text || '', at: Date.now(), state: 'done', cards: [], tools: [], ...(role === 'ai' && S.lastRefresh ? {dataAt: S.lastRefresh.getTime()} : {}), ...extra};
     st.msgs.push(m);
     if (st.msgs.length > 60) st.msgs.splice(0, st.msgs.length - 60);
     return m;

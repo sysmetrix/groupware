@@ -163,3 +163,16 @@ test('v1.12.2: 결과보고는 계획서의 기록물철을 이어받고, 제목
   assert.match(de, /setNative\(w, inp, spec\.title\);\n      try \{ inp\.blur\(\);/);
   assert.match(read('wc/42-result-review.js'), /기록물철은 계획서와 같게 이어받음/);
 });
+test('v1.13.0 계획 이행: 숫자→같은 목록, 버튼 이름, 빈 상태 조회 시각, 포커스 복원, 답의 자료 기준 시각', () => {
+  const hv = read('wc/29-home-view.js');
+  assert.match(hv, /v === 'approval'\) \{ if \(go\('approval'\)\) \{ S\.apTab = 'pending'; S\.apTabPinned = true; renderMain\(\); \} \}/);
+  assert.match(hv, /picked\?\.type === 'mail' \? '메일 읽기'/);
+  assert.match(hv, /현재 확인된 내 일 없음/);
+  assert.match(hv, /hhmm\(S\.lastRefresh\)\) \+ ' 조회 기준 · '/);
+  // 같은 것을 가리키는 숫자는 같은 원천(메뉴와 홈의 안 읽은 메일)
+  assert.match(hv, /out\.unread = mailSnapshot\(\)\.unread;/);
+  assert.match(read('wc/05-views.js'), /const n = mailSnapshot\(\)\.unread;/);
+  assert.match(read('wc/15-overlays-palette-help-menus.js'), /new MutationObserver\(\(\) => \{ if \(ovEl\.childElementCount\) return;/);
+  assert.match(read('wc/31-chat-engine.js'), /role === 'ai' && S\.lastRefresh \? \{dataAt: S\.lastRefresh\.getTime\(\)\}/);
+  assert.match(read('wc/30-chat-ui.js'), /그룹웨어 자료 \$\{da\} 기준/);
+});

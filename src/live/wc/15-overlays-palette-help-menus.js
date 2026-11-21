@@ -255,3 +255,8 @@
     if (requestSeq === weeklyRequestSeq && S.view === 'report') renderMain();
   }
 
+
+  // v1.13.0: 덮개 창(근태 준비·결과보고·확인 창 등)이 닫혀 포커스가 갈 곳을 잃으면, 창을 열기 직전에 있던 자리로 돌려놓는다.
+  if (typeof $ === 'function' && typeof root === 'object' && root && root.addEventListener) { let lastOutside = null; const ovEl = $('#overlay');
+    root.addEventListener('focusin', e => { const t = e.target; if (t && t.closest && !t.closest('#overlay')) lastOutside = t; }, true);
+    if (ovEl && typeof MutationObserver === 'function') new MutationObserver(() => { if (ovEl.childElementCount) return; const a = root.activeElement; if ((!a || a === document.body || !a.isConnected) && lastOutside && lastOutside.isConnected) { try { lastOutside.focus({preventScroll: true}); } catch {} } }).observe(ovEl, {childList: true}); }
