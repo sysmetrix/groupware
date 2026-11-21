@@ -165,6 +165,7 @@
     if (view === 'approval' && ['pending', 'deptWaiting', 'distWaiting', 'sendWaiting', 'submitted', 'viewing'].includes(param)) { if (go('approval') !== false) { S.apTab = param; S.apTabPinned = true; renderMain(); } return; }
     if (view === 'resource' && /^[\w-]+,\d{8}$/.test(param || '') && typeof resState === 'function') { const [seq, d8] = param.split(','), rs = resState(); if (rs.sel !== seq || rs.date !== d8) { rs.sel = seq; rs.date = d8; rs.bookings = null; } go('resource'); return; }
     if (view === 'mytodo' && param === 'wrap' && typeof todoWrapOpen === 'function') { if (go('mytodo') !== false) todoWrapOpen(); return; }
+    if (view === 'budget' && param === 'mine') { if (go('budget') !== false) { S.budget.mode = 'mine'; renderMain(); } return; }
     if (view === 'budget' && param === 'plan') { if (go('budget') !== false) { S.budget.mode = 'detail'; S.budget.budgetTab = 'plan'; renderMain(); } return; }
     if (view === 'today' && param === 'ref') { S.filter = {...S.filter, level: 'all', area: 'all', q: '', onlyNew: false, showHidden: false}; S.todayTab = 'ref'; go('today'); return; }
     go(view);

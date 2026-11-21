@@ -28,7 +28,21 @@
         const pins = (S.settings.budget || []).filter(p => p && p.project && p.filter);
         if (!pins.length) return {ok: false, text: '예산 집행 화면에서 내 관심 사업(항)을 먼저 저장해 주세요. 그 사업의 예상 집행률을 계산합니다.', cards: [{type: 'nav', label: '예산 집행 열기', view: 'budget'}]};
         const q = String(a.project || '').replace(/(예상|전망|예측|집행률|집행|예산|계획|알려\s*줘|보여\s*줘|얼마|돼|될까|[?？])/g, ' ').replace(/\s+/g, '').toLowerCase();
-        const pin = (q && pins.find(p => `${p.label || ''}${p.filter}${p.project}`.replace(/\s+/g, '').toLowerCase().includes(q))) || pins[0];
+        const hit = q && pins.find(p => `${p.label || ''}${p.filter}${p.project}`.replace(/\s+/g, '').toLowerCase().includes(q));
+        // v1.18.1: 사업을 집지 않았고 내 사업이 여러 개면 모두와 합계를 답한다
+        if (!hit && pins.length > 1) {
+          try {
+            const all = [];
+            for (const p of pins.slice(0, 8)) { const c = await bpForecastFor(p.project, p.filter); if (c.f.budget) all.push({p, f: c.f, sug: Object.keys(c.sug || {}).length, led: !!c.led}); }
+            if (!all.length) return {ok: false, text: '내 사업의 예산 자료를 읽지 못했습니다.'};
+            const s = k => all.reduce((a, x) => a + (x.f[k] || 0), 0), B = s('budget'), E = s('executed'), P = s('planned'), F = s('forecast');
+            const lines = [`내 사업 ${all.length}개 합계 집행률은 지금 ${pct(B ? E / B * 100 : 0)}, 집행 계획을 반영하면 ${pct(B ? F / B * 100 : 0)}로 예상됩니다. 계획 없는 잔액은 ${won(Math.max(0, B - F))}원입니다.`];
+            for (const x of all) lines.push(`• ${x.p.label || x.p.filter}: ${pct(x.f.rate)} → 예상 ${pct(x.f.forecastRate)} · 계획 없는 잔액 ${won(Math.max(0, x.f.budget - x.f.forecast))}원${x.sug ? ` · 짝 확인 ${x.sug}건` : ''}${x.f.warnings.length ? ` · 확인할 것 ${x.f.warnings.length}건` : ''}`);
+            if (all.some(x => !x.led)) lines.push('확인 제한: 일부 사업은 결의 내역을 읽지 못해 짝짓기가 빠졌습니다.');
+            return {ok: true, text: lines.join('\n'), llm: lines.join(' '), data: {projects: all.map(x => ({project: x.p.label || x.p.filter, rate: Math.round(x.f.rate * 10) / 10, forecast: Math.round(x.f.forecastRate * 10) / 10})), total_rate: B ? Math.round(E / B * 1000) / 10 : 0}, cards: [{type: 'nav', label: '내 사업 한눈에 열기', view: 'budget', v: 'mine'}]};
+          } catch (e) { logError('chat.forecastAll', e.message); return {ok: false, text: '예상 집행률을 계산하지 못했습니다: ' + String(e.message || e).slice(0, 80)}; }
+        }
+        const pin = hit || pins[0];
         try {
           const c = await bpForecastFor(pin.project, pin.filter), f = c.f;
           if (!f.budget) return {ok: false, text: `${pin.label || pin.filter}의 예산 자료를 읽지 못했습니다.`};
