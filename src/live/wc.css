@@ -1063,11 +1063,14 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 /* 통합알림: 한 건이 한 장. 안의 버튼은 조용하게 */
 .wc article.card2{padding:12px 16px}
 .wc article.card2 .btn.sm{box-shadow:none;font-weight:500}
-/* 조직도: 글머리표 대신 가는 연결선 */
+/* 조직도: 가로 배치. 이사장 → 대표이사 → 한 묶음으로 가로로 늘어선 부서(좁으면 줄을 바꾼다) */
 .wc .org-chart,.wc .org-chart ul{list-style:none;margin:0;padding:0}
-.wc .org-chart ul{margin:2px 0 2px 13px;padding-left:14px;border-left:1px solid var(--line2)}
-.wc .org-chart li{margin:4px 0}
-.wc .org-chart .chip{height:28px;font-weight:600}
+.wc .org-chart{display:flex;justify-content:center;padding:4px 0 8px}
+.wc .org-chart li{display:flex;flex-direction:column;align-items:center;margin:0;padding:0;max-width:100%}
+.wc .org-chart ul{position:relative;display:flex;flex-wrap:wrap;justify-content:center;align-items:flex-start;gap:8px;margin-top:16px;max-width:100%}
+.wc .org-chart ul::before{content:"";position:absolute;top:-16px;left:50%;height:16px;border-left:1px solid var(--line2)}
+.wc .org-chart ul ul{padding:14px 12px;border:1px solid var(--line2);border-radius:12px;margin-top:16px}
+.wc .org-chart .chip{height:28px;font-weight:600;white-space:nowrap}
 .wc .org-chart .chip .muted{font-weight:400;font-size:12px;margin-left:2px}
 .wc .legend i{border:1px solid var(--line2);border-radius:4px}
 /* 처리 창 */
