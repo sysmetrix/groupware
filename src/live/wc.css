@@ -1342,3 +1342,4 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 @media (max-width:640px){.wc main .set .si{grid-template-columns:minmax(0,1fr);display:grid;gap:6px}.wc main .btn{white-space:normal;height:auto;min-height:32px}.wc .att .c{padding:4px 3px}.wc main table:not(.apt){display:block;max-width:100%;overflow-x:auto}}
 .wc header .stat,.wc header .hb{flex-shrink:0;white-space:nowrap}.wc header .srch{min-width:0;flex-shrink:1}
 .wc .toast{left:calc(var(--navW,172px) + 20px);transform:none;max-width:min(560px,44vw)}
+.wc .dlg.rpt-review textarea#rptBody{min-height:240px;height:auto}

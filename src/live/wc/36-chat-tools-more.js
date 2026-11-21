@@ -210,15 +210,19 @@
     name: 'list_my_requests', label: '내 신청 현황 확인', kind: 'read',
     description: '내가 올린 휴가·출장·교육·시간외 근무 신청과 승인 상태(신청일 기준 최근 150일). 다른 직원의 신청은 다루지 않는다.',
     params: {type: 'object', properties: {limit: {type: 'number'}}},
-    run: async a => {
+    run: async (a, ctx) => {
       if (!S.raw) return chatNotReady();
       let dt; try { dt = await loadApps(); } catch (e) { return {ok: false, text: '근태 신청 내역을 읽지 못했습니다: ' + String(e.message || e).slice(0, 80)}; }
       const lim = chatLim(a.limit, 8, 15), t8 = today().replace(/-/g, '');
       const mine = (dt.apps || []).filter(x => String(x.empCd) === String(dt.me) && x.deleteReqYn !== 'Y').sort((x, y) => String(y.startDt).localeCompare(String(x.startDt)));
       const up = mine.filter(x => String(x.endDt || x.startDt) >= t8).reverse(), pend = mine.filter(x => String(x.approState) !== '1');
       const row = x => { const i = R.appInfo(x); return {title: `${chatSpan8(x.startDt, x.endDt)} ${x.atNm || '신청'}`, sub: [i.time, chatCut(i.place, 24), chatCut(i.reason, 32)].filter(Boolean).join(' · '), badge: i.pending ? '승인 전' : '승인', tone: i.pending ? 'todo' : 'ok'}; };
-      const head = `최근 150일 동안 올린 근태 신청은 ${mine.length}건이고, 오늘 이후 일정은 ${up.length}건, 아직 승인 전인 신청은 ${pend.length}건입니다.`;
+      let head = `최근 150일 동안 올린 근태 신청은 ${mine.length}건이고, 오늘 이후 일정은 ${up.length}건, 아직 승인 전인 신청은 ${pend.length}건입니다.`;
       const cards = [];
+      { const ut = String((ctx && ctx.userText) || ''), pdo = typeof R.chatParseDate === 'function' ? R.chatParseDate(ut, new Date()) : null, pd = pdo && pdo.date || '';
+        if (pd && /^\d{4}-\d{2}-\d{2}$/.test(pd)) { const d8 = pd.replace(/-/g, ''), on = mine.filter(x => String(x.startDt) <= d8 && String(x.endDt || x.startDt) >= d8), lab = `${Number(pd.slice(5, 7))}/${Number(pd.slice(8))}`;
+          head = (on.length ? `${lab}에 올린 내 근태 신청은 ${on.length}건입니다: ${on.slice(0, 3).map(x => { const i = R.appInfo(x); return `${x.atNm || '신청'}${i.time ? ' ' + i.time : ''}(${i.pending ? '승인 전' : '승인'})`; }).join(', ')}.` : `${lab}에 올린 내 근태 신청은 없습니다.`) + ' ' + head;
+          if (on.length) cards.push({type: 'list', title: `${lab} 신청`, items: on.slice(0, lim).map(row)}); } }
       if (up.length) cards.push({type: 'list', title: '오늘 이후 일정', items: up.slice(0, lim).map(row), more: Math.max(0, up.length - lim)});
       const past = mine.filter(x => String(x.endDt || x.startDt) < t8);
       if (past.length) cards.push({type: 'list', title: '지난 신청', items: past.slice(0, 5).map(row), more: Math.max(0, past.length - 5)});

@@ -134,3 +134,25 @@ test('v1.11.1: 연속 처리 안내는 위쪽 알림이 아니라 진행 막대�
   assert.doesNotMatch(s, /toast\('연속 처리: 그룹웨어 원래 화면에서/);
   assert.match(s, /원래 화면에서 처리한 뒤 초록 버튼을 누르면 처리됐는지 확인합니다/);
 });
+test('v1.12.0 실제 실행 점검: 결과보고 검토 본문 칸, 자동 기입 뒤 입력 중 표시, 제목 다시 읽기', () => {
+  assert.match(read('wc.css'), /\.wc \.dlg\.rpt-review textarea#rptBody\{min-height:240px;height:auto\}/);
+  const de = read('wc/19-draft-engine.js');
+  assert.match(de, /function showDraftReport\(title, steps, notes = \[\]\) \{\n    if \(typeof markPaneDirty === 'function'\)/);
+  assert.match(de, /await ctrl\.GetFieldText\('doc_name'\)/);
+  assert.match(de, /kindOf\(b\.title\) === kindOf\(plan\.title\)/);
+});
+
+test('v1.12.0 실제 실행 점검: 출장·휴가 준비는 같은 기간의 내 신청을 알리고, 채운 뒤 [신청완료]가 보이게(누르지 않음)', () => {
+  const at = read('wc/27-attendance-request.js');
+  assert.match(at, /function attOverlapNote\(st\)/);
+  assert.match(at, /const note = attOverlapNote\(st\) \+ wkWarn/);
+  assert.match(at, /done\.scrollIntoView\(\{block: 'center'/);
+  assert.doesNotMatch(at, /done\.click\(\)/);
+  assert.match(at, /finally \{ AUTO\.running = false; [^\n]*markPaneDirty/);
+});
+
+test('v1.12.0: 날짜를 물은 내 근태 신청 질문은 그날 것부터 답한다', () => {
+  const t = read('wc/36-chat-tools-more.js');
+  assert.match(t, /name: 'list_my_requests'[\s\S]*?run: async \(a, ctx\) =>/);
+  assert.match(t, /에 올린 내 근태 신청은 없습니다\./);
+});

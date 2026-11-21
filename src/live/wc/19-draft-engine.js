@@ -427,7 +427,7 @@
       setNative(w, inp, spec.title);
       await wait(300);
       if (!live()) return {ok: false, detail: '계정 또는 기안 화면이 변경되어 중단했습니다'};
-      let hwpTitle = ''; try { const ctrl = d.querySelector('iframe[src*="hwpBuild"], #formCtrl_1').contentWindow.HwpCtrl; ctrl.PutFieldText('doc_name', spec.title); hwpTitle = String(ctrl.GetFieldText('doc_name') || '').trim(); } catch {}
+      let hwpTitle = ''; try { const ctrl = d.querySelector('iframe[src*="hwpBuild"], #formCtrl_1').contentWindow.HwpCtrl; ctrl.PutFieldText('doc_name', spec.title); for (let i = 0; i < 10; i++) { hwpTitle = String((await ctrl.GetFieldText('doc_name')) || '').trim(); if (hwpTitle === spec.title) break; await wait(300); } } catch {}
       const ok = inp.value === spec.title && hwpTitle === spec.title;
       return {ok, detail: ok ? '화면 제목과 한글 제목 일치' : '화면 제목 또는 한글 제목 불일치 · 직접 확인 필요'};
     });
@@ -449,6 +449,7 @@
   }
 
   function showDraftReport(title, steps, notes = []) {
+    if (typeof markPaneDirty === 'function') { const pf = $('#frame iframe'); if (pf) markPaneDirty(pf); }
     const bad = steps.filter(s => !s.ok).length;
     const bodyStep = steps.find(s => s.name === '본문');
     const bodyFilled = !!(bodyStep && bodyStep.ok); // 본문을 실제로 넣고 다시 읽어 일치한 경우만
@@ -492,7 +493,8 @@
     const evidence = await resultEvidence(plan).catch(() => ({scope:'관련 자료 조회 실패. 직접 확인한 실적만 입력하세요.',sources:[],suggestions:[]}));
     if (owner !== currentKey || owner !== getUserKey() || ov.firstElementChild !== loading) return;
     const templates = Object.values(patLoad().docs).filter(x => x.body && /결과보고/.test(x.title) && x.id !== plan.id);
-    templates.sort((a,b) => Number(b.binder === plan.binder) - Number(a.binder === plan.binder) || String(b.date).localeCompare(String(a.date)));
+    const kindOf = t => /참가/.test(t || '') ? '참가' : /운영/.test(t || '') ? '운영' : '';
+    templates.sort((a,b) => Number(kindOf(b.title) === kindOf(plan.title)) - Number(kindOf(a.title) === kindOf(plan.title)) || Number(b.binder === plan.binder) - Number(a.binder === plan.binder) || String(b.date).localeCompare(String(a.date)));
     const reviewed = await reviewResultDraft(plan,evidence,templates[0]);
     if (!reviewed || owner !== currentKey || owner !== getUserKey()) return;
     const {title,body} = reviewed;

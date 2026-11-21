@@ -15,7 +15,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '1.11.1';
+  const VERSION = '1.12.0';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
