@@ -30,8 +30,8 @@ function fixture() {
   return {S,calls,messages,inputs,ctx,click};
 }
 test('picker and pin buttons choose, toggle, unpin and isolate nested clicks', async()=>{
-  const f=fixture(), b=f.S.budget; await f.click('bTogglePick'); assert.equal(b.pickOpen,true);
-  await f.click('bPick',{p:'B',f:'H'}); assert.equal(b.pickOpen,false); assert.equal(b.project,'B'); assert.equal(b.filter,'H'); assert.ok(f.calls.some(x=>x[0]==='loadBudget'));
+  const f=fixture(), b=f.S.budget; await f.click('bTogglePick'); assert.equal(b.mode,'all'); // v1.18: 사업 고르기는 '재단 전체' 탭
+  await f.click('bPick',{p:'B',f:'H'}); assert.equal(b.pickOpen,false); assert.equal(b.mode,'detail'); assert.equal(b.project,'B'); assert.equal(b.filter,'H'); assert.ok(f.calls.some(x=>x[0]==='loadBudget'));
   await f.click('bPin',{p:'B',f:'H',l:'사업'}); assert.equal(JSON.stringify(f.S.settings.budget),JSON.stringify([{project:'B',filter:'H',label:'사업'}]));
   await f.click('bPin',{p:'B',f:'H'}); assert.equal(f.S.settings.budget.length,0);
   await f.click('bPin',{p:'B'}); await f.click('bUnpin',{i:'0'}); assert.equal(f.S.settings.budget.length,0); assert.equal(f.calls.filter(x=>x[0]==='stop').length,5); assert.equal(f.calls.filter(x=>x[0]==='save').length,4);
@@ -73,8 +73,8 @@ test('all budget screen and budget settings actions have handlers',()=>{
   for(const name of ['budgetRowAdd','budgetRowDel','goBudgetPick']) if(settings.includes('data-act="'+name+'"')) actions.add(name);
   for(const name of actions) assert.ok(events.includes("case '"+name+"':"),'missing action '+name);
 });
-test('settings button opens the budget picker', async()=>{
-  const f=fixture(); f.ctx.go = view => f.calls.push(['go',view]); await f.click('goBudgetPick'); assert.equal(f.S.budget.pickOpen,true); assert.deepEqual(f.calls.find(x=>x[0]==='go'),['go','budget']);
+test('settings button opens the 재단 전체 tab to pick a project', async()=>{
+  const f=fixture(); f.ctx.go = view => f.calls.push(['go',view]); await f.click('goBudgetPick'); assert.equal(f.S.budget.mode,'all'); assert.deepEqual(f.calls.find(x=>x[0]==='go'),['go','budget']);
 });
 test('failed pin addition preserves the list and reports failure without success', async()=>{
   const f=fixture(); f.S.settings.budget.push({project:'A',filter:'H',label:'기존'});

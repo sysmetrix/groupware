@@ -1417,3 +1417,44 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .bp-imp{display:flex;flex-direction:column;gap:6px;padding:10px 0;border-bottom:1px solid var(--line)}
 @media (max-width:1100px){.wc .td-wrap.with-ed{grid-template-columns:minmax(0,1fr)}.wc .td-ed{position:static;max-height:none}}
 .wc .td-rep-w[hidden],.wc .td-f[hidden]{display:none}
+
+/* v1.18 예산 집행: 내 사업 한눈에 · 사업 상세 · 재단 전체 */
+.wc .bd-head{margin:2px 0 6px}
+.wc .bd-sel{min-width:280px;max-width:480px;height:36px;font-size:14px;font-weight:600}
+.wc .bm-sum{margin:4px 0 14px}
+.wc .bm-big{font-size:18px;font-weight:600;margin:4px 0 8px}
+.wc .bm-big b{font-size:22px}
+.wc .bm-sum>.bm-bar{display:flex;width:100%;max-width:none;height:12px;margin-bottom:8px}
+.wc .bm-bar{position:relative;display:inline-flex;width:120px;height:8px;border-radius:5px;background:var(--bg-subtle);vertical-align:middle;overflow:visible}
+.wc .bm-bar i{display:block;height:100%}
+.wc .bm-bar i.ex{background:var(--pri);border-radius:5px 0 0 5px}
+.wc .bm-bar i.pl{background:var(--accent);opacity:.45}
+.wc .bm-bar b{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--hi)}
+.wc .bm-rate{white-space:nowrap}
+.wc .bm-rate>span:last-child{display:inline-block;min-width:52px;text-align:right;margin-left:8px;font-variant-numeric:tabular-nums}
+.wc .bm-tbl{width:100%}
+.wc .bm-tbl tr.sum td{font-weight:700;border-top:1px solid var(--line)}
+.wc .bm-name{background:none;border:0;padding:0;font:inherit;font-weight:600;color:var(--accent);cursor:pointer;text-align:left}
+.wc .bm-name:hover{text-decoration:underline}
+.wc .bm-flag{color:var(--md)}
+.wc .bm-sep{width:1px;height:24px;background:var(--line);margin:0 4px}
+.wc .bm-phead,.wc .bm-proj>summary{display:grid;grid-template-columns:minmax(220px,1.6fr) 130px 130px minmax(190px,1fr) 130px;gap:12px;align-items:center}
+.wc .bm-phead{padding:0 12px 6px 30px;font-size:13px;color:var(--muted);border-bottom:1px solid var(--line)}
+.wc .bm-proj{border-bottom:1px solid var(--line)}
+.wc .bm-proj>summary{padding:10px 12px;cursor:pointer;list-style:none;position:relative;padding-left:30px}
+.wc .bm-proj>summary::-webkit-details-marker{display:none}
+.wc .bm-proj>summary::before{content:'›';position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);transition:transform .15s}
+.wc .bm-proj[open]>summary::before{transform:translateY(-50%) rotate(90deg)}
+.wc .bm-proj>summary:hover{background:var(--soft)}
+.wc .bm-pn{font-weight:600}
+.wc .bm-mine{color:var(--md);font-size:13px;font-weight:600;margin-left:6px}
+.wc .bm-mine .i{width:13px;height:13px;vertical-align:-2px}
+.wc .bm-proj .bm-tbl{margin:0 0 6px 18px;width:calc(100% - 18px)}
+.wc .bm-proj .bm-tbl tr.lv-관 td{background:var(--bg-subtle)}
+.wc .bm-pfoot{margin:0 0 10px 18px}
+.wc .bm-tbl tr[hidden],.wc .bm-proj[hidden]{display:none}
+@media (max-width:1100px){.wc .bm-phead{display:none}.wc .bm-proj>summary{grid-template-columns:1fr;gap:4px}.wc .bm-bar{width:90px}}
+.wc .bm-mine-tbl td:first-child{min-width:220px}
+.wc .bm-mine-tbl .bm-name{white-space:nowrap}
+.wc .bm-mine-tbl td,.wc .bm-mine-tbl th{padding-left:10px;padding-right:10px}
+.wc .bm-note{margin:8px 0 0}
