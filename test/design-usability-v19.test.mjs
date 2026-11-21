@@ -236,3 +236,8 @@ test('v1.16.0 유지보수: 자동 업데이트 즉시 적용·짧은 재확인,
   assert.match((read('wc/13-detail-pane.js') + read('wc/13b-mail-compose.js')), /보안메일은 대용량 첨부만/);
   assert.doesNotMatch(read('wc/19-draft-engine.js'), /buildConfirmedResultBody/);
 });
+
+test('v1.16.1: 예산 월 필터 해제는 화면의 전체 버튼(ledgerMonth 빈 값)으로, 따로 쓰이지 않던 처리기는 없음', () => {
+  assert.doesNotMatch(read('wc/16-events.js'), /budgetMonthClear/);
+  assert.match(read('wc/10-calendar-budget.js'), /data-act="ledgerMonth"/);
+});
