@@ -1729,6 +1729,53 @@
       "q": "요즘 내 업무 상황 한 문단으로 정리해줘",
       "tool": "get_overview",
       "why": "실사용: 요약 숫자만 나열"
+    },
+    {
+      "id": "z1",
+      "cat": "조회",
+      "q": "김소연 내일 뭐 해?",
+      "tool": "get_staff_status",
+      "args": {
+        "name": "김소연",
+        "exact": true
+      },
+      "notTool": [
+        "get_schedule"
+      ],
+      "why": "실사용: 내 일정을 답함"
+    },
+    {
+      "id": "z2",
+      "cat": "조회",
+      "q": "오늘 출근 몇 시에 했어?",
+      "tool": "get_work_hours",
+      "args": {
+        "today_only": true
+      },
+      "why": "실사용: 연차·시간외 지문 이야기로 답함"
+    },
+    {
+      "id": "z3",
+      "cat": "조회",
+      "q": "이번 달 부서운영업무비 얼마 썼어?",
+      "tool": "get_budget",
+      "args": {
+        "month": true
+      },
+      "why": "실사용: 외부 AI 4초, 같은 답 세 번"
+    },
+    {
+      "id": "z4",
+      "cat": "조회",
+      "q": "지문 안 찍은 날 있어?",
+      "tool": "get_my_attendance"
+    },
+    {
+      "id": "z5",
+      "cat": "넘겨짚지 않기",
+      "q": "봄 축제 일정 알려줘",
+      "tool": "",
+      "why": "행사 이름 첫 글자를 성으로 보지 않음"
     }
   ]
 }

@@ -154,7 +154,7 @@
       const d0 = chatDateArg(a.date);
       if (!d0) return {ok: false, text: '날짜를 알아보지 못했습니다. 예) 내일, 11/20, 다음 주'};
       const name = String(a.name || '').trim().replace(/\s+/g, '');
-      const n = Math.min(Math.max(Number(a.days) || 1, 1), name ? 31 : 14) || 1, nn = name ? Math.max(n, 14) : n;
+      const n = Math.min(Math.max(Number(a.days) || 1, 1), name ? 31 : 14) || 1, nn = name && !a.exact ? Math.max(n, 14) : n;
       const isos = Array.from({length: nn}, (_, i) => chatAddDays(d0, i));
       const ok = await chatLoadTeam(isos);
       if (!ok) return {ok: false, text: '직원 근태 자료를 읽지 못했습니다. 잠시 뒤 다시 시도하거나 일정 달력에서 확인해 주세요.'};
@@ -175,7 +175,7 @@
       if (KW) for (let i = hits.length - 1; i >= 0; i--) if (!KW.test(hits[i].label)) hits.splice(i, 1);
       const span = nn === 1 ? chatMd(d0) : `${chatMd(d0)}~${chatMd(isos[isos.length - 1])}`;
       const short = (x, n) => { x = String(x || ''); return x.length > n ? x.slice(0, n - 1) + '…' : x; };
-      if (!hits.length) return {ok: true, text: name ? `${span} 사이에 “${name}” 님의 휴가·출장·교육 일정이 없습니다.` : `${span}에 ${dept || '우리 부서'}에서 ${kName ? kName + ' 일정이 있는' : '휴가·출장·교육으로 자리를 비우는'} 직원이 없습니다.`, data: {count: 0}};
+      if (!hits.length) return {ok: true, text: name ? `${span}${nn === 1 ? '에' : ' 사이에'} “${name}” 님의 휴가·출장·교육 일정이 없습니다.${a.exact ? ' (그룹웨어에 공유된 근태만 볼 수 있어, 개인 일정은 알 수 없습니다)' : ''}` : `${span}에 ${dept || '우리 부서'}에서 ${kName ? kName + ' 일정이 있는' : '휴가·출장·교육으로 자리를 비우는'} 직원이 없습니다.`, data: {count: 0}};
       if (name) {
         const first = hits[0];
         const head = hits.length === 1 ? `${name} 님은 ${chatMd(first.iso)} ${first.label}${first.time ? ' ' + first.time : ''}${first.place ? ', ' + short(first.place, 30) : ''} 일정이 있습니다.` : `${name} 님의 일정은 ${hits.length}건이고, 가장 가까운 것은 ${chatMd(first.iso)} ${first.label}${first.time ? ' ' + first.time : ''}입니다.`;
@@ -235,6 +235,7 @@
       if (lv) bits.push(`남은 연차는 ${fmtDays(lv.remaining)}입니다(받은 ${fmtDays(lv.granted)}, 쓴 ${fmtDays(lv.used)}) · ${leaveTypesText(lv)}`);
       bits.push(m === thisM ? '시간외 퇴근 지문 확인은 신청일 기준 최근 150일 내 신청과 어제까지의 자료 기준입니다' : '시간외 신청은 신청일 기준 최근 150일 이내 자료입니다');
       bits.push(an.length ? `${Number(m.slice(5))}월에 시간외 신청일 중 퇴근 지문 확인이 필요한 날이 ${an.length}일 있습니다` : `${Number(m.slice(5))}월에 조회된 시간외 신청일 중 퇴근 지문 확인이 필요한 날은 없습니다`);
+      if (/(지문|안\s*찍|누락|빠진)/.test((ctx && ctx.userText) || '') && !R.chatParseDate((ctx && ctx.userText) || '', new Date())) { const md8 = d => `${+d.slice(4, 6)}/${+d.slice(6, 8)}`; return {ok: true, text: an.length ? `${Number(m.slice(5))}월에 퇴근 지문 확인이 필요한 날은 ${an.length}일입니다: ${an.map(x => `${md8(x.date)}(${x.item || '시간외'})`).join(', ')}.\n승인된 시간외 신청이 있는데 신청 종료 뒤의 퇴근 지문이 조회되지 않은 날입니다. 출근 지문 누락은 판정하지 않습니다.` : `${Number(m.slice(5))}월에 시간외 신청일 중 퇴근 지문 확인이 필요한 날은 없습니다. 출근 지문 누락은 판정하지 않습니다.`, data: {count: an.length}, cards: [{type: 'nav', label: '근태·연차 화면 열기', view: 'attendance'}]}; } // v1.7.0
       // 특정 날짜를 물었으면 그날이 확인 대상인지 먼저 답한다(v0.86.0)
       const asked = /지문|퇴근|출근|근태/.test((ctx && ctx.userText) || '') ? R.chatParseDate(ctx.userText, new Date()) : null;
       if (asked && asked.date && asked.date.slice(0, 7) === m) {
