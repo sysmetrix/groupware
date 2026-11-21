@@ -1326,3 +1326,13 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .cal .c.picked{box-shadow:inset 0 0 0 2px var(--accent)}
 .cal .c.picked.today{box-shadow:inset 0 2px 0 var(--accent),inset 0 0 0 2px var(--accent)}
 @media(max-width:1050px){.cal-layout.has-day{grid-template-columns:1fr}.cal-day{max-height:none}}
+
+/* v1.9.0 디자인·사용성 점검 반영 */
+.wc .hm-sw{width:40px;height:24px}.wc .hm-sw i{width:20px;height:20px}.wc .hm-sw[aria-checked="true"] i{transform:translateX(16px)}
+.wc .cal .c.today{background:transparent;box-shadow:none}.wc .cal .c.picked,.wc .cal .c.picked.today{background:var(--sel);box-shadow:inset 0 0 0 2px var(--accent)}
+.wc .cal .ev{height:auto;white-space:normal;word-break:keep-all;line-height:1.35;padding-top:2px;padding-bottom:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.wc .desk-start{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:12px 0}.wc .desk-start h2{margin:0;font-size:14px}.wc .desk-links,.wc .desk-links{display:flex;flex-wrap:wrap;gap:8px;border-top:0}.wc .desk-links button{display:inline-flex;width:auto;padding:6px 12px;border:1px solid var(--line2);border-radius:999px;font-size:13px}.wc .desk-links button:hover{border-color:var(--accent)}.wc .desk-links small{display:none}
+.wc .mail-ads{margin-top:14px}.wc .mail-ads>summary{cursor:pointer;color:var(--muted);font-size:13px;padding:8px 4px;border-top:1px solid var(--line)}
+.wc .rp-frame{height:auto;min-height:200px;border:0;border-radius:0;background:transparent}.wc .rp-period{font-size:13px;font-weight:500}
+@media (max-width:640px){.wc header{flex-wrap:nowrap;gap:4px;padding:0 8px;overflow:hidden}.wc header .srch{flex:1 1 auto;min-width:0}.wc header .srch input{min-width:0;width:100%}.wc header .demo-pill{display:none}.wc header .hb[data-act="menuNew"]{font-size:0;gap:0;width:36px;flex:0 0 36px;padding:0;justify-content:center}.wc header .hb.back{font-size:0;gap:0;width:36px;flex:0 0 36px;padding:0;margin-left:0;justify-content:center;overflow:hidden}.wc header .hb.icon{flex:0 0 34px}}
+@media (max-width:640px){.wc header .hb[data-act="menuNew"] .i{width:17px;height:17px}.wc nav a{position:relative}.wc nav a .n{position:absolute;top:1px;right:2px;margin:0;padding:0 4px;min-width:0;height:17px;line-height:17px;font-size:12px}}
