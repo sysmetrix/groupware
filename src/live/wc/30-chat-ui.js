@@ -47,7 +47,8 @@
     const label = iso ? iso.slice(0, 10) + ' ' + iso.slice(11, 16) + ' KST' : '시각 확인 불가';
     const warning = m.role !== 'user' && (!iso || iso.slice(0, 10) !== today)
       ? ' · 이전 기록: 당시 기준 응답입니다. 최신 정보는 다시 질문해 주세요.' : '';
-    return `<div class="ch-meta"><small>${esc(label + warning)}</small></div>`;
+    const da = m.role !== 'user' && !warning && (m.tools || []).some(t => t && t.state !== 'err') && typeof m.dataAt === 'number' && m.dataAt > 0 ? new Date(m.dataAt + 9 * 3600000).toISOString().slice(11, 16) : '';
+    return `<div class="ch-meta"><small>${esc(label + (da ? ` · 그룹웨어 자료 ${da} 기준` : '') + warning)}</small></div>`;
   }
   function chatMsgHtml(m) {
     const time = chatTimeHtml(m);

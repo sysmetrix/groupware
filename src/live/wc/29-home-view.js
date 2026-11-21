@@ -104,12 +104,12 @@
     const next = R.homeNextAction(d.mine.map(x => ({key: x.key, title: x.title, headline: x.headline, area: x.area, state: stateOf(x), deadline: x.deadline && x.deadline.date ? x.deadline.date.slice(5) + (x.deadline.time ? ' ' + x.deadline.time : '') : ''})));
     const tone = s => (s === 'overdue' || s === 'urgent' ? 'urgent' : 'todo');
     const picked = next && d.mine.find(x => x.key === next.key);
-    const nextLabel = picked?.type === 'mail' ? '메일 내용 확인' : picked?.area === '결재' ? '결재 문서 확인' : picked?.area === '근태' ? '근태 기록 확인' : '업무 상세 보기';
+    const nextLabel = picked?.type === 'mail' ? '메일 읽기' : picked?.area === '결재' ? '결재 문서 열기' : picked?.area === '근태' ? '근태 기록 확인' : '업무 상세 보기';
     const queue = next ? d.mine.filter(x => x.key !== next.key).slice(0, 2) : [];
     const queueHtml = queue.length ? `<div class="hm-queue-k">다음 순서</div><ol class="hm-queue">${queue.map((x,i) => `<li><button class="hm-q" data-act="homeNext" data-v="${esc(x.key)}"><span class="desk-num" aria-hidden="true">0${i+2}</span><span class="hm-q-t">${esc(x.title)}</span><span class="hm-badge hm-tone-${tone(stateOf(x))}">${esc(STATE_NAME[stateOf(x)] || x.area || '')}</span></button></li>`).join('')}</ol>` : '';
     const nextHtml = next
       ? `<section class="hm-card hm-next" aria-label="지금 할 일 한 가지"><div class="hm-card-h"><h2 class="hm-card-k"><span class="desk-index" aria-hidden="true">01</span> 지금 가장 먼저 할 일</h2><span class="hm-badge hm-tone-${tone(next.state)}">${esc(STATE_NAME[next.state] || '')}</span></div><div class="hm-next-b"><div class="hm-next-t">${esc(next.title)}</div>${next.sub || next.deadline ? `<div class="hm-next-s">${esc([next.sub, next.deadline ? '기한 ' + next.deadline : ''].filter(Boolean).join(' · '))}</div>` : ''}</div><div class="hm-next-a"><button class="ch-btn ch-btn-primary" data-act="homeNext" data-v="${esc(next.key)}">${nextLabel}</button><button class="ch-btn ch-btn-ghost" data-act="homeOpenToday">할 일 전체 ${total}건 보기</button></div><details class="hm-why"><summary>왜 먼저인가요?</summary><p>내가 처리할 일에서 상태 우선순위(기한 지남, 긴급, 할 일, 확인 필요)를 비교했습니다. 이 항목의 상태: ${esc(STATE_NAME[next.state] || next.state)}. 같은 순위에서는 목록 순서로 안내합니다.</p></details></section>${queueHtml}`
-      : `<section class="hm-card hm-next hm-next-ok" aria-label="지금 할 일"><div class="hm-card-h"><h2 class="hm-card-k">${d.taskGaps ? '확인된 처리할 일이 없습니다' : '지금 처리할 일이 없습니다'}</h2></div><div class="hm-next-s">${d.taskGaps ? '일부 자료를 읽지 못해 전체 할 일을 확인할 수 없습니다.' : d.refN ? `부서 참고 공문 ${d.refN}건이 등록되어 있습니다.` : '새로 도착한 일이 없습니다.'}</div><div class="hm-next-a"><button class="ch-btn ch-btn-ghost" data-act="homeOpenToday">할 일 목록 열기</button></div></section>`;
+      : `<section class="hm-card hm-next hm-next-ok" aria-label="지금 할 일"><div class="hm-card-h"><h2 class="hm-card-k">${d.taskGaps ? '확인된 처리할 일이 없습니다' : '현재 확인된 내 일 없음'}</h2></div><div class="hm-next-s">${S.lastRefresh ? esc(hhmm(S.lastRefresh)) + ' 조회 기준 · ' : ''}${d.taskGaps ? '일부 자료를 읽지 못해 전체 할 일을 확인할 수 없습니다.' : d.refN ? `부서 참고 공문 ${d.refN}건이 등록되어 있습니다.` : '새로 도착한 일이 없습니다.'}</div><div class="hm-next-a"><button class="ch-btn ch-btn-ghost" data-act="homeOpenToday">할 일 목록 열기</button></div></section>`;
     return `${nextHtml}<section class="hm-card hm-stats" aria-label="핵심 현황"><div class="hm-tiles">${tileHtml}</div></section>`;
   }
 
@@ -184,7 +184,7 @@
     if (['urgent', 'todo', 'wait'].includes(v)) { S.filter = {...S.filter, level: v === 'urgent' ? 'urgent' : v === 'wait' ? 'wait' : 'all', area: 'all', q: '', onlyNew: false, showHidden: false}; S.todayTab = 'mine'; go('today'); }
     else if (v === 'schedule' || v === 'away') { S.cal.offset = 0; if (v === 'away') teamCfg().day = today().replace(/-/g, ''); go('calendar'); }
     else if (v === 'mail') openUnreadMail();
-    else if (v === 'approval') go('approval');
+    else if (v === 'approval') { if (go('approval')) { S.apTab = 'pending'; S.apTabPinned = true; renderMain(); } } // 이동한 뒤 고정해야 빈 목록이어도 '결재 대기'가 열린다
     else if (v === 'leave') go('attendance');
     else if (v === 'ref') { S.filter = {...S.filter, level: 'all', area: 'all', q: '', onlyNew: false, showHidden: false}; S.todayTab = 'ref'; go('today'); }
   };
