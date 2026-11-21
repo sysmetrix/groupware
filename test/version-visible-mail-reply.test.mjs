@@ -266,5 +266,5 @@ test('AI request uses a fresh abort signal per model so a timeout can move on to
 });
 
 test('attendance request started from the calendar keeps the picked day', () => {
-  assert.match(read('27-attendance-request.js'), /const d0 = attYmd\(preset\.date\) \|\| selDate \|\| pickedDay \|\| today/);
+  assert.match(read('27-attendance-request.js'), /const d0 = attYmd\(preset\.date\) \|\| selDate \|\| pickedDay \|\| (wkNext \|\| )?today/);
 });

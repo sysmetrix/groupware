@@ -90,7 +90,8 @@
     chatRenderedDay = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
     const st = chatState();
     const past = st.msgs.filter(m => m.restored), current = st.msgs.filter(m => !m.restored);
-    return (past.length ? `<details class="ch-more ch-past" data-chat-history ${st.historyExpanded ? 'open' : ''}><summary>이전 대화 보기 (${past.length}개 메시지)</summary>${past.map(chatMsgHtml).join('')}</details>` : '') + (current.length ? (() => { const us = current.map((m, i) => m.role === 'user' ? i : -1).filter(i => i >= 0), cut = us.length > 2 ? us[us.length - 2] : 0; return (cut ? `<details class="ch-more ch-earlier"><summary>앞선 대화 보기 (${cut}개 메시지)</summary>${current.slice(0, cut).map(chatMsgHtml).join('')}</details>` : '') + current.slice(cut).map(chatMsgHtml).join(''); })() : chatWelcomeHtml()); // v1.9.0: 최근 두 번의 질문과 답만 펼쳐 둔다(대화 칸 안 긴 스크롤을 줄임)
+    // v1.9.0: 최근 두 번의 질문과 답만 펼쳐 둔다(대화 칸 안 긴 스크롤을 줄임)
+    return (past.length ? `<details class="ch-more ch-past" data-chat-history ${st.historyExpanded ? 'open' : ''}><summary>이전 대화 보기 (${past.length}개 메시지)</summary>${past.map(chatMsgHtml).join('')}</details>` : '') + (current.length ? (() => { const us = current.map((m, i) => m.role === 'user' ? i : -1).filter(i => i >= 0), cut = us.length > 2 ? us[us.length - 2] : 0; return (cut ? `<details class="ch-more ch-earlier"><summary>앞선 대화 보기 (${cut}개 메시지)</summary>${current.slice(0, cut).map(chatMsgHtml).join('')}</details>` : '') + current.slice(cut).map(chatMsgHtml).join(''); })() : chatWelcomeHtml());
   }
   const chatChipsHtml = () => { const st = chatState(); if (st.busy) return ''; const fresh = !st.msgs.some(m => !m.restored); return chatSuggestions().slice(0, fresh ? 4 : 3).map(q => `<button class="ch-chip" data-act="chatChip" data-v="${esc(q)}">${esc(q)}</button>`).join(''); };
   function chatFootHtml() {

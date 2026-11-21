@@ -106,3 +106,26 @@ test('v1.10.0: 좁은 화면 리플로 규칙(카드 격자·근태 달력·표)
 test('v1.10.1: 큰 글자에서 머리글 시각·버튼은 줄어들지 않고 검색칸이 줄어든다', () => {
   assert.match(read('wc.css'), /\.wc header \.stat,\.wc header \.hb\{flex-shrink:0;white-space:nowrap\}\.wc header \.srch\{min-width:0;flex-shrink:1\}/);
 });
+test('v1.11.0: 노트북 화면 결재 연속 처리 — 원문을 넓게 열고 첨부 목록을 접어 본문을 키운다', () => {
+  assert.match(read('wc/14-hide-snooze-undo-to-do.js'), /innerWidth < 1600\)\)\);/);
+  const pane = read('wc/13-detail-pane.js');
+  assert.match(pane, /roomyDocFrame\(f, u\)/);
+  assert.match(pane, /function roomyDocFrame\(f, u\) \{\n    if \(!\/MicroModuleCode=ea\/\.test\(u\)\) return;/);
+  assert.match(pane, /getBoundingClientRect\(\)\.height >= 760\) return;/);
+  assert.match(read('wc.css'), /\.wc \.toast\{left:calc\(var\(--navW,172px\) \+ 20px\);transform:none/);
+});
+
+test('v1.11.0: 주말에 휴가·출장 준비를 열면 다음 평일, 주말 날짜는 경고, 조사는 받침에 맞게', () => {
+  const att = read('wc/27-attendance-request.js');
+  assert.match(att, /wkNext = type !== 'overtime'/);
+  assert.match(att, /pickedDay \|\| wkNext \|\| today/);
+  assert.match(att, /josa\(st\.kind, '은', '는'\)/);
+  assert.match(att, /id="att_note" role="status"/);
+});
+
+test('v1.11.0: 결재함 답은 물은 기간(이번 주 등)과 급한 것부터', () => {
+  const t = read('wc/36-chat-tools-more.js');
+  assert.match(t, /name: 'list_approvals'[\s\S]*?run: async \(a, ctx\) =>/);
+  assert.match(t, /R\.cuPeriod\(ut, td\)/);
+  assert.match(t, /제목에 긴급 표시나 3일 안 기한/);
+});

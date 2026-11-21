@@ -51,7 +51,8 @@
     else if (x.type === 'mail') S.pane.url = ''; // 답장·전달·메일함 중 고르게 한다
     else if (marksRead(x)) { S.pane.url = ''; f.gate = true; }
     else S.pane.url = x.url;
-    S.pane.expanded = !!(S.pane.url && !/#\/?popup\?/.test(S.pane.url));
+    // v1.11.0: 좁은 PC 화면에서는 문서를 넓게
+    S.pane.expanded = !!(S.pane.url && (!/#\/?popup\?/.test(S.pane.url) || (typeof innerWidth === 'number' && innerWidth < 1600)));
     if (!f.started) f.started = new Date();
     render();
   }
