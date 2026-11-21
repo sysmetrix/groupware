@@ -517,3 +517,19 @@ test('v1.6.0: 왜 먼저야, 바쁜·한가한 날, 한 문단으로', async () 
   const eng = fs.readFileSync(new URL('../src/live/wc/31-chat-engine.js', import.meta.url), 'utf8');
   assert.match(eng, /\['get_weekly_summary', 'get_overview'\]\.includes\(it\.tool\) && \/\(문단\|줄글\)\//, '문단 요청은 로컬 줄글로');
 });
+
+test('v1.7.0: 직원의 그날 근태, 오늘 출근 시각, 지문 날짜, 이번 달 예산 안내, 지난 요일 자원', async () => {
+  const C13 = await import('../src/live/chat.mjs');
+  const now = new Date('2026-11-20T18:30:00Z');
+  assert.deepEqual(C13.chatIntent('김소연 내일 뭐 해?', now).args, {name: '김소연', date: '2026-11-22', days: 1, exact: true});
+  assert.equal(C13.chatIntent('가을 축제 일정 알려줘', now).tool, '', '행사 이름을 사람으로 보지 않는다');
+  assert.equal(C13.chatIntent('지난달 강사료 지급 건의 어디 있지?', now).tool, 'search_documents');
+  assert.equal(C13.chatIntent('진행비 얼마 남았어?', now).tool, 'get_budget');
+  assert.equal(C13.chatIntent('이번 달 부서운영업무비 얼마 썼어?', now).args.project, '부서운영업무비 얼마 썼어?');
+  const h = fs.readFileSync(new URL('../src/live/wc/49-chat-habits.js', import.meta.url), 'utf8');
+  assert.match(h, /집행액은 올해 누계입니다/);
+  assert.match(h, /지났으므로 다음 주/);
+  const rd = fs.readFileSync(new URL('../src/live/wc/32-chat-tools-read.js', import.meta.url), 'utf8');
+  assert.match(rd, /퇴근 지문 확인이 필요한 날은 \$\{an\.length\}일입니다/);
+  assert.match(rd, /nn = name && !a\.exact \? Math\.max\(n, 14\) : n/);
+});

@@ -17,8 +17,9 @@ import {minifySafely, TERSER_VERSION} from './terser-minify.mjs';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const DEFAULT_OUT_DIR = path.join(ROOT, 'build', 'live');
-// 1080KB(v0.98.0, 1070KB에서 상향): 죽은 CSS·오래된 업데이트 상세를 먼저 덜어 낸 뒤 올림. 번들은 브라우저 저장소에 약 1.0M자로 들어가며 한도(약 5.2M자)에 여유가 크다.
-export const MAX_SHIPPED_BUNDLE_BYTES = 1080 * 1024;
+// 1100KB(v1.7.0, 1080KB에서 상향). 그 전에 덜어 낸 것: 죽은 CSS(v0.98), 쓰지 않는 공개 함수(v1.0), 업데이트 내역 축소(v1.1·v1.6), 덮어쓴 CSS(v1.2).
+// 남은 큰 몫은 기능 코드와 AI 도구 설명이다. 번들은 브라우저 저장소에 약 1.0M자로 들어가며 한도(약 5.2M자)에 여유가 크다.
+export const MAX_SHIPPED_BUNDLE_BYTES = 1100 * 1024;
 export const EXTRA_MODULES = ['home-model.mjs', 'chat.mjs', 'chat-understand.mjs', 'gcal-sync.mjs', 'settings-transfer.mjs', 'doc-find.mjs', 'usage.mjs', 'contract.mjs', 'changelog.mjs'];
 const PARTS_MARK = '  /*@WC_PARTS@*/';
 const CSS_MARK = "'/*@WC_CSS@*/'";

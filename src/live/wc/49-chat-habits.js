@@ -68,3 +68,22 @@
     copyText(para);
     return {...r, text: para + '\n(복사해 두었습니다)', cards: []};
   }; } }
+
+  // v1.7.0: "오늘 출근 몇 시에 했어?" → 오늘 출퇴근 기록만
+  { const def = CHAT_TOOLS.get('get_work_hours'); if (def) { const run0 = def.run; def.params.properties.today_only = {type: 'boolean'}; def.run = async (a, ctx) => {
+    if (!a.today_only || !S.raw) return run0(a, ctx);
+    const t = today(), day = R.homeDayInfo({date: t, holidays: (S.raw.data.schedule && S.raw.data.schedule.holidays) || []}), td = (S.raw.data.attendance || {}).today || {};
+    if (td.error) return {ok: false, text: '오늘 출퇴근 기록을 읽지 못했습니다.'};
+    return {ok: true, text: `오늘 ${chatMd(t)} 출근 ${chatHm4(td.come) || '기록 없음'}, 퇴근 ${chatHm4(td.leave) || '기록 없음'}입니다.${day.weekend || day.holiday ? ` 오늘은 ${day.holiday || '주말'}입니다.` : ''}${!td.come ? ' 기록 없음은 지문 기록이 조회되지 않았다는 뜻이며 근태 이상 판정이 아닙니다.' : ''}`};
+  }; } }
+
+  // v1.7.0: 주말에 "이번 주 금요일 관용차 비어?"처럼 지난 요일을 물으면 다음 주 같은 요일로 본다
+  { const def = CHAT_TOOLS.get('get_resource_status'); if (def) { const run0 = def.run; def.run = async (a, ctx) => {
+    const t = today(), d = /^\d{4}-\d{2}-\d{2}$/.test(a.date || '') ? a.date : '';
+    if (!d || d >= t || Date.parse(t) - Date.parse(d) >= 7 * 864e5 || !/이번\s*주/.test((ctx && ctx.userText) || '')) return run0(a, ctx);
+    const nd = chatAddDays(d, 7), r = await run0({...a, date: nd}, ctx);
+    return r && r.ok ? {...r, text: `${chatMd(d)}은 지났으므로 다음 주 ${chatMd(nd)} 기준입니다.\n${r.text}`} : r;
+  }; } }
+
+  // v1.7.0: "이번 달 ○○비 얼마 썼어?" → 예산 집행액은 올해 누계라는 점을 밝힌다
+  { const def = CHAT_TOOLS.get('get_budget'); if (def) { const run0 = def.run; def.params.properties.month = {type: 'boolean'}; def.run = async (a, ctx) => { const r = await run0(a, ctx); return r && r.ok && a.month ? {...r, text: r.text + '\n(집행액은 올해 누계입니다. 달마다 쓴 금액은 예산 화면의 월별 차트에서 볼 수 있습니다)'} : r; }; } }

@@ -206,6 +206,9 @@ export function chatIntent(text, now = new Date(), _nested = false) {
   // v0.97.0: 업무 문장 쓰기 — 상급자 보고 문장, 부서 공유 메일(앞에서 다룬 메일 기준)
   if (/(보고\s*(?:할|드릴|용|하는)?\s*(?:문장|내용|글|메모|요약|문구)|보고\s*(?:문장|글)으로|(?:팀장|실장|과장|부장|국장|상급자|윗분)\S*\s*(?:께|에게|한테)\s*보고)/.test(t) && /(써|작성|정리|만들|뽑아)/.test(t) && !/(결과\s*보고|주간|실적|기안)/.test(t)) return make('write_text', {kind: 'report'});
   if (/(공유|전달|알리|안내)\S*\s*(?:하는|할|하기|용)?\s*(?:메일|문구|글|공지)/.test(t) && /(써|작성|만들|보내|초안)/.test(t) && !/(답장|회신)/.test(t)) return make('write_text', {kind: 'share'});
+  // v1.7.0: "김소연 내일 뭐 해?" → 그 직원의 그날 근태, "오늘 출근 몇 시에 했어?" → 오늘 출퇴근 기록
+  { const nm = chatExtractName(t); if (nm && /^[김이박최정강조윤장임한오서신권황안송류전홍고문양손배백허유남심노하곽성차주우구민진나지엄채원천방공현함변염여추도소석선설마길연위표명기반왕금옥육인맹제모탁국어은편용예봉경]/.test(nm) && (() => { const titled = new RegExp(nm + '\\s*(?:팀장|과장|차장|부장|실장|주임|주무관|선생|대리|사원|님)').test(t); return (t.indexOf(nm) === 0 || titled) && (/(뭐\s*해|뭐\s*하|어디\s*(?:가|있|계)|출근|자리)/.test(t) || (titled && /일정/.test(t))); })() && !/(메일|문서|결재|연락처|전화|번호|담당)/.test(t)) return make('get_staff_status', {name: nm, date: dt ? dt.date : chIso(chUtc(chKst(now).y, chKst(now).m, chKst(now).d)), days: dt && dt.end ? Math.round((Date.parse(dt.end) - Date.parse(dt.date)) / 864e5) + 1 : 1, exact: true}); }
+  if (/(출근|퇴근)\s*(?:은|는)?\s*(?:몇\s*시|언제)/.test(t) && /(오늘|내가|나|제가)/.test(t) && !/(해야|하면|가능)/.test(t)) return make('get_work_hours', {today_only: true});
   // v1.6.0: "왜 ○○가 먼저야?", "바쁜·한가한 날", "한 문단으로"
   if (/왜/.test(t) && /(먼저|급해|급한|우선|위에|1번|첫\s*번째)/.test(t)) return make('plan_priorities', {n: 5, why: t.replace(/(왜|먼저야?|먼저인지|급해\??|급한지|우선이야?|순위|위에\s*있어|있어|이야|야|가|이|은|는|메일|문서|건|[?.!])/g, ' ').replace(/\s+/g, ' ').trim()});
   if (/(바쁜|바빠|한가한|한가해|여유\s*있는|일정\s*많은|비는|빈)\s*(날|요일|때)/.test(t)) { const d0 = dt ? dt.date : chIso(chUtc(chKst(now).y, chKst(now).m, chKst(now).d)); return make('busy_days', {date: d0, days: dt && dt.end ? Math.round((Date.parse(dt.end) - Date.parse(dt.date)) / 864e5) + 1 : dt ? 1 : 5, free: /(한가|여유|비는|빈)/.test(t)}); }
@@ -253,7 +256,7 @@ export function chatIntent(text, now = new Date(), _nested = false) {
   const doAct = /신청|올려|올릴|등록|내줘|내 줘|써줘|써 줘|잡아|예약해|작성|보내줘|보내 줘/.test(t);
   // v0.91.0: 자유 질문 — 놓치기 쉬운 일·휴가 전 처리, 신청 횟수, ○○ 건 마감·처리 방법, 부서 부재, 근무 끝난 뒤 할 일
   // v0.93.0: 자유 질문 2차 — 예산 과목 사용액, 문서 금액, 연차 쓴 날, 결재 기다리는 내 신청, 공지 관련성
-  if (/(수당|여비|출장비|운영비|사업비|보상금|홍보비|인건비|용역비|구입비|사무용품|예산|과목)/.test(t) && /(얼마|썼|쓴|남았|남은|잔액|집행)/.test(t) && !/(문서|공문|기안|결의서)/.test(t) && !doAct) return make('get_budget', {project: t.slice(0, 60)});
+  if (/(수당|여비|출장비|운영비|사업비|보상금|홍보비|인건비|용역비|구입비|사무용품|예산|과목|[가-힣]{1,6}비(?=\s|$|[를을은는이가도]))/.test(t) && /(얼마|썼|쓴|남았|남은|잔액|집행)/.test(t) && !/(문서|공문|기안|결의서)/.test(t) && !doAct) return make('get_budget', {project: t.replace(/(이번|지난|저번)\s*달|이번\s*년|올해|지금까지/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60), ...(/(이번|지난|저번)\s*달/.test(t) ? {month: true} : {})});
   if (/(문서|공문|기안|구입|지급|결의|계약|견적)/.test(t) && /(금액|얼마|비용|총액|단가|예산액)/.test(t) && !/(남았|잔액|집행률)/.test(t) && !doAct) {
     const q = t.replace(/(문서|공문|기안문?|금액|얼마였지|얼마였어|얼마야|얼마|비용|총액|단가|예산액|이었지|였지|이야|은|는|이|가|의|좀|알려\s*줘|[?？!.,])/g, ' ').replace(/\s+/g, ' ').trim();
     if (q.length >= 2) return make('read_doc', {query: q.slice(0, 60), want: 'amount'});
