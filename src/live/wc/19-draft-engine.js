@@ -200,7 +200,7 @@
     const dlg = dlgOf(d);
     if (!dlg) return {ok: false, detail: '기록물철 선택창이 열리지 않았습니다'};
     const leaf = [...dlg.querySelectorAll('*')].find(el => el.children.length === 0 && (el.innerText || '').trim() === name);
-    if (!leaf) { if (!guardLive(guard)) return guardStopped(); [...dlg.querySelectorAll('button')].find(b => /닫기|취소/.test(b.innerText))?.click(); return {ok: false, detail: `기록물철 “${name}”을(를) 목록에서 찾지 못했습니다`}; }
+    if (!leaf) { if (!guardLive(guard)) return guardStopped(); [...dlg.querySelectorAll('button')].find(b => /닫기|취소/.test(b.innerText))?.click(); return {ok: false, detail: `기록물철 “${name}”${typeof R === 'object' && R && typeof R.cuJosa === 'function' ? R.cuJosa(String(name), '을를').slice(-1) : '을(를)'} 목록에서 찾지 못했습니다`}; }
     if (!guardLive(guard)) return guardStopped();
     leaf.dispatchEvent(new f.contentWindow.MouseEvent('dblclick', {bubbles: true}));
     await waitFor(() => !dlgOf(d), 3000);

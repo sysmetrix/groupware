@@ -176,3 +176,21 @@ test('v1.13.0 계획 이행: 숫자→같은 목록, 버튼 이름, 빈 상태 �
   assert.match(read('wc/31-chat-engine.js'), /role === 'ai' && S\.lastRefresh \? \{dataAt: S\.lastRefresh\.getTime\(\)\}/);
   assert.match(read('wc/30-chat-ui.js'), /그룹웨어 자료 \$\{da\} 기준/);
 });
+test('v1.14.0 실업무 흐름: 주간 실적 묶기, 메일 쓰기 넓게, 시간 범위 오후, 일정 겹침, 화면 맞춤, 입력 중 표시, 조사', async () => {
+  const {weeklyReport} = await import('../src/live/briefing.mjs');
+  const out = weeklyReport({submitted: [{title: 'A 『모의사업』 구입', docNo: '1', status: '결재완료'}, {title: '다른 건', docNo: '2', status: '결재완료'}, {title: 'B 『모의사업』 배너', docNo: '3', status: '결재완료'}, {title: '(11-22)시간외근무신청(홍길동)', status: '결재완료'}, {title: '(11-21)시간외근무신청(홍길동)', status: '결재완료'}], from: '20261116', to: '20261121'});
+  assert.match(out, /- A 『모의사업』 구입 \(1\)\n  - B 『모의사업』 배너 \(3\)\n  - 다른 건 \(2\)/);
+  assert.match(out, /복무 신청 2건: 시간외근무 2건/);
+  assert.doesNotMatch(out, /홍길동\)/);
+  const {chatParseRange} = await import('../src/live/chat.mjs');
+  assert.deepEqual(chatParseRange('오후 2시부터 5시까지'), {start: '14:00', end: '17:00'});
+  assert.deepEqual(chatParseRange('2시부터 4시 반까지'), {start: '14:00', end: '16:30'});
+  assert.deepEqual(chatParseRange('오전 10시부터 12시'), {start: '10:00', end: '12:00'});
+  assert.deepEqual(chatParseRange('9시부터 6시'), {start: '09:00', end: '18:00'});
+  const pane = read('wc/13-detail-pane.js');
+  assert.match(pane, /isMailCompose\(url\) && typeof innerWidth === 'number' && innerWidth < 1600/);
+  assert.match(pane, /function fitFrameWidth\(f, u\)/);
+  assert.match(pane, /if \(injected && typeof markPaneDirty === 'function'\)/);
+  assert.match(read('wc/47-chat-precise.js'), /그날 내 신청이 있습니다/);
+  assert.doesNotMatch(read('wc/33-chat-tools-act.js'), /\}을\(를\)/);
+});

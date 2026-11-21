@@ -156,7 +156,7 @@
           return {ok: true, text: `${c.limit ? '예약 한도를 넘습니다.' : '그 시간에는 이미 예약이 있습니다.'} 비어 있는 시간: ${free.length ? free.map(f => `${f.start}~${f.end}`).join(', ') : '없음'}`, cards: [{type: 'note', tone: 'warn', text: `${chatMd(iso)} ${a.start}~${a.end}은(는) 예약할 수 없습니다.`}, {type: 'timeline', title: `비어 있는 시간 (${chatMd(iso)})`, items: free.map(f => ({from: f.start, to: f.end, label: '예약 가능'}))}]};
         }
         const nm = car.name.replace(/\(.*$/, '');
-        return {ok: true, text: `${nm}을(를) ${chatMd(iso)} ${a.start}~${a.end}에 예약할 수 있습니다. 확정하면 실제로 예약이 올라갑니다.`, cards: [{type: 'confirm', title: '차량 예약 확정', risk: 'high', rows: [['차량', nm], ['일시', `${iso} ${a.start}~${a.end}`], ['예약명', title], ['승인', car.apprYn === 'Y' ? '관리자 승인 필요' : '승인 없이 확정']], warn: '[예약 확정]을 누르면 그룹웨어에 실제로 예약이 올라가고, 취소는 그룹웨어 자원 화면에서 해야 합니다.', confirmLabel: '예약 확정', cancelLabel: '취소',
+        return {ok: true, text: `${nm}${typeof R === 'object' && R && typeof R.cuJosa === 'function' ? R.cuJosa(String(nm), '을를').slice(-1) : '을(를)'} ${chatMd(iso)} ${a.start}~${a.end}에 예약할 수 있습니다. 확정하면 실제로 예약이 올라갑니다.`, cards: [{type: 'confirm', title: '차량 예약 확정', risk: 'high', rows: [['차량', nm], ['일시', `${iso} ${a.start}~${a.end}`], ['예약명', title], ['승인', car.apprYn === 'Y' ? '관리자 승인 필요' : '승인 없이 확정']], warn: '[예약 확정]을 누르면 그룹웨어에 실제로 예약이 올라가고, 취소는 그룹웨어 자원 화면에서 해야 합니다.', confirmLabel: '예약 확정', cancelLabel: '취소',
           onConfirm: async () => {
             const out = await GW.reserveResource({resSeq: car.resSeq, title, start: v.start12, end: v.end12});
             logActionRecord({command: `채팅 자원 예약: ${nm}`, type: '자원', target: title, summary: `${iso} ${a.start}~${a.end} 예약을 올렸습니다${out.needsApproval ? '(승인 대기)' : ''}.`, steps: [], verified: true});
@@ -177,7 +177,7 @@
       const due = a.due ? chatDateArg(a.due) : '';
       if (a.due && !due) return {ok: false, text: '기한 날짜를 알아보지 못했습니다.'};
       addTodo(title, due, '채팅');
-      return {ok: true, text: `“${title}”을(를) 내 할 일에 추가했습니다${due ? ` (기한 ${chatMd(due)})` : ''}. 그룹웨어에는 보내지 않는 이 PC의 메모입니다.`, cards: [{type: 'nav', label: '할 일 보드에서 보기', view: 'board'}]};
+      return {ok: true, text: `“${title}”${typeof R === 'object' && R && typeof R.cuJosa === 'function' ? R.cuJosa(String(title), '을를').slice(-1) : '을(를)'} 내 할 일에 추가했습니다${due ? ` (기한 ${chatMd(due)})` : ''}. 그룹웨어에는 보내지 않는 이 PC의 메모입니다.`, cards: [{type: 'nav', label: '할 일 보드에서 보기', view: 'board'}]};
     },
   });
 

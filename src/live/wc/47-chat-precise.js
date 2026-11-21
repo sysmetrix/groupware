@@ -90,7 +90,9 @@
       const s = hm(a.start); if (!s) return {ok: false, text: `${chatMd(d)} 몇 시로 잡을까요? 시작 시간을 말씀해 주세요. 예) 오후 3시, 14시~15시`};
       const e = hm(a.end) > s ? hm(a.end) : String(Math.min(+s.slice(0, 2) + 1, 23)).padStart(2, '0') + s.slice(2);
       const sp = {date: d, start: s, end: e, title: chatCut(String(a.title || '').trim() || '일정', 60), memo: chatCut(String(a.memo || '').trim(), 200)};
-      return {ok: true, text: `그룹웨어 일정 등록 창에 아래 내용을 채울까요? [등록]은 직접 누르셔야 합니다.`, cards: [{type: 'confirm', title: '일정 등록 창 채우기', risk: 'low', rows: [['제목', sp.title], ['일시', `${chatMd(d)} ${s}~${e}`], ...(sp.memo ? [['메모', sp.memo]] : []), ['캘린더', '개인캘린더(기본값)'], ['등록', '직접 눌러야 합니다'], ['참여자', '넣지 않습니다(추가하면 초대 알림이 가므로 직접)']], confirmLabel: '등록 창 채우기', cancelLabel: '취소', onConfirm: () => fillScheduleForm(sp)}]};
+      // v1.14.0: 그날 내 휴가·출장 신청과 겹치면 먼저 알린다(11/23 대체휴가 날에 회의를 잡을 뻔했음).
+      const clash = (typeof myAppInfos === 'function' ? (myAppInfos(d.replace(/-/g, '')) || []) : []).filter(x => x && x.item && !/시간외|연장|휴일근무|조기/.test(x.item)).map(x => `${x.item}${x.time ? ' ' + x.time : ''}`);
+      return {ok: true, text: `${clash.length ? `그날 내 신청이 있습니다: ${clash.slice(0, 2).join(', ')}. 시간이 겹치지 않는지 확인하세요.\n` : ''}그룹웨어 일정 등록 창에 아래 내용을 채울까요? [등록]은 직접 누르셔야 합니다.`, cards: [{type: 'confirm', title: '일정 등록 창 채우기', risk: 'low', rows: [['제목', sp.title], ['일시', `${chatMd(d)} ${s}~${e}`], ...(clash.length ? [['그날 내 신청', clash.slice(0, 2).join(', ')]] : []), ...(sp.memo ? [['메모', sp.memo]] : []), ['캘린더', '개인캘린더(기본값)'], ['등록', '직접 눌러야 합니다'], ['참여자', '넣지 않습니다(추가하면 초대 알림이 가므로 직접)']], confirmLabel: '등록 창 채우기', cancelLabel: '취소', onConfirm: () => fillScheduleForm(sp)}]};
     },
   });
 
@@ -127,6 +129,7 @@
       got.when = dates().map(i => i.value).join() === [sp.date, sp.date].join() && times().map(i => i.value).join() === [sp.start, sp.end].join();
     } finally { AUTO.running = false; }
     const miss = [!got.title && '제목', !got.when && '날짜·시각', sp.memo && !got.memo && '메모'].filter(Boolean);
+    if (typeof markPaneDirty === 'function') { const pf = $('#frame iframe'); if (pf) markPaneDirty(pf); }
     return {ok: true, text: `일정 등록 창에 ${miss.length ? `채웠지만 ${miss.join('·')}은 확인하지 못했습니다. 화면에서 확인해 주세요.` : `“${sp.title}” ${chatMd(sp.date)} ${sp.start}~${sp.end}을 채웠습니다.`} 내용을 확인하고 [등록]은 직접 누르세요. 참여자는 직접 추가하세요(추가하면 초대 알림이 갑니다).`};
   }
 

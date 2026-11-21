@@ -39,7 +39,7 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
       if (S.pane.url) {
         const f = document.createElement('iframe'); f.src = S.pane.url; f.title = '그룹웨어 원래 화면'; if (S.pane.previewBack) f.dataset.panePreview = '1'; const u = S.pane.url;
         f.addEventListener('error', () => { if (S.pane.url !== u) return; if (f.dataset.panePreview === '1') { toast('미리보기를 불러오지 못했습니다. 이전 메일 화면으로 돌아가 다시 시도하세요.'); return; } frame.innerHTML = `<div class="fe"><div>${ic('alert', 'style="width:28px;height:28px"')}</div><div>그룹웨어 화면을 불러오지 못했습니다.</div><a class="btn primary" href="${esc(u)}" target="_blank" rel="noopener">${ic('ext')}새 창으로 열기</a></div>`; });
-        f.addEventListener('load', () => { hookFrameWindow(f, u); scanFrame(f, u); watchDirty(f, u); if (typeof roomyDocFrame === 'function') roomyDocFrame(f, u); }); frame.append(f);
+        f.addEventListener('load', () => { hookFrameWindow(f, u); scanFrame(f, u); watchDirty(f, u); if (typeof roomyDocFrame === 'function') roomyDocFrame(f, u); if (typeof fitFrameWidth === 'function') fitFrameWidth(f, u); }); frame.append(f);
       }
       S.pane.mounted = S.pane.url;
     }
@@ -317,7 +317,7 @@ ${x ? `<div class="state"><span class="bdg ${st}">${STATE_NAME[st]}</span>${x.he
       return true;
     } catch (e) {
       if (btn) { btn.disabled = false; btn.innerHTML = `${ic('down')}다시 받기`; }
-      toast(`"${f.name}"을(를) 받지 못했습니다: ${e.message}. "메일 원문 열기"에서 받을 수 있습니다.`);
+      toast(`"${f.name}"${typeof R === 'object' && R && typeof R.cuJosa === 'function' ? R.cuJosa(String(f.name), '을를').slice(-1) : '을(를)'} 받지 못했습니다: ${e.message}. "메일 원문 열기"에서 받을 수 있습니다.`);
       return false;
     }
   }
@@ -440,7 +440,7 @@ ${mailFilesBox(m)}
     S.pane.url = url; S.pane.extract = null;
     // Full groupware screens (근태신청, 메일함, 결재작성) need width: open the pane wide.
     // Full screens, viewers, and new draft compose popups require full wide view
-    if (/ecm001A07|SynapDocViewServer/.test(decodeURIComponent(url)) || /MicroModuleCode=ea.*(?:tiKeyCode|draft)/.test(url) || !/#\/?popup\?/.test(url)) {
+    if (/ecm001A07|SynapDocViewServer/.test(decodeURIComponent(url)) || /MicroModuleCode=ea.*(?:tiKeyCode|draft)/.test(url) || !/#\/?popup\?/.test(url) || (isMailCompose(url) && typeof innerWidth === 'number' && innerWidth < 1600)) {
       S.pane.expanded = true;
     } else {
       S.pane.expanded = false;
@@ -676,6 +676,7 @@ ${custom.slice(0, 12).map(l => `<p>${esc(String(l).slice(0, 400))}</p>`).join('\
     let injected = put();
     // 그룹웨어가 본문을 뒤늦게 다시 채워 문구가 지워졌으면 한 번 더 넣는다.
     if (injected) { await new Promise(r => setTimeout(r, 900)); if (S.pane.url !== url) return false; if (!has()) injected = put() && has(); }
+    if (injected && typeof markPaneDirty === 'function') { const pf = $('#frame iframe'); if (pf) markPaneDirty(pf); }
     if (injected && templateType === 'custom') toast('초안을 본문 맨 위에 넣었습니다. 사실관계와 (확인 필요) 칸을 확인한 뒤 직접 보내세요.');
     else if (injected) toast(`회신 문구를 본문 맨 위에 넣었습니다. 괄호 칸을 채우고${templateType === 'submit' && !hasAttach ? ' 첨부파일을 붙인 뒤' : ''} 직접 보내세요.`);
     else toast('메일 편집기를 찾지 못했습니다. 답장 화면이 다 뜬 뒤 회신문 버튼을 다시 누르세요.');
@@ -731,4 +732,22 @@ ${custom.slice(0, 12).map(l => `<p>${esc(String(l).slice(0, 400))}</p>`).join('\
       } catch {}
     };
     if (typeof setTimeout === 'function') setTimeout(tick, 300);
+  }
+
+  // v1.14.0: 그룹웨어 전체 화면(일정 등 팝업이 아닌 화면)은 최소 너비가 처리 창보다 조금 넓어(1232 > 1138px) 오른쪽 등록 창이 잘렸다.
+  // 넘친 정도가 20% 이내면 처리 창 안에서만 화면 배율을 줄여 한눈에 들어오게 한다. 그룹웨어 자료는 바꾸지 않는다.
+  function fitFrameWidth(f, u) {
+    if (/#\/?popup\?/.test(u)) return;
+    let tries = 0;
+    const tick = () => {
+      if (!f.isConnected || S.pane.url !== u || ++tries > 12) return;
+      try {
+        const d = f.contentDocument, cw = f.getBoundingClientRect().width;
+        if (!d || !cw) { setTimeout(tick, 400); return; }
+        let need = 0; d.querySelectorAll('div,main,section').forEach(e => { if (e.clientWidth > 600 && e.scrollWidth > e.clientWidth + 8 && /auto|scroll/.test(getComputedStyle(e).overflowX)) need = Math.max(need, e.scrollWidth / e.clientWidth); });
+        if (!need) { setTimeout(tick, 600); return; }
+        if (need <= 1.25) { d.documentElement.style.zoom = String(Math.floor(100 / need) / 100); }
+      } catch {}
+    };
+    if (typeof setTimeout === 'function') setTimeout(tick, 800);
   }
