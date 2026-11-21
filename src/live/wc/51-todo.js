@@ -256,7 +256,11 @@ ${legacy.length ? `<div class="box warn td-legacy">이 PC에만 저장된 예전
     for (const x of (S.a && S.a.actions) || []) items.push({t: x.type || 'item', k: x.key, ti: String(x.title || '').slice(0, 80), u: x.url || '', sub: x.kind || ''});
     const sub = S.raw && S.raw.data && S.raw.data.approval && S.raw.data.approval.lists && S.raw.data.approval.lists.submitted;
     for (const d of (sub && sub.docs) || []) items.push({t: 'doc', k: 'sub:' + d.docId, ti: String(d.title || '').slice(0, 80), u: GW.links.doc(d, 'submitted'), no: d.docNo || '', sub: '내 상신 ' + (d.docNo || '')});
-    return items.filter(i => i.ti && (!s || `${i.ti} ${i.no || ''}`.toLowerCase().includes(s))).slice(0, 8);
+    // 받은 메일(처리할 일에 없는 메일도). 여는 것은 메일 읽기 화면이며, 안 읽은 메일은 열기 전에 묻는다(openItem).
+    const ml = S.raw && S.raw.data && S.raw.data.mail;
+    for (const m of [...((ml && ml.inbox && ml.inbox.records) || []), ...((ml && ml.otherUnseen) || [])]) if (m && m.uid) items.push({t: 'mail', k: `mail:${m.box || 'INBOX'}:${m.uid}`, ti: String(m.subject || '(제목 없음)').slice(0, 80), mb: m.box || 'INBOX', uid: String(m.uid), sub: '메일 · ' + String(m.from || '').slice(0, 20)});
+    const seen = new Set();
+    return items.filter(i => i.ti && !seen.has(i.k) && seen.add(i.k) && (!s || `${i.ti} ${i.no || ''} ${i.sub || ''}`.toLowerCase().includes(s))).slice(0, 10);
   }
   function todoEditorHtml() {
     const isNew = TD.sel === 'new';
@@ -286,7 +290,7 @@ ${legacy.length ? `<div class="box warn td-legacy">이 PC에만 저장된 예전
   }
   function todoLinksHtml(t) {
     const m = (TD.sel !== 'new' && TD.edMeta) || (t && t.meta) || {}, ln = m.ln || [], lq = TD.linkQ || '';
-    return `<h3>연결한 문서·메일</h3>${ln.map((l, i) => `<div class="td-ln"><button class="btn sm ghost" data-act="tdLinkOpen" data-i="${i}">${ic(l.t === 'mail' ? 'mail' : 'doc')}${esc(l.no ? l.no + ' ' : '')}${esc(l.ti || '(제목 없음)')}</button><button class="btn sm ghost" data-act="tdLinkDel" data-i="${i}" aria-label="연결 끊기">${ic('x')}</button></div>`).join('') || '<p class="muted">없음</p>'}<div class="bar"><label for="tdeLinkQ" class="vh">연결할 문서 찾기</label><input class="inp grow" id="tdeLinkQ" placeholder="처리할 일·내 상신문서 제목으로 찾기" value="${esc(lq)}" autocomplete="off"><button class="btn sm" data-act="tdLinkFind">찾기</button></div>${TD.linkOpen ? `<div class="td-lc">${todoLinkCandidates(lq).map((c, i) => `<button class="btn sm ghost" data-act="tdLinkAdd" data-i="${i}">${esc(c.sub ? c.sub + ' · ' : '')}${esc(c.ti)}</button>`).join('') || '<p class="muted">찾은 항목이 없습니다.</p>'}</div>` : ''}`;
+    return `<h3>연결한 문서·메일</h3>${ln.map((l, i) => `<div class="td-ln"><button class="btn sm ghost" data-act="tdLinkOpen" data-i="${i}">${ic(l.t === 'mail' ? 'mail' : 'doc')}${esc(l.no ? l.no + ' ' : '')}${esc(l.ti || '(제목 없음)')}</button><button class="btn sm ghost" data-act="tdLinkDel" data-i="${i}" aria-label="연결 끊기">${ic('x')}</button></div>`).join('') || '<p class="muted">없음</p>'}<div class="bar"><label for="tdeLinkQ" class="vh">연결할 문서 찾기</label><input class="inp grow" id="tdeLinkQ" placeholder="처리할 일·내 상신문서·받은 메일 제목으로 찾기" value="${esc(lq)}" autocomplete="off"><button class="btn sm" data-act="tdLinkFind">찾기</button></div>${TD.linkOpen ? `<div class="td-lc">${todoLinkCandidates(lq).map((c, i) => `<button class="btn sm ghost" data-act="tdLinkAdd" data-i="${i}">${esc(c.sub ? c.sub + ' · ' : '')}${esc(c.ti)}</button>`).join('') || '<p class="muted">찾은 항목이 없습니다.</p>'}</div>` : ''}`;
   }
   // 체크리스트·연결 칸만 다시 그린다(고치던 제목·메모는 그대로)
   function todoRefreshSections() {
@@ -388,6 +392,17 @@ ${list.length ? `<p class="muted">오늘까지인데 끝내지 않은 할 일 ${
   function todoWrapOpen() { if (!TD.list) { todoLoad({force: true}).then(() => todoWrapOpen()); return; } closeOverlay(); S.paletteOpen = true; $('#overlay').innerHTML = todoWrapHtml(); setTimeout(() => $('#overlay button.primary')?.focus(), 30); }
   const todoWrapRefresh = () => { if ($('#overlay .dlg[aria-label="퇴근 전 마무리"]')) $('#overlay').innerHTML = todoWrapHtml(); };
 
+  // 홈 '지금 가장 먼저 할 일'이 비었을 때(그룹웨어 처리할 일 없음) 오늘까지인 내 할 일을 대신 보여 준다
+  function todoHomeNext() {
+    if (!TD.list) return '';
+    const due = R.tdWrapUp(TD.list).filter(t => !t.readonly);
+    if (!due.length) return '';
+    const t = due[0], n = R.dday(t.due);
+    return `<section class="hm-card hm-next" aria-label="지금 할 일 한 가지"><div class="hm-card-h"><h2 class="hm-card-k"><span class="desk-index" aria-hidden="true">01</span> 지금 가장 먼저 할 일</h2><span class="hm-badge hm-tone-${n < 0 ? 'urgent' : 'todo'}">${n < 0 ? '기한 지남' : '오늘 마감'}</span></div><div class="hm-next-b"><div class="hm-next-t">${esc(t.title)}</div><div class="hm-next-s">${esc(['내 할 일', '기한 ' + t.due.slice(5).replace('-', '/'), due.length > 1 ? `오늘까지 ${due.length}건` : ''].filter(Boolean).join(' · '))}</div></div><div class="hm-next-a"><button class="ch-btn ch-btn-primary" data-act="tdSel" data-id="${esc(t.id)}">할 일 열기</button><button class="ch-btn ch-btn-ghost" data-act="tdWrap">퇴근 전 마무리</button></div></section>`;
+  }
+  // 왼쪽 메뉴 '할 일' 숫자에 더할 내 할 일(오늘까지)
+  function todoNavDue() { try { return TD.list ? R.tdWrapUp(TD.list).filter(t => !t.readonly) : []; } catch { return []; } }
+
   // 홈 '챙겨 둘 것'의 한 줄과 브리핑 줄
   function todoHomeSig() {
     if (!todoGwOk()) return '';
@@ -471,7 +486,7 @@ ${list.length ? `<p class="muted">오늘까지인데 끝내지 않은 할 일 ${
   HOME_ACTS.tdLinkFind = () => { TD.linkQ = ($('#tdeLinkQ') || {}).value || ''; TD.linkOpen = true; todoRefreshSections(); const q = $('#tdeLinkQ'); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } };
   HOME_ACTS.tdLinkAdd = el => {
     const c = todoLinkCandidates(TD.linkQ)[Number(el.dataset.i)]; if (!c) return;
-    const link = {t: c.t === 'mail' ? 'mail' : 'doc', k: c.k, ti: c.ti, u: c.u || undefined, no: c.no || undefined};
+    const link = {t: c.t === 'mail' ? 'mail' : 'doc', k: c.k, ti: c.ti, u: c.u || undefined, no: c.no || undefined, mb: c.mb || undefined, uid: c.uid || undefined};
     if (TD.sel === 'new') { const d = {...(TD.draft || {meta: {}}), ...todoDraftFromEditor()}; d.meta = {...(d.meta || {}), ln: [...((d.meta && d.meta.ln) || []), link].slice(0, 5)}; TD.draft = d; }
     else { const t = todoFind(TD.sel); if (!t) return; const m = TD.edMeta || t.meta || {}; TD.edMeta = {...m, ln: [...(m.ln || []).filter(x => x.k !== link.k), link].slice(0, 5)}; }
     TD.linkOpen = false; TD.dirty = true; todoRefreshSections(); toast('연결했습니다. [저장]을 누르면 그룹웨어에 남습니다.');
@@ -487,6 +502,7 @@ ${list.length ? `<p class="muted">오늘까지인데 끝내지 않은 할 일 ${
     const lm = (TD.sel !== 'new' && TD.edMeta) || (t && t.meta) || {}; const l = (lm.ln || [])[Number(el.dataset.i)]; if (!l) return;
     const act = S.a && S.a.actions.find(x => x.key === l.k);
     if (act) { if (TD.dirty && !confirm('고치던 내용이 저장되지 않았습니다. 문서를 열면 이 화면을 떠납니다. 계속할까요?')) return; TD.dirty = false; if (go('today')) selectAction(act.key); return; }
+    if (l.t === 'mail' && l.uid && typeof openItem === 'function') { openItem({type: 'mail', ref: {box: l.mb || 'INBOX', uid: l.uid}, title: l.ti, url: S.a && S.a.mail && S.a.mail.url}); return; }
     if (l.u) openUrl(l.u, {title: l.ti || '연결 문서'});
     else toast('이 항목은 지금 목록에 없어 열 수 없습니다. 그룹웨어에서 찾아 주세요.');
   };
