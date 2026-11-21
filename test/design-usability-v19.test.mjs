@@ -68,5 +68,5 @@ test('v1.9.1 검수: 근태 칸은 그룹웨어 판정 대신 지문 기록 유�
   assert.doesNotMatch(att, /: '그룹웨어 기록';/);
   const cal = read('wc/10-calendar-budget.js');
   assert.match(cal, /wait: \['예정', '아직 진행 전'\]/);
-  assert.match(read('wc/08-approval-mail.js'), /· \$\{r\.of\}건 중 \$\{r\.count\}건<\/span>/);
+  assert.match(read('wc/08-approval-mail.js'), /<div class="nowrap">\$\{esc\(r\.name\)\} <span class="muted"[^>]*>· \$\{r\.of\}건 중 \$\{r\.count\}건<\/span>/);
 });
