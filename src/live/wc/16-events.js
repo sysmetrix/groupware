@@ -24,7 +24,7 @@
     switch (act) {
       case 'skipMain': $('#main')?.focus(); break;
       case 'refresh': refresh({announce: true}); break;
-      case 'applyRefresh': applyDeferredBudgetInvalidation(); S.pendingRefresh = false; render(); break;
+      case 'applyRefresh': applyPendingRefresh(); break;
       case 'relogin': if (!S.pane.dirty || confirm('처리 창에 입력 중인 내용이 있습니다. 그룹웨어를 새로 고치면 사라집니다. 계속할까요?')) location.reload(); break;
       case 'close': if (leavePane()) close(); break;
       case 'home': goHome(); break;

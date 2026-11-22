@@ -100,7 +100,7 @@
     else if (S.error) parts.push(`<div class="b err">${ic('alert')}자료를 읽지 못했습니다: ${esc(S.error)} <button class="btn sm" data-act="refresh">다시 시도</button></div>`);
     if (S.a && S.a.failed.length) parts.push(`<div class="b warn">${ic('alert')}${S.a.failed.map(f => esc(MODNAME[f.name] || f.name)).join(', ')} 자료를 지금 확인할 수 없습니다. 해당 숫자는 "확인 불가"로 표시합니다. <button class="btn sm" data-act="refresh">다시 시도</button></div>`);
     { const cm = R.contractMessage(S.contract); if (cm) parts.push(`<div class="b warn">${ic('alert')}${esc(cm)} <button class="btn sm" data-act="openDiag">자세히</button></div>`); }
-    if (S.pendingRefresh) parts.push(`<div class="b info">새 자료가 도착했습니다. 작업 중이라 화면은 그대로 두었습니다. <button class="btn sm primary" data-act="applyRefresh">지금 반영</button></div>`);
+    if (S.pendingRefresh) parts.push(`<div class="b info">새 자료가 도착했습니다. 작업 중이라 화면은 그대로 두었고, 작업을 마치면 알아서 반영합니다. <button class="btn sm primary" data-act="applyRefresh">지금 반영</button></div>`);
     const age = S.lastRefresh ? (Date.now() - S.lastRefresh.getTime()) / 60000 : 0;
     if (age >= 15 && !S.loading) parts.push(`<div class="b warn">${Math.floor(age)}분 전 자료입니다. <button class="btn sm" data-act="refresh">새로고침</button></div>`);
     b.innerHTML = parts.join('');
