@@ -181,3 +181,20 @@ test('중요도만 바꾸기: 그룹웨어 화면과 같은 prj001A09, 내가 �
   await assert.rejects(other.api.todoSetImportance('td9', '1'), /내가 만든/);
   assert.equal(other.writes().length, 0);
 });
+test('댓글 읽기: 그룹웨어 ToDo 댓글 조회(읽기 전용 목록), 지운 댓글은 내용 없이, 접속 IP는 버린다', async () => {
+  const src = await fs.readFile(new URL('../src/live/collector.browser.js', import.meta.url), 'utf8');
+  const calls = [];
+  const client = {call() {}, post: (p, body) => { calls.push({p, body}); return Promise.resolve(p.endsWith('gw026A03') ? {resultCode: 0, resultData: {moreYn: 'N', commentList: [{commentSeq: '1', empName: '홍길동', deptName: '기획팀', createDate: '2026-11-22 11:55:37', useYn: 'Y', depth: 1, createSeq: '1', contents: '첫 줄', createIp: '10.0.0.1', fileSnList: []}, {commentSeq: '2', empName: '김민수', useYn: 'N', depth: 2, createSeq: '2', contents: '지운 글'}]}} : {resultCode: 0, resultData: {}}); }};
+  const req = () => ({A: client}); req.m = {42: function signer() { return 'wehago-sign getTransactionId'; }};
+  const window = {webpackChunkklago_ui_gw: {push: ([, , cb]) => cb(req)}};
+  const sandbox = {window, location: {origin: ORIGIN}, navigator: {userActivation: {isActive: false}}, sessionStorage: {getItem: () => JSON.stringify(ME)}, performance: {now: () => 0}, Intl, Date, JSON, Promise, setTimeout, clearTimeout, Object, Array, String, Number, Set, Map, Math, Function, Error};
+  vm.createContext(sandbox); vm.runInContext(src, sandbox);
+  const api = window.BWYFGW;
+  assert.ok(api.readOnlyEndpoints().includes('/gw/api/gw026A03'));
+  const r = JSON.parse(JSON.stringify(await api.todoComments('td9')));
+  assert.equal(calls[0].body.moduleSeq, 'td9'); assert.equal(calls[0].body.moduleGbnCode, 'project'); assert.equal(calls[0].body.commentType, '200');
+  assert.deepEqual(r.comments[0], {id: '1', who: '홍길동', dept: '기획팀', at: '2026-11-22 11:55:37', deleted: false, reply: false, mine: true, text: '첫 줄', files: 0});
+  assert.equal(r.comments[1].deleted, true); assert.equal(r.comments[1].text, ''); assert.equal(r.comments[1].reply, true);
+  assert.ok(!JSON.stringify(r).includes('10.0.0.1'));
+  await assert.rejects(api.todoComments('x'), /번호/);
+});

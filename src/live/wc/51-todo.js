@@ -307,6 +307,7 @@ ${legacy.length ? `<div class="box warn td-legacy">이 PC에만 저장된 예전
     const meta = t.meta || {}, rp = meta.rp || null, b = meta.b || null, ln = meta.ln || [];
     const repV = !rp ? '' : rp.f === 'm' && rp.md === -1 ? 'me' : rp.f;
     const opts = todoBudgetOptions(b);
+    const lock = !isNew && t.files ? 'disabled' : ''; // 첨부가 있으면 전체 고치기(prj001A02)가 첨부를 지울 수 있어 잠근다
     const bv = b && b.c ? (opts.find(o => o.v === `${b.p || ''}|${b.h || ''}|${b.c}`) || {}).v || '' : '';
     return `<div class="td-ed-h"><h2>${isNew ? '새 할 일' : '할 일 자세히'}</h2><button class="btn sm ghost" data-act="tdClose" aria-label="닫기">${ic('x')}닫기</button></div>
 <label class="td-f">제목<input class="inp" id="tdeTitle" value="${esc(t.title)}" maxlength="100" autocomplete="off" ${lock}></label>
@@ -321,7 +322,7 @@ ${!isNew && typeof todoEditorInfoHtml === 'function' ? todoEditorInfoHtml(t) : '
 <label class="td-f">메모<textarea class="inp td-memo" id="tdeMemo" rows="4" ${lock}>${esc(t.memo || '')}</textarea></label>
 <div class="td-sec" id="tdeCl">${todoChecklistHtml(t, isNew)}</div>
 <div class="td-sec"><h3>예산 연결</h3>${opts.length ? `<label class="td-f">사업·세목<select class="inp" id="tdeBud"><option value="">연결 안 함</option>${opts.map(o => `<option value="${esc(o.v)}" ${o.v === bv ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select></label><div class="td-f2"><label class="td-f">집행 예정 금액(원)<input class="inp" id="tdeAmt" inputmode="numeric" value="${b && b.a ? won(b.a) : ''}" placeholder="예: 300,000"></label><label class="td-f">집행 예정일<input class="inp" type="date" id="tdeBudDate" value="${esc((b && b.d) || '')}"></label></div>${b && b.pd ? `<p class="muted">근거 계획서 ${esc(b.pd)}${b.pt ? ' · ' + esc(String(b.pt).slice(0, 40)) : ''}</p>` : ''}${b && Array.isArray(b.m) && b.m.length ? `<p class="muted">짝지은 결의 ${b.m.length}건 · ${won(b.m.reduce((s, x) => s + (Number(x.a) || 0), 0))}원${b.st === 'done' ? ' · 집행됨' : ''}</p>` : ''}<p class="muted td-hint">금액을 넣으면 예산 집행 화면의 '집행 계획' 예상 집행률에 더해집니다.</p>` : `<p class="muted">예산 집행 화면에서 내 관심 사업을 저장하면 여기서 세목을 고를 수 있습니다. ${(S.settings.budget || []).length ? '<span class="spin"></span> 세목을 불러오는 중…' : ''}</p>`}</div>
-<div class="td-sec" id="tdeLn">${todoLinksHtml(t)}</div>
+<div class="td-sec" id="tdeLn">${todoLinksHtml(t)}</div>${!isNew && typeof todoCommentsHtml === 'function' ? todoCommentsHtml(t) : ''}
 <div class="acts td-ed-acts"><button class="btn primary" data-act="tdSave" ${TD.saving ? 'disabled' : ''}>${TD.saving ? '<span class="spin"></span> 저장 중…' : isNew ? '그룹웨어 ToDo에 저장' : '저장'}</button>${isNew ? '' : `<button class="btn" data-act="tdToggle" data-id="${esc(t.id)}">${t.done ? '끝냄 취소' : '끝냄'}</button><button class="btn" data-act="openUrl" data-url="${esc(GW.todoLink ? GW.todoLink(t.id) : '')}" data-title="그룹웨어 ToDo">${ic('ext')}그룹웨어에서 보기</button><button class="btn" data-act="tdCopyLink" data-id="${esc(t.id)}">링크 복사</button><button class="btn danger" data-act="tdDel" data-id="${esc(t.id)}">지우기</button>`}</div>
 <p class="muted td-hint">그룹웨어 개인 ToDo에 저장됩니다(나만 보임). 기한을 넣으면 그룹웨어 일정 화면에도 '종일'로 보입니다.</p>`;
   }

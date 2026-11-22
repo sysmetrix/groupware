@@ -1525,3 +1525,7 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .td-bulk-prev{max-height:220px;overflow:auto;font-size:14px}
 .wc .td-bulk-prev ol{margin:4px 0;padding-left:22px}
 @media (max-width:900px){.wc .td-kan{grid-template-columns:minmax(0,1fr)}.wc .tl-row{grid-template-columns:130px minmax(560px,1fr)}}
+.wc .td-cm{padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}
+.wc .td-cm.re{padding-left:18px}
+.wc .td-cm-h{display:flex;gap:8px;align-items:baseline;font-size:13px}
+.wc .td-cm p{margin:2px 0 0;word-break:keep-all}

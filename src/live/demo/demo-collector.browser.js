@@ -317,6 +317,7 @@
     readAlert: async id => { await wait(50); return {ok: true, id: String(id || '')}; },
     todoDelete: async id => { await wait(100); const i = TODOS.findIndex(x => x.todoSeq === id); if (i >= 0) TODOS.splice(i, 1); else for (const t of TODOS) t.children = t.children.filter(c => c.todoSeq !== id); return {ok: true, id}; },
     todoLink: id => '#demo-todo-' + id,
+    todoComments: async id => { await wait(80); return {comments: id === 'td906' ? [{id: 'c1', who: '홍길동', dept: '전략기획팀', at: day(-1) + ' 10:12:00', deleted: false, reply: false, mine: true, text: '통계표 초안 올렸습니다.', files: 0}, {id: 'c2', who: '홍담당', dept: '청소년사업팀', at: day(0) + ' 09:03:00', deleted: false, reply: true, mine: false, text: '시설 이용 수치도 넣어 주세요.', files: 0}] : [], more: false}; },
   };
   window.BWYFGW_DEMO = true;
   window.BWYFGW = Object.freeze({

@@ -135,6 +135,31 @@
   const d1 = await ask('예산 잔액 얼마 남았어?');
   check('예산을 물으면 금액으로 답함', d1.text && /\d{1,3}(,\d{3})+|원|집행/.test(d1.text) && !BAD.test(d1.text), d1.error || d1.text);
 
+  // ---------- 5. 내 할 일(그룹웨어 ToDo): 목록·편집기·칸반·일정표·여러 개 추가(저장은 하지 않는다) ----------
+  journey = '5. 내 할 일';
+  await nav('home');
+  click(await until(() => $('[data-act="homeTile"][data-v="mytodo"]'), 5000));
+  await until(() => $$('[data-act="tdSel"]').length >= 3, 8000);
+  click($('[data-act="tdView"][data-v="list"]')); await wait(300);
+  check('내 할 일 목록이 보임', $$('.td-row').length >= 3, text(main()).slice(0, 160));
+  check('중요도 표시와 진행률이 보임', /긴급/.test(text(main())) && /40%/.test(text(main())), text(main()).slice(0, 200));
+  for (const [id, want] of [['td906', /첨부/], ['td907', /받은 할 일/], ['td901', /시작일/]]) {
+    click($(`[data-act="tdSel"][data-id="${id}"]`));
+    const ed = await until(() => { const e = $('#tdEd'); return e && text(e).length > 20 ? e : null; }, 3000);
+    check(`할 일 자세히(${id})가 열림`, ed && want.test(text(ed)) && !BAD.test(text(ed)), ed ? text(ed).slice(0, 160) : '편집기가 열리지 않았습니다');
+    click($('[data-act="tdClose"]')); await wait(200);
+  }
+  click($('[data-act="tdView"][data-v="kanban"]'));
+  check('칸반에 예정·진행·완료 칸이 보임', await until(() => $$('.td-kcol').length === 3), $$('.td-kcol').length);
+  click($('[data-act="tdView"][data-v="timeline"]'));
+  check('일정표에 기간 막대가 보임', await until(() => $$('.tl-bar').length >= 2), $$('.tl-bar').length);
+  click($('[data-act="tdView"][data-v="list"]')); await wait(200);
+  click($('[data-act="tdBulk"]'));
+  const bulk = await until(() => $('#tdeBulk'));
+  if (bulk) { bulk.value = '- 자료 준비 금요일\n- 결과보고 11/24~11/28 !긴급'; bulk.dispatchEvent(new Event('input', {bubbles: true, composed: true})); }
+  check('여러 개 추가가 두 줄을 미리 보여 줌', await until(() => /2건 추가/.test(text($('#tdBulkGo')))), text($('#tdBulkPrev')));
+  click($('[data-act="closeHelp"]')); await wait(200);
+
   // ---------- 마무리: 사용 기록이 이름과 횟수만 남겼는가, 오류가 쌓이지 않았는가 ----------
   journey = '마무리';
   await wait(4500);

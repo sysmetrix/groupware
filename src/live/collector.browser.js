@@ -15,7 +15,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '1.20.0';
+  const VERSION = '1.20.1';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
@@ -35,6 +35,8 @@
     '/ea/ea059A02',
     // v1.17 개인 ToDo(업무관리) 목록·상세. 그룹웨어 일정 화면의 ToDo 패널이 부르는 조회 주소(2026-11-21 확인).
     '/kiss/APIHandler/prj001A12', '/kiss/APIHandler/prj001A05',
+    // v1.20.1 ToDo 댓글 목록. 그룹웨어 ToDo 상세의 댓글 칸이 부르는 조회 주소(2026-11-22 확인). 댓글 쓰기는 그룹웨어에서 한다.
+    '/gw/api/gw026A03',
   ]);
 
   // Left-menu ids of 전자결재(비영리) observed in getMenuCountInfo (2026-11-08).
@@ -559,6 +561,14 @@
     return {ok: true, id};
   }
   const todoLink = id => `${ORIGIN}/#/popup?${qs({callComp: 'UGAP012', MicroModuleCode: 'kiss', todoSeq: id})}`;
+  // ToDo 댓글 읽기(읽기 전용). 지운 댓글은 내용 없이 표시만 남긴다. 접속 IP는 가져오지 않는다.
+  async function todoComments(id) {
+    const ctx = context();
+    const d = await call('/gw/api/gw026A03', {companyInfo: {compSeq: ctx.compSeq, bizSeq: ctx.bizSeq, deptSeq: ctx.deptSeq, emailAddr: ctx.emailAddr, emailDomain: ctx.emailDomain}, langCode: ctx.langCode || 'kr', moduleGbnCode: 'project', moduleSeq: todoId(id), commentType: '200', commentSeq: '', sort: 'A', searchWay: 'D', pageSize: 200}, {timeoutMs: 12000});
+    const list = Array.isArray(d && d.commentList) ? d.commentList : null;
+    if (!list) throw new GwError('API_ERROR', '댓글 목록 형식이 바뀌었습니다');
+    return {comments: list.map(c => ({id: str(c.commentSeq, 30), who: str(c.empName, 40), dept: str(c.deptName, 60), at: str(c.createDate, 19), deleted: c.useYn !== 'Y', reply: num(c.depth) > 1, mine: String(c.createSeq) === String(ctx.empSeq), text: c.useYn === 'Y' ? String(c.contents || '').slice(0, 2000) : '', files: Array.isArray(c.fileSnList) ? c.fileSnList.length : 0})), more: d.moreYn === 'Y'};
+  }
 
   // 앞으로 예정된 휴가·출장·연장근무: 근태/출장 신청 현황(결재 중 포함)을 읽는다. 신청일 기준 최근 150일 안의 신청만 본다.
   async function teamPlanned() {
@@ -1205,7 +1215,7 @@
   }
 
   window.BWYFGW = Object.freeze({
-    version: VERSION, collect, call, search, organizationTree, organizationMembers, sentMail, budgetCatalog, budgetProject, budgetAll, budgetLedger, budgetMonthly, attendanceDays, teamAttendance, teamPlanned, resourceList, resourceBookings, resourceDetail, resourceCheck, reserveResource, todoList, todoDetail, todoCreate, todoUpdate, todoSetDone, todoSetProgress, todoSetImportance, todoDelete, todoLink, readAlert, routingHistory, submittedRange, approvalPage, approvalFallback, docPreview, frequentForms, findReply, mailDetail, mailInlineImage, mailAttachment, mailAttachmentPreview, mailAttachmentPages, docAttachmentPages, synapPageImages, saveBlob,
+    version: VERSION, collect, call, search, organizationTree, organizationMembers, sentMail, budgetCatalog, budgetProject, budgetAll, budgetLedger, budgetMonthly, attendanceDays, teamAttendance, teamPlanned, resourceList, resourceBookings, resourceDetail, resourceCheck, reserveResource, todoList, todoDetail, todoCreate, todoUpdate, todoSetDone, todoSetProgress, todoSetImportance, todoDelete, todoLink, todoComments, readAlert, routingHistory, submittedRange, approvalPage, approvalFallback, docPreview, frequentForms, findReply, mailDetail, mailInlineImage, mailAttachment, mailAttachmentPreview, mailAttachmentPages, docAttachmentPages, synapPageImages, saveBlob,
     context: () => { const c = context(); return {name: c.name, deptName: c.deptName, compName: c.compName, duty: c.duty, position: c.position}; },
     readOnlyEndpoints: () => [...READ_ONLY], routes: ROUTES, links: LINKS, searchLabels: SEARCH_LABELS, defaults: DEFAULTS,
   });
