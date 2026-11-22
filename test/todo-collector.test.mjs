@@ -6,7 +6,7 @@ import vm from 'node:vm';
 
 const ORIGIN = 'https://gw.bwyf.or.kr';
 const ME = {ucUserInfo: {empSeq: '1', groupSeq: 'g', compSeq: 'c', deptSeq: 'd', loginId: 'u', empName: '홍길동'}};
-async function load({detail = {}, gesture = false, list = []} = {}) {
+async function load({detail = {}, gesture = false, list = [], session = () => JSON.stringify(ME)} = {}) {
   const src = await fs.readFile(new URL('../src/live/collector.browser.js', import.meta.url), 'utf8');
   const calls = [];
   const respond = (p, body) => {
@@ -20,7 +20,7 @@ async function load({detail = {}, gesture = false, list = []} = {}) {
   const req = () => ({A: client});
   req.m = {42: function signer() { return 'wehago-sign getTransactionId'; }};
   const window = {webpackChunkklago_ui_gw: {push: ([, , cb]) => cb(req)}};
-  const sandbox = {window, location: {origin: ORIGIN}, navigator: {userActivation: {isActive: gesture}}, sessionStorage: {getItem: () => JSON.stringify(ME)}, performance: {now: () => 0}, Intl, Date, JSON, Promise, setTimeout, clearTimeout, Object, Array, String, Number, Set, Map, Math, Function, Error};
+  const sandbox = {window, location: {origin: ORIGIN}, navigator: {userActivation: {isActive: gesture}}, sessionStorage: {getItem: () => session()}, performance: {now: () => 0}, Intl, Date, JSON, Promise, setTimeout, clearTimeout, Object, Array, String, Number, Set, Map, Math, Function, Error};
   vm.createContext(sandbox);
   vm.runInContext(src, sandbox);
   return {api: window.BWYFGW, calls, writes: () => calls.filter(c => /prj001A0[1237]$/.test(c.p))};
@@ -117,4 +117,16 @@ test('ToDo 주소는 읽기 전용 목록과 쓰기 목록에 알맞게 들어 �
   assert.ok(ro.includes('/kiss/APIHandler/prj001A12') && ro.includes('/kiss/APIHandler/prj001A05'));
   for (const w of ['prj001A01', 'prj001A02', 'prj001A03', 'prj001A07']) assert.ok(!ro.includes('/kiss/APIHandler/' + w));
   await assert.rejects(api.call('/kiss/APIHandler/prj001A03', {todoSeq: 'td1'}), /허용 목록/);
+});
+
+test('ToDo 만들기: 로그인 화면에서 먼저 실린 뒤 로그인해도 저장되고, 다른 사용자로 바뀌면 막는다', async () => {
+  let who = null; // 스크립트가 실릴 때는 아직 로그인 전(같은 문서의 #/ 로그인 화면)
+  const {api, writes} = await load({session: () => (who ? JSON.stringify(who) : null)});
+  who = ME;
+  const r = await api.todoCreate({title: '로그인 뒤 할 일'});
+  assert.equal(r.id, 'td777');
+  assert.equal(writes().length, 1);
+  who = {ucUserInfo: {...ME.ucUserInfo, empSeq: '2'}};
+  await assert.rejects(api.todoCreate({title: '다른 사람'}), /로그인 정보가 바뀌었습니다/);
+  assert.equal(writes().length, 1);
 });
