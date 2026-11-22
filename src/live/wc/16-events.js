@@ -331,6 +331,7 @@
       case 'usageClear':
       case 'bMode': case 'bOpen': case 'bMineReload': case 'bAllReload':
       case 'tdReload': case 'tdFilter': case 'tdAdd': case 'tdNew': case 'tdSel': case 'tdClose': case 'tdSave': case 'tdToggle': case 'tdDel': case 'tdDelYes':
+      case 'tdView': case 'tdTl': case 'tdKanMove': case 'tdRoSave': case 'tdCopyLink': case 'tdBulk': case 'tdBulkSave':
       case 'tdSubAdd': case 'tdSubToggle': case 'tdSubDel': case 'tdLinkFind': case 'tdLinkAdd': case 'tdLinkDel': case 'tdLinkOpen':
       case 'tdWrap': case 'tdWrapDone': case 'tdWrapNext': case 'tdWrapPick': case 'tdWrapAll': case 'tdMigrate': case 'tdMigrateSkip':
       case 'bpAdd': case 'bpImport': case 'bpImportAdd': case 'bpConfirm': case 'bpReject': case 'bpEdit': case 'bpReload': case 'bpDropRest':
@@ -361,7 +362,7 @@
   root.addEventListener('change', e => {
     const t = e.composedPath()[0];
     if (t.id && t.id.startsWith('df') && dfChange(t)) return;
-    if (t.id && /^(tde\w*|tdQ|bpTarget|bpClose)$/.test(t.id) && typeof todoChange === 'function') { todoChange(t); return; }
+    if (t.id && /^(tde\w*|tdQ|tdSort|tdImpF|tdDoneSpan|bpTarget|bpClose)$/.test(t.id) && typeof todoChange === 'function') { todoChange(t); return; }
     if (t.id === 'speriod') S.search.period = t.value;
     if ((t.id === 'bSel' || t.id === 'bAllSort') && typeof bmChange === 'function') { bmChange(t); return; }
     if (t.id === 'bproj' && t.value === '__custom') { S.budget.custom = true; renderMain(); }
@@ -395,7 +396,8 @@
     e.preventDefault(); z.classList.remove('drop');
     const id = e.dataTransfer.getData('text/plain');
     if (!id) return;
-    if (z.dataset.drop) dropTo(id, z.dataset.drop);
+    if (z.dataset.drop && z.dataset.drop.startsWith('tdk:')) { if (typeof todoKanbanDrop === 'function') todoKanbanDrop(id, z.dataset.drop.slice(4)); }
+    else if (z.dataset.drop) dropTo(id, z.dataset.drop);
     else if (z.dataset.dropDate && id.startsWith('todo:') && /^td\d+$/.test(id.slice(5)) && typeof todoSave === 'function') { const due = z.dataset.dropDate; delete S.plan[id]; todoSave(id.slice(5), {due}).then(r => toast(r.ok ? `기한을 ${due.slice(5)}로 바꿨습니다(그룹웨어 ToDo).` : r.text)); }
     else if (z.dataset.dropDate && id.startsWith('todo:')) { const t = S.todos.find(x => `todo:${x.id}` === id); if (t) { pushUndo('기한 변경'); t.due = z.dataset.dropDate; delete S.plan[id]; saveLocal(); renderMain(); toastUndo(`기한을 ${t.due.slice(5)}로 바꿨습니다.`); } }
   });

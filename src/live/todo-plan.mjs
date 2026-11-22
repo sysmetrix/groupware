@@ -67,12 +67,109 @@ export function tdFromGw(r = {}) {
   return {
     id: String(r.todoSeq || ''), title: String(r.todoName || '').trim(), due, start: tdIso(r.startDate), contents: String(r.contents || ''),
     done: String(r.todoStatus) === '2' || Number(r.processRate) >= 100, doneDate: tdIso(r.completeDate),
-    important: String(r.importDegree || '0') === '1', memo, meta, broken,
+    imp: tdImpOf(r.importDegree), important: tdImpOf(r.importDegree) !== '0', rate: tdRateOf(r), memo, meta, broken,
     created: tdIso(r.createDate), modified: tdIso(r.modifyDate), level: Number(r.todoLevel) || 1, parent: String(r.prtSeq || ''),
-    project: String(r.prjSeq || ''), owner: String(r.ownerEmpSeq || ''), creator: String(r.createEmpSeq || ''),
+    project: String(r.prjSeq || ''), projectName: String(r.prjName || '').trim(), owner: String(r.ownerEmpSeq || ''), creator: String(r.createEmpSeq || ''),
+    ownerName: String(r.ownerEmpName || '').trim(), creatorName: String(r.createEmpName || '').trim(),
+    files: Number(r.fileCount) || 0, replies: Number(r.replyCount) || 0, dday: r.dDayYn === 'Y', order: Number(r.todoOrd) || 0,
     mine: r.loginUserTodoOwnerYn === 'Y' && r.loginUserTodoCreateYn === 'Y',
-    checklist: kids.map(c => ({id: String(c.todoSeq || ''), title: String(c.todoName || '').trim(), done: String(c.todoStatus) === '2' || Number(c.processRate) >= 100})),
+    // 내가 담당자인 ToDo(다른 사람이 준 것·프로젝트 ToDo 포함)는 그룹웨어 화면처럼 진행률·완료를 바꿀 수 있다
+    canProgress: r.loginUserTodoOwnerYn === 'Y' && r.proccessYn !== 'N',
+    checklist: kids.map(c => ({id: String(c.todoSeq || ''), title: String(c.todoName || '').trim(), done: String(c.todoStatus) === '2' || Number(c.processRate) >= 100, rate: tdRateOf(c), start: tdIso(c.startDate), due: tdIso(c.endDate) || tdIso(c.startDate)})),
   };
+}
+
+// ---------- 그룹웨어 ToDo와 같은 중요도·진행률·상태 ----------
+// 중요도 값은 그룹웨어 그대로: 1 즉시, 3 긴급, 2 중요, 0 일반(2026-11-22 그룹웨어 화면 코드에서 확인)
+export const TD_IMPS = [['1', '즉시'], ['3', '긴급'], ['2', '중요'], ['0', '일반']];
+const TD_IMP_RANK = {1: 3, 3: 2, 2: 1, 0: 0};
+export const tdImpOf = v => { const s = String(v ?? '0'); return TD_IMP_RANK[s] !== undefined ? s : '0'; };
+export const tdImpLabel = v => (TD_IMPS.find(x => x[0] === tdImpOf(v)) || TD_IMPS[3])[1];
+export const tdImpRank = v => TD_IMP_RANK[tdImpOf(v)];
+export function tdRateOf(r = {}) {
+  if (String(r.todoStatus) === '2') return 100;
+  const n = Math.round(Number(r.processRate));
+  return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 0;
+}
+// 그룹웨어 상태: 예정(진행률 0) · 진행(1~99) · 지연(끝나지 않았는데 기한이 지남) · 완료
+export const TD_STATES = [['todo', '예정'], ['doing', '진행'], ['late', '지연'], ['done', '완료']];
+export function tdState(t = {}, now = new Date()) {
+  if (t.done || Number(t.rate) >= 100) return 'done';
+  if (t.due && tdDayNum(t.due) < tdDayNum(tdToday(now))) return 'late';
+  return Number(t.rate) > 0 ? 'doing' : 'todo';
+}
+export function tdStateCounts(todos = [], now = new Date()) {
+  const c = {todo: 0, doing: 0, late: 0, done: 0};
+  for (const t of todos) c[tdState(t, now)]++;
+  return c;
+}
+// 정렬: smart(기본, 끝냄·중요도·기한), created(등록순, 새것 먼저), modified(수정순), due(종료일순), imp(중요도순)
+export const TD_SORTS = [['smart', '기한·중요도'], ['due', '종료일순'], ['imp', '중요도순'], ['created', '등록순'], ['modified', '수정순']];
+const tdIdNum = t => Number(String(t.id || '').replace(/\D/g, '')) || 0;
+export function tdSortBy(list = [], key = 'smart') {
+  const by = {
+    created: (a, b) => String(b.created || '').localeCompare(String(a.created || '')) || tdIdNum(b) - tdIdNum(a),
+    modified: (a, b) => String(b.modified || '').localeCompare(String(a.modified || '')) || tdIdNum(b) - tdIdNum(a),
+    due: (a, b) => String(a.due || '9999').localeCompare(String(b.due || '9999')) || tdImpRank(b.imp) - tdImpRank(a.imp),
+    imp: (a, b) => tdImpRank(b.imp) - tdImpRank(a.imp) || String(a.due || '9999').localeCompare(String(b.due || '9999')),
+  }[key];
+  if (!by) return tdSort(list);
+  return [...list].sort((a, b) => (!!a.done - !!b.done) || by(a, b) || String(a.title).localeCompare(String(b.title), 'ko'));
+}
+// 끝낸 일 기간: week(최근 7일), month(최근 30일), all
+export function tdDoneWithin(t, span = 'all', now = new Date()) {
+  if (!t.done) return false;
+  if (span === 'all') return true;
+  if (!t.doneDate) return false;
+  return tdDayNum(tdToday(now)) - tdDayNum(t.doneDate) <= (span === 'week' ? 7 : 30);
+}
+
+// ---------- 빠른 추가 ----------
+// "보고서 초안 !긴급 11/24~11/28", "자문회의 준비 금요일까지", "!회의록 정리 내일" → {title, start, due, imp}
+// 중요도: '!즉시' '!긴급' '!중요' 또는 맨 앞·맨 뒤의 '!' 하나(중요). 기간: 'A~B', 'A부터 B까지'. 기한: 끝에 붙은 날짜 말.
+const TD_DATE_WORD = '(?:(?:다음\\s*주|이번\\s*주)\\s*[일월화수목금토]요일?|[일월화수목금토]요일|오늘|내일|모레|\\d{4}-\\d{1,2}-\\d{1,2}|\\d{1,2}\\s*[/.]\\s*\\d{1,2}|\\d{1,2}월\\s*\\d{1,2}일)';
+const tdWordDue = (w, now) => tdParseDue(/^\d{1,2}월/.test(w) ? w.replace(/월\s*/, '/').replace(/일$/, '') : w, now);
+export function tdParseQuick(text, now = new Date()) {
+  let s = String(text || '').replace(/\s+/g, ' ').trim();
+  let imp = '0';
+  const im = s.match(/(?:^|\s)!(즉시|긴급|중요)(?=\s|$)/);
+  if (im) { imp = {즉시: '1', 긴급: '3', 중요: '2'}[im[1]]; s = s.replace(im[0], ' ').replace(/\s+/g, ' ').trim(); }
+  else if (/^!\s*\S/.test(s) || /\S\s*!$/.test(s)) { imp = '2'; s = s.replace(/^!\s*/, '').replace(/\s*!$/, '').trim(); }
+  let start = '', due = '';
+  const rg = s.match(new RegExp(`^(.*?)\\s+(${TD_DATE_WORD})\\s*(?:~|-|부터)\\s*(${TD_DATE_WORD})(?:까지)?$`));
+  if (rg && rg[1].trim().length >= 2) {
+    const a = tdWordDue(rg[2], now), b = tdWordDue(rg[3], now);
+    if (a && b && a <= b) return {title: rg[1].trim(), start: a, due: b, imp};
+  }
+  const m = s.match(new RegExp(`^(.*?)\\s+(${TD_DATE_WORD})(?:까지)?$`));
+  if (m && m[1].trim().length >= 2) { const d = tdWordDue(m[2], now); if (d) { due = d; s = m[1].trim(); } }
+  return {title: s, start, due, imp};
+}
+// 여러 줄을 한 번에: 글머리(-, •, ·, *, 1., 1), □, ☐, [ ])를 떼고 빈 줄은 건너뛴다. 30줄까지.
+export function tdParseBulk(text, now = new Date()) {
+  const rows = [];
+  for (const raw of String(text || '').replace(/\r\n/g, '\n').split('\n')) {
+    const line = raw.replace(/^\s*(?:[-•·*▪◦]|\d{1,3}[.)]|[□☐■]|\[\s?[xX ]?\s?\])\s*/, '').trim();
+    if (!line) continue;
+    const p = tdParseQuick(line, now);
+    if (p.title) rows.push({...p, title: p.title.slice(0, 100)});
+  }
+  return {rows: rows.slice(0, 30), more: Math.max(0, rows.length - 30)};
+}
+
+// ---------- 일정표(그룹웨어 간트 보기에 해당) ----------
+// from(ISO)부터 days일 동안 보이는 막대. 시작·기한이 모두 없는 할 일은 뺀다. 칸 번호는 0부터.
+export function tdTimeline(todos = [], from = '', days = 28) {
+  if (!tdValidIso(from)) return [];
+  const f = tdDayNum(from), l = f + days - 1, out = [];
+  for (const t of todos) {
+    const e = t.due ? tdDayNum(t.due) : null, s = t.start ? tdDayNum(t.start) : e;
+    if (e === null || s === null) continue;
+    const a = Math.min(s, e), b = Math.max(s, e);
+    if (b < f || a > l) continue;
+    out.push({t, col: Math.max(a, f) - f, span: Math.min(b, l) - Math.max(a, f) + 1, cutL: a < f, cutR: b > l});
+  }
+  return out.sort((x, y) => x.col - y.col || y.span - x.span || String(x.t.title).localeCompare(String(y.t.title), 'ko'));
 }
 
 // ---------- 반복 ----------
@@ -132,7 +229,7 @@ export function tdBucketOf(t, now = new Date()) {
 }
 export const TD_BUCKETS = [['late', '지난 기한'], ['today', '오늘'], ['tomorrow', '내일'], ['week', '7일 안'], ['later', '나중'], ['nodate', '기한 없음'], ['done', '끝낸 일']];
 export function tdSort(list = []) {
-  return [...list].sort((a, b) => (!!a.done - !!b.done) || (!!b.important - !!a.important) || String(a.due || '9999').localeCompare(String(b.due || '9999')) || String(a.title).localeCompare(String(b.title), 'ko'));
+  return [...list].sort((a, b) => (!!a.done - !!b.done) || (tdImpRank(b.imp ?? (b.important ? '2' : '0')) - tdImpRank(a.imp ?? (a.important ? '2' : '0'))) || String(a.due || '9999').localeCompare(String(b.due || '9999')) || String(a.title).localeCompare(String(b.title), 'ko'));
 }
 export function tdSummary(todos = [], now = new Date()) {
   const s = {total: 0, late: 0, today: 0, tomorrow: 0, week: 0, important: 0, done: 0, plans: 0};
