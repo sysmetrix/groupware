@@ -64,6 +64,34 @@
 <div class="tl" role="list" aria-label="할 일 일정표"><div class="tl-row tl-h"><span class="tl-lab">할 일</span><div class="tl-track" style="--tl-days:${days}">${head}</div></div>${rows || '<p class="muted" style="padding:10px">이 기간에 걸친 할 일이 없습니다.</p>'}${bars.length > 80 ? `<p class="muted">외 ${bars.length - 80}건</p>` : ''}</div>`;
   }
 
+  // ---------- 댓글(읽기). 쓰기는 그룹웨어 ToDo 화면에서 한다(받은 ToDo는 준 사람에게 알림이 간다) ----------
+  const TD_CM = {};
+  async function todoCommentsLoad(id, force = false) {
+    if (!GW.todoComments) return;
+    const c = TD_CM[id];
+    if (c && (c.busy || (!force && Date.now() - c.at < 60000))) return;
+    TD_CM[id] = {...(c || {}), busy: true, at: Date.now()};
+    try { const r = await GW.todoComments(id); TD_CM[id] = {at: Date.now(), list: r.comments, more: r.more}; }
+    catch (e) { TD_CM[id] = {at: Date.now(), err: todoErr(e), list: c && c.list}; logError('todo.comments', e.message); }
+    const box = $('#tdeCm'); if (box && TD.sel === id) box.innerHTML = todoCommentsInner(todoFind(id));
+  }
+  function todoCommentsInner(t) {
+    if (!t) return '';
+    const c = TD_CM[t.id];
+    const n = c && c.list ? c.list.filter(x => !x.deleted).length : t.replies;
+    const head = `<h3>댓글 <span class="muted">${n || 0}</span></h3>`;
+    const write = `<button class="btn sm ghost" data-act="openUrl" data-url="${esc(GW.todoLink ? GW.todoLink(t.id) : '')}" data-title="그룹웨어 ToDo">${ic('ext')}그룹웨어에서 댓글 쓰기</button>`;
+    if (!t.replies && !(c && c.list && c.list.length)) return `${head}<p class="muted">없음</p>${write}`;
+    if (!c || (c.busy && !c.list)) return `${head}<p class="muted"><span class="spin"></span> 댓글을 읽는 중…</p>`;
+    const rows = (c.list || []).map(x => `<div class="td-cm ${x.reply ? 're' : ''}"><div class="td-cm-h"><b>${esc(x.who || '(이름 없음)')}</b><span class="muted">${esc(x.dept || '')} · ${esc(String(x.at || '').slice(5, 16).replace('-', '/'))}</span></div>${x.deleted ? '<p class="muted">지운 댓글입니다.</p>' : `<p>${esc(x.text).replace(/\n/g, '<br>')}${x.files ? ` <span class="muted">${ic('clip')}파일 ${x.files}</span>` : ''}</p>`}</div>`).join('');
+    return `${head}${c.err ? `<p class="err">댓글을 읽지 못했습니다: ${esc(c.err)}</p>` : ''}${rows}${c.more ? '<p class="muted">더 있는 댓글은 그룹웨어에서 보세요.</p>' : ''}${write}`;
+  }
+  function todoCommentsHtml(t) {
+    if (!t || !GW.todoComments) return '';
+    if (t.replies && !TD_CM[t.id]) setTimeout(() => todoCommentsLoad(t.id), 0);
+    return `<div class="td-sec" id="tdeCm" aria-live="polite">${todoCommentsInner(t)}</div>`;
+  }
+
   // ---------- 편집기 덧붙임 ----------
   function todoEditorInfoHtml(t) {
     const st = R.tdState(t), sn = R.TD_STATES.find(s => s[0] === st)[1];
@@ -77,6 +105,7 @@
 <p class="muted">${t.due ? `기간 ${esc(todoPeriod(t))} · ${esc(todoDdayText(t.due))}` : '기한 없음'}</p>
 ${t.memo ? `<div class="td-ro-memo">${esc(t.memo).replace(/\n/g, '<br>')}</div>` : ''}
 ${(t.checklist || []).length ? `<div class="td-sec"><h3>하위 ToDo <span class="muted">${t.checklist.filter(c => c.done).length}/${t.checklist.length}</span></h3>${t.checklist.map(c => `<div class="td-cl ${c.done ? 'done' : ''}"><span>${c.done ? '✓ ' : ''}${esc(c.title)}</span></div>`).join('')}</div>` : ''}
+${todoCommentsHtml(t)}
 ${t.canProgress ? `<div class="td-sec"><label class="td-f">진행률 <b id="tdeRateV">${Number(t.rate) || 0}%</b><input class="td-range" type="range" id="tdeRate" min="0" max="100" step="10" value="${Number(t.rate) || 0}"></label><div class="acts td-ed-acts"><button class="btn primary" data-act="tdRoSave" data-id="${esc(t.id)}">진행률 저장</button><button class="btn" data-act="tdToggle" data-id="${esc(t.id)}">${t.done ? '끝냄 취소' : '끝냄'}</button></div></div>` : '<p class="muted">내가 담당자가 아니어서 여기서는 바꿀 수 없습니다.</p>'}
 <div class="acts td-ed-acts"><button class="btn" data-act="openUrl" data-url="${esc(GW.todoLink ? GW.todoLink(t.id) : '')}" data-title="그룹웨어 ToDo">${ic('ext')}그룹웨어에서 보기</button><button class="btn" data-act="tdCopyLink" data-id="${esc(t.id)}">링크 복사</button></div>
 <p class="muted td-hint">제목·기간·내용은 준 사람이 그룹웨어에서 고칩니다.</p>`;
