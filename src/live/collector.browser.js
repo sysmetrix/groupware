@@ -15,7 +15,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '1.19.2';
+  const VERSION = '1.19.3';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
@@ -197,12 +197,16 @@
     return (start ? '…' : '') + t.slice(start, start + size) + (start + size < t.length ? '…' : '');
   };
 
+  // 이 화면에서 처음 확인한 로그인 사용자. 스크립트가 로그인 화면(같은 문서의 #/ 경로)에서 먼저 실렸다가 그대로 로그인하는 경우가 있어,
+  // 실릴 때가 아니라 로그인 정보를 처음 읽은 때 기록한다. 그 뒤 다른 사용자로 바뀌면 쓰기를 막는다.
+  let loadedEmpSeq = '';
   function context() {
     let ui;
     try { ui = JSON.parse(sessionStorage.getItem('userInfo') || 'null'); } catch { ui = null; }
     let u = ui && ui.ucUserInfo;
     if (typeof u === 'string') { try { u = JSON.parse(u); } catch { u = null; } }
     if (!u || !u.empSeq) throw new GwError('NOT_LOGGED_IN', '그룹웨어에 로그인되어 있지 않습니다.');
+    if (!loadedEmpSeq) loadedEmpSeq = String(u.empSeq);
     return {
       groupSeq: u.groupSeq, compSeq: u.compSeq, bizSeq: u.bizSeq, deptSeq: u.deptSeq, empSeq: u.empSeq,
       loginId: u.loginId, erpEmpSeq: u.erpEmpSeq || u.loginId, erpCompSeq: u.erpCompSeq || u.compSeq,
@@ -362,7 +366,7 @@
     return {conflict: d && d.reservationYn === 'Y', limit: d && d.limitYn === 'Y'};
   }
   // 예약 등록: 입력 검증, 과거 시간 거부, 중복·한도 확인 후에만 저장한다. 성공 여부는 서버 응답(successTf)으로 판단한다.
-  const loadedEmpSeq = (() => { try { return context().empSeq; } catch { return ''; } })();
+  try { context(); } catch { /* 아직 로그인 전: 처음 로그인 정보를 읽을 때 기록한다 */ }
   let reserveBusy = false;
   async function reserveResource({resSeq, title, start, end}) {
     // 사용자가 방금 직접 클릭한 경우에만 실행한다(페이지 스크립트가 몰래 부르는 것을 막는다). 동시에 두 번 실행되지 않게 잠근다.
