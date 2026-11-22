@@ -204,3 +204,56 @@ test('월별 예상 곡선: 이번 달 결의에서 출발하고 지난 예정�
   assert.equal(p.projected[11], 1280); // 지난 예정(10월)과 12월 계획이 12월 점에 더해짐
   assert.equal(p.goal, 1500);
 });
+
+test('v1.20 중요도: 그룹웨어 값(1 즉시, 3 긴급, 2 중요, 0 일반)을 그대로 읽고 순위를 매긴다', () => {
+  const a = T.tdFromGw({todoSeq: 'td1', todoName: '가', importDegree: '3', processRate: 40, todoStatus: '1', fileCount: '2', replyCount: 1, dDayYn: 'Y', loginUserTodoOwnerYn: 'Y', loginUserTodoCreateYn: 'N', createEmpName: '홍담당', proccessYn: 'Y'});
+  assert.equal(a.imp, '3'); assert.equal(a.important, true); assert.equal(a.rate, 40); assert.equal(a.files, 2); assert.equal(a.replies, 1); assert.equal(a.dday, true);
+  assert.equal(a.mine, false); assert.equal(a.canProgress, true); assert.equal(a.creatorName, '홍담당');
+  assert.equal(T.tdImpLabel('1'), '즉시'); assert.equal(T.tdImpLabel('2'), '중요'); assert.equal(T.tdImpLabel('x'), '일반');
+  assert.ok(T.tdImpRank('1') > T.tdImpRank('3') && T.tdImpRank('3') > T.tdImpRank('2') && T.tdImpRank('2') > T.tdImpRank('0'));
+  assert.equal(T.tdFromGw({todoSeq: 'td2', todoStatus: '2', processRate: 30}).rate, 100);
+  assert.equal(T.tdFromGw({todoSeq: 'td3', loginUserTodoOwnerYn: 'Y', proccessYn: 'N'}).canProgress, false);
+});
+
+test('v1.20 상태: 예정·진행·지연·완료를 그룹웨어와 같게 나눈다', () => {
+  const L = [{id: 'a', due: '2026-11-20', rate: 0}, {id: 'b', due: '2026-11-25', rate: 30}, {id: 'c', due: '2026-11-25', rate: 0}, {id: 'd', done: true, rate: 100, doneDate: '2026-11-20'}, {id: 'e', due: '2026-11-19', rate: 50}];
+  assert.deepEqual(L.map(t => T.tdState(t, NOW)), ['late', 'doing', 'todo', 'done', 'late']);
+  assert.deepEqual(T.tdStateCounts(L, NOW), {todo: 1, doing: 1, late: 2, done: 1});
+  assert.equal(T.tdDoneWithin(L[3], 'week', NOW), true);
+  assert.equal(T.tdDoneWithin({done: true, doneDate: '2026-10-01'}, 'month', NOW), false);
+  assert.equal(T.tdDoneWithin({done: true, doneDate: '2026-10-01'}, 'all', NOW), true);
+});
+
+test('v1.20 정렬: 등록순·수정순·종료일순·중요도순, 끝낸 일은 늘 뒤', () => {
+  const L = [{id: 'td1', title: '가', created: '2026-11-01', modified: '2026-11-20', due: '2026-11-30', imp: '0'}, {id: 'td2', title: '나', created: '2026-11-10', modified: '2026-11-11', due: '2026-11-22', imp: '1'}, {id: 'td3', title: '다', created: '2026-11-15', modified: '2026-11-15', due: '', imp: '2', done: true}];
+  assert.deepEqual(T.tdSortBy(L, 'created').map(t => t.id), ['td2', 'td1', 'td3']);
+  assert.deepEqual(T.tdSortBy(L, 'modified').map(t => t.id), ['td1', 'td2', 'td3']);
+  assert.deepEqual(T.tdSortBy(L, 'due').map(t => t.id), ['td2', 'td1', 'td3']);
+  assert.deepEqual(T.tdSortBy(L, 'imp').map(t => t.id), ['td2', 'td1', 'td3']);
+  assert.deepEqual(T.tdSortBy(L, 'smart').map(t => t.id), ['td2', 'td1', 'td3']);
+});
+
+test('v1.20 빠른 추가: 기간·중요도·날짜 말을 읽는다', () => {
+  assert.deepEqual(T.tdParseQuick('결과보고서 초안 11/24~11/28 !긴급', NOW), {title: '결과보고서 초안', start: '2026-11-24', due: '2026-11-28', imp: '3'});
+  assert.deepEqual(T.tdParseQuick('자문회의 준비 금요일까지', NOW), {title: '자문회의 준비', start: '', due: '2026-11-27', imp: '0'});
+  assert.deepEqual(T.tdParseQuick('!회의록 정리 내일', NOW), {title: '회의록 정리', start: '', due: '2026-11-22', imp: '2'});
+  assert.deepEqual(T.tdParseQuick('!즉시 전화 회신', NOW), {title: '전화 회신', start: '', due: '', imp: '1'});
+  assert.deepEqual(T.tdParseQuick('예산 점검 12월 1일부터 12월 3일까지', NOW), {title: '예산 점검', start: '2026-12-01', due: '2026-12-03', imp: '0'});
+  assert.equal(T.tdParseQuick('11/28', NOW).title, '11/28'); // 제목이 날짜뿐이면 그대로 둔다
+  assert.deepEqual(T.tdParseQuick('보고 11/28~11/24', NOW), {title: '보고 11/28~11/24', start: '', due: '', imp: '0'}); // 거꾸로 쓴 기간은 짐작하지 않고 제목에 남긴다
+});
+
+test('v1.20 여러 개 추가: 글머리를 떼고 빈 줄을 건너뛰며 30줄까지', () => {
+  const r = T.tdParseBulk('- 자료 준비 금요일\n\n• 결과보고 11/24~11/28 !긴급\n1. 견적 받기\n☐ 품의\n[ ] 다과', NOW);
+  assert.deepEqual(r.rows.map(x => x.title), ['자료 준비', '결과보고', '견적 받기', '품의', '다과']);
+  assert.equal(r.rows[1].imp, '3'); assert.equal(r.rows[0].due, '2026-11-27');
+  const many = T.tdParseBulk(Array.from({length: 33}, (_, i) => `일 ${i + 1}`).join('\n'), NOW);
+  assert.equal(many.rows.length, 30); assert.equal(many.more, 3);
+});
+
+test('v1.20 일정표: 기간 막대를 보이는 칸에 맞춰 자른다', () => {
+  const L = [{id: 'a', title: 'A', start: '2026-11-20', due: '2026-11-25'}, {id: 'b', title: 'B', due: '2026-11-30'}, {id: 'c', title: 'C'}, {id: 'd', title: 'D', start: '2026-12-20', due: '2026-12-30'}];
+  const bars = T.tdTimeline(L, '2026-11-23', 14);
+  assert.deepEqual(bars.map(b => [b.t.id, b.col, b.span, b.cutL, b.cutR]), [['a', 0, 3, true, false], ['b', 7, 1, false, false]]);
+  assert.deepEqual(T.tdTimeline(L, 'bad'), []);
+});

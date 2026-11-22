@@ -13,6 +13,7 @@ async function load({detail = {}, gesture = false, list = [], session = () => JS
     if (p.endsWith('prj001A12')) return {resultCode: 0, resultData: {totalCnt: list.length, todoList: list}};
     if (p.endsWith('prj001A05')) return {resultCode: 0, resultData: {todoSeq: body.todoSeq, loginUserTodoOwnerYn: 'Y', loginUserTodoCreateYn: 'Y', ownerEmpSeq: '1', createEmpSeq: '1', prjSeq: '', todoName: '기존', startDate: '20261124', endDate: '20261124', contents: '메모', importDegree: '0', todoStatus: '0', processRate: 0, fileCount: 0, todoLevel: 1, ...detail}};
     if (p.endsWith('prj001A01')) return {resultCode: 0, resultData: 'td777'};
+    if (p.endsWith('prj001A09')) return {resultCode: 0, resultData: {}};
     if (p.endsWith('prj001A02') || p.endsWith('prj001A03') || p.endsWith('prj001A07')) return {resultCode: 0, resultData: {todoSeq: body.todoSeq, todoStatus: body.processRate === '100' ? '2' : '0'}};
     return {resultCode: 0, resultData: {}};
   };
@@ -23,7 +24,7 @@ async function load({detail = {}, gesture = false, list = [], session = () => JS
   const sandbox = {window, location: {origin: ORIGIN}, navigator: {userActivation: {isActive: gesture}}, sessionStorage: {getItem: () => session()}, performance: {now: () => 0}, Intl, Date, JSON, Promise, setTimeout, clearTimeout, Object, Array, String, Number, Set, Map, Math, Function, Error};
   vm.createContext(sandbox);
   vm.runInContext(src, sandbox);
-  return {api: window.BWYFGW, calls, writes: () => calls.filter(c => /prj001A0[1237]$/.test(c.p))};
+  return {api: window.BWYFGW, calls, writes: () => calls.filter(c => /prj001A0[12379]$/.test(c.p))};
 }
 
 test('ToDo 목록: 전체 기간으로 읽고 하위 ToDo를 children으로 정리', async () => {
@@ -42,7 +43,7 @@ test('ToDo 만들기: 하루짜리 기한은 시작=기한, 담당자는 나, �
   assert.equal(b.todoName, '결과 보고');
   assert.equal(b.startDate, '20261128');
   assert.equal(b.endDate, '20261128');
-  assert.equal(b.importDegree, '1');
+  assert.equal(b.importDegree, '2'); // 예전 important(참)는 그룹웨어 '중요'(2)
   assert.equal(b.ownerUserList[0].empSeq, '1');
   await api.todoCreate({title: '세부', parent: 'td5'});
   assert.ok(calls.some(c => c.p.endsWith('prj001A05') && c.body.todoSeq === 'td5'));
@@ -115,7 +116,7 @@ test('ToDo 주소는 읽기 전용 목록과 쓰기 목록에 알맞게 들어 �
   const {api} = await load();
   const ro = api.readOnlyEndpoints();
   assert.ok(ro.includes('/kiss/APIHandler/prj001A12') && ro.includes('/kiss/APIHandler/prj001A05'));
-  for (const w of ['prj001A01', 'prj001A02', 'prj001A03', 'prj001A07']) assert.ok(!ro.includes('/kiss/APIHandler/' + w));
+  for (const w of ['prj001A01', 'prj001A02', 'prj001A03', 'prj001A07', 'prj001A09']) assert.ok(!ro.includes('/kiss/APIHandler/' + w));
   await assert.rejects(api.call('/kiss/APIHandler/prj001A03', {todoSeq: 'td1'}), /허용 목록/);
 });
 
@@ -129,4 +130,54 @@ test('ToDo 만들기: 로그인 화면에서 먼저 실린 뒤 로그인해도 �
   who = {ucUserInfo: {...ME.ucUserInfo, empSeq: '2'}};
   await assert.rejects(api.todoCreate({title: '다른 사람'}), /로그인 정보가 바뀌었습니다/);
   assert.equal(writes().length, 1);
+});
+test('ToDo 고치기: 바꾸지 않은 긴급·중요·즉시는 그대로 보낸다(일반으로 바뀌지 않음)', async () => {
+  for (const imp of ['1', '2', '3']) {
+    const c = await load({detail: {importDegree: undefined}, list: [{todoSeq: 'td9', todoName: '기존', importDegree: imp, children: []}]});
+    await c.api.todoUpdate('td9', {title: '새 제목'});
+    assert.equal(c.writes()[0].body.importDegree, imp);
+  }
+  const c = await load();
+  await c.api.todoUpdate('td9', {importance: '3', dday: true});
+  assert.equal(c.writes()[0].body.importDegree, '3');
+  assert.equal(c.writes()[0].body.dDayYn, 'Y');
+  await assert.rejects(c.api.todoUpdate('td9', {importance: '7'}), /중요도/);
+});
+
+test('ToDo 만들기: 중요도 4단계·기간·D-day', async () => {
+  const {api, writes} = await load();
+  await api.todoCreate({title: '보고서', start: '2026-11-24', due: '2026-11-28', importance: '1', dday: true});
+  const b = writes()[0].body;
+  assert.equal(b.importDegree, '1');
+  assert.equal(b.startDate, '20261124');
+  assert.equal(b.endDate, '20261128');
+  assert.equal(b.dDayYn, 'Y');
+});
+
+test('진행률: 내가 담당자면 받은 ToDo·프로젝트 ToDo도 바꾸고, 담당자가 아니면 막는다', async () => {
+  const got = await load({detail: {createEmpSeq: '2', loginUserTodoCreateYn: 'N', prjSeq: 'P1', proccessYn: 'Y'}});
+  const r = await got.api.todoSetProgress('td9', 40);
+  assert.equal(r.rate, 40);
+  assert.equal(got.writes()[0].p, '/kiss/APIHandler/prj001A07');
+  assert.deepEqual(JSON.parse(JSON.stringify(got.writes()[0].body)), {prjSeq: 'P1', todoSeq: 'td9', processRate: '40'});
+  await got.api.todoSetDone('td9', true);
+  assert.equal(got.writes()[1].body.processRate, '100');
+  for (const detail of [{loginUserTodoOwnerYn: 'N'}, {ownerEmpSeq: '2'}, {proccessYn: 'N'}]) {
+    const no = await load({detail});
+    await assert.rejects(no.api.todoSetProgress('td9', 50), /담당자/);
+    assert.equal(no.writes().length, 0);
+  }
+  const bad = await load();
+  await assert.rejects(bad.api.todoSetProgress('td9', 101), /0~100/);
+  await assert.rejects(bad.api.todoSetProgress('td9', 12.5), /0~100/);
+});
+
+test('중요도만 바꾸기: 그룹웨어 화면과 같은 prj001A09, 내가 만든 개인 ToDo만(첨부가 있어도 됨)', async () => {
+  const c = await load({detail: {fileCount: 2, processRate: 30}});
+  await c.api.todoSetImportance('td9', '3');
+  assert.equal(c.writes()[0].p, '/kiss/APIHandler/prj001A09');
+  assert.deepEqual(JSON.parse(JSON.stringify(c.writes()[0].body)), {todoSeq: 'td9', importDegree: '3', processRate: '30'});
+  const other = await load({detail: {createEmpSeq: '2'}});
+  await assert.rejects(other.api.todoSetImportance('td9', '1'), /내가 만든/);
+  assert.equal(other.writes().length, 0);
 });

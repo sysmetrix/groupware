@@ -152,16 +152,21 @@ await stage('안전 규칙', async () => {
   for (const e of eps) if (/save|insert|update|delete|remove|submit|approve|send|regist|create|modify|apply/i.test(e)) fails.push(`읽기 전용 목록에 쓰기로 보이는 주소: ${e}`);
   // call('/주소', '/다른주소' ...) 처럼 인자가 오염된 호출 검출 (문자열 치환 사고 방지)
   for (const m of col.matchAll(/call\('(\/[\w/]+)',\s*'\//g)) fails.push('수집기 call 인자 오염: ' + m[1]);
-  // 쓰기 허용 목록은 자원 예약 한 개, 개인 ToDo 네 개(v1.17), 알림 읽음 표시 하나(v1.19.1)뿐이어야 한다
-  const WRITE_EXPECT = ['/schres/rs121A06', '/kiss/APIHandler/prj001A01', '/kiss/APIHandler/prj001A02', '/kiss/APIHandler/prj001A03', '/kiss/APIHandler/prj001A07', '/event/event02A03'];
+  // 쓰기 허용 목록은 자원 예약 한 개, 개인 ToDo 다섯 개(v1.17 네 개 + v1.20 중요도), 알림 읽음 표시 하나(v1.19.1)뿐이어야 한다
+  const WRITE_EXPECT = ['/schres/rs121A06', '/kiss/APIHandler/prj001A01', '/kiss/APIHandler/prj001A02', '/kiss/APIHandler/prj001A03', '/kiss/APIHandler/prj001A07', '/kiss/APIHandler/prj001A09', '/event/event02A03'];
   const wm = col.match(/const WRITE_ALLOWED = new Set\(\[([^\]]*)\]/);
   const wl = wm ? [...wm[1].matchAll(/'([^']+)'/g)].map(x => x[1]) : [];
-  if (wl.length !== WRITE_EXPECT.length || WRITE_EXPECT.some(e => !wl.includes(e))) fails.push('쓰기 허용 목록이 자원 예약·개인 ToDo 네 개·알림 읽음 표시가 아님: ' + wl.join(','));
+  if (wl.length !== WRITE_EXPECT.length || WRITE_EXPECT.some(e => !wl.includes(e))) fails.push('쓰기 허용 목록이 자원 예약·개인 ToDo 다섯 개·알림 읽음 표시가 아님: ' + wl.join(','));
   for (const e of eps) if (WRITE_EXPECT.includes(e)) fails.push('쓰기 주소가 읽기 전용 목록에 있음: ' + e);
-  // ToDo 고치기·완료·지우기는 반드시 내 ToDo 확인(todoOwned)을 거친다. 지우기는 사용자 동작이 있어야 한다.
-  for (const fn of ['todoUpdate', 'todoSetDone', 'todoDelete']) { const body = (col.match(new RegExp(`async function ${fn}\\([\\s\\S]*?\\n  }\\n`)) || [''])[0]; if (!/await todoOwned\(/.test(body)) fails.push(`${fn}가 내 ToDo 확인(todoOwned)을 거치지 않음`); }
+  // ToDo 고치기·중요도·지우기는 반드시 내 ToDo 확인(todoOwned)을 거친다. 지우기는 사용자 동작이 있어야 한다.
+  // 진행률·완료는 그룹웨어처럼 내가 담당자인 ToDo(받은 ToDo 포함)에서만: todoAssigned 확인(v1.20).
+  const fnBody = fn => (col.match(new RegExp(`async function ${fn}\\([\\s\\S]*?\\n  }\\n`)) || [''])[0];
+  for (const fn of ['todoUpdate', 'todoSetImportance', 'todoDelete']) if (!/await todoOwned\(/.test(fnBody(fn))) fails.push(`${fn}가 내 ToDo 확인(todoOwned)을 거치지 않음`);
+  if (!/await todoAssigned\(/.test(fnBody('todoSetProgress'))) fails.push('todoSetProgress가 담당자 확인(todoAssigned)을 거치지 않음');
+  if (!/await todoSetProgress\(/.test(fnBody('todoSetDone'))) fails.push('todoSetDone가 담당자 확인을 거치는 todoSetProgress를 쓰지 않음');
+  if (!/loginUserTodoOwnerYn !== 'Y' \|\| String\(d\.ownerEmpSeq\) !== String\(ctx\.empSeq\)/.test(fnBody('todoAssigned'))) fails.push('todoAssigned가 담당자를 확인하지 않음');
   if (!/async function todoDelete\([^)]*\) \{\n\s*if \(!\(navigator\.userActivation/.test(col)) fails.push('todoDelete가 사용자 동작 확인 없이 실행될 수 있음');
-  for (const m of col.matchAll(/transport\(\s*(TODO_P \+ '[^']+'|'[^']+')/g)) { const p = m[1].replace(/TODO_P \+ '([^']+)'/, '/kiss/APIHandler/$1').replace(/'/g, ''); if (/prj001A0[1237]/.test(p)) fails.push('ToDo 쓰기 주소를 todoWrite 밖에서 부름: ' + p); }
+  for (const m of col.matchAll(/transport\(\s*(TODO_P \+ '[^']+'|'[^']+')/g)) { const p = m[1].replace(/TODO_P \+ '([^']+)'/, '/kiss/APIHandler/$1').replace(/'/g, ''); if (/prj001A0[12379]/.test(p)) fails.push('ToDo 쓰기 주소를 todoWrite 밖에서 부름: ' + p); }
   const eng = await read('src/live/wc/19-draft-engine.js');
   const deny = (eng.match(/const DENY_BTN = .*/) || [''])[0];
   for (const w of ['상신', '결재', '임시저장', '삭제', '발송']) if (!deny.includes(w)) fails.push(`비가역 버튼 차단 목록에 '${w}' 없음`);
