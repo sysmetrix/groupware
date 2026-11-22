@@ -12,6 +12,21 @@
       } else refresh({silent: true});
     }, m * 60_000); // 보이지 않는 탭은 알림을 켠 경우에만 조회 + 멀티탭 중복 수집 방지
   }
+  // v1.19.2: 작업 중이라 미뤄 둔 새 자료는 입력 칸·처리 창·명령창에서 손을 뗀 뒤 잠깐(약 2초) 조용하면 알아서 반영한다.
+  // 전에는 "지금 반영"을 직접 눌러야만 띠가 사라졌다. 버튼은 바로 보고 싶을 때만 쓰면 된다.
+  let pendingIdleAt = 0;
+  function applyPendingRefresh() {
+    applyDeferredBudgetInvalidation();
+    if (S.pendingReanalyze && S.raw) reanalyze(); // 다른 탭에서 바뀐 숨김·미루기·할 일을 반영
+    S.pendingRefresh = false; S.pendingReanalyze = false; pendingIdleAt = 0;
+    render();
+  }
+  function autoApplyPending() {
+    if (!S.open || !S.pendingRefresh || S.loading || isUserBusy()) { pendingIdleAt = 0; return; }
+    if (!pendingIdleAt) { pendingIdleAt = Date.now(); return; }
+    if (Date.now() - pendingIdleAt >= 1500) applyPendingRefresh();
+  }
+  const pendingTimer = setInterval(autoApplyPending, 1000);
   const onDocKey = e => {
     if (e.altKey && e.code === 'KeyG') { e.preventDefault(); e.stopPropagation(); S.open ? close() : open(); return; }
     if (S.open) handleKey(e);

@@ -296,7 +296,7 @@
         clearTimeout(storageTimer);
         storageTimer = setTimeout(() => { if (S.raw) reanalyze(); render(); }, 200);
       } else { if (S.raw) reanalyze(); render(); }
-    } else S.pendingRefresh = true;
+    } else { S.pendingRefresh = true; S.pendingReanalyze = true; }
   };
   window.addEventListener('storage', onStorage);
 
