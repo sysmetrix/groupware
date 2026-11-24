@@ -1297,12 +1297,23 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .ntf-time{font-size:13px;color:var(--muted);text-align:right;white-space:nowrap}
 .wc .ntf-acts{display:flex;gap:4px;justify-content:flex-end}
 @container (max-width:680px){.wc .ntf-row{grid-template-columns:minmax(0,1fr) auto}.wc .ntf-type,.wc .ntf-time{display:none}}
-/* 보고·현황: 구획 제목 옆에 그 구획의 동작 */
-.wc .rp-sec+.rp-sec{margin-top:28px}
-.wc .rp-h{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 16px;margin:0 0 10px}
-.wc .rp-h h2{margin:0}
-.wc .rp-h .acts{margin:0}
-.wc .rp-frame{display:block;width:100%;height:clamp(420px,70vh,760px);border:1px solid var(--line);border-radius:8px;background:#fff}
+/* 보고 작업: 넓을 때 초안 옆에 요약, 좁을 때 세로로 */
+.wc .rp-layout{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,4fr);align-items:start;gap:16px}
+.wc .rp-sec{min-width:0;border:1px solid var(--line);border-radius:12px;padding:16px;background:var(--card)}
+.wc .rp-h,.wc .rp-dates{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.wc .rp-h :is(p,h2),.wc .rp-h .acts,.wc .rp-range .acts{margin:0}
+.wc .rp-h p{color:var(--muted);font-size:13px;margin-top:4px}
+.wc .rp-range{padding:12px;margin:12px 0;background:var(--soft);border-radius:8px}
+.wc .rp-dates{justify-content:start;align-items:end;margin-top:8px}
+.wc .rp-dates label{display:grid;gap:4px;font-size:13px}.wc .rp-dates input{min-width:0;max-width:100%}
+.wc #wkStatus{margin:8px 0 0}.wc #wkStatus:empty{margin:0}
+.wc .rp-editor textarea{width:100%;min-height:210px;resize:vertical;margin-top:8px;line-height:1.7}
+.wc .rp-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:12px 0}
+.wc .rp-metrics div{display:grid;gap:3px;background:var(--soft);padding:8px;border-radius:6px;color:var(--muted);font-size:12px}
+.wc .rp-metrics b{color:var(--fg);font-size:19px;font-variant-numeric:tabular-nums}
+.wc #briefDetails summary{cursor:pointer;padding:8px;font-weight:650}
+.wc .rp-frame{display:block;width:100%;height:clamp(280px,48vh,560px);border:1px solid var(--line)}
+@container (max-width:960px){.wc .rp-layout{grid-template-columns:minmax(0,1fr)}}
 /* 예산: 월별 집행을 아직 안 불렀으면 좁은 칸 */
 .wc .budget-cards:has(.bm-empty){grid-template-columns:minmax(0,2fr) minmax(220px,1fr)}
 @container (max-width:760px){.wc .budget-cards:has(.bm-empty){grid-template-columns:minmax(0,1fr)}}
