@@ -191,12 +191,7 @@
     }
     el.scrollTop = scroll;
     if (S.view === 'notifications' && NTF.items === null && !NTF.loading && !NTF.error) { loadNotifications(); return; }
-    // v1.9.0: 내려받기용 브리핑을 GW 비서 글꼴·색으로 보여 주고, 틀 안 스크롤 없이 내용 높이만큼 펼친다(스크립트는 여전히 막힘)
-    if (S.view === 'report') { const f = $('#briefFrame'); if (f) {
-      const cs = getComputedStyle(wcEl), v = n => cs.getPropertyValue(n).trim();
-      const skin = `<style>:root{--bg:transparent;--card:transparent;--fg:${v('--fg')};--muted:${v('--muted')};--line:${v('--line')};--accent:${v('--accent')};--hi:${v('--hi')};--md:${v('--md')};--ok:${v('--ok')};color-scheme:${wcEl.classList.contains('dark') ? 'dark' : 'light'}}html{overflow:hidden;background:${getComputedStyle(el).backgroundColor}}body{background:transparent;font-family:"Pretendard Variable",Pretendard,"Malgun Gothic",system-ui,sans-serif}main{max-width:none;padding:0 0 8px}h1{display:none}h2{font-size:15px}.card,table{border-radius:8px}.pill{border:0;padding:1px 0;margin-right:8px;font-weight:600}.pill.new{color:var(--muted)}</style>`;
-      f.onload = () => { try { f.style.height = Math.max(200, f.contentDocument.documentElement.scrollHeight + 4) + 'px'; } catch {} };
-      f.srcdoc = briefExportHtml().replace('</head>', skin + '</head>'); } }
+    if (S.view === 'report') renderBriefFrame();
     if (S.view === 'budget' && !S.budget.table && !S.budget.busy) loadBudget();
     if (S.view === 'attendance' && !S.att.rows && !S.att.busy && !S.att.error) loadAttendance();
     if (S.view === 'attendance' && GW.teamPlanned) loadApps().catch(() => {});

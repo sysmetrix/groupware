@@ -280,8 +280,9 @@
       case 'richBrief': copyRich(briefHtml(), briefExportText()); break;
       case 'csvQueue': download(`할일목록_${today()}.csv`, R.toCsv(queue(), csvCols), 'text/csv;charset=utf-8'); break;
       case 'mkWeekly': makeWeekly(); break;
-      case 'richWeekly': { const text = weeklyExportText(); copyRich(weeklyHtml(text), text); break; }
-      case 'dlWeekly': download(`주간업무실적_${today()}.txt`, weeklyExportText()); break;
+      case 'wkPreset': reportPreset(v); break;
+      case 'richWeekly': { if (!S.weekly.trim()) { toast('복사할 초안이 없습니다.'); break; } const text = weeklyExportText(); copyRich(weeklyHtml(text), text); break; }
+      case 'dlWeekly': if (S.weekly.trim()) download(`주간업무실적_${today()}.txt`, weeklyExportText()); else toast('저장할 초안이 없습니다.'); break;
       case 'budgetRowAdd': budgetRowAdd(); break;
       case 'budgetRowDel': budgetRowDel(Number(el.dataset.i)); break;
       case 'cleanSynap': {
@@ -361,10 +362,17 @@
     else if (t.id === 'notificationsQuery') { NTF.query = t.value; }
     else if (t.id === 'sq') { S.search.kw = t.value; }
     else if (t.id === 'dfq') { dfState().kw = t.value; }
+    else if (t.id === 'wkFrom' || t.id === 'wkTo') { const w = reportState(); w.range[t.id === 'wkFrom' ? 'from' : 'to'] = t.value; if (!w.busy) reportStatus(w, ''); }
     else if (t.id === 'weekly') { const shown = t.dataset.prev ?? t.defaultValue; if (S.weekly && S.weekly !== shown) store.set('weeklyRecovery', {at: Date.now(), text: S.weekly}); /* 다른 탭에서 바뀐 초안을 덮기 전에 보관 */ S.weekly = t.value; t.dataset.prev = t.value; const saved = saveLocal(); const w = $('#wkSaved'); if (w) { w.classList.toggle('on', saved); w.textContent = saved ? '이 브라우저에 저장됨' : '저장 실패 · 내용을 복사하세요'; } }
     else if (t.id === 'palq') palRender(t.value);
   });
   root.addEventListener('compositionend', e => { const t = e.composedPath()[0]; if (t.id === 'peopleFilter') { PEOPLE.localFilter = t.value; peopleFilterRows(); return; } if (t.id === 'qfilter') { S.filter.q = t.value; refreshQueue(); } else if (t.id === 'dfIn') { dfState().filter.q = t.value; dfRefreshList(); } });
+  root.addEventListener('toggle', e => {
+    const d = e.target;
+    if (d.id !== 'briefDetails' || !d.isConnected) return;
+    reportState().details = d.open;
+    if (d.open && !$('#briefFrame')) { d.lastElementChild.innerHTML = briefFrame(); renderBriefFrame(); }
+  }, true);
   root.addEventListener('change', e => {
     const t = e.composedPath()[0];
     if (t.id && t.id.startsWith('df') && dfChange(t)) return;

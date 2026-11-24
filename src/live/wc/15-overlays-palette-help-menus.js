@@ -1,7 +1,7 @@
 // GW 비서 · overlays: palette, help, menus
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
   // ---------- overlays: palette, help, menus ----------
-  let palItems = [], palIndex = 0, lastOverlayFocus = null, weeklyRequestSeq = 0;
+  let palItems = [], palIndex = 0, lastOverlayFocus = null, report;
   const dispTitle = x => R.cleanTitle((x && x.title) || '');
   function openPalette(q = '') {
     lastOverlayFocus = root.activeElement;
@@ -25,7 +25,7 @@
     add('근태신청', '출장·휴가·대체', () => openUrl(GW.links.route(GW.routes.attendanceRequest), {title: '근태신청'}), '휴가 출장');
     add('근태 지난달 보기', '근태·연차', () => { if (!go('attendance')) return; const p = R.kstNow(new Date()); const d = new Date(Date.UTC(p.y, p.m - 2, 1)); loadAttendance(`${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}`); });
     for (const p of S.settings.budget) add(`예산 ${p.project} ${p.filter || ''}`, p.label || '예산 집행', () => { if (!go('budget')) return; S.budget.mode = 'detail'; S.budget.project = p.project; S.budget.filter = p.filter || ''; S.budget.table = null; renderMain(); });
-    add('주간 업무 실적 초안', '보고서', () => { if (go('report')) makeWeekly(); }, '보고');
+    add('주간 업무 실적 초안', '보고서', () => { if (go('report')) $('#wkFrom')?.focus(); }, '보고');
     add('오늘 브리핑 한글용 복사', '보고서', () => copyRich(briefHtml(), R.renderMarkdown(S.a)));
     add('새로 만들기', '기안·신청·메일 메뉴', () => openMenu('new', root.querySelector('[data-act=menuNew]')), '기안 작성 신청');
     add('결과보고 작성', '내 계획서에서 이어서', () => openResultPlanPicker(), '결과 보고 기안');
@@ -219,41 +219,60 @@
       }
     } catch (err) { if (!current()) return; if (out) out.innerHTML = `<p class="err">${esc(err.message)}</p>`; else toast('문서 검색 실패: ' + err.message); }
   }
+  function reportRange(preset, now = new Date()) {
+    const {y,m,d} = R.kstNow(now), base = Date.UTC(y,m-1,d), dow = new Date(base).getUTCDay() || 7;
+    const iso = offset => new Date(base + offset * 86400000).toISOString().slice(0,10);
+    return {from: iso(preset === 'last' ? -dow-6 : preset === 'recent' ? -6 : 1-dow), to: iso(preset === 'last' ? -dow-2 : 0)};
+  }
+  function reportState() {
+    if (!report || report.owner !== currentKey) report = {owner: currentKey, range: reportRange('week'), note: '', busy: false};
+    return report;
+  }
+  function reportPreset(v) {
+    const w = reportState();
+    w.range = reportRange(v);
+    $('#wkFrom').value = w.range.from; $('#wkTo').value = w.range.to;
+    if (!w.busy) reportStatus(w, '');
+  }
+  function reportStatus(w, note) {
+    w.note = note;
+    if (S.view !== 'report') return;
+    const status = $('#wkStatus'), b = root.querySelector('[data-act="mkWeekly"]');
+    if (status) status.textContent = note;
+    if (b) { b.disabled = w.busy; b.textContent = w.busy ? '조회 중…' : '이 기간으로 초안 만들기'; }
+  }
   async function makeWeekly() {
-    if (S.weekly && S.weekly.trim() && !confirm('지금 초안을 고친 내용이 있으면 사라집니다. 새로 만들까요?\n(필요하면 먼저 복사해 두세요)')) return;
-    // 기간: 이번 주(월~오늘) · 지난주(월~금) · 최근 7일 · 직접(11/2~11/6)
-    const pv = await askText('주간 업무 실적 초안', '기간 (이번 주 / 지난주 / 최근 7일 / 11/2~11/6)', S.settings.weeklyPeriod || (new Date(Date.now() + 9 * 3600000).getUTCDay() === 1 ? '지난주' : '이번 주'));
-    if (pv === null) return;
-    const k = R.kstNow(new Date()), base = new Date(Date.UTC(k.y, k.m - 1, k.d)), dow = base.getUTCDay() || 7;
-    const ymdU = dt => `${dt.getUTCFullYear()}${String(dt.getUTCMonth() + 1).padStart(2, '0')}${String(dt.getUTCDate()).padStart(2, '0')}`;
-    const add = n => new Date(base.getTime() + n * 86400000);
-    let range = null; const p = pv.replace(/\s+/g, '');
-    const mm = p.match(/(\d{1,2})[./](\d{1,2})~(\d{1,2})[./](\d{1,2})/);
-    if (mm) range = {from: `${k.y}${mm[1].padStart(2, '0')}${mm[2].padStart(2, '0')}`, to: `${k.y}${mm[3].padStart(2, '0')}${mm[4].padStart(2, '0')}`};
-    else if (/지난주|저번주/.test(p)) range = {from: ymdU(add(-dow - 6)), to: ymdU(add(-dow - 2))};
-    else if (/최근/.test(p)) range = {from: ymdU(add(-6)), to: ymdU(base)};
-    else if (/이번주|금주|^$/.test(p)) range = {from: ymdU(add(1 - dow)), to: ymdU(base)};
-    else { toast('기간을 알아보지 못했습니다. 예) 이번 주, 지난주, 최근 7일, 11/2~11/6'); return; }
-    
-    const validDay = s => { const y = +s.slice(0, 4), m = +s.slice(4, 6), d = +s.slice(6, 8), dt = new Date(Date.UTC(y, m - 1, d)); return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d; };
-    if (!validDay(range.from) || !validDay(range.to) || range.from > range.to) { toast('기간의 날짜와 순서를 확인해 주세요.'); return; }
-    const owner = currentKey, original = S.weekly, requestSeq = ++weeklyRequestSeq;
-    toast(`${range.from.slice(4, 6)}/${range.from.slice(6)}~${range.to.slice(4, 6)}/${range.to.slice(6)} 자료를 읽는 중…`);
+    const w = reportState(), {from, to} = w.range;
+    if (w.busy) return;
+    const valid = d => /^\d{4}-\d{2}-\d{2}$/.test(d) && Number.isFinite(Date.parse(d)) && new Date(d).toISOString().startsWith(d);
+    if (!valid(from) || !valid(to) || from > to) { reportStatus(w, '시작일과 종료일을 날짜 순서에 맞게 입력하세요.'); return; }
+    if (to > reportRange('week').to) { reportStatus(w, '종료일은 오늘까지 선택할 수 있습니다.'); return; }
+    const range = {from: from.replaceAll('-', ''), to: to.replaceAll('-', '')};
+    const original = S.weekly;
+    if (original.trim() && !confirm('기존 초안을 새로 만들까요? 현재 초안은 조회에 성공한 뒤 복구본으로 보관합니다.')) return;
+    const current = () => reportState() === w && getUserKey() === w.owner;
+    w.busy = true; reportStatus(w, '선택한 기간의 상신·접수 자료를 읽고 있습니다.');
     try {
       const [sub0, hist] = await Promise.all([GW.submittedRange({from: range.from, to: range.to, size: 100}), loadRouting()]);
-      const sub = {...sub0, docs: (sub0.docs || []).filter(dd => { const dt = String(dd.date || '').replace(/\D/g, '').slice(0, 8); return !dt || (dt >= range.from && dt <= range.to); })};
+      if (!current()) return;
+      const sub = {...sub0, docs: sub0.docs.filter(dd => { const dt = String(dd.date || '').replace(/\D/g, '').slice(0, 8); return !dt || (dt >= range.from && dt <= range.to); })};
       const me = S.raw.principal.name;
-      const receipts = (hist ? hist.dept : []).filter(r => String(r.toEmp).replace(/\s/g, '') === String(me).replace(/\s/g, '') && String(r.date).replace(/-/g, '').slice(0, 8) >= sub.from && String(r.date).replace(/-/g, '').slice(0, 8) <= sub.to);
-      if (requestSeq !== weeklyRequestSeq || currentKey !== owner || S.weekly !== original) { if (requestSeq === weeklyRequestSeq) toast('조회 중 계정이나 초안이 변경되어 덮어쓰지 않았습니다.'); return; }
+      const receipts = (Array.isArray(hist?.dept) ? hist.dept : []).filter(r => String(r.toEmp).replace(/\s/g, '') === String(me).replace(/\s/g, '') && String(r.date).replace(/-/g, '').slice(0, 8) >= sub.from && String(r.date).replace(/-/g, '').slice(0, 8) <= sub.to);
+      if (S.weekly !== original || w.range.from !== from || w.range.to !== to) { reportStatus(w, '조회 중 기간이나 초안이 바뀌어 기존 글을 유지했습니다.'); return; }
       const notes = [`상신 ${sub.docs.length}건${sub.docs.length >= 100 ? ' (최대 100건 조회)' : ''}`];
       const routingPartial = !hist || !Array.isArray(hist.dept) || (hist.from && hist.from > range.from) || (hist.to && hist.to < range.to) || (typeof routingFailedRecently === 'function' && routingFailedRecently());
       notes.push(routingPartial ? '접수 이력은 조회되지 않았거나 기간이 일부여서 접수 실적이 일부일 수 있음' : `접수 ${receipts.length}건`);
       notes.push('원본과 대조 필요');
       const draft = R.weeklyReport({submitted: sub.docs, receipts, me: `${S.raw.principal.deptName} ${me}`, from: sub.from, to: sub.to, extraLines: typeof todoWeeklyFor === 'function' ? todoWeeklyFor(sub.from, sub.to) : []});
+      if (original.trim() && !store.set('weeklyRecovery', {at: Date.now(), text: original})) {
+        reportStatus(w, '복구본을 저장할 수 없어 기존 초안을 유지했습니다.'); return;
+      }
       S.weekly = `[자료 범위: ${notes.join(' · ')}]\n[자료 조회 기준: ${reportCollectedAt(new Date())}]\n[보고 기간: ${range.from} ~ ${range.to}]\n\n` + draft;
-      if (!saveLocal()) toast('초안 저장에 실패했습니다. 내용을 복사해 보관하세요.');
-    } catch (err) { if (requestSeq === weeklyRequestSeq) toast('주간 초안을 만들지 못했습니다: ' + err.message); }
-    if (requestSeq === weeklyRequestSeq && S.view === 'report') renderMain();
+      if (!saveLocal()) { S.weekly = original; reportStatus(w, '저장할 수 없어 기존 초안을 유지했습니다.'); return; }
+      w.note = '초안을 만들었습니다. 내용을 확인하고 편집하세요.';
+      if (S.view === 'report') { w.busy = false; const active = root.activeElement?.id; renderMain(); $(active === 'wkFrom' || active === 'wkTo' ? '#' + active : '#weekly')?.focus({preventScroll: true}); }
+    } catch (err) { if (current()) reportStatus(w, '자료를 읽지 못했습니다. 기존 초안은 그대로입니다.'); }
+    finally { if (current()) { w.busy = false; reportStatus(w, w.note); } }
   }
 
 

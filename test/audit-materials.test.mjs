@@ -90,9 +90,11 @@ test('budget actual and forecast stay separate and missing plans do not become z
 test('report copy and exports preserve scope, as-of time and coverage warnings', () => {
   const S = {weekly: '[자료 범위: 접수 미조회]\n[자료 조회 기준: 2026-11-24 12:00 KST]\n[보고 기간: 20261121 ~ 20261124]\n초안', a: {collectedAt: '2026-11-24T03:00:00Z', sessionExpired: true, summary: {}, failed: [{name: '<메일>&'}]}};
   const R = {weeklyDraftPeriod, renderHtml: () => '<h1>그룹웨어 업무 브리핑</h1>', renderMarkdown: () => '# 브리핑'};
-  const api = runInNewContext(section('12-report-settings.js', '  // ----- 설정') + '\n({vReport, weeklyExportText, briefHtml, briefExportText, briefExportHtml});', {...html, S, R, store: {get: () => null}, mineVisible: () => [], fmtDays: () => '-'});
+  const api = runInNewContext(section('12-report-settings.js', '  // ----- 설정') + '\n({vReport, weeklyExportText, briefHtml, briefExportText, briefExportHtml});', {...html, S, R, store: {get: () => null}, reportState: () => ({range: {from: '2026-11-21', to: '2026-11-24'}}), mineVisible: () => [], fmtDays: () => '-'});
   assert.match(api.vReport(), /주간 초안 복사.*브리핑 요약 복사/s);
   assert.match(api.vReport(), /그룹웨어에는 제출되지 않습니다/);
+  assert.match(api.vReport(), /id="wkFrom"[^>]+2026-11-21/);
+  assert.doesNotMatch(api.vReport(), /<iframe/);
   assert.equal(api.weeklyExportText(), S.weekly);
   S.weekly = '메모만 있는 옛 초안';
   assert.match(api.weeklyExportText(), /보고 기간: 확인 불가.*자료 조회 기준: 확인 불가.*자료 범위: 확인 불가/s);
