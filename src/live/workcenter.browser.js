@@ -9,13 +9,13 @@
  */
 (() => {
   'use strict';
-  const VERSION = '1.20.3';
+  const VERSION = '1.20.4';
   let api = null;
   const lazy = {
     version: VERSION,
     open() { if (!api) api = boot(); api.open(); },
     // Extension: create the launcher button only (the work center opens when the user clicks it).
-    mount() { if (!api) { api = boot(); api.refresh({silent: true}).catch(() => {}); } return true; },
+    mount() { if (!api) { api = boot(); if (new URLSearchParams(location.search).has('gw-view')) api.open(); else api.refresh({silent: true}).catch(() => {}); } return true; },
     close() { if (api) api.close(); },
     destroy() { if (api) api.destroy(); api = null; },
     refresh() { if (!api) api = boot(); return api.refresh(); },

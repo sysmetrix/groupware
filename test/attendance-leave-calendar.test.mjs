@@ -5,7 +5,9 @@ import vm from 'node:vm';
 
 const attendance = readFileSync(new URL('../src/live/wc/11-attendance.js', import.meta.url), 'utf8');
 const overlays = readFileSync(new URL('../src/live/wc/15-overlays-palette-help-menus.js', import.meta.url), 'utf8');
-const makeWeeklyCode = 'let weeklyRequestSeq = 0;\n' + overlays.slice(overlays.indexOf('  async function makeWeekly()'));
+const report = readFileSync(new URL('../src/live/wc/12-report-settings.js', import.meta.url), 'utf8');
+const reportTimeCode = report.slice(report.indexOf('  function reportCollectedAt'), report.indexOf('  function briefCoverage'));
+const makeWeeklyCode = reportTimeCode + 'let weeklyRequestSeq = 0;\n' + overlays.slice(overlays.indexOf('  async function makeWeekly()'));
 
 function attendanceHtml(history) {
   const S = {raw: {data: {attendance: {overtime: {me: 'me', apps: [], days: []}, today: {}, month: {}}, leave: {year: 2026, history}}}, att: {month: '202611', rows: [], day: '', error: false, busy: false}, a: {actions: [], today: {isWorkday: true}}};

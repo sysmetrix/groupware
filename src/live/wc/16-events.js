@@ -17,6 +17,10 @@
       }
     }
     if (!actEl) return;
+    if (act === 'view' && actEl.matches('a[href]')) {
+      if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+      e.preventDefault();
+    }
     if (typeof usageNote === 'function') { usageNote('act', act); setTimeout(usageViewCheck, 0); } // 이름과 횟수만 센다(40-usage.js)
     const el = actEl;
     if (act === 'closeOverlay' && hasStop && !actEl.closest('[data-stop]')) return;
@@ -68,7 +72,7 @@
     case 'resCheck': resCheck(); break;
     case 'resBook': resBook(e); break;
     case 'resCancelForm': resCancelForm(); break;
-    case 'resReload': { const s = resState(); s.err = ''; s.list = null; s.bookings = null; renderMain(); resLoad(true); break; }
+    case 'resReload': resReload(); break;
     case 'openAi': openAi(); break;
     case 'aiSetup': aiSetup(); break;
     case 'aiSaveKey': aiSaveKey(); break;
@@ -271,13 +275,13 @@
       case 'attMonth': loadAttendance(v); break;
       case 'attDay': S.att.day = S.att.day === v ? '' : v; renderMain(); break;
       case 'csvAtt': download(`근태_${S.att.month}.csv`, R.toCsv(S.att.rows, [{label: '날짜', value: r => ymd8(r.date)}, {label: '근무유형', key: 'workType'}, {label: '출결', key: 'result'}, {label: '근태항목', key: 'item'}, {label: '상태', key: 'status'}, {label: '출근', value: r => hm4(r.come)}, {label: '퇴근', value: r => hm4(r.leave)}, {label: '인정(분)', key: 'recognizedMin'}]), 'text/csv;charset=utf-8'); break;
-      case 'dlBrief': download(`그룹웨어_브리핑_${today()}.html`, R.renderHtml(S.a), 'text/html;charset=utf-8'); break;
-      case 'printBrief': { const w = window.open('', '_blank'); if (w) { w.document.write(R.renderHtml(S.a)); w.document.close(); setTimeout(() => w.print(), 400); } break; }
-      case 'richBrief': copyRich(briefHtml(), R.renderMarkdown(S.a)); break;
+      case 'dlBrief': download(`그룹웨어_브리핑_${today()}.html`, briefExportHtml(), 'text/html;charset=utf-8'); break;
+      case 'printBrief': { const w = window.open('', '_blank'); if (w) { w.document.write(briefExportHtml()); w.document.close(); setTimeout(() => w.print(), 400); } break; }
+      case 'richBrief': copyRich(briefHtml(), briefExportText()); break;
       case 'csvQueue': download(`할일목록_${today()}.csv`, R.toCsv(queue(), csvCols), 'text/csv;charset=utf-8'); break;
       case 'mkWeekly': makeWeekly(); break;
-      case 'richWeekly': copyRich(weeklyHtml(S.weekly), S.weekly); break;
-      case 'dlWeekly': download(`주간업무실적_${today()}.txt`, S.weekly); break;
+      case 'richWeekly': { const text = weeklyExportText(); copyRich(weeklyHtml(text), text); break; }
+      case 'dlWeekly': download(`주간업무실적_${today()}.txt`, weeklyExportText()); break;
       case 'budgetRowAdd': budgetRowAdd(); break;
       case 'budgetRowDel': budgetRowDel(Number(el.dataset.i)); break;
       case 'cleanSynap': {
@@ -356,6 +360,7 @@
     else if (t.id === 'peopleQuery') { PEOPLE.query = t.value; }
     else if (t.id === 'notificationsQuery') { NTF.query = t.value; }
     else if (t.id === 'sq') { S.search.kw = t.value; }
+    else if (t.id === 'dfq') { dfState().kw = t.value; }
     else if (t.id === 'weekly') { const shown = t.dataset.prev ?? t.defaultValue; if (S.weekly && S.weekly !== shown) store.set('weeklyRecovery', {at: Date.now(), text: S.weekly}); /* 다른 탭에서 바뀐 초안을 덮기 전에 보관 */ S.weekly = t.value; t.dataset.prev = t.value; const saved = saveLocal(); const w = $('#wkSaved'); if (w) { w.classList.toggle('on', saved); w.textContent = saved ? '이 브라우저에 저장됨' : '저장 실패 · 내용을 복사하세요'; } }
     else if (t.id === 'palq') palRender(t.value);
   });

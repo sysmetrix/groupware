@@ -31,7 +31,7 @@ test('머리글 종은 통합알림 팝업을 열고, 숫자도 통합알림의 
 });
 test('왼쪽 메뉴: 읽히는 이름이 보이는 메뉴 이름으로 시작하고 숫자 배지는 따로 읽히지 않는다', () => {
   const src = read('wc/05-views.js');
-  assert.match(src, /aria-label="\$\{esc\(v\.label\)\}/);
+  assert.match(src, /aria-label="\$\{esc\(v\.label \+ /);
   assert.match(src, /<span class="n [^`]*aria-hidden="true">/);
   assert.doesNotMatch(src, /tip: '퇴근 지문 확인'\}/);
 });
@@ -79,7 +79,8 @@ test('v1.10.0: 글자 크기 설정은 화면 전체 배율로, 분할창 끌기
 
 test('v1.10.0: 메뉴로 화면을 바꾸면 포커스를 같은 메뉴에 돌려주고 화면 이름을 읽어 준다', () => {
   const v = read('wc/05-views.js');
-  assert.match(v, /fromNav = !!\(root\.activeElement/);
+  assert.match(v, /fromNav = active\?\.closest\('#nav a'\)/);
+  assert.match(v, /if \(fromNav\).*focus\(\{preventScroll: true\}\)/);
   assert.match(v, /\$\('#srAnnounce'\)/);
   assert.match(read('wc/02-shell.js'), /<div class="vh" id="srAnnounce" role="status" aria-live="polite"><\/div>/);
 });

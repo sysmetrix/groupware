@@ -10,19 +10,51 @@
   // 메뉴에 따로 두지 않고 상위 화면 안의 탭으로 들어가는 화면(기능은 그대로, 메뉴만 합침).
   const VIEW_PARENT = {board: 'today', mytodo: 'today', resource: 'calendar', gcal: 'calendar', gsync: 'calendar', docs: 'search', overview: 'report'};
   const navView = () => VIEW_PARENT[S.view] || S.view;
+  const viewUrl = v => { const url = new URL(location.href); url.searchParams.set('gw-view', v); return url.href; };
+  const linkedView = () => VIEWS.find(v => v.id === new URLSearchParams(location.search).get('gw-view'))?.id;
+  function viewAvailable(v) {
+    return v !== 'resource' ? !['gcal', 'gsync'].includes(v) || allowed('googleCalendar') : allowed('resource');
+  }
+  function normalizeTabs(el) {
+    for (const group of el.querySelectorAll('[role="tablist"]')) {
+      const tabs = [...group.querySelectorAll('[role="tab"]')];
+      const first = tabs.find(t => t.getAttribute('aria-selected') === 'true' && !t.disabled) || tabs.find(t => !t.disabled);
+      for (const t of tabs) t.tabIndex = t === first ? 0 : -1;
+    }
+  }
   function viewTabs() {
     const tab = (id, label, n) => `<button role="tab" aria-selected="${S.view === id}" class="${S.view === id ? 'on' : ''}" data-act="view" data-v="${id}">${label}${n ? `<span class="c">${n}</span>` : ''}</button>`;
     const p = navView();
-    if (p === 'today') return `<div class="vtabs"><div class="seg" role="tablist" aria-label="할 일 보기 방식">${tab('today', '그룹웨어 업무')}${tab('mytodo', '내 할 일', typeof TD === 'object' && TD.list && typeof R.tdSummary === 'function' ? R.tdSummary(TD.list).total : 0)}${tab('board', '보드', boardCount())}</div></div>`;
-    if (p === 'calendar') return `<div class="vtabs"><div class="seg" role="tablist" aria-label="일정 및 예약">${tab('calendar', '그룹웨어 일정')}${allowed('resource') ? tab('resource', '자원 예약') : ''}${allowed('googleCalendar') ? tab('gcal', '구글 일정') + tab('gsync', '구글 동기화') : ''}</div></div>`;
-    if (p === 'search') return `<div class="vtabs"><div class="seg" role="tablist" aria-label="검색 방식">${tab('search', '통합검색')}${tab('docs', '문서 찾기 (기안·접수·발송)')}</div></div>`;
+    if (p === 'today') return `<div class="vtabs"><div class="seg" role="tablist" aria-label="할 일 보기 방식">${tab('today', '그룹웨어 처리·확인', mineVisible().length)}${tab('mytodo', '개인 ToDo', typeof TD === 'object' && TD.list && typeof R.tdSummary === 'function' ? R.tdSummary(TD.list).total : 0)}${tab('board', '계획 보드 보기')}</div></div>`;
+    if (p === 'calendar') return `<div class="vtabs"><div class="seg" role="tablist" aria-label="일정 및 예약">${tab('calendar', '그룹웨어 일정')}${allowed('resource') ? tab('resource', '자원 예약') : ''}${allowed('googleCalendar') ? tab('gcal', '구글 일정') : ''}</div>${allowed('googleCalendar') ? `<div class="seg" role="group" aria-label="연동 관리"><a class="btn sm ${S.view === 'gsync' ? 'on' : ''}" href="${esc(viewUrl('gsync'))}" ${S.view === 'gsync' ? 'aria-current="page"' : ''} data-act="view" data-v="gsync">${ic('gear')}구글 연동 관리</a></div>` : ''}</div>`;
+    if (p === 'search') return `<div class="vtabs"><div class="seg" role="tablist" aria-label="검색 방식">${tab('search', '통합검색 (여러 자료)')}${tab('docs', '결재문서 찾기 (기안·접수·발송)')}</div></div>`;
     if (p === 'report') return `<div class="vtabs"><div class="seg" role="tablist" aria-label="보고 및 현황">${tab('report', '보고서')}${tab('overview', '현황 차트')}</div></div>`;
     return '';
   }
   // Charts: shown on big screens, folded on laptops unless the user chose otherwise.
   const showCharts = () => S.settings.showCharts ?? (window.innerHeight >= 860 && window.innerWidth >= 1500);
   // v1.10.0: 메뉴를 다시 그리면 키보드 포커스가 사라져 화면낭독기 사용자가 위치를 잃었다. 같은 메뉴로 포커스를 돌려 주고, 바뀐 화면 이름을 읽어 준다.
-  const go = v => { if (S.view !== v && !S.focus) { if (!leavePane()) return false; S.sel = null; S.pane.url = ''; } const changed = S.view !== v, fromNav = !!(root.activeElement && root.activeElement.closest && root.activeElement.closest('#nav')); if (changed) S.apTabPinned = false; S.view = v; S.multi.clear(); S.pane.expanded = false; render(); const mm = $('#main'); if (mm) mm.scrollTop = 0; if (changed) { const nv = typeof navView === 'function' ? navView() : v; if (fromNav) { const a = root.querySelector(`#nav a[data-v="${nv}"]`); if (a) a.focus({preventScroll: true}); } const sr = $('#srAnnounce'), h = mm && mm.querySelector('h1'); if (sr) { sr.textContent = ''; setTimeout(() => { sr.textContent = (h ? h.textContent.trim() : '') + ' 화면'; }, 60); } } return true; };
+  const go = v => {
+    if (!viewAvailable(v)) return false;
+    const changed = S.view !== v;
+    if (changed && !S.focus) { if (!leavePane()) return false; S.sel = null; S.pane.url = ''; }
+    const active = root.activeElement;
+    const fromNav = active?.closest('#nav a');
+    const fromViewTabs = active?.closest('.vtabs');
+    if (changed) {
+      S.apTabPinned = false;
+      if (typeof carrySearchInputs === 'function') carrySearchInputs(S.view, v);
+    }
+    S.view = v; S.multi.clear(); S.pane.expanded = false;
+    writeViewUrl(v);
+    render();
+    const mm = $('#main'); if (mm) mm.scrollTop = 0;
+    if (fromNav) root.querySelector(`#nav a[data-v="${navView()}"]`)?.focus({preventScroll: true});
+    else if (fromViewTabs) (mm?.querySelector('.vtabs [aria-current="page"]') || mm?.querySelector('.vtabs [aria-selected="true"]'))?.focus({preventScroll: true});
+    else if (changed) mm?.focus({preventScroll: true});
+    if (changed && $('#srAnnounce')) $('#srAnnounce').textContent = (mm?.querySelector('h1')?.textContent.trim() || VIEWS.find(x => x.id === v)?.label || '') + ' 화면';
+    return true;
+  };
   // Home: back to a clean "오늘 할 일" (asks first if something is being typed in the pane).
   function goHome() {
     if (S.focus) { stopFocus(); if (S.focus) return; }
@@ -30,8 +62,7 @@
     closeOverlay();
     S.sel = null; S.pane.url = ''; S.pane.expanded = false; S.multi.clear();
     S.filter = {...S.filter, area: 'all', level: 'all', onlyNew: false, q: '', showHidden: false};
-    S.view = 'home';
-    render();
+    go('home');
     const mm = $('#main'); if (mm) mm.scrollTop = 0;
   }
   // Hidden items come back after 24h if the groupware still lists them (숨겼지만 아직 남음).
@@ -72,7 +103,7 @@
     // 기관명: 관리자 정책 > 로그인한 사용자의 소속 기관 > 기본 문구
     try { const on = $('#orgName'), nm = POLICY.orgName || (S.raw && S.raw.principal && S.raw.principal.compName) || ''; if (on && nm) on.textContent = nm; } catch {}
     // v1.9.1: 종은 통합알림 화면을 연다. 숫자도 통합알림의 안 읽음 수(조회한 최근 100건 기준)로 맞춘다.
-    { const unread = typeof ntfUnread === 'function' ? ntfUnread() : null, bl = $('#bell'); bl.innerHTML = `${ic('bell')}${unread ? `<span class="dot" aria-hidden="true">${unread > 99 ? '99+' : unread}</span>` : ''}`; bl.setAttribute('aria-label', unread ? `통합알림, 안 읽음 ${unread}건` : '통합알림'); bl.title = unread ? `통합알림 · 최근 100건 중 안 읽음 ${unread}건` : '통합알림'; if (S.a && typeof notificationsBackground === 'function') notificationsBackground(); }
+    { const unread = typeof ntfUnread === 'function' ? ntfUnread() : null, bl = $('#bell'); bl.innerHTML = `${ic('bell')}${unread ? `<span class="dot" aria-hidden="true">${unread > 99 ? '99+' : unread}</span>` : ''}`; bl.setAttribute('aria-label', unread ? `통합알림, 최근 조회분에서 안 읽음 ${unread}건` : '통합알림'); bl.title = unread ? `통합알림 · 최근 100건 중 안 읽음 ${unread}건` : '통합알림'; if (S.a && typeof notificationsBackground === 'function') notificationsBackground(); if (bl.dataset.unread !== String(unread)) { bl.dataset.unread = String(unread); renderNav(); } }
     const urgent = S.a ? mineVisible().filter(x => ['overdue', 'urgent'].includes(stateOf(x))).length : 0;
     const total = S.a ? mineVisible().length : 0;
     { const st = !S.a ? 'idle' : urgent ? 'urgent' : total ? 'todo' : 'ok'; const sum = !S.a ? '불러오는 중' : urgent ? `급한 일 ${urgent}건 · 전체 ${total}건` : total ? `처리할 일 ${total}건` : '오늘 처리할 일 없음'; fab.dataset.st = st;
@@ -113,14 +144,20 @@
     const urgent = mine.filter(x => ['overdue', 'urgent'].includes(stateOf(x))).length;
     const byArea = a => mine.filter(x => x.area === a).length;
     const counts = {
-      today: S.a ? (() => { const td = typeof todoNavDue === 'function' ? todoNavDue() : [], late = td.some(t => R.dday(t.due) < 0), n = mine.length + td.length; return {n, cls: urgent || late ? 'hot' : n ? 'mine' : '', tip: '처리할 일 ' + mine.length + '건' + (td.length ? ` · 오늘까지인 내 할 일 ${td.length}건` : '')}; })() : null,
+      today: S.a ? (() => { const td = typeof todoNavDue === 'function' ? todoNavDue() : []; const late = td.some(t => R.dday(t.due) < 0); return {n: mine.length || td.length, text: [mine.length ? '처리·확인 ' + mine.length : '', td.length ? '오늘까지 ' + td.length : ''].filter(Boolean), cls: urgent || late ? 'hot' : 'mine', tip: '그룹웨어 처리·확인 ' + mine.length + '건 · 오늘까지인 개인 할 일 ' + td.length + '건' + (typeof TD === 'object' && (!TD.list || TD.cached || TD.complete === false || TD.err) ? ' (개인 목록 전체 확인 전)' : '')}; })() : null,
       approval: S.a ? (u.approval ? {n: '?'} : (() => { const n = S.a.approval?.lists?.pending?.total ?? byArea('결재'); return {n, cls: n ? 'mine' : '', tip: '대기 ' + n + '건'}; })()) : null,
-      mail: S.a ? (() => { const n = mailSnapshot().unread; return {n: n ?? '?', cls: n ? 'mine' : '', tip: n == null ? '안 읽은 메일 확인 불가' : '안 읽은 메일 조회분 ' + n + '건'}; })() : null,
+      mail: S.a ? (() => { const n = mailSnapshot().unread; return {n: n ?? '?', text: [n == null ? '조회 확인 불가' : '안 읽음 ' + n + ' · 조회분'], cls: n ? 'mine' : '', tip: n == null ? '안 읽은 메일 확인 불가' : '안 읽은 메일 조회분 ' + n + '건'}; })() : null,
+      notifications: (() => { const n = ntfUnread(); return n == null ? null : {n, text: ['안 읽음 ' + n + ' · 최근'], cls: 'mine', tip: '최근 조회 알림 중 안 읽음 ' + n + '건'}; })(),
       attendance: S.a ? {n: byArea('근태'), cls: byArea('근태') ? 'mine' : '', tip: '퇴근 지문 확인 ' + byArea('근태') + '건'} : null,
       calendar: S.a ? (() => { const n = mine.filter(x => x.deadline && x.deadline.dday >= 0 && x.deadline.dday <= 7).length; return {n, cls: n ? 'mine' : '', tip: '7일 안 기한 ' + n + '건'}; })() : null,
     };
     // 읽히는 이름은 보이는 메뉴 이름으로 시작한다(WCAG 2.5.3). 숫자 뜻은 뒤에 붙인다.
-    const item = (v) => { const i = VIEWS.indexOf(v); const c = counts[v.id]; const shown = c && c.n !== '' && c.n !== 0; return `<a data-act="view" data-v="${v.id}" class="${navView() === v.id ? 'on' : ''}" role="link" tabindex="0" aria-current="${navView() === v.id ? 'page' : 'false'}" aria-label="${esc(v.label)}${shown ? ', ' + esc(c.tip || (c.n === '?' ? '확인 불가' : c.n + '건')) : ''}" title="${esc(v.label)}${i < 9 ? ` (Alt+${i + 1})` : ''}">${ic(VIEW_ICON[v.id])}<span class="lb">${esc(v.label)}</span>${shown ? `<span class="n ${c.cls || ''}" title="${esc(c.tip || v.label)}" aria-hidden="true">${c.n}</span>` : ''}</a>`; };
+    const item = v => {
+      const i = VIEWS.indexOf(v), c = counts[v.id], shown = c && c.n !== '' && c.n !== 0;
+      const active = navView() === v.id;
+      const tip = shown ? c.tip || (c.n === '?' ? '확인 불가' : c.n + '건') : '';
+      return `<a href="${esc(viewUrl(v.id))}" data-act="view" data-v="${v.id}" class="${active ? 'on' : ''}${shown && c.text ? ' nav-counted' : ''}" ${active ? 'aria-current="page"' : ''} aria-label="${esc(v.label + (tip ? ', ' + tip : ''))}" title="${esc(v.label + (i < 9 ? ' (Alt+' + (i + 1) + ')' : '') + (tip ? ' · ' + tip : ''))}">${ic(VIEW_ICON[v.id])}<span class="lb">${esc(v.label)}</span>${shown ? `<span class="n ${c.cls || ''}" aria-hidden="true">${c.text ? c.text.map(t => '<span>' + esc(t) + '</span>').join('') : c.n}</span>` : ''}</a>`;
+    };
     const topViews = VIEWS.filter(v => !VIEW_PARENT[v.id] && v.id !== 'settings');
     const settingsView = VIEWS.find(v => v.id === 'settings');
     // 메뉴 묶음: 매일 보는 것 → 처리하는 업무 → 찾아보는 자료 → 사람. 어디에도 없는 화면은 마지막 묶음에 붙는다.
@@ -130,17 +167,28 @@
       const vs = topViews.filter(v => ids.includes(v.id) || (gi === NAV_GROUPS.length - 1 && !grouped.has(v.id)));
       return vs.length ? `<div class="nav-g" role="group"${label ? ` aria-label="${label}"` : ''}>${label ? `<div class="nav-label">${label}</div>` : ''}${vs.map(item).join('')}</div>` : '';
     }).join('');
-    $('#nav').innerHTML = navGroups + '<div class="sep"></div>' + (settingsView ? item(settingsView) : '') + (() => { const v = versionInfo(); return `<div class="foot"><a data-act="openChangelog" role="button" tabindex="0" class="navver ${v.state}" title="설치된 버전과 업데이트 내역"><span class="lb"><span><b>v${esc(VERSION)}</b>${v.label ? ' · ' + esc(v.label) : ''}</span>${v.applied ? `<small>${esc(v.applied)} 적용</small>` : ''}</span></a></div>`; })();
+    const nav = $('#nav'), focused = root.activeElement?.closest('#nav a');
+    const top = nav.scrollTop;
+    nav.innerHTML = navGroups + '<div class="sep"></div>' + (settingsView ? item(settingsView) : '') + (() => { const v = versionInfo(); return `<div class="foot"><a data-act="openChangelog" role="button" tabindex="0" class="navver ${v.state}" title="설치된 버전과 업데이트 내역"><span class="lb"><span><b>v${esc(VERSION)}</b>${v.label ? ' · ' + esc(v.label) : ''}</span>${v.applied ? `<small>${esc(v.applied)} 적용</small>` : ''}</span></a></div>`; })();
+    nav.scrollTop = top;
+    if (focused) nav.querySelector(focused.dataset.v ? `a[data-v="${focused.dataset.v}"]` : '.navver')?.focus({preventScroll: true});
   }
-  function boardCount() { return (S.a ? S.a.actions.filter(x => onBoard(x) && !boardLinked(x) && bucketOfAction(x) !== 'done').length : 0) + S.todos.filter(t => bucketOfTodo(t) !== 'done').length; }
   function renderMain() {
     const el = $('#main');
     if (!S.a) { el.innerHTML = S.error && S.error !== 'SESSION' ? `<div class="empty"><div class="ill">${ic('alert')}</div><b>자료를 읽지 못했습니다</b>${esc(S.error)}<div class="acts" style="justify-content:center"><button class="btn primary" data-act="refresh">다시 시도</button></div></div>` : `<div class="pgh"><h1>그룹웨어 자료를 읽는 중입니다</h1><span class="spin"></span></div><div class="list">${'<div class="sk row"></div>'.repeat(6)}</div>`; return; }
     const scroll = el.scrollTop;
     if (S.view === 'home' && typeof homePartialRefresh === 'function' && homePartialRefresh()) return; // 홈이 이미 그려져 있으면 입력창을 건드리지 않고 요약만 갱신
     const fn = {notifications: vNotifications, people: vPeople, docs: vDocs, home: vHome, today: vToday, overview: vOverview, approval: vApproval, mail: vMail, search: vSearch, board: vBoard, mytodo: vMyTodo, calendar: vCalendar, gcal: vGcal, gsync: vGsync, budget: vBudget, attendance: vAttendance, resource: vResource, report: vReport, settings: vSettings}[S.view] || vToday;
+    const focusedTab = root.activeElement?.closest('[role=tab]');
+    const tabGroup = focusedTab?.closest('[role=tablist]');
+    const tabGroupIndex = [...el.querySelectorAll('[role=tablist]')].indexOf(tabGroup);
     el.innerHTML = fn();
     { const vt = viewTabs(); if (vt) { const ph = el.querySelector(':scope > .pgh'); if (ph) ph.insertAdjacentHTML('afterend', vt); else el.insertAdjacentHTML('afterbegin', vt); } }
+    normalizeTabs(el);
+    if (tabGroupIndex >= 0) {
+      const tabs = el.querySelectorAll('[role=tablist]')[tabGroupIndex]?.querySelectorAll('[role=tab]');
+      if (tabs) ([...tabs].find(t => t.dataset.act === focusedTab.dataset.act && t.dataset.v === focusedTab.dataset.v && t.tabIndex === 0) || [...tabs].find(t => t.tabIndex === 0))?.focus({preventScroll: true});
+    }
     el.scrollTop = scroll;
     if (S.view === 'notifications' && NTF.items === null && !NTF.loading && !NTF.error) { loadNotifications(); return; }
     // v1.9.0: 내려받기용 브리핑을 GW 비서 글꼴·색으로 보여 주고, 틀 안 스크롤 없이 내용 높이만큼 펼친다(스크립트는 여전히 막힘)
@@ -148,12 +196,12 @@
       const cs = getComputedStyle(wcEl), v = n => cs.getPropertyValue(n).trim();
       const skin = `<style>:root{--bg:transparent;--card:transparent;--fg:${v('--fg')};--muted:${v('--muted')};--line:${v('--line')};--accent:${v('--accent')};--hi:${v('--hi')};--md:${v('--md')};--ok:${v('--ok')};color-scheme:${wcEl.classList.contains('dark') ? 'dark' : 'light'}}html{overflow:hidden;background:${getComputedStyle(el).backgroundColor}}body{background:transparent;font-family:"Pretendard Variable",Pretendard,"Malgun Gothic",system-ui,sans-serif}main{max-width:none;padding:0 0 8px}h1{display:none}h2{font-size:15px}.card,table{border-radius:8px}.pill{border:0;padding:1px 0;margin-right:8px;font-weight:600}.pill.new{color:var(--muted)}</style>`;
       f.onload = () => { try { f.style.height = Math.max(200, f.contentDocument.documentElement.scrollHeight + 4) + 'px'; } catch {} };
-      f.srcdoc = R.renderHtml(S.a).replace('</head>', skin + '</head>'); } }
+      f.srcdoc = briefExportHtml().replace('</head>', skin + '</head>'); } }
     if (S.view === 'budget' && !S.budget.table && !S.budget.busy) loadBudget();
     if (S.view === 'attendance' && !S.att.rows && !S.att.busy && !S.att.error) loadAttendance();
     if (S.view === 'attendance' && GW.teamPlanned) loadApps().catch(() => {});
     if (S.view === 'gsync' && GW.teamPlanned) loadApps().catch(() => {});
-    if (S.view === 'resource' && !resState().bookings && !resState().busy && !resState().err) resLoad();
+    if (S.view === 'resource') resEnsure();
     if (S.view === 'approval' && ['distWaiting', 'deptWaiting'].includes(S.apTab) && !S.routing && !routingBusy() && !routingFailedRecently()) loadRouting().then(() => { if (S.view === 'approval') renderMain(); });
   }
   const pgh = (title, sub = '', tools = '') => `<div class="pgh"><h1>${title}</h1>${sub ? `<span class="sub">${sub}</span>` : ''}${tools ? `<div class="tools">${tools}</div>` : ''}</div>`;

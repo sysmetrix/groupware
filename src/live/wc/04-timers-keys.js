@@ -88,6 +88,20 @@
       else if (t.id === 'bcode' || t.id === 'bfilter') { S.budget.mode = 'detail'; S.budget.project = $('#bcode').value.trim(); S.budget.filter = $('#bfilter').value.trim(); loadBudget(); }
       return;
     }
+    if (!e.altKey && !e.ctrlKey && !e.metaKey && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key) && t.getAttribute?.('role') === 'tab') {
+      const group = t.closest('[role=tablist]');
+      const tabs = group ? [...group.querySelectorAll('[role=tab]')].filter(x => !x.disabled && x.getClientRects().length) : [];
+      const i = tabs.indexOf(t);
+      if (i >= 0) {
+        e.preventDefault();
+        const next = tabs[e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : (i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+        next.focus(); if (next !== t) next.click(); return;
+      }
+    }
+    if (!typing && t.closest?.('#nav a[href], .vtabs a[href], [role=tab]') && (e.key === 'Enter' || e.key === ' ')) {
+      if (e.key === ' ' && t.tagName === 'A') { e.preventDefault(); t.click(); }
+      return;
+    }
     if (S.paletteOpen || S.helpOpen) return; // 대화상자(AI·지급·기록기·명령 콘솔 등) 위에서는 전역 단축키를 쓰지 않는다
     const c = e.code;
     if (e.altKey && !e.ctrlKey && !e.metaKey) {

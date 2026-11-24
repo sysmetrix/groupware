@@ -3,6 +3,8 @@
   // ----- 결재·문서유통 -----
   const AP_VERB = {distWaiting: '배부하기', deptWaiting: '접수하기', pending: '결재하기', sendWaiting: '발송하기', viewing: '열람하기', submitted: '열기'};
   const AP_STATUS = {distWaiting: '배부 전', deptWaiting: '접수 전'};
+  const AP_DATES = {pending: '작성일', sendWaiting: '작성일', submitted: '작성일'};
+  const approvalDate = value => String(value || '').replace(/^(\d{4})[-./]?(\d{2})[-./]?(\d{2})(?:[ T].*|\d{4,6})?$/, '$1-$2-$3') || '–';
   async function loadApprovalMore() {
     const tab = S.apTab, owner = currentKey, epoch = S.apEpoch;
     const l = S.a?.approval?.lists?.[tab];
@@ -21,35 +23,41 @@
   }
   function vApproval() {
     const lists = S.a.approval.lists, counts = S.a.approval.counts;
-    const tabs = [['pending', '결재 대기'], ['deptWaiting', '부서 접수 대기'], ['distWaiting', '배부 대기'], ['sendWaiting', '발송 대기'], ['viewing', '열람문서'], ['submitted', '내 상신문서']];
+    const workflow = [['pending', '결재 대기'], ['deptWaiting', '부서 접수 대기'], ['distWaiting', '배부 대기'], ['sendWaiting', '발송 대기']];
+    const history = [['viewing', '열람문서'], ['submitted', '내 상신문서']];
+    const tabs = [...workflow, ...history];
+    const isWorkflow = workflow.some(([k]) => k === S.apTab);
     // Automatically select the first tab that has documents if the active tab is empty
     // (사용자가 탭을 직접 고른 뒤에는 0건이어도 그 탭을 그대로 보여 준다)
-    if (!S.apTabPinned && (!lists[S.apTab] || !lists[S.apTab].docs || lists[S.apTab].docs.length === 0)) {
-      const firstWithDocs = tabs.find(([k]) => lists[k] && lists[k].docs && lists[k].docs.length > 0);
+    if (!S.apTabPinned && isWorkflow && lists[S.apTab] && !lists[S.apTab].error && !lists[S.apTab].docs.length) {
+      const firstWithDocs = workflow.find(([k]) => lists[k] && !lists[k].error && lists[k].docs.length > 0);
       if (firstWithDocs) S.apTab = firstWithDocs[0];
     }
     const l = lists[S.apTab];
     const more = S.apMore[S.apTab] || [];
     const docs = l && !l.error ? [...l.docs, ...more] : [];
+    const otherQueueUnknown = workflow.some(([k]) => !lists[k] || lists[k].error);
     const withRec = ['distWaiting', 'deptWaiting'].includes(S.apTab);
     const hist = S.routing ? (S.apTab === 'distWaiting' ? S.routing.dist : S.routing.dept) : [];
     const target = S.apTab === 'distWaiting' ? 'toDept' : 'toEmp';
-    const myTab = k => k === 'pending' || k === 'submitted' || k === 'viewing' || ({distWaiting: S.settings.roles?.distributor, deptWaiting: S.settings.roles?.deptReceiver, sendWaiting: S.settings.roles?.sender}[k]);
     const roleMine = {distWaiting: S.settings.roles?.distributor, deptWaiting: S.settings.roles?.deptReceiver, sendWaiting: S.settings.roles?.sender}[S.apTab];
     const rows = docs.map(d => {
+      const title = (R.cleanTitle ? R.cleanTitle(d.title) : d.title) || '(제목 없음)';
+      const verb = roleMine === false ? '원래 화면 보기' : AP_VERB[S.apTab];
       const rec = withRec && hist.length ? R.recommendRouting(d, hist, {target, limit: 2}) : Object.assign([], {group: null});
       const recHtml = !withRec ? '' : !S.routing ? (routingFailedRecently() ? '<span class="muted">이력을 읽지 못함</span>' : '<span class="spin"></span>') : rec.group && rec.group.targets.length >= 2 ? `<b>${rec.group.targets.length}곳 함께</b><div class="muted">${esc(rec.group.targets.slice(0, 3).join(', '))}${rec.group.targets.length > 3 ? ' 외' : ''}</div>` : rec.length ? rec.map(r => `<div class="nowrap">${esc(r.name)} <span class="muted" title="비슷한 문서 ${r.of}건 가운데 ${r.count}건을 이곳에 배부·접수">· ${r.of}건 중 ${r.count}건</span></div>`).join('') : '<span class="muted">비슷한 이력 없음</span>';
       const docPrefix = (String(d.docNo || '').match(/^([가-힣A-Za-z0-9()]+?)-\d+/) || [])[1] || '';
       const senderDisp = [d.sendDept, d.sender && d.sender !== d.sendDept ? d.sender : '', docPrefix && docPrefix !== d.sender && docPrefix !== d.sendDept ? docPrefix : ''].filter(Boolean).join(' · ') || d.drafter || d.drafterDept || '';
-      return `<tr class="click ${S.sel && S.sel.type === 'doc' && S.sel.docId === d.docId ? 'sel' : ''}" data-act="selDoc" data-kind="${S.apTab}" data-id="${esc(d.docId)}" tabindex="0"><td><div style="font-weight:700">${esc(R.cleanTitle ? R.cleanTitle(d.title) : d.title)}</div><div class="muted">${d.unread ? '<span class="unseen">아직 안 봄</span>' : ''}${esc(d.docNo)}${d.attachments ? ` · 첨부 ${d.attachments}` : ''}</div><div class="muted ap-narrow">${esc(senderDisp)} · ${esc(AP_STATUS[S.apTab] || d.status)}</div></td><td class="ap-from">${esc(senderDisp)}</td><td class="nowrap ap-st">${esc(AP_STATUS[S.apTab] || d.status)}</td>${withRec ? `<td class="ap-rec">${recHtml}</td>` : ''}<td class="nowrap">${esc(shortWhen(d.date))}</td><td class="nowrap"><button class="btn sm ${roleMine === false || S.apTab === 'submitted' || S.apTab === 'viewing' ? '' : 'primary'}" data-act="apOpen" data-kind="${S.apTab}" data-id="${esc(d.docId)}">${roleMine === false ? '원래 화면 보기' : AP_VERB[S.apTab]}</button></td></tr>`;
+      return `<tr class="click ${S.sel && S.sel.type === 'doc' && S.sel.docId === d.docId ? 'sel' : ''}" data-act="selDoc" data-kind="${S.apTab}" data-id="${esc(d.docId)}" tabindex="0"><td><div style="font-weight:700">${esc(title)}</div><div class="muted">${d.unread ? '<span class="unseen">아직 안 봄</span>' : ''}${esc(d.docNo)}${d.attachments ? ` · 첨부 ${d.attachments}` : ''}</div><div class="muted ap-narrow">${esc(senderDisp)} · ${esc(AP_STATUS[S.apTab] || d.status)}</div></td><td class="ap-from">${esc(senderDisp)}</td><td class="nowrap ap-st">${esc(AP_STATUS[S.apTab] || d.status)}</td>${withRec ? `<td class="ap-rec">${recHtml}</td>` : ''}<td class="nowrap">${esc(approvalDate(d.date))}</td><td class="nowrap"><button class="btn sm ${roleMine === false || S.apTab === 'submitted' || S.apTab === 'viewing' ? '' : 'primary'}" data-act="apOpen" data-kind="${S.apTab}" data-id="${esc(d.docId)}" aria-label="${esc(`${verb}: ${title}${d.docNo ? ' · ' + d.docNo : ''}`)}">${verb}</button></td></tr>`;
     }).join('');
     const total = l ? (l.total ?? l.docs.length) : 0;
-    const note = roleMine === false ? `<div class="box" style="margin:0 0 12px">이 목록은 설정상 <b>참고</b>(부서 담당자가 처리)로 분류되어 "오늘 할 일"에는 나오지 않습니다. 내 업무라면 <a class="btn sm" data-act="view" data-v="settings">설정에서 바꾸기</a></div>` : '';
-    return `${pgh('결재·문서유통', '', `${l ? `<button class="btn sm" data-act="openUrl" data-url="${esc(l.url)}" data-title="그룹웨어 결재 목록">${ic('ext')}그룹웨어 목록</button>` : ''}${docs.length && ['distWaiting', 'deptWaiting', 'pending', 'sendWaiting'].includes(S.apTab) ? `<button class="btn sm primary" data-act="focusList">${ic('play')}이 목록 하나씩 처리</button>` : ''}`)}
-<div class="bar"><div class="seg" role="tablist">${tabs.map(([k, n]) => { const c = lists[k]; const cnt = c ? (c.error ? '?' : c.total ?? c.docs.length) : '-'; return `<button role="tab" aria-selected="${S.apTab === k}" class="${S.apTab === k ? 'on' : ''}" data-act="apTab" data-v="${k}">${n}<span class="c">${cnt}</span></button>`; }).join('')}</div></div>
+    const note = roleMine === false ? `<div class="box" style="margin:0 0 12px">이 목록은 설정상 <b>참고</b>(부서 담당자가 처리)로 분류되어 그룹웨어 처리·확인 목록에는 나오지 않습니다. 내 업무라면 <a class="btn sm" data-act="view" data-v="settings">설정에서 바꾸기</a></div>` : '';
+    const tabGroup = (label, items) => `<div><b>${label}</b><div class="seg" role="tablist" aria-label="${label}">${items.map(([k, n]) => { const c = lists[k]; const cnt = c && !c.error ? c.total ?? c.docs.length : '?'; return `<button role="tab" aria-selected="${S.apTab === k}" class="${S.apTab === k ? 'on' : ''}" data-act="apTab" data-v="${k}">${n}<span class="c">${cnt}</span></button>`; }).join('')}</div></div>`;
+    return `${pgh('결재·문서유통', '', `${l ? `<button class="btn sm" data-act="openUrl" data-url="${esc(l.url)}" data-title="그룹웨어 결재 목록">${ic('ext')}그룹웨어 목록</button>` : ''}${docs.length && isWorkflow && roleMine !== false ? `<button class="btn sm primary" data-act="focusList">${ic('play')}이 목록 하나씩 처리</button>` : ''}`)}
+<div class="bar">${tabGroup('처리 대기', workflow)}${tabGroup('열람·상신 내역', history)}</div>
 ${note}
-${l && l.error ? `<div class="box errb">${esc(l.message)} <button class="btn sm" data-act="refresh">다시 시도</button></div>` : docs.length ? `<table class="apt"><tr><th>제목</th><th class="ap-from">보낸 곳·기안</th><th class="ap-st">상태</th>${withRec ? `<th class="ap-rec" title="최근 180일 동안 제목 주제가 비슷한 문서가 어디로 갔는지 센 값">비슷한 문서 배부처</th>` : ''}<th>받은 날</th><th></th></tr>${rows}</table>` : `<div class="list"><div class="empty"><b>${esc((tabs.find(t => t[0] === S.apTab) || [])[1] || '')} 문서가 없습니다</b>${tabs.filter(([k]) => k !== S.apTab && lists[k] && !lists[k].error && (lists[k].total ?? lists[k].docs.length) > 0 && !['viewing', 'submitted'].includes(k)).map(([k, n]) => `<button class="chip" data-act="apTab" data-v="${k}" style="margin:8px 4px 0">${n} ${lists[k].total ?? lists[k].docs.length}건 보기${myTab(k) ? '' : ' (참고)'}</button>`).join('') || '<div>지금 처리할 결재 문서가 없습니다.</div>'}</div></div>`}
-${docs.length < total ? `<div class="acts"><button class="btn" data-act="apMore" ${S.apBusy[S.apTab] ? 'disabled' : ''}>${S.apBusy[S.apTab] ? '읽는 중…' : '더 보기'} (${docs.length}/${total})</button></div>` : ''}
+${!l || l.error ? `<div class="box errb" role="status">${esc(l?.message || '이 결재 목록을 읽지 못했습니다.')} <button class="btn sm" data-act="refresh">다시 시도</button></div>` : docs.length ? `<table class="apt"><tr><th>제목</th><th class="ap-from">보낸 곳·기안</th><th class="ap-st">상태</th>${withRec ? `<th class="ap-rec" title="최근 180일 동안 제목 주제가 비슷한 문서가 어디로 갔는지 센 값">비슷한 문서 배부처</th>` : ''}<th>${AP_DATES[S.apTab] || '문서 일자'}</th><th>열기</th></tr>${rows}</table>` : `<div class="list"><div class="empty"><b>${esc((tabs.find(t => t[0] === S.apTab) || [])[1] || '')} ${total ? '문서를 아직 표시하지 못했습니다' : '조회 범위에 문서가 없습니다'}</b>${isWorkflow && otherQueueUnknown ? '<p>다른 처리 목록 중 일부를 확인할 수 없습니다.</p>' : ''}</div></div>`}
+${l && !l.error && docs.length < total ? `<div class="acts"><button class="btn" data-act="apMore" ${S.apBusy[S.apTab] ? 'disabled' : ''}>${S.apBusy[S.apTab] ? '읽는 중…' : '더 보기'} (${docs.length}/${total})</button></div>` : ''}
 <details style="margin-top:18px"><summary class="muted" style="cursor:pointer">그룹웨어 메뉴별 건수</summary><table style="margin-top:8px"><tr><th>메뉴</th><th class="num">건수</th></tr>${counts.map(c => `<tr><td>${esc(c.name)}</td><td class="num">${c.count}</td></tr>`).join('')}</table></details>`;
   }
 
@@ -108,19 +116,21 @@ ${docs.length < total ? `<div class="acts"><button class="btn" data-act="apMore"
     const snapshot = mailSnapshot(), all = sortMailNewest(snapshot.rows);
     const actKeys = new Map(S.a.actions.filter(x => x.type === 'mail').map(x => [mailRefKey(x.ref.box, x.ref.uid), x]));
     const f = S.mailFilter;
-    const rows = all.filter(x => f === 'all' || (f === 'unread' && !x.seen) || (f === 'todo' && actKeys.has(mailRefKey(x.box, x.uid)) && isMine(actKeys.get(mailRefKey(x.box, x.uid)))) || (f === 'attach' && (x.attach || /대용량 파일첨부/.test(x.preview))) || (f === 'other' && x.box !== 'INBOX'));
+    const isAd = x => typeof R.isNoiseMail === 'function' && R.isNoiseMail(x);
+    const adUnread = all.filter(x => !x.seen && isAd(x)).length;
+    const rows = all.filter(x => f === 'all' || (f === 'unread' && !x.seen) || (f === 'todo' && actKeys.has(mailRefKey(x.box, x.uid)) && isMine(actKeys.get(mailRefKey(x.box, x.uid)))) || (f === 'attach' && (x.attach || /대용량 파일첨부/.test(x.preview))) || (f === 'other' && x.box !== 'INBOX') || (f === 'ads' && isAd(x)));
     const sr = S.mailSearch.res;
     const rowHtml = x => { const a = actKeys.get(mailRefKey(x.box, x.uid)); const st = a ? stateOf(a) : ''; const att = x.attach || /대용량 파일첨부/.test(x.preview); return `<div class="row ${S.sel && S.sel.type === 'mail' && S.sel.box === x.box && S.sel.uid === x.uid ? 'sel' : ''}" role="listitem" tabindex="0" data-act="selMail" data-box="${esc(x.box)}" data-uid="${esc(x.uid)}" style="grid-template-columns:minmax(112px,160px) minmax(0,1fr) auto"><div style="${x.seen ? '' : 'font-weight:800'}">${x.seen ? '' : '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);margin-right:6px"></span>'}${esc(x.from)}</div><div class="mn"><div class="t" style="${x.seen ? 'font-weight:600' : ''}">${esc(x.subject || '(제목 없음)')}</div><div class="hl">${a && st !== 'info' ? `<span class="bdg ${st}">${STATE_NAME[st]}</span>` : ''}${att ? `<span class="bdg tag">${ic('clip')}첨부</span>` : ''}${x.box !== 'INBOX' ? `<span class="bdg tag">${esc(x.box)}</span>` : ''}<span class="muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1 1 auto">${esc(cleanPreview(x.preview).slice(0, 140))}</span></div></div><div class="w">${esc(mailWhen(x.date))}</div></div>`; };
     // v1.9.0: 광고·뉴스레터로 보이는 메일은 맨 아래 접힌 묶음으로(안 읽음이어도 업무 메일보다 위에 오지 않게).
-    const isAd = x => typeof R.isNoiseMail === 'function' && R.isNoiseMail(x), work = rows.filter(x => !isAd(x)), ads = rows.filter(isAd), adUnread = all.filter(x => !x.seen && isAd(x)).length;
-    const listHtml = rows.length ? `${work.length ? `<div class="list" role="list">${work.map(rowHtml).join('')}</div>` : ''}${ads.length ? `<details class="mail-ads"${work.length ? '' : ' open'}><summary>광고·소식으로 보이는 메일 ${ads.length}통${ads.some(x => !x.seen) ? ` (안 읽음 ${ads.filter(x => !x.seen).length})` : ''}</summary><div class="list" role="list">${ads.map(rowHtml).join('')}</div></details>` : ''}` : `<div class="list"><div class="empty"><b>해당하는 메일이 없습니다</b></div></div>`;
-    return `${pgh('메일', `처리할 메일 ${S.a.actions.filter(x => x.type === 'mail' && isMine(x)).length}통 · 조회분 안 읽음 ${snapshot.unread == null ? '확인 불가' : snapshot.unread + '통' + (adUnread ? `(광고성 ${adUnread})` : '')} · 최근 ${all.length}통`, `<button class="btn sm" data-act="openUrl" data-url="${esc(m.url)}" data-title="받은메일함">${ic('ext')}받은메일함</button><button class="btn sm primary" data-act="openUrl" data-url="${esc(GW.links.compose('plain'))}" data-title="새 메일 쓰기">${ic('plus')}새 메일</button>`)}
-<div class="bar"><div class="seg" role="tablist">${[['all', '전체'], ['todo', '처리할 메일'], ['unread', '안 읽음'], ['attach', '첨부 있음'], ['other', '내 메일함']].map(([k, n]) => `<button role="tab" aria-selected="${f === k}" class="${f === k ? 'on' : ''}" data-act="mailFilter" data-v="${k}">${n}</button>`).join('')}</div>
+    const work = f === 'ads' ? rows : rows.filter(x => !isAd(x)), ads = f === 'ads' ? [] : rows.filter(isAd);
+    const listHtml = rows.length ? `${work.length ? `<div class="list" role="list">${work.map(rowHtml).join('')}</div>` : ''}${ads.length ? `<details class="mail-ads"${work.length ? '' : ' open'}><summary>광고·소식으로 보이는 메일 ${ads.length}통${ads.some(x => !x.seen) ? ` (안 읽음 ${ads.filter(x => !x.seen).length})` : ''}</summary><div class="list" role="list">${ads.map(rowHtml).join('')}</div></details>` : ''}` : `<div class="list"><div class="empty"><b>최근 조회 범위에 조건에 맞는 메일이 없습니다</b></div></div>`;
+    return `${pgh('메일', `${snapshot.unread == null ? '확인된 ' : ''}처리할 메일 ${S.a.actions.filter(x => x.type === 'mail' && isMine(x)).length}통 · 최근 조회분 안 읽음 ${snapshot.unread == null ? '확인 불가' : snapshot.unread + '통' + (adUnread ? `(광고성 ${adUnread})` : '')}`, `<button class="btn sm" data-act="openUrl" data-url="${esc(m.url)}" data-title="받은메일함">${ic('ext')}받은메일함</button><button class="btn sm primary" data-act="openUrl" data-url="${esc(GW.links.compose('plain'))}" data-title="새 메일 쓰기">${ic('plus')}새 메일</button>`)}
+<p class="muted lean-note">최근 조회 범위: 받은메일함의 최근 메일${snapshot.unread == null && !all.length ? '' : ` ${all.filter(x => x.box === 'INBOX').length}통`}과 다른 메일함의 조회된 안 읽은 메일을 합칩니다. 전체 보관 메일은 그룹웨어 또는 검색에서 확인하세요.</p>
+<div class="bar"><div class="seg" role="tablist" aria-label="최근 조회 메일 거르기">${[['all', '최근 전체'], ['todo', '처리할 메일'], ['unread', '안 읽음'], ['attach', '첨부 있음'], ['other', '다른 메일함'], ['ads', '광고·소식만']].map(([k, n]) => `<button role="tab" aria-selected="${f === k}" class="${f === k ? 'on' : ''}" data-act="mailFilter" data-v="${k}">${n}</button>`).join('')}</div>
 <input class="inp grow" id="mailq" placeholder="메일 본문까지 검색 후 Enter" value="${esc(S.mailSearch.kw)}" aria-label="메일 검색">${S.mailSearch.busy ? '<span class="spin"></span><button class="btn sm" data-act="clearMailSearch">검색 취소</button>' : ''}</div>
 ${S.mailSearch.err ? `<div class="box errb" role="alert">${esc(S.mailSearch.err)}</div>` : ''}
 ${sr ? `<h2>"${esc(sr.keyword)}" 검색 결과 ${sr.groups.mail?.total ?? 0}건 · ${(sr.groups.mail?.items || []).length}건 표시 <button class="btn sm ghost" data-act="clearMailSearch">${ic('x')}지우기</button></h2><div class="list">${(sr.groups.mail?.items || []).map(x => `<div class="row" ${mailSearchSelectable(x, sr.groups.mail.items) ? 'tabindex="0" data-act="selMailSearch"' : 'aria-disabled="true" title="메일 식별자가 불명확합니다. 그룹웨어 메일함에서 확인하세요."'} data-uid="${esc(x.uid)}" style="grid-template-columns:minmax(112px,160px) minmax(0,1fr) auto"><div>${esc(x.from)}</div><div class="mn"><div class="t">${hl(x.subject || '(제목 없음)', sr.keyword)}${mailSearchSelectable(x, sr.groups.mail.items) ? '' : ' · 식별 확인 필요'}</div><div class="fx">${hl(x.snippet, sr.keyword)}</div></div><div class="w">${esc(shortWhen(x.date))}</div></div>`).join('') || '<div class="empty"><b>결과가 없습니다</b>다른 단어로 찾아보세요.</div>'}</div>` : ''}
 <h2>최근 메일 · 최신순 <span class="muted" style="font-size:12px">조회된 ${rows.length}건</span></h2>
-<div class="muted" style="margin:4px 0 10px">받은메일함 최근 ${S.raw.data.mail?.inbox?.fetched ?? 0}건과 다른 메일함의 조회된 안 읽은 메일을 합쳐 받은 시각이 최근인 순서로 표시합니다. 전체 보관 메일은 그룹웨어 메일함 또는 검색에서 확인하세요.</div>
 ${snapshot.unread == null ? '<p role="status">메일함 일부를 확인할 수 없습니다. 새로 고침 후 다시 확인하세요.</p>' : ''}
 ${snapshot.unread == null && !rows.length ? '' : listHtml}
 <p class="muted" style="margin-top:12px">메일 목록을 보는 것만으로는 읽음 처리되지 않습니다.</p>`;

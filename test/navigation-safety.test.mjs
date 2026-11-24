@@ -6,9 +6,9 @@ import vm from 'node:vm';
 const views = readFileSync(new URL('../src/live/wc/05-views.js', import.meta.url), 'utf8');
 const events = readFileSync(new URL('../src/live/wc/16-events.js', import.meta.url), 'utf8');
 test('cancelled navigation preserves current view and selection', () => {
-  const code = views.match(/const go = v => \{[^\n]+/)[0];
+  const code = views.match(/const go = v => \{[\s\S]+?\n  };\r?\n/)[0];
   const S = {view:'mail', sel:{key:'draft'}, pane:{url:'draft',expanded:true}, multi:new Set(['a'])};
-  const context = {S, leavePane:()=>false, render:()=>{throw Error('must not render')}, $:()=>null};
+  const context = {S, viewAvailable: () => true, leavePane:()=>false, render:()=>{throw Error('must not render')}, $:()=>null};
   vm.createContext(context); vm.runInContext(code + '\nthis.go=go;', context);
   assert.equal(context.go('budget'), false); assert.equal(S.view, 'mail'); assert.equal(S.pane.url,'draft'); assert.equal(S.sel.key,'draft');
 });
