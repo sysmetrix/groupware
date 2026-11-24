@@ -48,7 +48,7 @@ test('화면 제목은 왼쪽 메뉴 이름과 같고, 하위 탭은 제목 아�
   const views = await read('wc/05-views.js');
   assert.match(views, /el\.innerHTML = fn\(\);/);
   assert.match(views, /querySelector\(':scope > \.pgh'\)[\s\S]{0,80}insertAdjacentHTML\('afterend', vt\)/);
-  const labels = {'09-search-board.js':"pgh('검색·문서'", '35-docs.js':"pgh('검색·문서'", '12-report-settings.js':"pgh('보고·현황'", '07-charts.js':"pgh('보고·현황'", '10-calendar-budget.js':"pgh('일정·예약'", '28-gcal.js':"pgh('일정·예약'", '34-gsync.js':"pgh('일정·예약'", '24-resource.js':"pgh('일정·예약'", '38-notifications-people.js':"pgh('조직·사람'"};
+  const labels = {'09-search-board.js':"pgh('통합검색'", '35-docs.js':"pgh('결재문서 찾기'", '12-report-settings.js':"pgh('보고·현황'", '07-charts.js':"pgh('보고·현황'", '10-calendar-budget.js':"pgh('일정·예약'", '28-gcal.js':"pgh('일정·예약'", '34-gsync.js':"pgh('일정·예약'", '24-resource.js':"pgh('일정·예약'", '38-notifications-people.js':"pgh('조직·사람'"};
   for (const [f, needle] of Object.entries(labels)) assert.ok((await read('wc/' + f)).includes(needle), f + ' 제목');
   const css = await read('wc.css');
   assert.doesNotMatch(css, /#194957|#d8eeed|#b2e6d8/, '홈 강조면은 테마 토큰만 쓴다');

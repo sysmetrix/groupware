@@ -135,7 +135,7 @@
   const ic = (n, extra = '') => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true" ${extra}>${ICONS[n] || ''}</svg>`;
   root.innerHTML = `<style>${WC_CSS}</style><div class="wc nopane" id="wc" role="region" aria-label="GW 비서"><header role="banner">
 <button class="skip-main" data-act="skipMain">본문으로 건너뛰기</button><button class="home" data-act="home" title="처음 화면(오늘 할 일)으로 · H" aria-label="GW 비서 처음 화면"><span class="logo">${brandImage}</span><span class="brand-name"><b>GW 비서</b><small id="orgName">부천여성청소년재단</small></span></button>
-<button class="hb icon navtg" data-act="navMini" id="navTg" title="왼쪽 메뉴 접기·펴기" aria-label="왼쪽 메뉴 접기·펴기" aria-pressed="false">${ic('side')}</button>
+<button class="hb icon navtg" data-act="navMini" id="navTg" title="왼쪽 메뉴 접기·펴기" aria-label="왼쪽 메뉴 접기·펴기" aria-expanded="true" aria-controls="nav" aria-pressed="false">${ic('side')}</button>
 <label class="srch" title="통합검색 또는 명령 (Ctrl+K)">${ic('search')}<input id="gsearch" placeholder="메일·문서·사람 검색 또는 명령" autocomplete="off" aria-label="통합검색"><kbd>Ctrl K</kbd></label>
 <span class="sp"></span>${window.BWYFGW_DEMO ? '<span class="demo-pill" title="로그인 없이 살펴보는 화면입니다. 보이는 기관·사람·문서·금액은 모두 지어낸 것이며 그룹웨어에는 아무 요청도 보내지 않습니다.">둘러보기 · 지어낸 자료</span>' : ''}
 <button class="stat" id="meta" data-act="refresh" title="지금 다시 읽기 (R)"></button>
@@ -151,7 +151,7 @@
     wcEl.dataset.fs = S.settings.fontSize;
     wcEl.classList.toggle('dark', S.settings.theme === 'dark');
     wcEl.classList.toggle('navmini', !!S.settings.navMini);
-    { const nt = wcEl.querySelector('#navTg'); if (nt) nt.setAttribute('aria-pressed', String(!!S.settings.navMini)); }
+    { const nt = wcEl.querySelector('#navTg'); if (nt) { nt.setAttribute('aria-pressed', String(!!S.settings.navMini)); nt.setAttribute('aria-expanded', String(!S.settings.navMini && window.innerWidth > 640)); } }
   { const tb = wcEl.querySelector('#themeBtn'); if (tb) { tb.innerHTML = ic(S.settings.theme === 'dark' ? 'sun' : 'moon'); tb.title = (S.settings.theme === 'dark' ? '라이트 모드로' : '다크 모드로') + ' 전환 (Shift+D)'; } }
     const pw = Math.max(360, Math.min(window.innerWidth * 0.75, S.settings.paneWidth));
     wcEl.style.setProperty('--paneW', `${pw}px`);

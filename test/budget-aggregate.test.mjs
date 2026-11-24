@@ -13,11 +13,11 @@ function context(table, filter = '', ledger = async ({bgtCd}) => ({rows: [{date:
 }
 test('사업 전체 요약은 첫 관이 아니라 원본 전체 합계를 사용', () => {
   const c=context({project:'P', rows:[row('첫관','관',20),row('둘째관','관',30)], total:row('합계','계',50)});
-  assert.match(c.view(), /<b>사업전체<\/b>.*<span>총예산<\/span><strong>100원<\/strong>.*<span>집행액<\/span><strong>50원<\/strong>/);
+  assert.match(c.view(), /<b>사업전체<\/b>.*<span>총예산<\/span><strong>100원<\/strong>.*<span>실집행액<\/span><strong>50원<\/strong>/);
 });
 test('선택 과목 요약은 순서와 무관하게 정확한 코드 사용, 없으면 생략', () => {
   const t={project:'P',rows:[row('다른','관',11),row('선택','항',40)]};
-  const c=context(t,'선택'); assert.match(c.view(), /<b>선택<\/b>.*<span>총예산<\/span><strong>100원<\/strong>.*<span>집행액<\/span><strong>40원<\/strong>/);
+  const c=context(t,'선택'); assert.match(c.view(), /<b>선택<\/b>.*<span>총예산<\/span><strong>100원<\/strong>.*<span>실집행액<\/span><strong>40원<\/strong>/);
   c.S.budget.filter='없는코드'; assert.doesNotMatch(c.view(), /class="box budget-summary"/);
 });
 test('전체 결의는 전체 합계와 대조하며 0과 음수 세목도 조회', async () => {

@@ -8,6 +8,11 @@
   // 왼쪽 메뉴 접기·펴기(아이콘만 남긴다). 고른 상태는 이 브라우저에 남는다.
   HOME_ACTS.navMini = () => { S.settings.navMini = !S.settings.navMini; saveLocal(); applyLook(); };
 
+  function groupwareTaskGaps() {
+    const sources = ['approval', 'mail', 'attendance', 'leave', 'notice', '시간외 지문 확인'];
+    return !!(S.error || S.raw?.sessionExpired || S.raw?.data?.mail?.partial || S.a?.failed?.some(x => sources.includes(x.name)) || sources.some(k => S.raw?.status?.[k]?.ok === false || S.raw?.status?.[k]?.error) || Object.values(S.a?.approval?.lists || {}).some(x => x?.error));
+  }
+
   function homeData() {
     const loaded = !!(S.a && S.raw);
     const out = {loaded, mine: [], urgent: 0, todo: 0, check: 0, wait: 0, refN: 0, events: [], away: [], timeline: [], resources: []};
@@ -16,7 +21,7 @@
     const cnt = st => mine.filter(x => st.includes(stateOf(x))).length;
     out.mine = mine; out.urgent = cnt(['overdue', 'urgent']); out.todo = cnt(['todo']); out.check = cnt(['check', 'confirm']);
     out.wait = visibleActions().filter(x => isMine(x) && stateOf(x) === 'wait').length;
-    out.taskGaps = !!(S.error || S.raw.sessionExpired || (S.a.failed && S.a.failed.some(x => ['approval', 'mail', 'attendance', 'leave', '시간외 지문 확인'].includes(x.name))) || Object.entries(S.raw.status || {}).some(([k, v]) => ['approval', 'mail', 'attendance', 'leave'].includes(k) && v && (v.ok === false || v.error)) || Object.values((S.a.approval && S.a.approval.lists) || {}).some(x => x && x.error));
+    out.taskGaps = groupwareTaskGaps();
     out.refN = visibleActions().filter(x => !isMine(x)).length;
     const status = S.raw.status?.leave;
     const lv = !S.error && !S.raw.sessionExpired && status?.ok !== false && !status?.error && S.raw.data?.leave;
@@ -65,6 +70,7 @@
     const name = (S.raw && S.raw.principal && S.raw.principal.name) || '';
     const day = typeof R.homeDayInfo === 'function' ? R.homeDayInfo({date: R.kstNow(new Date()).date, holidays: d.holidays || []}) : {label: '', weekend: false, holiday: '', nextLabel: ''};
     const g = R.homeGreeting({hour, name, urgent: d.urgent, total: d.urgent + d.todo + d.check, loading: !d.loaded, weekend: day.weekend, nextLabel: day.nextLabel});
+    if (d.loaded) g.sub = `그룹웨어 처리·확인 ${d.mine.length}건`;
     if (!d.loaded && S.error) g.sub = '그룹웨어 자료를 읽지 못했습니다';
     if (d.loaded && d.taskGaps) { g.sub = '일부 자료를 읽지 못해 할 일 현황이 불완전할 수 있습니다'; g.tone = 'warn'; }
     return `<div class="hm-head"><div class="hm-eyebrow">${esc(day.label)}${day.weekend ? ' · 주말' : ''}</div><h1 class="hm-hello">오늘의 업무</h1><p class="hm-sub hm-tone-${g.tone}">${esc(g.sub)}</p></div>`;
@@ -95,22 +101,24 @@
     const tiles = R.homeTiles({urgent: d.urgent, todo: d.todo, check: d.check, wait: d.wait, events: d.events.length, away: d.away.length, loaded: true});
     const tileHtml = tiles.map(t => {
       if (t.id === 'away' && (d.teamLoading || d.teamError || d.teamUnknown)) return {...t, value: '–', sub: d.teamError ? '조회 실패' : d.teamLoading ? '확인 중' : '조회 여부 확인 불가'};
-      if (t.id === 'wait' && d.taskGaps) return {...t, sub: '일부 자료 누락 가능 · 확인된 건수'};
-      if (['urgent', 'todo'].includes(t.id) && d.taskGaps) return {...t, sub: '일부 자료 누락 가능 · 확인된 건수'};
+      if (['urgent', 'todo', 'wait'].includes(t.id) && d.taskGaps) return {...t, sub: '일부 자료 누락 가능 · 확인된 건수'};
+      if (t.id === 'urgent') return {...t, label: '그룹웨어 우선 처리', sub: '기한 지남·임박 또는 결재 등'};
+      if (t.id === 'todo') return {...t, label: '그룹웨어 처리·확인', sub: '개인 ToDo 제외'};
       if (t.id === 'schedule' && (d.scheduleUnknown || d.teamLoading || d.teamError || d.teamUnknown)) return {...t, value: '–', sub: '일부 미확인 · 구글 제외'};
       return t;
     }).map(t => `<button class="hm-tile hm-tile-${esc(t.id)} hm-tone-${t.tone}" data-act="homeTile" data-v="${t.id}" aria-label="${esc(t.label + ' ' + t.value + ' ' + t.sub)}"><span class="hm-tile-l">${esc(t.label)}</span><b class="hm-tile-v">${esc(t.value)}</b><span class="hm-tile-s">${esc(t.sub)}</span></button>`).join('');
-    const total = d.urgent + d.todo + d.check;
+    const total = d.mine.length;
+    const day = R.kstNow(new Date()).date;
+    const personal = typeof personalHomeDueHtml === 'function' ? personalHomeDueHtml() : '';
     const next = R.homeNextAction(d.mine.map(x => ({key: x.key, title: x.title, headline: x.headline, area: x.area, state: stateOf(x), deadline: x.deadline && x.deadline.date ? x.deadline.date.slice(5) + (x.deadline.time ? ' ' + x.deadline.time : '') : ''})));
     const tone = s => (s === 'overdue' || s === 'urgent' ? 'urgent' : 'todo');
     const picked = next && d.mine.find(x => x.key === next.key);
     const nextLabel = picked?.type === 'mail' ? '메일 읽기' : picked?.area === '결재' ? '결재 문서 열기' : picked?.area === '근태' ? '근태 기록 확인' : '업무 상세 보기';
-    const queue = next ? d.mine.filter(x => x.key !== next.key).slice(0, 2) : [];
-    const queueHtml = queue.length ? `<div class="hm-queue-k">다음 순서</div><ol class="hm-queue">${queue.map((x,i) => `<li><button class="hm-q" data-act="homeNext" data-v="${esc(x.key)}"><span class="desk-num" aria-hidden="true">0${i+2}</span><span class="hm-q-t">${esc(x.title)}</span><span class="hm-badge hm-tone-${tone(stateOf(x))}">${esc(STATE_NAME[stateOf(x)] || x.area || '')}</span></button></li>`).join('')}</ol>` : '';
+    const reason = next && (next.state === 'overdue' ? '기한이 지났습니다' : picked?.deadline?.date === day ? '오늘 마감입니다' : next.state === 'urgent' && picked?.deadline?.dday === 1 ? '내일 마감입니다' : ({pending: '내 결재가 대기 중입니다', rejected: '내 문서가 반려되었습니다', conflict: '기한과 일정이 겹칩니다'}[picked?.base] || ({urgent: '우선 확인이 필요한 업무입니다', todo: '내가 처리할 그룹웨어 업무입니다', check: '확인이 필요합니다', confirm: '처리 여부를 확인해야 합니다'}[next.state])));
     const nextHtml = next
-      ? `<section class="hm-card hm-next" aria-label="지금 할 일 한 가지"><div class="hm-card-h"><h2 class="hm-card-k"><span class="desk-index" aria-hidden="true">01</span> 지금 가장 먼저 할 일</h2><span class="hm-badge hm-tone-${tone(next.state)}">${esc(STATE_NAME[next.state] || '')}</span></div><div class="hm-next-b"><div class="hm-next-t">${esc(next.title)}</div>${next.sub || next.deadline ? `<div class="hm-next-s">${esc([next.sub, next.deadline ? '기한 ' + next.deadline : ''].filter(Boolean).join(' · '))}</div>` : ''}</div><div class="hm-next-a"><button class="ch-btn ch-btn-primary" data-act="homeNext" data-v="${esc(next.key)}">${nextLabel}</button><button class="ch-btn ch-btn-ghost" data-act="homeOpenToday">할 일 전체 ${total}건 보기</button></div><details class="hm-why"><summary>왜 먼저인가요?</summary><p>내가 처리할 일에서 상태 우선순위(기한 지남, 긴급, 할 일, 확인 필요)를 비교했습니다. 이 항목의 상태: ${esc(STATE_NAME[next.state] || next.state)}. 같은 순위에서는 목록 순서로 안내합니다.</p></details></section>${queueHtml}`
-      : (typeof todoHomeNext === 'function' && todoHomeNext()) || `<section class="hm-card hm-next hm-next-ok" aria-label="지금 할 일"><div class="hm-card-h"><h2 class="hm-card-k">${d.taskGaps ? '확인된 처리할 일이 없습니다' : '현재 확인된 내 일 없음'}</h2></div><div class="hm-next-s">${S.lastRefresh ? esc(hhmm(S.lastRefresh)) + ' 조회 기준 · ' : ''}${d.taskGaps ? '일부 자료를 읽지 못해 전체 할 일을 확인할 수 없습니다.' : d.refN ? `부서 참고 공문 ${d.refN}건이 등록되어 있습니다.` : '새로 도착한 일이 없습니다.'}</div><div class="hm-next-a"><button class="ch-btn ch-btn-ghost" data-act="homeOpenToday">할 일 목록 열기</button></div></section>`;
-    return `${nextHtml}<section class="hm-card hm-stats" aria-label="핵심 현황"><div class="hm-tiles">${tileHtml}</div></section>`;
+      ? `<section class="hm-card hm-next" aria-label="그룹웨어에서 먼저 볼 업무"><div class="hm-card-h"><h2 class="hm-card-k"><span class="desk-index" aria-hidden="true">01</span> 그룹웨어에서 먼저 볼 업무</h2><span class="hm-badge hm-tone-${tone(next.state)}">${esc(STATE_NAME[next.state] || '')}</span></div><div class="hm-next-b"><div class="hm-next-t">${esc(next.title)}</div><div class="hm-next-s">${esc(reason)} · ${esc(next.deadline ? '기한 ' + next.deadline : '확인된 기한 없음')}<br>다음: ${esc(next.sub || '업무 상세 확인')}</div></div><div class="hm-next-a"><button class="ch-btn ch-btn-primary" data-act="homeNext" data-v="${esc(next.key)}">${nextLabel}</button><button class="ch-btn ch-btn-ghost" data-act="homeOpenToday">그룹웨어 처리·확인 ${total}건 보기</button></div></section>`
+      : `<section class="hm-card hm-next hm-next-ok" aria-label="지금 할 일"><div class="hm-card-h"><h2 class="hm-card-k">${d.taskGaps ? '그룹웨어 업무를 모두 확인할 수 없습니다' : '그룹웨어: 현재 확인된 내 일 없음'}</h2></div><div class="hm-next-s">${S.lastRefresh ? esc(hhmm(S.lastRefresh)) + ' 조회 기준 · ' : ''}${d.taskGaps ? '일부 자료를 읽지 못해 전체 할 일을 확인할 수 없습니다.' : d.refN ? `부서 참고 공문 ${d.refN}건이 등록되어 있습니다.` : '개인 ToDo는 위에서 별도로 확인하세요.'}</div><div class="hm-next-a"><button class="ch-btn ch-btn-ghost" data-act="homeOpenToday">할 일 목록 열기</button></div></section>`;
+    return `${personal}${nextHtml}<section class="hm-card hm-stats" aria-label="핵심 현황"><div class="hm-tiles">${tileHtml}</div></section>`;
   }
 
   // 오른쪽: 오늘 일정(하루 띠 + 목록 + 자리 비움), 챙겨 둘 것, 자동화, 자원 예약.
@@ -133,17 +141,18 @@
     const resourceHtml = `<section class="hm-card hm-today hm-res" aria-label="오늘 자원 예약"><div class="hm-card-h"><h3 class="hm-card-k hm-today-k">오늘 자원 예약 (직원 전체)</h3></div>${resources.rows.length ? `<ul class="hm-tl">${resources.rows.map(r => `<li class="hm-tl-car"><span class="hm-tl-t">${esc(r.from)}${r.to ? '~' + esc(r.to) : ''}</span><span class="hm-tl-l">${esc(r.label)}</span></li>`).join('')}</ul>${resources.more ? `<div class="hm-more">외 ${resources.more}건</div>` : ''}` : resourceGaps.length ? '' : '<div class="hm-empty">조회된 자원 예약이 없습니다.</div>'}${resourceGaps.map(x => `<div class="hm-empty">${esc(x)}</div>`).join('')}</section>`;
     const sum = (S.a && S.a.summary) || {};
     const sig = (id, icon, k, v) => `<button class="hm-sig" data-act="homeTile" data-v="${id}" aria-label="${esc(k + ' ' + v)}">${typeof ic === 'function' ? ic(icon) : ''}<span class="hm-sig-k">${esc(k)}</span><b class="hm-sig-v">${esc(v)}</b></button>`;
-    const signals = `<section class="hm-card hm-sigs" aria-label="업무 참고 현황"><div class="hm-card-h"><h3 class="hm-card-k hm-today-k">챙겨 둘 것</h3></div><div class="hm-sig-l">${homeRiskSig()}${typeof todoHomeSig === 'function' ? todoHomeSig() : ''}${sig('mail', 'mail', '안 읽은 메일', d.unread == null ? '확인 불가' : '조회분 ' + d.unread + '건')}${sum.pending !== undefined ? sig('approval', 'doc', '내가 결재할 문서', sum.pending == null ? '확인 불가' : sum.pending + '건') : ''}${sig('ref', 'inbox', '부서 참고', (d.taskGaps ? '확인된 ' : '') + d.refN + '건')}<button class="hm-sig" data-act="homeTile" data-v="leave" aria-label="남은 연차 합계 ${esc(d.leave || '확인 불가')} · ${esc(d.leaveTypes)}"><span class="hm-sig-k">남은 연차 합계 <b>${esc(d.leave || '확인 불가')}</b><br><small>${esc(d.leaveTypes)}${S.raw.collectedAt ? '<br>' + leaveStamp() : ''}</small></span></button></div></section>`;
+    const signals = `<section class="hm-card hm-sigs" aria-label="업무 참고 현황"><div class="hm-card-h"><h3 class="hm-card-k hm-today-k">챙겨 둘 것</h3></div><div class="hm-sig-l">${homeRiskSig()}${sig('mail', 'mail', '안 읽은 메일', d.unread == null ? '확인 불가' : '조회분 ' + d.unread + '건')}${sum.pending !== undefined ? sig('approval', 'doc', '내가 결재할 문서', sum.pending == null ? '확인 불가' : sum.pending + '건') : ''}${sig('ref', 'inbox', '부서 참고', (d.taskGaps ? '확인된 ' : '') + d.refN + '건')}<button class="hm-sig" data-act="homeTile" data-v="leave" aria-label="남은 연차 합계 ${esc(d.leave || '확인 불가')} · ${esc(d.leaveTypes)}"><span class="hm-sig-k">남은 연차 합계 <b>${esc(d.leave || '확인 불가')}</b><br><small>${esc(d.leaveTypes)}${S.raw.collectedAt ? '<br>' + leaveStamp() : ''}</small></span></button></div></section>`;
     return tlHtml + signals + (typeof autoCardHtml === 'function' ? autoCardHtml() : '') + resourceHtml;
   }
 
   // v0.94.0: "놓치기 쉬운 일"을 묻지 않아도 보이게(지난·임박 기한, 하루 넘게 안 읽은 요청 메일, 오래된 답장 확인, 근태 확인, 반려). 누르면 비서가 이유와 함께 답한다.
   function homeRiskSig() {
     if (!S.a || typeof R.cuRisks !== 'function') return '';
+    const taskGaps = groupwareTaskGaps();
     // 이미 읽어 둔 메일 본문의 기한까지 반영(새로 열지는 않음 — 홈을 그릴 때마다 요청을 보내지 않는다)
     const items = typeof cuRiskItemsCached === 'function' ? cuRiskItemsCached() : mineVisible().map(x => ({key: x.key, title: x.title, state: stateOf(x), base: x.base, type: x.type, deadline: x.deadline && x.deadline.date || '', when: x.when || ''}));
     const n = R.cuRisks(items, {today: today()}).length;
-    return `<button class="hm-sig" data-act="homeTile" data-v="risks" aria-label="${esc('놓치기 쉬운 일 ' + n + '건, 누르면 비서가 이유를 알려 줍니다')}">${typeof ic === 'function' ? ic('alert') : ''}<span class="hm-sig-k">놓치기 쉬운 일</span><b class="hm-sig-v">${n ? n + '건 · 이유 보기' : '없음'}</b></button>`;
+    return `<button class="hm-sig" data-act="homeTile" data-v="risks" aria-label="${esc('놓치기 쉬운 일 ' + (taskGaps && !n ? '전체 확인 불가' : (taskGaps ? '확인된 ' : '') + n + '건') + ', 누르면 비서가 이유를 알려 줍니다')}">${typeof ic === 'function' ? ic('alert') : ''}<span class="hm-sig-k">놓치기 쉬운 일</span><b class="hm-sig-v">${n ? (taskGaps ? '확인된 ' : '') + n + '건 · 이유 보기' : taskGaps ? '전체 확인 불가' : '없음'}</b></button>`;
   }
 
   // 넓은 화면: 왼쪽은 인사 → 지금 할 일 → 숫자 줄 → 대화, 오른쪽은 오늘 일정과 참고. 좁은 화면에서는 같은 순서로 한 줄로 쌓인다(순서는 CSS order).

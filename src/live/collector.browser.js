@@ -15,7 +15,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '1.20.3';
+  const VERSION = '1.20.4';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
@@ -357,7 +357,8 @@
   // 하루 이상 구간의 예약 현황 (YYYYMMDD). statusType 10=신청, 20=승인
   async function resourceBookings({from, to, resSeqs = []}) {
     const d = await call('/schres/rs121A05', {startDate: from, endDate: to, statusType: ['10', '20'], resList: resSeqs.map(s => ({resSeq: String(s)})), statusCode: '', searchType: '', sechType: '', menuAuth: 'USER'});
-    return arr(d && d.resultList).map(r => ({resSeq: str(r.resSeq, 12), seqNum: str(r.seqNum, 12), name: str(r.resName, 60), title: str(r.reqText || r.resTitleDisplay, 120), start: str(r.resStartDate || r.startDate, 12), end: str(r.resEndDate || r.endDate, 12), status: str(r.statusCode, 4), who: str(r.empName || r.createName || r.reqEmpName, 20), mine: !!r.mineYn || undefined, raw: undefined}));
+    if (!Array.isArray(d?.resultList)) throw new GwError('API_ERROR', '자원 예약 목록 형식을 확인할 수 없습니다');
+    return d.resultList.map(r => ({resSeq: str(r.resSeq, 12), seqNum: str(r.seqNum, 12), name: str(r.resName, 60), title: str(r.reqText || r.resTitleDisplay, 120), start: str(r.resStartDate || r.startDate, 12), end: str(r.resEndDate || r.endDate, 12), status: str(r.statusCode, 4), who: str(r.empName || r.createName || r.reqEmpName, 20), mine: !!r.mineYn || undefined, raw: undefined}));
   }
   async function resourceDetail(resSeq) {
     const d = await call('/schres/rs121A42', {resSeq: String(resSeq)});

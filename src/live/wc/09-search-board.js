@@ -18,6 +18,17 @@
   const cleanSnip = t => String(t || '').replace(/^[\s\S]{0,80}?수신자[\s\S]{0,160}?제목\s*/, '').replace(/\s+/g, ' ').trim();
   const periodFrom = p => { if (!p) return ''; const d = new Date(); d.setMonth(d.getMonth() - Number(p)); return R.kstNow(d).date.replace(/-/g, ''); };
   let searchSeq = 0;
+  const searchDateText = d => String(d).replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3');
+  const searchTypeLabel = type => type === 'doc' ? '결재문서' : GW.searchLabels[type] || type;
+  const searchTotal = g => (g.reliableTotal === undefined ? g.total : g.reliableTotal) ?? null;
+  const searchCanPage = g => !g.error && !g.exhausted && (searchTotal(g) == null ? g.items.length > 0 : searchTotal(g) > g.items.length);
+  function carrySearchInputs(from, to) {
+    if (!(from === 'search' && to === 'docs' || from === 'docs' && to === 'search')) return;
+    const src = from === 'search' ? S.search : dfState(), dst = to === 'search' ? S.search : dfState();
+    src.kw = $(from === 'search' ? '#sq' : '#dfq')?.value ?? src.kw;
+    src.period = $(from === 'search' ? '#speriod' : '#dfPeriod')?.value ?? src.period;
+    dst.kw = src.kw; dst.period = src.period;
+  }
   function searchFromInputs() {
     const q = $('#sq'), p = $('#speriod');
     if (q) S.search.kw = q.value.trim();
@@ -26,33 +37,44 @@
   }
   function vSearch() {
     const s = S.search, res = s.res;
-    const types = Object.entries(GW.searchLabels).filter(([k]) => k !== 'note');
-    const group = (type, render) => { const g = res && res.groups[type]; if (!g) return ''; return `<h2>${esc(g.label)} <span class="muted">${g.total}건</span>${g.total > g.items.length ? `<button class="btn sm ghost" data-act="searchMore" data-t="${type}" ${s.moreBusy?.[type] ? 'disabled' : ''}>${s.moreBusy?.[type] ? '불러오는 중…' : '더 보기'}</button>` : ''}</h2>${g.error ? `<div class="box errb">${esc(g.message)}</div>` : g.items.length ? `<div class="list" role="list">${g.items.map(render).join('')}</div>` : '<div class="muted">결과 없음</div>'}`; };
+    const types = Object.keys(GW.searchLabels).filter(k => k !== 'note');
+    const group = (type, render) => {
+      const g = res?.groups?.[type]; if (!g) return '';
+      const n = searchTotal(g), count = g.items.length;
+      return `<h2>${esc(searchTypeLabel(type))} <span class="muted">${g.error ? '조회 실패' : n == null ? `${count}건 확인 · 전체 건수 미확인` : n > count ? `${n}건 중 ${count}건 확인` : `${n}건`}</span>${searchCanPage(g) ? `<button class="btn sm ghost" data-act="searchMore" data-t="${type}" ${s.moreBusy?.[type] ? 'disabled' : ''}>${s.moreBusy?.[type] ? '불러오는 중…' : '더 보기'}</button>` : ''}</h2>${g.error ? `<div class="box errb">${esc(g.message)}</div>` : count ? `<div class="list" role="list">${g.items.map(render).join('')}</div>` : n === 0 ? '<div class="muted">이 검색 범위에서 결과 0건</div>' : '<div class="muted">결과 유무를 확인하지 못했습니다.</div>'}${g.exhausted && n > count ? '<p class="muted">추가 응답이 없어 전체 결과를 확인하지 못했습니다.</p>' : ''}`;
+    };
     const row = (t, id, pill, title, desc, when) => `<div class="row ${S.sel && S.sel.type === 'search' && S.sel.item && (S.sel.item.docId || S.sel.item.uid || S.sel.item.id || S.sel.item.fileId) === id ? 'sel' : ''}" role="listitem" tabindex="0" data-act="selSearch" data-t="${t}" data-id="${esc(id)}" style="grid-template-columns:90px 1fr auto"><span class="bdg tag">${esc(pill)}</span><div class="mn"><div class="t">${title}</div><div class="fx">${desc}</div></div><div class="w">${esc(when)}</div></div>`;
-    const totals = res ? Object.values(res.groups).reduce((n, g) => n + (g.total || 0), 0) : 0;
-    const busy = s.busy ? `<div class="list">${'<div class="sk row"></div>'.repeat(4)}</div><p class="muted"><span class="spin"></span> ${esc(s.types.map(t => GW.searchLabels[t]).join('·'))}에서 "${esc(s.kw)}"${typeof R === 'object' && R && typeof R.cuJosa === 'function' ? R.cuJosa(String(esc(s.kw)), '을를').slice(-1) : '을(를)'} 찾는 중입니다…</p>` : '';
-    return `${pgh('검색·문서', res && !s.busy ? `"${esc(res.keyword)}" 결과 ${totals}건 · ${Object.values(res.groups).filter(g => g.total).map(g => `${esc(g.label)} ${g.total}`).join(' · ')}` : '')}
+    const byType = res?.groups || {}, groups = Object.values(byType), query = s.searchQuery;
+    const missing = !!res && ((query && query.types.some(t => !byType[t])) || !groups.length || groups.some(g => g.error || g.pageError || searchTotal(g) == null || ((g.exhausted || !g.items.length) && searchTotal(g) > g.items.length)));
+    const count = groups.reduce((n, g) => n + (g.error ? 0 : g.items.length), 0);
+    const zero = !!res && !missing && groups.every(g => searchTotal(g) === 0);
+    const busy = s.busy ? `<div class="list">${'<div class="sk row"></div>'.repeat(4)}</div><p class="muted"><span class="spin"></span> “${esc(s.kw)}” 검색 중입니다…</p>` : '';
+    return `${pgh('통합검색', '결재문서·메일 등 여러 자료에서 찾습니다')}
 <div class="bar"><input class="inp grow" id="sq" placeholder="검색어 (예: 월간업무보고, 문서번호, 사람 이름)" value="${esc(s.kw)}" aria-label="검색어"><select class="f" id="speriod" aria-label="기간">${[['', '전체 기간'], ['1', '최근 1개월'], ['3', '최근 3개월'], ['12', '최근 1년']].map(([v, n]) => `<option value="${v}" ${s.period === v ? 'selected' : ''}>${n}</option>`).join('')}</select><button class="btn primary" data-act="doSearch" ${s.busy ? 'disabled' : ''}>${ic('search')}검색</button></div>
-<div class="bar"><span class="muted">찾을 곳</span>${types.map(([k, n]) => `<button class="chip ${s.types.includes(k) ? 'on' : ''}" data-act="stype" data-v="${k}" aria-pressed="${s.types.includes(k)}">${s.types.includes(k) ? ic('check') : ''}${esc(n)}</button>`).join('')}</div>
+<div class="bar"><span class="muted">찾을 곳</span>${types.map(k => `<button class="chip ${s.types.includes(k) ? 'on' : ''}" data-act="stype" data-v="${k}" aria-pressed="${s.types.includes(k)}">${s.types.includes(k) ? ic('check') : ''}${esc(searchTypeLabel(k))}</button>`).join('')}</div>
 ${busy}
+<p class="muted">계정에 보이는 그룹웨어 검색 색인 기준입니다. 결과가 없어도 권한 밖이거나 색인에 없는 자료의 존재 여부는 확인할 수 없습니다.</p>
 ${!res && !s.busy ? `<div class="card2"><div class="ct">이렇게 찾아보세요</div><div class="bar" style="margin:0">${['월간업무보고', '시간외근무', '노동이사제', '일상감사', ...(S.searchRecent || [])].filter((v, i, a) => a.indexOf(v) === i).slice(0, 8).map(k => `<button class="chip" data-act="searchExample" data-v="${esc(k)}">${ic('search')}${esc(k)}</button>`).join('')}</div><p class="muted" style="margin:10px 0 0">결과를 누르면 오른쪽에 본문 미리보기가 열립니다. 미리보기와 검색은 열람 기록이나 그룹웨어 최근 검색어를 남기지 않습니다.</p></div>` : ''}
-${res && !s.busy ? [
-      group('doc', x => row('doc', x.docId, x.form || '문서', hl(x.title, res.keyword), `${esc(x.docNo)} · ${esc(x.dept)} ${esc(x.drafter)} · ${hl(cleanSnip(x.snippet), res.keyword)}`, ymd8(x.date))),
+${res && !s.busy ? `<p role="status">“${esc(res.keyword)}” · ${query?.from ? `${searchDateText(query.from)} ~ ${searchDateText(query.to || '')}` : '전체 기간'}${zero ? ' · 이 범위에서 결과 0건' : count ? ` · ${count}건 확인` : ''}${missing ? ' · 일부 조회 실패 또는 범위 미확인' : ''}</p>` + [
+      group('doc', x => row('doc', x.docId, '결재문서', hl(x.title, res.keyword), `${x.form ? esc(x.form) + ' · ' : ''}${esc(x.docNo)} · ${esc(x.dept)} ${esc(x.drafter)} · ${hl(cleanSnip(x.snippet), res.keyword)}`, ymd8(x.date))),
       group('mail', x => row('mail', x.uid, '메일', hl(x.subject || '(제목 없음)', res.keyword), `${esc(x.from)} → ${esc(x.to)} · ${hl(x.snippet, res.keyword)}`, shortWhen(x.date))),
-      group('board', x => row('board', x.id, x.catTitle || '게시판', hl(x.title, res.keyword), `${esc(x.writer)} · ${hl(x.snippet, res.keyword)}`, String(x.date).slice(0, 10))),
-      group('file', x => row('file', x.fileId, (x.ext || '파일').toUpperCase(), hl(x.name, res.keyword), `${esc(x.parent)} · ${esc(x.owner)}`, String(x.date).slice(0, 10))),
+      group('board', x => row('board', x.id, '게시판', hl(x.title, res.keyword), `${x.catTitle ? esc(x.catTitle) + ' · ' : ''}${esc(x.writer)} · ${hl(x.snippet, res.keyword)}`, String(x.date).slice(0, 10))),
+      group('file', x => row('file', x.fileId, '첨부파일', hl(x.name, res.keyword), `${x.ext ? esc(x.ext.toUpperCase()) + ' · ' : ''}${esc(x.parent)} · ${esc(x.owner)}`, String(x.date).slice(0, 10))),
       group('schedule', x => row('schedule', x.id, '일정', hl(x.title, res.keyword), hl(x.snippet, res.keyword), String(x.start).slice(0, 10))),
       group('person', x => `<div class="row" role="listitem" style="grid-template-columns:90px 1fr auto"><span class="bdg tag">사람</span><div class="mn"><div class="t">${esc(x.name)} ${esc(x.duty || x.position)}</div><div class="fx">${esc(x.dept)}${x.tel ? ' · ☎ ' + esc(x.tel) : ''}${x.email ? ' · ' + esc(x.email) : ''}</div></div><div>${x.email ? `<button class="btn sm" data-act="copy" data-v="${esc(x.email)}">메일 주소 복사</button>` : ''}</div></div>`),
       group('contact', x => `<div class="row" role="listitem" style="grid-template-columns:90px 1fr auto"><span class="bdg tag">연락처</span><div class="mn"><div class="t">${esc(x.name)} ${esc(x.rank)}</div><div class="fx">${esc(x.company)} ${esc(x.dept)}${x.tel ? ' · ☎ ' + esc(x.tel) : ''}${x.email ? ' · ' + esc(x.email) : ''}</div></div><div></div></div>`),
-    ].join('') || '<div class="list"><div class="empty"><b>찾은 결과가 없습니다</b>기간이나 찾을 곳을 넓혀 보세요.</div></div>' : ''}`;
+    ].join('') : ''}`;
   }
   async function runSearch(types) {
     const s = S.search, kw = s.kw.trim();
     if (kw.length < 2) { toast('검색어를 두 글자 이상 입력하세요.'); return; }
-    const seq = ++searchSeq, query = {kw, from: periodFrom(s.period), types: [...(types || s.types)]};
-    s.busy = true; s.moreBusy = {}; S.view = 'search'; render();
+    const selected = types || s.types;
+    if (!selected.length) { toast('찾을 곳을 하나 이상 선택하세요.'); return; }
+    const from = periodFrom(s.period);
+    const seq = ++searchSeq, query = {kw, from, to: from ? R.kstNow(new Date()).date.replace(/-/g, '') : '', types: [...selected]};
+    s.busy = true; s.res = null; s.moreBusy = {}; S.view = 'search'; render();
     try {
-      const res = await GW.search(query.kw, {types: query.types, pageSize: 10, from: query.from});
+      const res = await GW.search(query.kw, {types: query.types, pageSize: 10, from: query.from, to: query.to});
       if (seq !== searchSeq || S.search !== s) return;
       s.res = res; s.searchQuery = query; s.more = {};
       S.searchRecent = [kw, ...(S.searchRecent || []).filter(k => k !== kw)].slice(0, 5);
@@ -61,19 +83,20 @@ ${res && !s.busy ? [
   }
   async function searchMore(type) {
     const s = S.search, res = s.res, query = s.searchQuery, g = res?.groups?.[type];
-    if (s.busy || !query || !g || g.total <= g.items.length) return;
+    if (s.busy || !query || !g || !searchCanPage(g)) return;
     const locks = s.moreBusy || (s.moreBusy = {});
     if (locks[type]) return;
     locks[type] = true;
     const seq = searchSeq, page = (s.more[type] || 1) + 1;
     renderMain();
     try {
-      const r = await GW.search(query.kw, {types: [type], pageSize: 10, page, from: query.from});
+      const r = await GW.search(query.kw, {types: [type], pageSize: 10, page, from: query.from, to: query.to});
       if (seq !== searchSeq || S.search !== s || s.res !== res || s.searchQuery !== query) return;
       const next = r.groups[type];
       if (!next || next.error) throw new Error(next?.message || '결과를 불러오지 못했습니다.');
-      g.items = [...g.items, ...next.items]; s.more[type] = page;
-    } catch (err) { if (seq === searchSeq && S.search === s && s.res === res) toast(err.message); }
+      if (!next.items.length) g.exhausted = true;
+      g.items = [...g.items, ...next.items]; s.more[type] = page; g.pageError = false;
+    } catch (err) { if (seq === searchSeq && S.search === s && s.res === res) { g.pageError = true; toast(err.message); } }
     finally {
       delete locks[type];
       if (seq === searchSeq && S.search === s && s.res === res) renderMain();

@@ -2,9 +2,18 @@
 // 51-todo.js의 TD·todo* 함수를 쓴다. 쓰기는 모두 그룹웨어 ToDo로 가며, 결과를 그대로 알린다.
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
 
+  const personalTodoIncomplete = () => TD.complete === false || TD.cached || !!TD.err;
+  function personalHomeDueHtml() {
+    const known = Array.isArray(TD.list), incomplete = personalTodoIncomplete();
+    const due = known ? todoNavDue() : [];
+    const dueToday = due.filter(t => t.due === today()).length;
+    const count = known ? `${incomplete ? '확인된 ' : ''}오늘 마감 ${dueToday}건 · 기한 지남 ${due.length - dueToday}건` : TD.err ? '개인 ToDo를 읽지 못했습니다' : '개인 ToDo 확인 중';
+    return `<section class="hm-card hm-next" aria-label="개인 ToDo 오늘까지"><div class="hm-card-h"><h2 class="hm-card-k">개인 ToDo · 오늘까지</h2><button class="hm-link" data-act="homeTile" data-v="mytodo">개인 ToDo 보기</button></div><div class="hm-next-s">${count}${known && incomplete ? ' · 전체 목록 확인 불가' : ''}</div>${due.length ? `<ul class="hm-queue">${due.slice(0, 2).map(t => `<li><button class="hm-q" data-act="tdSel" data-id="${esc(t.id)}"><span class="hm-q-t">${esc(t.title)}</span><span class="hm-badge">기한 ${esc(todoMd(t.due))} · 상세 보기</span></button></li>`).join('')}</ul>` : ''}</section>`;
+  }
+
   const TODO_VIEWS = [['list', '목록'], ['kanban', '칸반'], ['timeline', '일정표']];
   function todoViewSeg() {
-    return `<div class="seg" role="group" aria-label="보기 방식">${TODO_VIEWS.map(([k, n]) => `<button class="${TD.view === k ? 'on' : ''}" aria-pressed="${TD.view === k}" data-act="tdView" data-v="${k}">${esc(n)}</button>`).join('')}</div>`;
+    return `<div class="seg" role="group" aria-label="개인 ToDo 보기 방식">${TODO_VIEWS.map(([k, n]) => `<button class="${TD.view === k ? 'on' : ''}" aria-pressed="${TD.view === k}" data-act="tdView" data-v="${k}">${esc(n)}</button>`).join('')}</div>`;
   }
   // 칸반·일정표는 상태를 칸으로 보여 주므로 상태 거르기 대신 찾기·중요도만 적용한다
   function todoBaseFiltered() {
@@ -36,7 +45,7 @@
     if (!TD.list) return '';
     const all = R.tdSortBy(todoBaseFiltered(), TD.sort);
     const cols = TODO_KAN.map(([k, n]) => [k, n, all.filter(t => todoKanCol(t) === k && (k !== 'done' || R.tdDoneWithin(t, TD.doneSpan)))]);
-    return `<p class="muted td-hint">카드를 끌어 옮기거나 [→] 버튼을 누르면 그룹웨어 ToDo의 진행률이 바뀝니다(예정 0% · 진행 10% 이상 · 완료 100%). 완료 칸은 '끝낸 일' 기간(${TD.doneSpan === 'week' ? '최근 1주' : TD.doneSpan === 'month' ? '최근 1달' : '전체'})만 보입니다.</p><div class="td-kan">${cols.map(([k, n, l]) => `<section class="td-kcol" data-drop="tdk:${k}" aria-label="${esc(n)} ${l.length}건"><h3 class="td-gh">${esc(n)} <span class="muted">${l.length}</span></h3><div class="td-klist" role="list">${l.slice(0, 60).map(todoKanCard).join('') || '<p class="muted">없음</p>'}${l.length > 60 ? `<p class="muted">외 ${l.length - 60}건은 목록 보기에서 보세요.</p>` : ''}</div></section>`).join('')}</div>`;
+    return `<p class="muted td-hint">카드를 끌어 옮기거나 [→] 버튼을 누르면 그룹웨어 ToDo의 진행률이 바뀝니다(예정 0% · 진행 10% 이상 · 완료 100%). 완료 칸은 '끝낸 일' 기간(${TD.doneSpan === 'week' ? '최근 1주' : TD.doneSpan === 'month' ? '최근 1달' : '전체'})만 보입니다.</p><div class="td-kan">${cols.map(([k, n, l]) => `<section class="td-kcol" data-drop="tdk:${k}" aria-label="${esc(n)} ${l.length}건"><h3 class="td-gh">${esc(n)} <span class="muted">${l.length}</span></h3><div class="td-klist" role="list">${l.slice(0, 60).map(todoKanCard).join('') || `<p class="muted">${personalTodoIncomplete() ? '전체 목록 확인 불가' : '없음'}</p>`}${l.length > 60 ? `<p class="muted">외 ${l.length - 60}건은 목록 보기에서 보세요.</p>` : ''}</div></section>`).join('')}</div>`;
   }
   async function todoKanbanDrop(dragId, col) {
     const id = String(dragId || '').replace(/^todo:/, '');
@@ -61,7 +70,7 @@
     const now = tcol >= 0 && tcol < days ? `<span class="tl-now" style="left:calc(${tcol} * 100% / ${days})" aria-hidden="true"></span>` : '';
     const rows = bars.slice(0, 80).map(({t, col, span, cutL, cutR}) => { const st = R.tdState(t); return `<div class="tl-row"><button class="tl-lab" data-act="tdSel" data-id="${esc(t.id)}" title="${esc(t.title)}">${todoImpBadge(t)}${esc(t.title)}</button><div class="tl-track" style="--tl-days:${days}">${now}<button class="tl-bar st-${st} ${cutL ? 'cut-l' : ''} ${cutR ? 'cut-r' : ''}" style="grid-column:${col + 1} / span ${span}" data-act="tdSel" data-id="${esc(t.id)}" aria-label="${esc(`${t.title} ${todoPeriod(t)} ${R.TD_STATES.find(s => s[0] === st)[1]}${st === 'doing' ? ' ' + t.rate + '%' : ''}`)}">${st === 'doing' ? `${t.rate}%` : st === 'late' ? '지연' : st === 'done' ? '완료' : ''}</button></div></div>`; }).join('');
     return `<div class="bar tl-nav"><button class="btn sm" data-act="tdTl" data-v="-14" aria-label="2주 앞으로">${ic('back')}2주 전</button><b>${esc(todoMd(from))} ~ ${esc(todoMd(todoAddDays(from, days - 1)))}</b><button class="btn sm" data-act="tdTl" data-v="0">이번 주</button><button class="btn sm" data-act="tdTl" data-v="14" aria-label="2주 뒤로">2주 뒤</button><span class="muted">막대를 누르면 자세히 봅니다.${noDate ? ` 기한 없는 할 일 ${noDate}건은 목록 보기에서 보세요.` : ''}</span></div>
-<div class="tl" role="list" aria-label="할 일 일정표"><div class="tl-row tl-h"><span class="tl-lab">할 일</span><div class="tl-track" style="--tl-days:${days}">${head}</div></div>${rows || '<p class="muted" style="padding:10px">이 기간에 걸친 할 일이 없습니다.</p>'}${bars.length > 80 ? `<p class="muted">외 ${bars.length - 80}건</p>` : ''}</div>`;
+<div class="tl" role="list" aria-label="할 일 일정표"><div class="tl-row tl-h"><span class="tl-lab">할 일</span><div class="tl-track" style="--tl-days:${days}">${head}</div></div>${rows || `<p class="muted" style="padding:10px">${personalTodoIncomplete() ? '전체 목록을 확인할 수 없습니다.' : '이 기간에 걸친 할 일이 없습니다.'}</p>`}${bars.length > 80 ? `<p class="muted">외 ${bars.length - 80}건</p>` : ''}</div>`;
   }
 
   // ---------- 댓글(읽기). 쓰기는 그룹웨어 ToDo 화면에서 한다(받은 ToDo는 준 사람에게 알림이 간다) ----------
@@ -165,9 +174,9 @@ ${t.canProgress ? `<div class="td-sec"><label class="td-f">진행률 <b id="tdeR
     const list = TD.list ? R.tdWrapUp(TD.list) : [];
     const nx = todoNextWorkday();
     return `<div class="modal" data-act="closeOverlay"><div class="dlg" data-stop="1" role="dialog" aria-label="퇴근 전 마무리" style="width:min(640px,94vw)"><button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button><h2 style="margin-top:0">퇴근 전 마무리</h2>
-${list.length ? `<p class="muted">오늘까지인데 끝내지 않은 할 일 ${list.length}건입니다. 다음 평일은 ${esc(nx.slice(5).replace('-', '/'))}입니다.</p><div class="td-list" role="list">${list.map(t => `<div class="td-row" role="listitem"><span class="td-main"><span class="td-t">${t.important ? `<span class="td-star">${ic('star')}</span>` : ''}${esc(t.title)}</span><span class="td-sub"><span class="${R.dday(t.due) < 0 ? 'td-late' : ''}">${esc(t.due.slice(5).replace('-', '/'))} · ${esc(todoDdayText(t.due))}</span></span></span><span class="acts"><button class="btn sm" data-act="tdWrapDone" data-id="${esc(t.id)}">끝냄</button><button class="btn sm" data-act="tdWrapNext" data-id="${esc(t.id)}">${esc(nx.slice(5).replace('-', '/'))}로</button><button class="btn sm ghost" data-act="tdWrapPick" data-id="${esc(t.id)}">날짜</button></span></div>`).join('')}</div><div class="acts" style="justify-content:flex-end;margin-top:14px"><button class="btn" data-act="closeOverlay">닫기</button><button class="btn primary" data-act="tdWrapAll">남은 ${list.length}건 모두 ${esc(nx.slice(5).replace('-', '/'))}로</button></div>` : `<p>오늘까지 남은 할 일이 없습니다. 수고하셨습니다.</p><div class="acts" style="justify-content:flex-end"><button class="btn primary" data-act="closeOverlay">닫기</button></div>`}</div></div>`;
+${list.length ? `<p class="muted">${personalTodoIncomplete() ? '확인된 ' : ''}오늘까지인데 끝내지 않은 할 일 ${list.length}건입니다. 다음 평일은 ${esc(nx.slice(5).replace('-', '/'))}입니다.</p><div class="td-list" role="list">${list.map(t => `<div class="td-row" role="listitem"><span class="td-main"><span class="td-t">${t.important ? `<span class="td-star">${ic('star')}</span>` : ''}${esc(t.title)}</span><span class="td-sub"><span class="${R.dday(t.due) < 0 ? 'td-late' : ''}">${esc(t.due.slice(5).replace('-', '/'))} · ${esc(todoDdayText(t.due))}</span></span></span><span class="acts"><button class="btn sm" data-act="tdWrapDone" data-id="${esc(t.id)}">끝냄</button><button class="btn sm" data-act="tdWrapNext" data-id="${esc(t.id)}">${esc(nx.slice(5).replace('-', '/'))}로</button><button class="btn sm ghost" data-act="tdWrapPick" data-id="${esc(t.id)}">날짜</button></span></div>`).join('')}</div><div class="acts" style="justify-content:flex-end;margin-top:14px"><button class="btn" data-act="closeOverlay">닫기</button><button class="btn primary" data-act="tdWrapAll">확인한 ${list.length}건을 ${esc(nx.slice(5).replace('-', '/'))}로</button></div>` : `<p>${!TD.list || personalTodoIncomplete() ? '오늘까지 남은 개인 ToDo를 모두 확인할 수 없습니다.' : '오늘까지 남은 할 일이 없습니다. 수고하셨습니다.'}</p><div class="acts" style="justify-content:flex-end"><button class="btn primary" data-act="closeOverlay">닫기</button></div>`}</div></div>`;
   }
-  function todoWrapOpen() { if (!TD.list) { todoLoad({force: true}).then(() => todoWrapOpen()); return; } closeOverlay(); S.paletteOpen = true; $('#overlay').innerHTML = todoWrapHtml(); setTimeout(() => $('#overlay button.primary')?.focus(), 30); }
+  function todoWrapOpen() { if (!TD.list && !TD.err && todoGwOk()) { todoLoad({force: true}).then(() => { if (TD.list || TD.err) todoWrapOpen(); }); return; } closeOverlay(); S.paletteOpen = true; $('#overlay').innerHTML = todoWrapHtml(); setTimeout(() => $('#overlay button.primary')?.focus(), 30); }
   const todoWrapRefresh = () => { if ($('#overlay .dlg[aria-label="퇴근 전 마무리"]')) $('#overlay').innerHTML = todoWrapHtml(); };
 
   HOME_ACTS.tdWrap = () => todoWrapOpen();

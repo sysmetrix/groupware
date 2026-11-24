@@ -250,7 +250,7 @@
       notes.push(routingPartial ? '접수 이력은 조회되지 않았거나 기간이 일부여서 접수 실적이 일부일 수 있음' : `접수 ${receipts.length}건`);
       notes.push('원본과 대조 필요');
       const draft = R.weeklyReport({submitted: sub.docs, receipts, me: `${S.raw.principal.deptName} ${me}`, from: sub.from, to: sub.to, extraLines: typeof todoWeeklyFor === 'function' ? todoWeeklyFor(sub.from, sub.to) : []});
-      S.weekly = `[자료 범위: ${notes.join(' · ')}]\n\n` + draft;
+      S.weekly = `[자료 범위: ${notes.join(' · ')}]\n[자료 조회 기준: ${reportCollectedAt(new Date())}]\n[보고 기간: ${range.from} ~ ${range.to}]\n\n` + draft;
       if (!saveLocal()) toast('초안 저장에 실패했습니다. 내용을 복사해 보관하세요.');
     } catch (err) { if (requestSeq === weeklyRequestSeq) toast('주간 초안을 만들지 못했습니다: ' + err.message); }
     if (requestSeq === weeklyRequestSeq && S.view === 'report') renderMain();

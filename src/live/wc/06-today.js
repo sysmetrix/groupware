@@ -9,18 +9,20 @@
     const f = S.filter;
     const tab = S.todayTab || 'mine';
     const hiddenN = S.a.actions.filter(x => isHidden(x.key) || isSnoozed(x.key)).length;
-    const curList = tab === 'mine' ? mine : visibleActions().filter(x => !isMine(x));
+    const curList = tab === 'mine' ? (f.level === 'wait' ? visibleActions().filter(x => isMine(x) && stateOf(x) === 'wait') : mine) : visibleActions().filter(x => !isMine(x));
     const areas = [['all', '전체'], ['메일', '메일'], ['결재', '결재'], ['근태', '근태'], ['공지', '공지']].filter(([a]) => a === 'all' || curList.some(x => x.area === a));
     const acnt = a => a === 'all' ? curList.length : curList.filter(x => x.area === a).length;
-    const sub = !mine.length ? '지금 처리할 일이 없습니다' : urgent ? `<b style="color:var(--hi)">급한 일 ${urgent}건</b> · 전체 ${mine.length}건` : `전체 ${mine.length}건`;
+    const gaps = groupwareTaskGaps();
+    const sub = `${gaps ? '확인된 ' : ''}그룹웨어 처리·확인 ${mine.length}건${urgent ? ` · <b style="color:var(--hi)">급한 일 ${urgent}건</b>` : ''} · 개인 ToDo 제외`;
 
-    return `${pgh('할 일', sub, mine.length ? `<button class="btn primary" data-act="focusStart" title="처리할 일을 하나씩 차례로 (F)">${ic('play')}하나씩 처리</button>` : '')}
+    return `${pgh('그룹웨어 업무', sub, mine.length ? `<button class="btn primary" data-act="focusStart" title="처리할 일을 하나씩 차례로 (F)">${ic('play')}하나씩 처리</button>` : '')}
+${gaps ? '<p class="muted lean-note" role="status">일부 그룹웨어 자료를 읽지 못해 확인된 항목만 표시합니다.</p>' : ''}
 <div class="bar">
-  <div class="seg" role="tablist">
-    <button role="tab" aria-selected="${tab === 'mine'}" class="${tab === 'mine' ? 'on' : ''}" data-act="setTodayTab" data-v="mine">내 할 일<span class="c">${mine.length}</span></button>
+  <div class="seg" role="tablist" aria-label="그룹웨어 업무 구분">
+    <button role="tab" aria-selected="${tab === 'mine'}" class="${tab === 'mine' ? 'on' : ''}" data-act="setTodayTab" data-v="mine">처리·확인<span class="c">${mine.length}</span></button>
     <button role="tab" aria-selected="${tab === 'ref'}" class="${tab === 'ref' ? 'on' : ''}" data-act="setTodayTab" data-v="ref" title="부서 접수·배부 등 부서 문서담당자가 처리하는 공문">부서 참고<span class="c">${refN}</span></button>
   </div>
-  ${areas.length > 2 ? `<div class="seg" role="tablist">${areas.map(([a, n]) => `<button role="tab" aria-selected="${f.area === a}" class="${f.area === a ? 'on' : ''}" data-act="area" data-v="${a}">${n}<span class="c">${acnt(a)}</span></button>`).join('')}</div>` : ''}
+  ${areas.length > 2 ? `<div class="seg" role="tablist" aria-label="그룹웨어 업무 영역">${areas.map(([a, n]) => `<button role="tab" aria-selected="${f.area === a}" class="${f.area === a ? 'on' : ''}" data-act="area" data-v="${a}">${n}<span class="c">${acnt(a)}</span></button>`).join('')}</div>` : ''}
   <label class="srch-in" style="flex:1;min-width:160px;display:flex"><input class="inp grow" id="qfilter" placeholder="목록에서 검색" value="${esc(f.q)}" aria-label="목록에서 검색"></label>
   ${f.level !== 'all' ? `<button class="chip on" data-act="stateFilter" data-v="all" title="이 조건 풀기">${esc(STATE_GROUP[f.level] || '')}만 ${ic('x')}</button>` : ''}
   ${hiddenN || f.showHidden ? `<button class="chip ${f.showHidden ? 'on' : ''}" data-act="showHidden" title="이 화면에서 숨기거나 내일로 미룬 항목">${ic('eye')}숨긴 항목 ${hiddenN}</button>` : ''}
@@ -34,18 +36,19 @@
   function todayQueue() {
     const all = queue(), lvl = S.filter.level;
     if ((S.todayTab || 'mine') === 'ref') return all.filter(x => !isMine(x));
-    const mine = all.filter(x => isMine(x) && stateOf(x) !== 'wait').filter(x => lvl === 'all' || (lvl === 'urgent' ? ['overdue', 'urgent'].includes(stateOf(x)) : stateOf(x) === lvl));
-    return ['urgent', 'todo', 'check', 'confirm'].flatMap(st => mine.filter(x => STATE_GROUP[stateOf(x)] === STATE_GROUP[st]));
+    const mine = all.filter(x => isMine(x) && (lvl === 'wait' ? stateOf(x) === 'wait' : stateOf(x) !== 'wait')).filter(x => lvl === 'all' || (lvl === 'urgent' ? ['overdue', 'urgent'].includes(stateOf(x)) : stateOf(x) === lvl));
+    return ['urgent', 'todo', 'check', 'confirm', 'wait'].flatMap(st => mine.filter(x => STATE_GROUP[stateOf(x)] === STATE_GROUP[st]));
   }
   const queueRows = () => {
     const all = todayQueue();
     const lvl = S.filter.level;
     const tab = S.todayTab || 'mine';
 
+    const gaps = groupwareTaskGaps();
     if (tab === 'ref') {
       const refs = all.filter(x => !isMine(x));
       if (!refs.length) {
-        return `<div class="list"><div class="empty"><div class="ill">${ic('check', 'style="width:36px;height:36px;color:var(--ok)"')}</div><b>부서 참고 공문이 없습니다</b></div></div>`;
+        return `<div class="list"><div class="empty"><div class="ill">${ic('check', 'style="width:36px;height:36px;color:var(--ok)"')}</div><b>${gaps ? '부서 참고 공문을 모두 확인할 수 없습니다' : '조건에 맞는 부서 참고 공문이 없습니다'}</b></div></div>`;
       }
       return `<p class="muted lean-note">부서 문서담당자가 처리하는 공문입니다. 내 업무라면 줄 끝의 ⋯에서 “내 일로 지정”을 누르세요.</p><div class="list" role="list">${refs.map(x => actionRow(x, true)).join('')}</div>`;
     }
@@ -57,7 +60,7 @@
       if (xs.length && !groups.some(g => g.name === STATE_GROUP[st])) groups.push({name: STATE_GROUP[st], xs});
     }
     const body = groups.map(g => `<div class="grp">${esc(g.name)}<span class="c">${g.xs.length}</span></div><div class="list" role="list">${g.xs.map(x => actionRow(x)).join('')}</div>`).join('');
-    const empty = !mine.length ? `<div class="list"><div class="empty"><div class="ill">${ic('check', 'style="width:36px;height:36px;color:var(--ok)"')}</div><b>${S.filter.showHidden ? '숨긴 항목이 없습니다' : S.a.failed.length ? '일부 자료를 읽지 못했습니다' : S.filter.q || lvl !== 'all' || S.filter.area !== 'all' ? '조건에 맞는 항목이 없습니다' : '지금 처리할 일이 없습니다'}</b>${S.a.failed.length ? '목록이 비어 보일 수 있습니다. 위의 "다시 시도"를 눌러 주세요.' : '새 일이 들어오면 여기에 바로 나타납니다.'}</div></div>` : '';
+    const empty = !mine.length ? `<div class="list"><div class="empty"><div class="ill">${ic('check', 'style="width:36px;height:36px;color:var(--ok)"')}</div><b>${gaps ? '일부 자료를 읽지 못했습니다' : S.filter.showHidden ? '조건에 맞는 숨긴 항목이 없습니다' : S.filter.q || lvl !== 'all' || S.filter.area !== 'all' ? '조건에 맞는 항목이 없습니다' : '조회된 그룹웨어 처리·확인 항목이 없습니다'}</b>${gaps ? '전체 목록을 확인할 수 없습니다. 새로 고침 후 다시 확인하세요.' : ''}</div></div>` : '';
     return empty + body;
   };
 

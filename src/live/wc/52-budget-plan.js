@@ -4,8 +4,15 @@
 // 결의 짝짓기는 제안만 하고 확정은 사용자가 누른다. 설계: docs/design/todo-budget-plan.md
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
 
-  const BP = {rows: {}, ledger: {}, busy: {}, err: {}, imp: null, impBusy: false, impErr: ''};
+  const BP = {rows: {}, basis: {}, ledger: {}, busy: {}, err: {}, imp: null, impBusy: false, impErr: ''};
   const bpKey = (p, f) => `${p}|${f || ''}`;
+  function budgetBasis(year, asOf) {
+    const d = asOf ? new Date(asOf) : null;
+    return `회계연도 ${esc(year || '확인 전')} · 자료 조회 기준 ${d && Number.isFinite(d.getTime()) ? esc(new Date(d.getTime() + 9 * 3600000).toISOString().slice(0, 16).replace('T', ' ') + ' KST') : '확인 전'}`;
+  }
+  const bpPlansReady = () => typeof TD === 'object' && Array.isArray(TD.list);
+  const bpPlansPartial = () => bpPlansReady() && (TD.cached || TD.complete === false || TD.err);
+  const bpPlanPurpose = '남은 지출을 미리 배분해 연말 집행을 가늠하는 계획입니다. 확정 집행액이 아닙니다.';
   function bpRows(project, filter) {
     const k = bpKey(project, filter);
     if (BP.rows[k]) return BP.rows[k];
@@ -17,7 +24,9 @@
     const k = bpKey(project, filter);
     if (!force && BP.rows[k]) return BP.rows[k];
     const t = await GW.budgetProject({project, filter: filter || ''});
-    BP.rows[k] = Array.isArray(t.rows) ? t.rows : [];
+    if (t.error || !Array.isArray(t.rows)) throw new Error(t.message || '예산 자료를 확인하지 못했습니다.');
+    BP.basis[k] = {year: t.year, asOf: t.asOf || new Date().toISOString()};
+    BP.rows[k] = t.rows;
     return BP.rows[k];
   }
   // 편집기의 '예산 연결' 선택지를 위해 내 관심 사업의 세목을 미리 읽는다
@@ -92,6 +101,7 @@
   const bpSt = {plan: '계획', check: '짝 확인', wait: '끝냄·결의 대기', done: '집행됨', drop: '취소'};
   function bpChart(c) {
     const p = c.proj; if (!p || !c.f.budget) return '';
+    if (c.led.fails.length) return '<p class="muted">일부 세목의 결의 자료가 없어 월별 누계 그래프를 표시하지 않습니다.</p>';
     const W = 660, H = 190, L = 64, B = 24, T = 14, max = Math.max(c.f.budget, p.goal, ...p.projected.filter(v => v != null), ...p.actual.filter(v => v != null)) * 1.08 || 1;
     const x = i => L + (W - L - 10) * (i / 11), y = v => T + (H - T - B) * (1 - v / max);
     const line = (arr, from = 0) => arr.map((v, i) => v == null || i < from ? null : `${x(i).toFixed(1)},${y(v).toFixed(1)}`).filter(Boolean).join(' ');
@@ -123,20 +133,24 @@ ${last != null ? `<circle class="bp-dot" cx="${x(11)}" cy="${y(last)}" r="4"/><t
     const exW = f.budget ? Math.min(100, f.executed / f.budget * 100) : 0, plW = f.budget ? Math.max(0, Math.min(100 - exW, f.planned / f.budget * 100)) : 0;
     const sugIds = Object.keys(c.sug);
     const planRows = f.items;
-    const status = [BP.busy[k] ? '<span class="spin"></span> 결의 내역을 읽는 중…' : led ? `결의 내역 ${esc(new Date(led.at).toLocaleTimeString('ko-KR', {timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'}))} 기준 ${led.rows.length}건${led.sum !== led.exec ? ` · <span class="err">결의 합계 ${won(led.sum)}원이 집행액 ${won(led.exec)}원과 ${won(Math.abs(led.exec - led.sum))}원 다릅니다(월별 곡선은 결의 기준)</span>` : ' · 집행액과 일치'}${led.fails.length ? ` · <span class="err">세목 ${led.fails.length}개는 결의 내역을 읽지 못했습니다</span>` : ''}` : BP.err[k] ? `<span class="err">결의 내역을 읽지 못했습니다: ${esc(BP.err[k])}</span>` : '',
-      typeof TD === 'object' && TD.err ? `<span class="err">계획(그룹웨어 ToDo)을 새로 읽지 못했습니다</span>` : ''].filter(Boolean).join(' · ');
-    return `<section class="bp-sum" aria-label="예상 집행률"><div class="bp-big">${esc(head.name || b.filter)} · 지금 <b>${pct(f.rate)}</b> <span aria-hidden="true">→</span> 계획 반영 예상 <b class="${f.forecastRate > 100.0001 ? 'err' : ''}">${pct(f.forecastRate)}</b></div>
-<div class="bp-bar" role="img" aria-label="집행 ${pct(f.rate)}, 계획 포함 ${pct(f.forecastRate)}, 목표 ${f.target}%"><i class="ex" style="width:${exW}%"></i><i class="pl" style="width:${plW}%"></i><b style="left:${Math.min(100, f.target)}%"></b></div>
-<p>예산 ${won(f.budget)}원 · 집행 ${won(f.executed)}원 · 남은 계획 ${won(f.planned)}원${f.pending ? ` · 짝 확인 대기 ${won(f.pending)}원(이미 결의된 것으로 보고 계획에서 뺌)` : ''} · ${gapTxt}</p>
+    const status = [BP.busy[k] ? '<span class="spin"></span> 결의 내역을 읽는 중…' : led ? `결의 내역 ${esc(new Date(led.at).toLocaleString('ko-KR', {timeZone: 'Asia/Seoul'}))} KST 기준 ${led.rows.length}건${led.sum !== led.exec ? ` · <span class="err">결의 합계 ${won(led.sum)}원이 집행액 ${won(led.exec)}원과 ${won(Math.abs(led.exec - led.sum))}원 다릅니다(월별 곡선은 결의 기준)</span>` : led.fails.length ? '' : ' · 집행액과 일치'}${led.fails.length ? ` · <span class="err">세목 ${led.fails.length}개는 결의 내역을 읽지 못했습니다</span>` : ''}` : BP.err[k] ? `<span class="err">결의 내역을 읽지 못했습니다: ${esc(BP.err[k])}</span>` : '',
+      bpPlansPartial() ? '<span class="err">계획 자료가 이전 저장본이거나 일부만 확인되었습니다</span>' : ''].filter(Boolean).join(' · ');
+    const ready = bpPlansReady(), basis = (BP.rows[k] && BP.basis[k]) || t;
+    return `<section class="bp-sum" aria-label="실집행과 계획 반영 예상"><div class="bp-big">${esc(head.name || b.filter)}</div>
+<p><b>그룹웨어 실집행</b> · 예산 ${won(f.budget)}원 · 실집행 ${won(f.executed)}원 (${pct(f.rate)}) · 실제 잔액 ${won(f.budget - f.executed)}원</p>
+<p class="muted">예실대비 세목 누계 · ${budgetBasis(basis.year, basis.asOf)}</p>
+${ready ? `<p><b>연말 계획 반영 예상</b> · ${won(f.forecast)}원 (<b class="${f.forecastRate > 100.0001 ? 'err' : ''}">${pct(f.forecastRate)}</b>) · 남은 계획 ${won(f.planned)}원${f.pending ? ` · 짝 확인 대기 ${won(f.pending)}원(이미 결의된 것으로 보고 계획에서 뺌)` : ''} · ${gapTxt}</p>` : '<p><b>연말 계획 반영 예상</b> · 계획 자료 미확인</p>'}
+<p class="muted">${bpPlanPurpose} 실집행액에 결의와 겹치지 않는 남은 계획을 더합니다.</p>
+<div class="bp-bar" role="img" aria-label="실집행 ${pct(f.rate)}, ${ready ? `계획 반영 예상 ${pct(f.forecastRate)}, ` : ''}목표 ${f.target}%"><i class="ex" style="width:${exW}%"></i><i class="pl" style="width:${ready ? plW : 0}%"></i><b style="left:${Math.min(100, f.target)}%"></b></div>
 <div class="bar bp-set"><label>목표 집행률 <input class="inp" type="number" id="bpTarget" min="1" max="150" value="${f.target}" style="width:80px">%</label><label>회계 마감일 <input class="inp" type="date" id="bpClose" value="${esc(f.close)}"></label><button class="btn sm" data-act="bpReload">${ic('refresh')}결의 다시 읽기</button></div>
 <p class="muted" role="status">${status}</p></section>
 ${f.warnings.length ? `<div class="box warn bp-warn"><b>확인할 것 ${f.warnings.length}건</b><ul>${f.warnings.slice(0, 8).map(w => `<li>${esc(w.text)}${w.id ? ` <button class="btn sm ghost" data-act="bpEdit" data-id="${esc(w.id)}">고치기</button>` : ''}</li>`).join('')}</ul></div>` : ''}
 ${sugIds.length ? `<section class="bp-sug" aria-label="결의와 짝짓기"><h3>결의가 들어온 것 같은 계획 ${sugIds.length}건 <span class="muted">맞으면 집행됨으로 바뀌고 할 일도 끝냄 처리됩니다</span></h3>${sugIds.map(id => { const p = c.plans.find(x => x.id === id), s = c.sug[id]; return `<div class="bp-sg"><div><b>${esc(p.title)}</b> <span class="muted">계획 ${won(p.meta.b.a)}원 · 남은 ${won(s.remain)}원</span>${s.rows.map(r => `<div class="muted">· ${esc(r.d.slice(5).replace('-', '/'))} ${esc(r.desc.slice(0, 60))} <b>${won(r.a)}원</b></div>`).join('')}</div><div class="acts"><button class="btn sm primary" data-act="bpConfirm" data-id="${esc(id)}" data-keys="${esc(s.rows.map(r => r.k).join(','))}">${s.full ? '맞아요, 집행됨' : `맞아요 (${won(s.sum)}원 반영)`}</button><button class="btn sm" data-act="bpReject" data-id="${esc(id)}">아니에요</button></div></div>`; }).join('')}</section>` : ''}
 <section class="bp-plans" aria-label="집행 계획"><h3>집행 계획 <span class="muted">${planRows.filter(i => !['done', 'drop'].includes(i.state)).length}건 진행 · ${planRows.filter(i => i.state === 'done').length}건 집행됨</span></h3>
 <div class="bar bp-add"><label for="bpNewTitle" class="vh">내용</label><input class="inp grow" id="bpNewTitle" placeholder="내용 (예: 12월 자문회의 다과)" autocomplete="off"><label for="bpNewCode" class="vh">세목</label><select class="inp" id="bpNewCode">${se.map(r => `<option value="${esc(r.code)}">${esc(String(r.name).replace(/^[○●·\s]+/, ''))}</option>`).join('')}</select><label for="bpNewAmt" class="vh">금액</label><input class="inp" id="bpNewAmt" inputmode="numeric" placeholder="금액(원)" style="width:130px"><label for="bpNewDate" class="vh">예정일</label><input class="inp" type="date" id="bpNewDate"><button class="btn primary" data-act="bpAdd">${ic('plus')}계획 추가</button><button class="btn" data-act="bpImport">내 계획서에서 가져오기</button></div>
-${planRows.length ? `<table class="bp-tbl"><tr><th scope="col">예정일</th><th scope="col">내용</th><th scope="col">세목</th><th scope="col" class="num">계획</th><th scope="col" class="num">집행(짝지음)</th><th scope="col" class="num">남은 금액</th><th scope="col">상태</th><th scope="col"></th></tr>${planRows.map(i => `<tr class="${['done', 'drop'].includes(i.state) ? 'done' : ''}"><td class="nowrap ${i.state === 'plan' && i.date && i.date < today() ? 'err' : ''}">${esc(i.date ? i.date.slice(5).replace('-', '/') : '-')}</td><td>${esc(i.title)}${i.pd ? ` <span class="muted">${esc(i.pd)}</span>` : ''}</td><td class="muted">${esc(String(i.name).replace(/^[○●·\s]+/, '').slice(0, 20))}</td><td class="num">${won(i.amount)}</td><td class="num">${i.matched ? won(i.matched) : '-'}</td><td class="num">${['done', 'drop'].includes(i.state) ? '-' : won(i.remain)}</td><td>${esc(i.state === 'plan' && i.date && i.date < today() ? '예정일 지남' : bpSt[i.state] || i.state)}</td><td class="nowrap"><button class="btn sm ghost" data-act="bpEdit" data-id="${esc(i.id)}">고치기</button>${!['done', 'drop'].includes(i.state) ? `<button class="btn sm ghost" data-act="bpDropRest" data-id="${esc(i.id)}">${i.matched ? '남은 금액 안 씀' : '계획 취소'}</button>` : ''}</td></tr>`).join('')}</table>` : `<p class="muted">아직 계획이 없습니다. 남은 행사·지급을 건별로 넣으면 연말 예상 집행률이 계산됩니다.</p>`}</section>
-<section aria-label="세목별 예상"><h3>세목별 예상</h3><table class="bp-tbl"><tr><th scope="col">세목</th><th scope="col" class="num">예산</th><th scope="col" class="num">집행</th><th scope="col" class="num">남은 계획</th><th scope="col" class="num">예상</th><th scope="col" class="num">예상 집행률</th><th scope="col" class="num">계획 없는 잔액</th></tr>${f.subjects.map(s => `<tr><td>${esc(s.name)}</td><td class="num">${won(s.budget)}</td><td class="num">${won(s.executed)}</td><td class="num">${s.planned ? won(s.planned) : '-'}</td><td class="num">${won(s.forecast)}</td><td class="num ${s.forecast > s.budget ? 'err' : ''}">${pct(s.forecastRate)}</td><td class="num">${won(s.unplanned)}</td></tr>`).join('')}<tr class="sum"><td>합계</td><td class="num">${won(f.budget)}</td><td class="num">${won(f.executed)}</td><td class="num">${won(f.planned)}</td><td class="num">${won(f.forecast)}</td><td class="num">${pct(f.forecastRate)}</td><td class="num">${won(Math.max(0, f.budget - f.forecast))}</td></tr></table></section>
-${bpChart(c)}
+${planRows.length ? `<table class="bp-tbl"><tr><th scope="col">예정일</th><th scope="col">내용</th><th scope="col">세목</th><th scope="col" class="num">계획</th><th scope="col" class="num">집행(짝지음)</th><th scope="col" class="num">남은 금액</th><th scope="col">상태</th><th scope="col"></th></tr>${planRows.map(i => `<tr class="${['done', 'drop'].includes(i.state) ? 'done' : ''}"><td class="nowrap ${i.state === 'plan' && i.date && i.date < today() ? 'err' : ''}">${esc(i.date ? i.date.slice(5).replace('-', '/') : '-')}</td><td>${esc(i.title)}${i.pd ? ` <span class="muted">${esc(i.pd)}</span>` : ''}</td><td class="muted">${esc(String(i.name).replace(/^[○●·\s]+/, '').slice(0, 20))}</td><td class="num">${won(i.amount)}</td><td class="num">${i.matched ? won(i.matched) : '-'}</td><td class="num">${['done', 'drop'].includes(i.state) ? '-' : won(i.remain)}</td><td>${esc(i.state === 'plan' && i.date && i.date < today() ? '예정일 지남' : bpSt[i.state] || i.state)}</td><td class="nowrap"><button class="btn sm ghost" data-act="bpEdit" data-id="${esc(i.id)}">고치기</button>${!['done', 'drop'].includes(i.state) ? `<button class="btn sm ghost" data-act="bpDropRest" data-id="${esc(i.id)}">${i.matched ? '남은 금액 안 씀' : '계획 취소'}</button>` : ''}</td></tr>`).join('')}</table>` : `<p class="muted">${ready ? '아직 계획이 없습니다. 남은 행사·지급을 건별로 넣으면 연말 예상 집행률이 계산됩니다.' : '계획 자료를 아직 확인하지 못했습니다.'}</p>`}</section>
+${ready ? `<section aria-label="세목별 계획 반영 예상"><h3>세목별 계획 반영 예상</h3><table class="bp-tbl"><tr><th scope="col">세목</th><th scope="col" class="num">예산</th><th scope="col" class="num">실집행</th><th scope="col" class="num">남은 계획</th><th scope="col" class="num">계획 반영 예상액</th><th scope="col" class="num">예상 집행률</th><th scope="col" class="num">계획 없는 잔액</th></tr>${f.subjects.map(s => `<tr><td>${esc(s.name)}</td><td class="num">${won(s.budget)}</td><td class="num">${won(s.executed)}</td><td class="num">${s.planned ? won(s.planned) : '-'}</td><td class="num">${won(s.forecast)}</td><td class="num ${s.forecast > s.budget ? 'err' : ''}">${pct(s.forecastRate)}</td><td class="num">${won(s.unplanned)}</td></tr>`).join('')}<tr class="sum"><td>합계</td><td class="num">${won(f.budget)}</td><td class="num">${won(f.executed)}</td><td class="num">${won(f.planned)}</td><td class="num">${won(f.forecast)}</td><td class="num">${pct(f.forecastRate)}</td><td class="num">${won(Math.max(0, f.budget - f.forecast))}</td></tr></table></section>
+${bpChart(c)}` : ''}
 <p class="muted td-hint">계획은 그룹웨어 개인 ToDo에 저장되어 '내 할 일'에도 보입니다(다른 PC·모바일과 같음). 결의 짝짓기는 같은 세목·비슷한 금액·적요 낱말로 제안만 하며, 확정은 직접 누릅니다.</p>`;
   }
 

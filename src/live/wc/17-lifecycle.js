@@ -7,13 +7,19 @@
   const hideBrandFavicon = () => { if (brandFavicon) brandFavicon.remove(); brandFavicon = null; };
   // Browser Back button: step back inside the work center (pane → list → groupware) instead of leaving the page.
   let backArmed = false;
-  const armBack = () => { if (!backArmed) { try { history.pushState({bwyfgwWc: 1}, '', location.href); backArmed = true; } catch {} } };
+  // Query goes before the groupware hash, so its router and the original pane URLs stay untouched.
+  const writeViewUrl = v => {
+    if (!backArmed) return;
+    const href = viewUrl(v);
+    if (href !== location.href) { try { history.replaceState({...history.state, bwyfgwWc: 1}, '', href); } catch {} }
+  };
+  const armBack = () => { if (!backArmed) { try { history.pushState({...history.state, bwyfgwWc: 1}, '', viewUrl(S.view)); backArmed = true; } catch {} } };
   const onPop = () => {
     if (!backArmed || !S.open) return;
     backArmed = false;
     if (S.helpOpen || S.paletteOpen || S.menuOpen) { closeOverlay(); armBack(); return; }
     if (S.focus || S.pane.url || S.sel) { if (S.focus) stopFocus(); else if (leavePane()) { S.sel = null; S.pane.url = ''; S.pane.expanded = false; render(); } armBack(); return; }
-    if (S.view !== 'home') { go('home'); armBack(); return; }
+    if (S.view !== 'home') { armBack(); go('home'); return; }
     if (S.pane.dirty && !leavePane()) { armBack(); return; }
     close();
   };
@@ -23,6 +29,8 @@
     if (S.updReady && autoUpdateApply(true)) return;
     govPurge();
     tipBubble.style.display = 'none';
+    const target = !S.open && linkedView();
+    if (target && viewAvailable(target)) { S.view = target; if (target === 'mail') S.mailFilter = 'unread'; }
     S.open = true; host.style.display = 'block'; fab.style.display = 'none'; prevTitle = document.title;
     armBack();
     showBrandFavicon();
@@ -32,7 +40,7 @@
     const noticed = showNoticeIfNeeded();
     if (S.settings.verOf !== VERSION) { S.settings.verFrom = S.settings.verOf || (S.settings.seenVersion !== VERSION ? S.settings.seenVersion : '') || ''; S.settings.verOf = VERSION; S.settings.verAt = Date.now(); saveLocal(); renderHead(); renderNav(); if (S.settings.verFrom) toast(`GW 비서가 v${S.settings.verFrom} → v${VERSION} 으로 갱신되었습니다.`); }
     if (!noticed && S.settings.seenVersion !== VERSION) { const first = !S.settings.seenVersion; S.settings.seenVersion = VERSION; saveLocal(); if (!first) setTimeout(() => { if (S.open && !S.paletteOpen) openChangelog(); }, 1500); }
-    if (!noticed && !S.settings.tourDone) setTimeout(() => startCoach(), 900);
+    if (!target && !noticed && !S.settings.tourDone) setTimeout(() => { if (S.open && S.view === 'home' && !S.coach) startCoach(); }, 900);
     checkUpdate(false).then(i => { renderHead(); renderNav(); if (i && i.latest && R.compareVersions(i.latest, VERSION) > 0) { if (S.settings.autoUpdate === false || window.BWYFGW_DEMO) { if (!S.updToast) { S.updToast = true; toast(`새 버전 v${i.latest} 이 있습니다. 왼쪽 아래 버전 표시를 누르면 바로 바꿀 수 있습니다.`); } } else autoUpdate().catch(() => {}); } }).catch(() => {});
   }
   function close() { if (backArmed) { backArmed = false; try { history.back(); } catch {} } S.open = false; host.style.display = 'none'; fab.style.display = 'block';

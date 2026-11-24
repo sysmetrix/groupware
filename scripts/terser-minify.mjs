@@ -30,7 +30,7 @@ export async function minifySafely(code) {
   const terser = await loadTerser();
   const result = await terser.minify(code, {
     // v0.92.0: 기본 압축을 켜되, 선언되지 않은 전역(POLICY 등)에 대한 typeof 검사를 바꾸지 않도록 typeofs는 끈다.
-    compress: {defaults: true, passes: 2, typeofs: false, unsafe: false, keep_fargs: true, keep_infinity: true},
+    compress: {defaults: true, passes: 3, typeofs: false, unsafe: false, keep_fargs: true, keep_infinity: true},
     mangle: {toplevel: false},
     format: {comments: false},
   });
