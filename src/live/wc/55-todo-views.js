@@ -115,7 +115,7 @@ ${t.canProgress ? `<div class="td-sec"><label class="td-f">진행률 <b id="tdeR
   function todoBulkOpen() {
     closeOverlay(); S.paletteOpen = true;
     $('#overlay').innerHTML = `<div class="modal" data-act="closeOverlay"><div class="dlg" data-stop="1" role="dialog" aria-label="할 일 여러 개 추가" style="width:min(680px,94vw)"><button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button><h2 style="margin-top:0">할 일 여러 개 추가</h2>
-<p class="muted">한 줄에 하나씩 쓰거나 메모·메일에서 목록을 붙여 넣으세요. 글머리(-, •, 1.)는 떼고, 끝의 날짜('금요일', '11/28', '11/24~11/28')와 '!긴급'·'!즉시'·'!중요'를 읽습니다. 30줄까지.</p>
+<p class="muted">한 줄에 하나씩 쓰거나 메모·메일에서 목록을 붙여 넣으세요. 글머리(-, •, 1.)는 떼고, 끝의 날짜('금요일', '11/28', '11/24~11/28')와 '!긴급'·'!즉시'·'!중요'를 읽습니다. 날짜가 없는 항목은 오늘 시작·종료합니다. 30줄까지.</p>
 <label for="tdeBulk" class="vh">할 일 목록</label><textarea class="inp td-bulk" id="tdeBulk" rows="8" placeholder="- 자문회의 자료 준비 금요일\n- 결과보고서 초안 11/24~11/28 !긴급\n- 다과 견적 받기"></textarea>
 <div id="tdBulkPrev" class="td-bulk-prev" aria-live="polite"></div>
 <div class="acts" style="justify-content:flex-end;margin-top:12px"><button class="btn" data-act="closeOverlay">취소</button><button class="btn primary" data-act="tdBulkSave" id="tdBulkGo" disabled>추가</button></div></div></div>`;
@@ -123,13 +123,15 @@ ${t.canProgress ? `<div class="td-sec"><label class="td-f">진행률 <b id="tdeR
   }
   function todoBulkPreview() {
     const box = $('#tdBulkPrev'), go = $('#tdBulkGo'); if (!box) return;
-    const {rows, more} = R.tdParseBulk(($('#tdeBulk') || {}).value || '');
+    const parsed = R.tdParseBulk(($('#tdeBulk') || {}).value || '');
+    const rows = parsed.rows.map(r => ({...r, due: r.due || today(), start: r.start || r.due || today()})), more = parsed.more;
     box.innerHTML = rows.length ? `<p class="muted">${rows.length}건을 그룹웨어 ToDo에 추가합니다${more ? ` (31줄째부터 ${more}건은 빠집니다)` : ''}.</p><ol>${rows.map(r => `<li>${r.imp !== '0' ? `<span class="td-imp-b td-imp-${esc(r.imp)}">${esc(R.tdImpLabel(r.imp))}</span>` : ''}${esc(r.title)}${r.due ? ` <span class="muted">· ${esc(r.start && r.start !== r.due ? todoMd(r.start) + '~' : '')}${esc(todoMd(r.due))}</span>` : ''}</li>`).join('')}</ol>` : '';
     if (go) { go.disabled = !rows.length; go.textContent = rows.length ? `${rows.length}건 추가` : '추가'; }
   }
   async function todoBulkSave(el) {
     if (TD.bulkBusy) return;
-    const {rows} = R.tdParseBulk(($('#tdeBulk') || {}).value || '');
+    const {rows: parsedRows} = R.tdParseBulk(($('#tdeBulk') || {}).value || '');
+    const rows = parsedRows.map(r => ({...r, due: r.due || today(), start: r.start || r.due || today()}));
     if (!rows.length) return;
     if (!todoGwOk()) { toast('그룹웨어 ToDo에 연결하지 못했습니다. 그룹웨어를 새로고침한 뒤 다시 시도하세요.'); return; }
     TD.bulkBusy = true; if (el) { el.disabled = true; el.innerHTML = '<span class="spin"></span> 저장 중…'; }
