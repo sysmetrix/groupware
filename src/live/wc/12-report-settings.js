@@ -5,7 +5,7 @@
     const w = reportState(), a = S.a, range = w.range;
     const draft = !!S.weekly.trim(), period = draft && R.weeklyDraftPeriod(S.weekly);
     const saved = S.storageError ? '저장 실패 · 내용을 복사하세요' : draft ? '이 브라우저에 저장됨' : '작성 전';
-    const btn = (act, label, cls = '') => `<button type="button" class="btn sm ${cls}" data-act="${act}">${label}</button>`;
+    const btn = (act, label) => `<button type="button" class="btn sm" data-act="${act}">${label}</button>`;
     return `${pgh('보고·현황', '주간 보고와 오늘 업무')}
 <div class="rp-layout"><section class="rp-sec" aria-labelledby="rpWeeklyTitle"><div class="rp-h"><div><h2 id="rpWeeklyTitle">주간 업무 실적 초안</h2><p>선택한 기간의 상신·접수 자료로 작성합니다. 그룹웨어에는 제출되지 않습니다.</p></div><span class="saved on" id="wkSaved" role="status">${saved}</span></div>
 <div class="rp-range" role="group" aria-label="조회 기간"><div class="acts">${[['week','이번 주'],['last','지난주'],['recent','최근 7일']].map(([v,t])=>`<button type="button" class="btn sm" data-act="wkPreset" data-v="${v}">${t}</button>`).join('')}</div><div class="rp-dates"><label>시작일<input type="date" id="wkFrom" class="inp" value="${esc(range.from)}"></label><label>종료일<input type="date" id="wkTo" class="inp" value="${esc(range.to)}"></label><button type="button" class="btn sm primary" data-act="mkWeekly" ${w.busy ? 'disabled' : ''}>${w.busy ? '조회 중…' : '이 기간으로 초안 만들기'}</button></div><p id="wkStatus" class="muted" role="status">${esc(w.note)}</p></div>
