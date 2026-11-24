@@ -46,7 +46,7 @@
       case 'openHistory': openActionHistory(); break;
       case 'submitCmd': { const q = ($('#cmdPrompt') || {}).value; executeCommandWorkflow(q); break; }
       case 'runPreset': { const pr = COMMAND_PRESETS.find(x => x.id === el.dataset.id); if (pr) executeCommandWorkflow(pr.query); break; }
-      case 'recoverWeekly': { const r = store.get('weeklyRecovery', null); if (r && confirm('보관된 다른 탭의 초안으로 바꿀까요? 현재 초안도 복구본으로 보관합니다.')) { const old = S.weekly; S.weekly = r.text; if (!saveLocal()) { S.weekly = old; toast('저장하지 못해 복구하지 않았습니다.'); break; } store.set('weeklyRecovery', {at: Date.now(), text: old}); renderMain(); toast('복구본을 불러왔습니다.'); } break; }
+      case 'recoverWeekly': { const r = store.get('weeklyRecovery', null); if (r?.text?.trim() && confirm('보관된 이전 초안으로 바꿀까요? 현재 초안도 복구본으로 보관합니다.')) { const old = S.weekly; if (!store.set('weeklyRecovery', {at: Date.now(), text: old})) { toast('현재 초안을 보관할 수 없어 복구하지 않았습니다.'); break; } S.weekly = r.text; if (!saveLocal()) { S.weekly = old; store.set('weeklyRecovery', r); toast('저장하지 못해 복구하지 않았습니다.'); break; } renderMain(); toast('복구본을 불러왔습니다.'); } break; }
       case 'clearHistory': if (confirm('자동 작업 감사 기록을 모두 지울까요? 되돌릴 수 없습니다.')) { store.del('actionHistory'); logActionRecord({command: '작업 내역 초기화', type: '관리', summary: '사용자가 이전 감사 기록을 삭제했습니다.', status: 'cleared', verified: true}); openActionHistory(); toast('이전 기록을 지우고 초기화 이력을 남겼습니다.'); } break;
       case 'mailToDraft': mailToDraft(el.dataset.uid); break;
       case 'quickDraft': {

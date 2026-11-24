@@ -16,3 +16,15 @@ test('weekly editor stays available for empty and populated drafts', () => {
   }
   assert.match(render({weekly: '', a: {summary: {}}}, {text: '보관 초안'}), /data-act="recoverWeekly"/);
 });
+
+test('recovery does not replace a draft that could not be backed up', () => {
+  const handlers = readFileSync(new URL('../src/live/wc/16-events.js', import.meta.url), 'utf8');
+  const branch = handlers.split('\n').find(line => line.includes("case 'recoverWeekly':"));
+  for (const [backup, saved] of [[false,false],[true,false],[true,true]]) {
+    const S = {weekly: 'current'}; let record = {text: 'previous'}, writes = 0;
+    runInNewContext(`switch ('recoverWeekly') {${branch}}`, {S, store: {get: () => record, set: (_,v) => {if (backup) record = v; return backup;}}, confirm: () => true, saveLocal: () => {writes++; return saved;}, renderMain() {}, toast() {}});
+    assert.equal(writes, Number(backup));
+    assert.equal(S.weekly, saved ? 'previous' : 'current');
+    assert.equal(record.text, saved ? 'current' : 'previous');
+  }
+});
