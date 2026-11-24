@@ -66,6 +66,41 @@
   const todoErr = e => { const m = String((e && e.message) || e || ''); return m.length > 120 ? m.slice(0, 120) + '…' : m; };
   const todoYmd = iso => String(iso || '').replace(/-/g, '');
 
+  // ISO 값은 유지하고 날짜와 요일을 함께 보여 준다.
+  function todoDateText(value) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return '날짜 없음';
+    const d = new Date(value + 'T00:00:00Z');
+    return value.slice(0, 4) + '. ' + value.slice(5, 7) + '. ' + value.slice(8, 10) + '. (' + ['일','월','화','수','목','금','토'][d.getUTCDay()] + ')';
+  }
+  function todoDateField(id, value, label, disabled = '') {
+    return `<span class="td-date-field"><input type="hidden" id="${id}" value="${esc(value || '')}"><button type="button" class="td-date-btn" data-act="tdDateOpen" data-id="${id}" aria-label="${esc(label)}: ${esc(todoDateText(value))}, 날짜 선택" ${disabled}>${ic('cal')}<span>${esc(todoDateText(value))}</span></button></span>`;
+  }
+  const TD_DATE_NAMES = {tdQuickDue: '기한', tdeStart: '시작일', tdeDue: '기한(종료일)'};
+  function todoDateDialog(id, month) {
+    const input = $('#' + id); if (!input || !TD_DATE_NAMES[id]) return;
+    const selected = input.value, base = /^\d{4}-\d{2}$/.test(month || '') ? month : (selected || today()).slice(0, 7);
+    const y = Number(base.slice(0, 4)), m = Number(base.slice(5, 7));
+    const first = new Date(Date.UTC(y, m - 1, 1)).getUTCDay(), count = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const shift = delta => { const d = new Date(Date.UTC(y, m - 1 + delta, 1)); return d.toISOString().slice(0, 7); };
+    const days = Array.from({length: first + count}, (_, i) => {
+      if (i < first) return '<span class="td-cal-blank" aria-hidden="true"></span>';
+      const day = i - first + 1, iso = base + '-' + String(day).padStart(2, '0');
+      return `<button type="button" class="td-cal-day ${iso === selected ? 'selected' : ''} ${iso === today() ? 'today' : ''}" data-act="tdDatePick" data-id="${id}" data-v="${iso}" aria-label="${todoDateText(iso)}${iso === today() ? ' 오늘' : ''}" aria-pressed="${iso === selected}">${day}</button>`;
+    }).join('');
+    closeOverlay(); S.paletteOpen = true;
+    $('#overlay').innerHTML = `<div class="modal" data-act="closeOverlay"><div class="dlg td-cal-dialog" data-stop="1" role="dialog" aria-modal="true" aria-label="${esc(TD_DATE_NAMES[id])} 선택"><div class="td-cal-heading"><div><span class="td-cal-eyebrow">${esc(TD_DATE_NAMES[id])}</span><h2>날짜 선택</h2></div><button class="btn icon ghost" data-act="closeOverlay" aria-label="날짜 선택 닫기">${ic('x')}</button></div><div class="td-cal-nav"><button class="btn sm icon ghost" data-act="tdDateMonth" data-id="${id}" data-v="${shift(-1)}" aria-label="이전 달">‹</button><strong>${y}년 ${m}월</strong><button class="btn sm icon ghost" data-act="tdDateMonth" data-id="${id}" data-v="${shift(1)}" aria-label="다음 달">›</button></div><div class="td-cal-grid" role="group" aria-label="${y}년 ${m}월 달력">${['일','월','화','수','목','금','토'].map(w => `<span class="td-cal-week">${w}</span>`).join('')}${days}</div><div class="td-cal-footer"><button class="btn sm ghost" data-act="tdDatePick" data-id="${id}" data-v="">날짜 지우기</button><button class="btn sm" data-act="tdDatePick" data-id="${id}" data-v="${today()}">오늘</button></div></div></div>`;
+    setTimeout(() => root.querySelector('.td-cal-day.selected, .td-cal-day.today, .td-cal-day')?.focus(), 30);
+  }
+  HOME_ACTS.tdDateOpen = el => todoDateDialog(el.dataset.id);
+  HOME_ACTS.tdDateMonth = el => todoDateDialog(el.dataset.id, el.dataset.v);
+  HOME_ACTS.tdDatePick = el => {
+    const id = el.dataset.id, input = $('#' + id); if (!input || !TD_DATE_NAMES[id]) return;
+    input.value = el.dataset.v || ''; todoChange(input);
+    const button = root.querySelector('[data-act="tdDateOpen"][data-id="' + id + '"]');
+    if (button) { button.querySelector('span').textContent = todoDateText(input.value); button.setAttribute('aria-label', TD_DATE_NAMES[id] + ': ' + todoDateText(input.value) + ', 날짜 선택'); }
+    closeOverlay(); button?.focus();
+  };
+
   // ---------- 쓰기(모두 그룹웨어 ToDo로) ----------
   // 만들기: 체크리스트는 하위 ToDo로 이어서 만든다. 결과를 그대로 돌려준다(하지 않은 일을 했다고 하지 않음).
   async function todoCreate({title, due = '', start = '', important = false, importance, dday = false, memo = '', meta = {}, checklist = []} = {}) {
@@ -266,8 +301,8 @@
     const filt = TODO_FILTERS.map(([k, n]) => { const c = !TD.list ? '' : k === 'open' ? s.total : k === 'due' ? s.late + s.today : k === 'doing' ? sc.doing : k === 'mine-other' ? TD.list.filter(t => !t.done && t.readonly).length : k === 'important' ? TD.list.filter(t => !t.done && t.imp !== '0').length : k === 'plan' ? TD.list.filter(t => t.meta && t.meta.b && t.meta.b.c && !t.done).length : k === 'repeat' ? TD.list.filter(t => !t.done && t.meta && t.meta.rp).length : ''; return `<button class="${TD.filter === k ? 'on' : ''}" aria-pressed="${TD.filter === k}" data-act="tdFilter" data-v="${k}">${esc(n)}${c !== '' ? ` <span class="c">${c}</span>` : ''}</button>`; }).join('');
     return `${pgh('할 일', s ? `내 할 일 ${s.total}건${s.late ? ` · 지난 기한 ${s.late}` : ''}${s.today ? ` · 오늘 ${s.today}` : ''}` : '', `<button class="btn sm ${wrapN ? '' : 'ghost'}" data-act="tdWrap">${ic('clock')}퇴근 전 마무리${wrapN ? ` ${wrapN}` : ''}</button><button class="btn sm" data-act="tdReload" aria-label="그룹웨어 ToDo 새로 읽기">${ic('refresh')}새로 읽기</button><button class="btn sm" data-act="openUrl" data-url="${esc(GW.links.route(GW.routes.schedule))}" data-title="그룹웨어 일정·ToDo">${ic('ext')}그룹웨어 ToDo</button>`)}
 ${sc ? `<div class="td-states" role="group" aria-label="상태별 할 일">${R.TD_STATES.map(([k, n]) => `<button class="td-st td-st-${k} ${TD.filter === k || (k === 'done' && TD.filter === 'done') ? 'on' : ''}" data-act="tdFilter" data-v="${k}" aria-pressed="${TD.filter === k}"><b>${k === 'done' ? TD.list.filter(t => R.tdDoneWithin(t, TD.doneSpan)).length : sc[k]}</b>${esc(n)}</button>`).join('')}</div>` : ''}
-<div class="bar td-add"><label for="tdQuick" class="vh">새 할 일</label><input class="inp grow" id="tdQuick" placeholder="할 일을 쓰고 Enter (끝에 '금요일', '11/28'처럼 쓰면 기한)" autocomplete="off"><label for="tdQuickDue" class="vh">기한</label><input class="inp" type="date" id="tdQuickDue" aria-label="기한"><label for="tdQuickImp" class="vh">중요도</label><select class="inp" id="tdQuickImp" aria-label="중요도">${R.TD_IMPS.slice().reverse().map(([v, n]) => `<option value="${v}">${esc(n)}</option>`).join('')}</select><button class="btn primary" data-act="tdAdd">${ic('plus')}추가</button><button class="btn" data-act="tdNew">자세히 쓰기</button><button class="btn" data-act="tdBulk">여러 개 추가</button></div>
-<p class="muted td-hint">끝에 '11/24~11/28'처럼 쓰면 기간, '!긴급'·'!즉시'·'!중요'를 넣으면 중요도가 됩니다.</p>
+<div class="bar td-add"><label for="tdQuick" class="vh">새 할 일</label><input class="inp grow" id="tdQuick" placeholder="할 일을 쓰고 Enter (끝에 '금요일', '11/28'처럼 쓰면 기한)" autocomplete="off">${todoDateField('tdQuickDue', today(), '기한')}<label for="tdQuickImp" class="vh">중요도</label><select class="inp" id="tdQuickImp" aria-label="중요도">${R.TD_IMPS.slice().reverse().map(([v, n]) => `<option value="${v}">${esc(n)}</option>`).join('')}</select><button class="btn primary" data-act="tdAdd">${ic('plus')}추가</button><button class="btn" data-act="tdNew">자세히 쓰기</button><button class="btn" data-act="tdBulk">여러 개 추가</button></div>
+<p class="muted td-hint">날짜를 쓰지 않으면 오늘 시작·종료합니다. 끝에 '11/24~11/28'처럼 쓰면 기간, '!긴급'·'!즉시'·'!중요'를 넣으면 중요도가 됩니다.</p>
 ${legacy.length ? `<div class="box warn td-legacy">이 PC에만 저장된 예전 할 일 ${legacy.length}건이 있습니다. 그룹웨어 ToDo로 옮기면 다른 PC와 모바일에서도 보입니다. <button class="btn sm primary" data-act="tdMigrate">그룹웨어 ToDo로 옮기기</button> <button class="btn sm ghost" data-act="tdMigrateSkip">옮기지 않고 지우기</button></div>` : ''}
 <div class="bar"><div class="seg" role="group" aria-label="할 일 거르기">${filt}</div></div>
 <div class="bar td-tools">${typeof todoViewSeg === 'function' ? todoViewSeg() : ''}<label class="td-sel">정렬 <select class="inp" id="tdSort">${R.TD_SORTS.map(([v, n]) => `<option value="${v}" ${TD.sort === v ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label><label class="td-sel">중요도 <select class="inp" id="tdImpF"><option value="all">모두</option>${R.TD_IMPS.map(([v, n]) => `<option value="${v}" ${TD.imp === v ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label><label class="td-sel">끝낸 일 <select class="inp" id="tdDoneSpan"><option value="week" ${TD.doneSpan === 'week' ? 'selected' : ''}>최근 1주</option><option value="month" ${TD.doneSpan === 'month' ? 'selected' : ''}>최근 1달</option><option value="all" ${TD.doneSpan === 'all' ? 'selected' : ''}>전체</option></select></label><label for="tdQ" class="vh">할 일 찾기</label><input class="inp" id="tdQ" placeholder="찾기(제목·메모·준 사람)" value="${esc(TD.q)}" style="width:200px"></div>
@@ -312,7 +347,7 @@ ${legacy.length ? `<div class="box warn td-legacy">이 PC에만 저장된 예전
     return `<div class="td-ed-h"><h2>${isNew ? '새 할 일' : '할 일 자세히'}</h2><button class="btn sm ghost" data-act="tdClose" aria-label="닫기">${ic('x')}닫기</button></div>
 <label class="td-f">제목<input class="inp" id="tdeTitle" value="${esc(t.title)}" maxlength="100" autocomplete="off" ${lock}></label>
 ${!isNew && typeof todoEditorInfoHtml === 'function' ? todoEditorInfoHtml(t) : ''}
-<div class="td-f2"><label class="td-f">시작일<input class="inp" type="date" id="tdeStart" value="${esc(t.start && t.start !== t.due ? t.start : '')}" ${lock}></label><label class="td-f">기한(종료일)<input class="inp" type="date" id="tdeDue" value="${esc(t.due || '')}" ${lock}></label></div>
+<div class="td-f2"><div class="td-f">시작일${todoDateField('tdeStart', t.start || t.due || '', '시작일', lock)}</div><div class="td-f">기한(종료일)${todoDateField('tdeDue', t.due || '', '기한(종료일)', lock)}</div></div>
 <div class="td-f2"><label class="td-f">중요도<select class="inp" id="tdeImp">${R.TD_IMPS.slice().reverse().map(([v, n]) => `<option value="${v}" ${(t.imp || (t.important ? '2' : '0')) === v ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label>${isNew ? '' : `<label class="td-f">진행률 <b id="tdeRateV">${Number(t.rate) || 0}%</b><input class="td-range" type="range" id="tdeRate" min="0" max="100" step="10" value="${Number(t.rate) || 0}"></label>`}</div>
 <label class="chk td-dd"><input type="checkbox" id="tdeDday" ${t.dday ? 'checked' : ''} ${lock}> 그룹웨어 첫 화면 D-day에 보이기</label>${!isNew && t.files ? `<p class="muted td-hint">첨부파일이 있어 제목·기간·메모는 그룹웨어에서 고칩니다(첨부 보호). 중요도·진행률은 여기서 저장됩니다.</p>` : ''}
 <label class="td-f">반복<select class="inp" id="tdeRep" ${lock}><option value="">반복 안 함</option><option value="wd" ${repV === 'wd' ? 'selected' : ''}>평일 매일</option><option value="w" ${repV === 'w' ? 'selected' : ''}>매주 요일</option><option value="m" ${repV === 'm' ? 'selected' : ''}>매월 날짜</option><option value="me" ${repV === 'me' ? 'selected' : ''}>매월 말일</option></select></label>
@@ -421,12 +456,14 @@ ${!isNew && typeof todoEditorInfoHtml === 'function' ? todoEditorInfoHtml(t) : '
     const raw = i.value.trim();
     if (!raw) { i.focus(); toast('할 일을 입력하세요.'); return; }
     const sp = todoSplitQuick(raw);
-    const due = ($('#tdQuickDue') || {}).value || sp.due;
+    const picked = ($('#tdQuickDue') || {}).value || '';
+    const due = ($('#tdQuickDue') || {}).dataset?.userSet ? picked : sp.due || today();
+    const start = sp.due === due && sp.start ? sp.start : due;
     const sel = ($('#tdQuickImp') || {}).value || '0', importance = sel !== '0' ? sel : sp.imp || '0';
     i.disabled = true; TD.adding = true;
-    const r = await todoCreate({title: sp.title, due, start: due === sp.due ? sp.start : '', importance}).finally(() => { TD.adding = false; });
+    const r = await todoCreate({title: sp.title, due, start, importance}).finally(() => { TD.adding = false; });
     const i2 = $('#tdQuick'); if (i2) i2.disabled = false;
-    if (r.ok) { const q = $('#tdQuick'); if (q) q.value = ''; const d = $('#tdQuickDue'); if (d) d.value = ''; const c = $('#tdQuickImp'); if (c) c.value = '0'; toast(`그룹웨어 ToDo에 추가했습니다${due ? ` (${sp.start && due === sp.due && sp.start !== due ? '기간 ' + todoMd(sp.start) + '~' : '기한 '}${todoMd(due)})` : ''}${importance !== '0' ? ' · ' + R.tdImpLabel(importance) : ''}.`); }
+    if (r.ok) { const q = $('#tdQuick'); if (q) q.value = ''; const d = $('#tdQuickDue'); if (d) { d.value = today(); delete d.dataset.userSet; const b = root.querySelector('[data-act="tdDateOpen"][data-id="tdQuickDue"]'); if (b) { b.querySelector('span').textContent = todoDateText(d.value); b.setAttribute('aria-label', '기한: ' + todoDateText(d.value) + ', 날짜 선택'); } } const c = $('#tdQuickImp'); if (c) c.value = '0'; toast(`그룹웨어 ToDo에 추가했습니다${due ? ` (${sp.start && due === sp.due && sp.start !== due ? '기간 ' + todoMd(sp.start) + '~' : '기한 '}${todoMd(due)})` : ''}${importance !== '0' ? ' · ' + R.tdImpLabel(importance) : ''}.`); }
     else toast(r.text);
     setTimeout(() => $('#tdQuick')?.focus(), 30);
   }
@@ -479,7 +516,7 @@ ${!isNew && typeof todoEditorInfoHtml === 'function' ? todoEditorInfoHtml(t) : '
   HOME_ACTS.tdReload = () => todoLoad({force: true});
   HOME_ACTS.tdFilter = (el, v) => { if (TODO_FILTERS.some(f => f[0] === v) || R.TD_STATES.some(f => f[0] === v)) { TD.filter = v; renderMain(); root.querySelector(`[data-act="tdFilter"][data-v="${v}"]`)?.focus(); } };
   HOME_ACTS.tdAdd = () => todoQuickAdd();
-  HOME_ACTS.tdNew = () => { const q = ($('#tdQuick') || {}).value || ''; const sp = todoSplitQuick(q); const sel = ($('#tdQuickImp') || {}).value || '0'; TD.draft = {title: sp.title, due: ($('#tdQuickDue') || {}).value || sp.due, start: sp.start || '', imp: sel !== '0' ? sel : sp.imp || '0', memo: '', meta: {}, checklist: []}; todoOpen('new'); };
+  HOME_ACTS.tdNew = () => { const q = ($('#tdQuick') || {}).value || ''; const sp = todoSplitQuick(q); const sel = ($('#tdQuickImp') || {}).value || '0'; const picked = ($('#tdQuickDue') || {}).value || ''; const due = ($('#tdQuickDue') || {}).dataset?.userSet ? picked : sp.due || today(); TD.draft = {title: sp.title, due, start: sp.due === due && sp.start ? sp.start : due, imp: sel !== '0' ? sel : sp.imp || '0', memo: '', meta: {}, checklist: []}; todoOpen('new'); };
   HOME_ACTS.tdSel = (el) => todoOpen(el.dataset.id);
   HOME_ACTS.tdClose = () => { if (TD.dirty && !confirm('고치던 내용이 저장되지 않았습니다. 닫을까요?')) return; TD.sel = ''; TD.dirty = false; TD.draft = null; TD.edMeta = null; renderMain(); };
   HOME_ACTS.tdSave = () => todoSaveEditor();
@@ -554,6 +591,7 @@ ${!isNew && typeof todoEditorInfoHtml === 'function' ? todoEditorInfoHtml(t) : '
   };
   // 편집기의 선택 칸(반복 방식)과 찾기 입력
   function todoChange(t) {
+    if (t.id === 'tdQuickDue') { t.dataset.userSet = '1'; return; }
     if (/^bp/.test(t.id) && typeof bpChange === 'function') { bpChange(t); return; }
     if (t.id === 'tdeRep') { const v = t.value; const w = $('#tdeRepW'), m = $('#tdeRepM'); if (w) w.hidden = v !== 'w'; if (m) m.hidden = v !== 'm'; TD.dirty = true; return; }
     if (t.id === 'tdeBud') { const d = $('#tdeBudDate'); if (d && !d.value) d.value = (($('#tdeDue') || {}).value || ''); TD.dirty = true; return; }
