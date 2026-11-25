@@ -30,7 +30,7 @@
       const why = CDU.q ? '찾는 말과 맞는 카드 사용이 없습니다.' : CDU.state === 'open' ? '이 기간에 결의 전인 카드 사용이 없습니다.' : '이 기간에 해당하는 카드 사용이 없습니다.';
       return `<div class="empty"><div class="ill">${ic('check')}</div><b>${why}</b>${CDU.state === 'open' && !CDU.q ? '다른 기간이나 [전체]에서 확인해 보세요.' : ''}</div>`;
     }
-    const tr = r => `<tr data-cdu-row><td class="nowrap">${esc(R.cduDayLabel(r.date))}<div class="muted">${esc(r.time)}</div></td><td>${esc(r.card)}</td><td class="cu-place">${esc(r.place)}${r.approvalNo ? `<div class="muted">승인 ${esc(r.approvalNo)}</div>` : ''}</td><td class="num">${won(r.amount)}</td><td>${cduBadge(r)}</td></tr>`;
+    const tr = r => `<tr data-cdu-row><td class="nowrap">${esc(R.cduDayLabel(r.date))}<div class="muted">${esc(r.time)}</div></td><td>${esc(r.card)}</td><td class="cu-place">${esc(r.place)}${r.approvalNo ? `<div class="muted">승인 ${esc(r.approvalNo)}</div>` : ''}</td><td class="num">${won(r.amount)}${r.vat ? `<div class="muted">부가세 ${won(r.vat)}</div>` : ''}</td><td>${cduBadge(r)}</td></tr>`;
     return `<div class="bm-scroll"><table class="bm-tbl cu-tbl"><tr><th scope="col">승인일시</th><th scope="col">카드</th><th scope="col">사용처</th><th scope="col" class="num">금액</th><th scope="col">결의</th></tr>${v.rows.map(tr).join('')}${v.rows.length > 1 ? `<tr class="sum"><td colspan="3">합계 ${v.rows.length}건</td><td class="num">${won(v.amount)}</td><td></td></tr>` : ''}</table></div>`;
   }
   function vBudgetCard() {
