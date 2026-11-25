@@ -95,6 +95,7 @@
   const WC_CSS = '/*@WC_CSS@*/';
   // One small line-icon set (stroke icons, 24px grid) so every screen uses the same visual language.
   const ICONS = {
+    pin: '<path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
     sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
     moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/>',
     car: '<path d="M5 17h14M5 17a2 2 0 1 1-4 0m22 0a2 2 0 1 1-4 0M3 17v-5l2-5h14l2 5v5"/><path d="M3 12h18"/>',

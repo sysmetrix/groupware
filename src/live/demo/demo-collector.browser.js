@@ -344,6 +344,7 @@
         .filter(r => r.date >= f && r.date <= t);
       return {from: f, to: t, state: 'all', rows, url: LINKS.route(ROUTES.expenseEntry), at: new Date().toISOString()};
     },
+    cardSlip: async ({approvalNo, date} = {}) => { await wait(200); return {approvalNo: String(approvalNo || ''), cardName: '(예시)법인카드1', cardNo: '1111222233334444', place: '(예시)상점', bizNo: '1234567890', ceo: '(예시)대표', tel: '0320001234', addr: '(예시)시 구 로 1', business: '', amount: 48000, vat: 0, supply: 48000, at: (date ? date.slice(0, 4) + '-' + date.slice(4, 6) + '-' + date.slice(6, 8) : '') + ' 12:40:00'}; },
     etaxInvoices: async ({from, to} = {}) => {
       await wait(240);
       const f = String(from || day(0).slice(0, 6) + '01').replace(/-/g, ''), t = String(to || day(0)).replace(/-/g, '');

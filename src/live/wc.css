@@ -1566,5 +1566,19 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .linkbtn{background:none;border:0;padding:0;font:inherit;color:inherit;text-decoration:underline dotted;text-underline-offset:3px;cursor:pointer}
 .linkbtn:hover{text-decoration-style:solid}
 .linkbtn:focus-visible{outline:2px solid currentColor;outline-offset:2px}
-table.slip{border-collapse:collapse;margin:8px 0 12px;font-size:13px}
-table.slip td{padding:4px 0}
+
+.slipdlg{width:min(380px,94vw);padding:14px;background:#dbe6f6;position:relative}
+.slipdlg .x{position:absolute;top:6px;right:6px;z-index:1}
+.slip-paper{background:#fff;border-radius:6px;padding:22px 26px 20px;position:relative;color:#111}
+.slip-paper:before,.slip-paper:after{content:"";position:absolute;top:6px;bottom:6px;width:10px;background:radial-gradient(circle at 5px 50%,#dbe6f6 4px,transparent 4.5px) 0 0/10px 26px repeat-y}
+.slip-paper:before{left:-12px}
+.slip-paper:after{right:-12px}
+.slip-paper hr{border:0;border-top:1px solid #d9dde3;margin:14px 0}
+.slip-paper hr:first-of-type{border-top:2px solid #222}
+.sl-h{display:flex;align-items:center;gap:8px;font-size:17px;font-weight:700;margin-bottom:10px}
+.sl-h svg{width:16px;height:16px;opacity:.45;flex:none}
+.sl-amt{text-align:right;font-size:36px;font-weight:800;letter-spacing:-.5px;margin-bottom:12px}
+.sl-amt small{font-size:18px;font-weight:700;margin-left:3px}
+.sl-r{display:flex;justify-content:space-between;gap:16px;padding:5px 0;font-size:13px}
+.sl-r span{color:#777;font-weight:600;flex:none}
+.sl-r b{text-align:right;font-weight:700;word-break:keep-all}

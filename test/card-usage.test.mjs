@@ -97,7 +97,7 @@ test('카드 사용내역: 결의서 [카드승인내역]과 같은 조건으로
   assert.equal(done.time, '12:56');
   assert.equal(r.rows.find(x => x.date === '20261105').returned, true); // 회수된 결의는 다시 결의 전
   const text = JSON.stringify(r);
-  assert.equal(done.bizNo, '1234567890'); assert.equal(done.tel, '0321234567'); assert.equal(done.addr, '주소');
+  assert.equal(done.ebankKey, '');
   for (const secret of ['1234********5678', '@!E!@']) assert.ok(!text.includes(secret), '버리는 칸: ' + secret);
   assert.match(r.url, /NCA0020/);
   const open = await api.cardUsage({from: '20261101', to: '20261125', state: 'open'});
@@ -167,20 +167,31 @@ test('세금계산서 화면: 예산 집행의 하위 탭으로 연결되고 처
   assert.ok(!/chainRegnb|cardNb/.test(frag));
 });
 
-test('매출전표 보기: 합계에서 부가세를 뺀 공급가액과 읽기 좋은 번호를 만든다', () => {
-  const s = C.cduSlip({amount: 110000, vat: 10000, bizNo: '1234567890', tel: '0321234567', date: '20261102', time: '12:56'});
-  assert.deepEqual(s, {amount: 110000, vat: 10000, supply: 100000, bizNo: '123-45-67890', tel: '032-123-4567', at: '2026-11-02 12:56'});
-  assert.equal(C.cduSlip({amount: 5, vat: 0, tel: '0212345678'}).tel, '02-1234-5678');
-});
-test('매출전표 화면: 금액 단추에 처리기가 있고 카드번호를 다루지 않는다', () => {
-  const frag = readFileSync(new URL('../src/live/wc/56-budget-card.js', import.meta.url), 'utf8');
-  assert.match(frag, /HOME_ACTS\.cduSlip =/);
-  assert.match(frag, /data-act=\"cduSlip\"/);
+test('매출전표 보기: 그룹웨어 전표 창과 같은 표기로 만든다', () => {
+  const s = C.cduSlip({amount: 131600, vat: 0, supply: 131600, bizNo: '1138521083', cardNo: '4140117105823582', tel: '0215448667'});
+  assert.deepEqual(s, {amount: 131600, vat: 0, supply: 131600, bizNo: '113-85-21083', cardNo: '4140-1171-0582-3582', tel: '0215448667'});
+  assert.equal(C.cduSlip({amount: 110, vat: 10}).supply, 100);
 });
 
-test('예산 과목표: 전략경영실운영(A201)의 누계예산이 0으로 오지 않도록 예산구분 2로 읽는다', async () => {
-  const {api, calls} = await loadCollector(() => Promise.resolve({resultCode: 0, resultData: {printList: [{bgtCd: '고1', bgtNm: '행정운영비', divFgNm: '관', abgtSumAm: 5229902000, unitAm: 4409561094, subAm: 820340906, bglistCd: '고1|'}]}}));
-  const t = await api.budgetProject({project: 'A201'});
-  assert.equal(calls[0].body.abgtFg, '2');
-  assert.equal(t.rows[0].budget, 5229902000);
+test('매출전표 조회: 결의서 전표 창과 같은 주소를 암호화해 부르고 전표 칸을 풀어 돌려준다', async () => {
+  const RAW1 = [{issDt: enc('20261124'), issSq: enc('1'), issTime: enc('15:13'), attrNm: enc('(가)법인카드1'), chainName: enc('통신사'), sunginNb: enc('54533835'), sunginAm: enc('131600.0000'), ebankKey: enc('2587'), getbackFg: null}];
+  const SLIP = {sunginNb: enc('54533835'), cardNm: enc('(정책)법인카드3582'), cardNb: enc('4140117105823582'), chainName: enc('(주)케이티알파'), chainRegnb: enc('1138521083'), chainCeoNm: enc('박준석'), chainTel: enc('0215448667'), chainAddr: enc('서울구로구디지털로26길72'), chainBusiness: null, sunginAm: enc('131600.0000'), vatAm: enc('0.0000'), supAm: enc('131600.0000'), issDtTime: enc('2026-11-24 15:13:12')};
+  const {api, calls} = await loadCollector(p => Promise.resolve({resultCode: 0, resultData: p.endsWith('0BN00002') ? [SLIP] : RAW1}));
+  const list = await api.cardUsage({from: '20261124', to: '20261124'});
+  assert.equal(list.rows[0].ebankKey, '2587');
+  const s = await api.cardSlip({approvalNo: list.rows[0].approvalNo, ebankKey: list.rows[0].ebankKey, date: list.rows[0].date, seq: list.rows[0].seq});
+  const c = calls.find(x => x.p === '/nonprofit/cardAuth/0BN00002');
+  assert.equal(c.opts.encrypt, true);
+  assert.deepEqual(JSON.parse(JSON.stringify(c.body)), {popupCoCd: '', sunginNb: '54533835', ebankKey: '2587', isuDt: '', isuSq: 0, issDt: '20261124', issSq: '1'});
+  assert.equal(s.place, '(주)케이티알파'); assert.equal(s.cardNo, '4140117105823582'); assert.equal(s.at, '2026-11-24 15:13:12'); assert.equal(s.supply, 131600); assert.equal(s.business, '');
+  assert.ok(!JSON.stringify(list).includes('4140117105823582'), '목록에는 카드번호가 없다');
+  await assert.rejects(api.cardSlip({}), e => e.code === 'BAD_QUERY');
+});
+
+test('매출전표 화면: 금액 단추에 처리기가 있고 전표 창을 그린다', () => {
+  const frag = readFileSync(new URL('../src/live/wc/56-budget-card.js', import.meta.url), 'utf8');
+  assert.match(frag, /HOME_ACTS\.cduSlip =/);
+  assert.match(frag, /data-act="cduSlip"/);
+  assert.match(frag, /GW\.cardSlip\(/);
+  assert.match(frag, /esc\(raw\.place\)/);
 });

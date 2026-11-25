@@ -3,7 +3,7 @@
 // 자료: GW.cardUsage() (수집기). 거르기·합계: R.cduView (card-usage.mjs).
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
 
-  const CDU = {period: 'month', from: '', to: '', state: 'open', card: '', q: '', data: null, busy: false, err: '', seq: 0};
+  const CDU = {period: 'month', from: '', to: '', state: 'open', card: '', q: '', data: null, busy: false, err: '', seq: 0, slipSeq: 0};
   const cduRange = () => R.cduPeriod(CDU.period, new Date(), {from: CDU.from, to: CDU.to});
   async function cduLoad(inRender) {
     if (!GW.cardUsage) { CDU.err = '이 화면의 그룹웨어 연결에 카드 사용내역 조회가 없습니다. 그룹웨어를 새로고침한 뒤 다시 열어 주세요.'; if (!inRender && S.view === 'budget') renderMain(); return; }
@@ -70,12 +70,24 @@
     CDU.period = 'custom'; CDU.from = p.from; CDU.to = p.to; renderMain();
   };
   HOME_ACTS.cduState = (el, v) => { if (!R.CDU_STATES.some(([k]) => k === v)) return; CDU.state = v; renderMain(); root.querySelector(`[data-act="cduState"][data-v="${v}"]`)?.focus(); };
-  HOME_ACTS.cduSlip = el => {
+  // 매출전표: 그룹웨어 결의서의 전표 창과 같은 모양(천공 가장자리, 가맹점·큰 금액·두 칸 목록). 눌렀을 때 한 건만 읽는다.
+  const cduSlipHtml = body => `<div class="modal" data-act="closeOverlay"><div class="dlg slipdlg" data-stop="1" role="dialog" aria-label="카드 매출전표"><button class="btn icon ghost x" data-act="closeOverlay" aria-label="닫기">${ic('x')}</button><div class="slip-paper">${body}</div></div></div>`;
+  HOME_ACTS.cduSlip = async el => {
     const d = CDU.data, k = el.dataset.k || '';
     const r = d && d.rows.find(x => `${x.date}|${x.seq}|${x.approvalNo}` === k);
     if (!r) return;
-    const s = R.cduSlip(r), line = (a, b) => b ? `<tr><th scope="row" style="text-align:left;font-weight:600;padding:4px 12px 4px 0">${a}</th><td>${esc(b)}</td></tr>` : '';
-    $('#overlay').innerHTML = `<div class="modal" data-act="closeOverlay"><div class="dlg" data-stop="1" role="dialog" aria-label="카드 매출전표" style="width:min(460px,94vw)"><h2>카드 매출전표</h2><table class="slip">${line('승인일시', s.at)}${line('카드', r.card)}${line('승인번호', r.approvalNo)}${line('가맹점', r.place)}${line('사업자번호', s.bizNo)}${line('대표자', r.ceo)}${line('전화', s.tel)}${line('주소', r.addr)}${line('공급가액', won(s.supply) + '원')}${line('부가세', won(s.vat) + '원')}${line('합계', won(s.amount) + '원')}${line('결의', R.cduStatusLabel(r))}</table><p class="muted">카드번호는 읽지 않습니다. 그룹웨어 카드승인내역에 있는 값만 보여 드립니다.</p><div class="acts"><button class="btn" data-act="closeOverlay">닫기</button></div></div></div>`;
+    const mine = ++CDU.slipSeq;
+    $('#overlay').innerHTML = cduSlipHtml(`<p class="muted"><span class="spin"></span> 매출전표를 읽는 중입니다…</p>`);
+    try {
+      if (!GW.cardSlip) throw new Error('이 화면의 그룹웨어 연결에 매출전표 조회가 없습니다. 그룹웨어를 새로고침해 주세요.');
+      const raw = await GW.cardSlip({approvalNo: r.approvalNo, ebankKey: r.ebankKey, date: r.date, seq: r.seq});
+      if (mine !== CDU.slipSeq || !$('#overlay .slipdlg')) return;
+      const s = R.cduSlip(raw), row = (a, b) => `<div class="sl-r"><span>${a}</span><b>${esc(b || '')}</b></div>`;
+      $('#overlay').innerHTML = cduSlipHtml(`<div class="sl-h">${ic('pin')}<span>${esc(raw.place)}</span></div><div class="sl-amt">${won(s.amount)}<small>원</small></div><hr>${row('사업자등록번호', s.bizNo)}${row('대표자명', raw.ceo)}${row('전화번호', s.tel)}${row('주소', raw.addr)}${row('업종', raw.business)}<hr>${row('카드별칭', raw.cardName)}${row('카드번호', s.cardNo)}${row('공급가액', won(s.supply))}${row('부가세', won(s.vat))}${row('승인번호', raw.approvalNo)}${row('거래일시', raw.at)}`);
+    } catch (e) {
+      if (mine !== CDU.slipSeq || !$('#overlay .slipdlg')) return;
+      $('#overlay').innerHTML = cduSlipHtml(`<div class="box errb">매출전표를 읽지 못했습니다: ${esc(String((e && e.message) || e).slice(0, 160))}</div>`);
+    }
   };
   HOME_ACTS.cduCard = el => { CDU.card = el.dataset.c || ''; renderMain(); };
   HOME_ACTS.cduReload = () => { CDU.err = ''; cduLoad(); };

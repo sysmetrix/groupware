@@ -47,15 +47,16 @@ export function cduView(rows, {state = 'open', card = '', q = ''} = {}) {
   return {rows: shown, amount, counts, openAmount, oldestOpen, cards: [...cards.values()].sort((a, b) => b.count - a.count || String(a.card).localeCompare(String(b.card)))};
 }
 
-// 매출전표 보기: 합계에서 부가세를 뺀 공급가액과 읽기 좋은 전화·사업자번호. 카드번호는 다루지 않는다.
-export function cduSlip(r) {
-  const amount = Number(r && r.amount) || 0, vat = Number(r && r.vat) || 0;
-  const biz = String((r && r.bizNo) || ''), tel = String((r && r.tel) || '').replace(/\D/g, '');
+// 매출전표 보기: 그룹웨어 전표 창과 같은 표기(사업자번호 3-2-5, 카드번호 4-4-4-4, 전화번호는 받은 그대로).
+export function cduSlip(s) {
+  const amount = Number(s && s.amount) || 0, vat = Number(s && s.vat) || 0;
+  const supply = s && s.supply != null && s.supply !== '' ? Number(s.supply) || 0 : amount - vat;
+  const biz = String((s && s.bizNo) || ''), cn = String((s && s.cardNo) || '');
   return {
-    amount, vat, supply: amount - vat,
+    amount, vat, supply,
     bizNo: /^\d{10}$/.test(biz) ? `${biz.slice(0, 3)}-${biz.slice(3, 5)}-${biz.slice(5)}` : biz,
-    tel: /^02\d{7,8}$/.test(tel) ? `${tel.slice(0, 2)}-${tel.slice(2, tel.length - 4)}-${tel.slice(-4)}` : /^\d{10,11}$/.test(tel) ? `${tel.slice(0, 3)}-${tel.slice(3, tel.length - 4)}-${tel.slice(-4)}` : tel,
-    at: `${cduDash(r && r.date)}${r && r.time ? ` ${r.time}` : ''}`.trim(),
+    cardNo: /^\d{16}$/.test(cn) ? cn.replace(/(\d{4})(?=\d)/g, '$1-') : cn,
+    tel: String((s && s.tel) || ''),
   };
 }
 
