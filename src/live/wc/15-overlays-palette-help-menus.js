@@ -25,6 +25,7 @@
     add('근태신청', '출장·휴가·대체', () => openUrl(GW.links.route(GW.routes.attendanceRequest), {title: '근태신청'}), '휴가 출장');
     add('근태 지난달 보기', '근태·연차', () => { if (!go('attendance')) return; const p = R.kstNow(new Date()); const d = new Date(Date.UTC(p.y, p.m - 2, 1)); loadAttendance(`${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}`); });
     for (const p of S.settings.budget) add(`예산 ${p.project} ${p.filter || ''}`, p.label || '예산 집행', () => { if (!go('budget')) return; S.budget.mode = 'detail'; S.budget.project = p.project; S.budget.filter = p.filter || ''; S.budget.table = null; renderMain(); });
+    add('카드 사용내역', '예산 집행 · 결의 전 법인카드', () => { if (!go('budget')) return; S.budget.mode = 'card'; renderMain(); }, '법인카드 카드승인 승인내역 지출결의');
     add('주간 업무 실적 초안', '보고서', () => { if (go('report')) $('#wkFrom')?.focus(); }, '보고');
     add('오늘 브리핑 한글용 복사', '보고서', () => copyRich(briefHtml(), R.renderMarkdown(S.a)));
     add('새로 만들기', '기안·신청·메일 메뉴', () => openMenu('new', root.querySelector('[data-act=menuNew]')), '기안 작성 신청');

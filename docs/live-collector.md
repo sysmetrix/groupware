@@ -67,7 +67,7 @@
 | 통합검색 | 결재문서 본문·메일·게시판·첨부·일정·인물·연락처, 기간(1·3·12개월), 분류별 더 보기, **본문 미리보기(열람 기록 없음)**와 본문 기한 추출 |
 | 할 일 보드 | 오늘·내일·이번 주·나중에·끝냄 다섯 칸. 카드를 **끌어 옮기면** 계획·미루기·기한이 바뀐다 |
 | 일정 달력 | 월 달력에 그룹웨어 일정·휴일·내 휴가·기한·할 일. 할 일을 **다른 날짜로 끌면** 기한이 바뀐다 |
-| 예산 집행 | 연말 집행률·불용 예상액, 세목별 집행률 그래프(경과율 기준선), 월별 집행 그래프(막대를 누르면 그 달 결의만), **항 전체 결의 내역**(노121: 26건, 합계 = 항 집행액 자동 대조), 결의 행 → 결재문서 열기, CSV·한글용 복사 |
+| 예산 집행 | 연말 집행률·불용 예상액, 세목별 집행률 그래프(경과율 기준선), 월별 집행 그래프(막대를 누르면 그 달 결의만), **항 전체 결의 내역**(노121: 26건, 합계 = 항 집행액 자동 대조), 결의 행 → 결재문서 열기, CSV·한글용 복사. **카드 사용내역**(v1.21): 결의 전·결의 완료 법인카드 사용을 기간·카드·찾기어로 미리 보고 CSV로 저장(읽기만) |
 | 근태·연차 | 월 근태 달력(정상·부분·휴가·휴일·확인 필요 색 구분), 날짜를 누르면 상세와 근태신청 바로가기, 근무일대체 연결 안내, 연차 내역 |
 | 보고서 | 주간 업무 실적 초안(고친 내용 자동 저장), 오늘 브리핑의 **한글용 복사**(서식 유지)·인쇄·HTML, 할 일 CSV |
 | 설정 | 자동 새로고침, 바탕화면 알림, 글자 크기 4단계, 밝게·어둡게, 쉬운 안내, 예산 대상 표 편집, 긴급 키워드, 초기화 |
@@ -107,7 +107,7 @@
 | 공지 | `/board/APIHandler/ViewBoardArtList`, `getBoardReadCnt` |
 | 일정 | `/schres/sc111A02`, `sc111A03`, `/gw/APIHandler/gw114A14` |
 | 근태·연차 | `getTodayComeLeaveInfo`, `/personal/hpd0220/0hr00001`, `/human/hrd0410/selectTab2`(일별), `/personal/hpd0550/0hp00002`, `0hp00003` |
-| 예산 | `/nonprofit/NCC0610/0BN00002`(누계·월별), `/nonprofit/popup/0BN00001`(결의 내역) |
+| 예산 | `/nonprofit/NCC0610/0BN00002`(누계·월별), `/nonprofit/popup/0BN00001`(결의 내역), `/nonprofit/cardAuth/0BN00001`(카드 사용내역, v1.21. 지출결의서 [카드승인내역] 창과 같은 조건·같은 암호화 요청. 응답은 그룹웨어 자체 복호화 함수로 풀고 카드번호·가맹점 사업자번호·대표자·전화·주소는 버린다) |
 | 검색·알림 | `/gw/APIHandler/gw018A02`(통합검색, 날짜는 YYYY-MM-DD), `/event/event02A01` |
 
 원래 화면 주소(같은 출처, 처리 창에 띄울 수 있음): 결재문서 `/#popup?MicroModuleCode=ea&callComp=UCAP001&diKeyCode=…`(배부 `recvOpenYN=Y&isBaebu=Y`, 부서 접수 `pageCode=UCA3022&recvOpenYN=Y`, 발송 `isSend=Y`), 새 기안 `/#popup?MicroModuleCode=ea&tiKeyCode=<양식ID>&callComp=UCAP001`, 메일 쓰기 `/#popup?MicroModuleCode=mail&callComp=UDAP001&mailKind=re|reall|fw|plain&uid=…&mbox=…&popType=Y&moduleSeq=700`, 게시글 `/#/popup?callComp=UFAP003&art_seq_no=…&cat_seq_no=…`.

@@ -341,6 +341,7 @@
       case 'tdSubAdd': case 'tdSubToggle': case 'tdSubDel': case 'tdLinkFind': case 'tdLinkAdd': case 'tdLinkDel': case 'tdLinkOpen':
       case 'tdWrap': case 'tdWrapDone': case 'tdWrapNext': case 'tdWrapPick': case 'tdWrapAll': case 'tdMigrate': case 'tdMigrateSkip':
       case 'bpAdd': case 'bpImport': case 'bpImportAdd': case 'bpConfirm': case 'bpReject': case 'bpEdit': case 'bpReload': case 'bpDropRest':
+      case 'cduPeriod': case 'cduCustom': case 'cduState': case 'cduCard': case 'cduReload': case 'cduCsv':
         if (HOME_ACTS[act]) HOME_ACTS[act](actEl, v, e); break; // 홈·채팅 화면의 처리기 등록소(29~30번 조각)
       default: break;
     }
@@ -354,6 +355,7 @@
     else if (t.id === 'dfIn') { dfState().filter.q = t.value; if (!e.isComposing) dfRefreshList(); }
     else if (t.id === 'bq') { S.budget.q = t.value; }
     else if (t.id === 'bAllFilter' && typeof bmFilterRows === 'function') { if (!e.isComposing) bmFilterRows(t.value); else BM.q = t.value; }
+    else if (t.id === 'cduQ' && typeof cduInput === 'function') cduInput(t, !!e.isComposing);
     else if ((t.id === 'tdQ' || /^tde/.test(t.id || '')) && typeof todoInput === 'function') todoInput(t, !!e.isComposing);
     else if (t.id === 'ledgerQuery') { S.budget.ledgerQuery = t.value; }
     else if (t.id === 'bPickFilter') { const q = t.value.trim().toLowerCase(); root.querySelectorAll('[data-budget-picker-row]').forEach(row => { row.hidden = !!q && !row.dataset.search.includes(q); }); }
@@ -366,7 +368,7 @@
     else if (t.id === 'weekly') { const shown = t.dataset.prev ?? t.defaultValue; if (S.weekly && S.weekly !== shown) store.set('weeklyRecovery', {at: Date.now(), text: S.weekly}); /* 다른 탭에서 바뀐 초안을 덮기 전에 보관 */ S.weekly = t.value; t.dataset.prev = t.value; const saved = saveLocal(); const w = $('#wkSaved'); if (w) { w.classList.toggle('on', saved); w.textContent = saved ? '이 브라우저에 저장됨' : '저장 실패 · 내용을 복사하세요'; } }
     else if (t.id === 'palq') palRender(t.value);
   });
-  root.addEventListener('compositionend', e => { const t = e.composedPath()[0]; if (t.id === 'peopleFilter') { PEOPLE.localFilter = t.value; peopleFilterRows(); return; } if (t.id === 'qfilter') { S.filter.q = t.value; refreshQueue(); } else if (t.id === 'dfIn') { dfState().filter.q = t.value; dfRefreshList(); } });
+  root.addEventListener('compositionend', e => { const t = e.composedPath()[0]; if (t.id === 'peopleFilter') { PEOPLE.localFilter = t.value; peopleFilterRows(); return; } if (t.id === 'cduQ' && typeof cduInput === 'function') { cduInput(t, false); return; } if (t.id === 'qfilter') { S.filter.q = t.value; refreshQueue(); } else if (t.id === 'dfIn') { dfState().filter.q = t.value; dfRefreshList(); } });
   root.addEventListener('toggle', e => {
     const d = e.target;
     if (d.id !== 'briefDetails' || !d.isConnected) return;

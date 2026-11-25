@@ -335,6 +335,15 @@
       const weight = [3, 5, 9, 8, 11, 7, 6, 4, 12, 14, 10, 0].slice(0, cur), wsum = weight.reduce((s, w) => s + w, 0) || 1;
       return {project, code, year: Number(year || day(0).slice(0, 4)), months: Array.from({length: 12}, (_, i) => ({month: String(i + 1).padStart(2, '0'), rows: i < cur ? sel.map(r => ({...r, executed: Math.round(r.executed * weight[i] / wsum)})) : []}))};
     },
+    // v1.21 카드 사용내역(지어낸 가게·카드). 상태는 실제 수집기와 같은 open/done/other.
+    cardUsage: async ({from, to} = {}) => {
+      await wait(240);
+      const f = String(from || day(0).slice(0, 6) + '01').replace(/-/g, ''), t = String(to || day(0)).replace(/-/g, '');
+      const c = (off, time, card, place, amount, status, resolution = '') => ({date: day(off), time, seq: 0, card, cardCode: '', place, approvalNo: String(30000000 + Math.abs(off) * 7 + amount % 97), amount, vat: 0, resolution, resolutionDate: resolution ? resolution.slice(0, 8) : '', slip: '', proposal: '', returned: false, transferred: false, status});
+      const rows = [c(-1, '12:40', '(예시)법인카드1', '행복한식당', 48000, 'open'), c(-3, '15:10', '(예시)법인카드2', '예시문구', 23500, 'open'), c(-5, '11:20', '(예시)법인카드1', '예시인쇄소', 165000, 'done', day(-4) + '-3'), c(-9, '18:05', '(예시)법인카드2', '예시서점', 31000, 'done', day(-8) + '-11'), c(-12, '10:00', '(예시)법인카드1', '예시우체국', 4200, 'other')]
+        .filter(r => r.date >= f && r.date <= t);
+      return {from: f, to: t, state: 'all', rows, url: LINKS.route(ROUTES.expenseEntry), at: new Date().toISOString()};
+    },
     attendanceDays: async ({from, to} = {}) => { await wait(); const f = from || day(0).slice(0, 6) + '01'; return attendanceRows(f, to || day(0)); },
     teamAttendance, teamPlanned,
     resourceList: async () => { await wait(); return RES.map(r => ({...r})); },
