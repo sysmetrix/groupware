@@ -97,7 +97,8 @@ test('카드 사용내역: 결의서 [카드승인내역]과 같은 조건으로
   assert.equal(done.time, '12:56');
   assert.equal(r.rows.find(x => x.date === '20261105').returned, true); // 회수된 결의는 다시 결의 전
   const text = JSON.stringify(r);
-  for (const secret of ['1234********5678', '1234567890', '0321234567', '대표', '주소', '@!E!@']) assert.ok(!text.includes(secret), '버리는 칸: ' + secret);
+  assert.equal(done.bizNo, '1234567890'); assert.equal(done.tel, '0321234567'); assert.equal(done.addr, '주소');
+  for (const secret of ['1234********5678', '@!E!@']) assert.ok(!text.includes(secret), '버리는 칸: ' + secret);
   assert.match(r.url, /NCA0020/);
   const open = await api.cardUsage({from: '20261101', to: '20261125', state: 'open'});
   assert.equal(calls.at(-1).body.commitFg, '2');
@@ -164,4 +165,15 @@ test('세금계산서 화면: 예산 집행의 하위 탭으로 연결되고 처
   assert.match(view, /m === 'etax' && typeof vBudgetEtax === 'function'/);
   for (const act of new Set([...frag.matchAll(/data-act="(etx\w+)"/g)].map(m => m[1]))) assert.match(frag, new RegExp(`HOME_ACTS\\.${act} =`), act);
   assert.ok(!/chainRegnb|cardNb/.test(frag));
+});
+
+test('매출전표 보기: 합계에서 부가세를 뺀 공급가액과 읽기 좋은 번호를 만든다', () => {
+  const s = C.cduSlip({amount: 110000, vat: 10000, bizNo: '1234567890', tel: '0321234567', date: '20261102', time: '12:56'});
+  assert.deepEqual(s, {amount: 110000, vat: 10000, supply: 100000, bizNo: '123-45-67890', tel: '032-123-4567', at: '2026-11-02 12:56'});
+  assert.equal(C.cduSlip({amount: 5, vat: 0, tel: '0212345678'}).tel, '02-1234-5678');
+});
+test('매출전표 화면: 금액 단추에 처리기가 있고 카드번호를 다루지 않는다', () => {
+  const frag = readFileSync(new URL('../src/live/wc/56-budget-card.js', import.meta.url), 'utf8');
+  assert.match(frag, /HOME_ACTS\.cduSlip =/);
+  assert.match(frag, /data-act=\"cduSlip\"/);
 });

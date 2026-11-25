@@ -30,7 +30,7 @@
       const why = CDU.q ? '찾는 말과 맞는 카드 사용이 없습니다.' : CDU.state === 'open' ? '이 기간에 결의 전인 카드 사용이 없습니다.' : '이 기간에 해당하는 카드 사용이 없습니다.';
       return `<div class="empty"><div class="ill">${ic('check')}</div><b>${why}</b>${CDU.state === 'open' && !CDU.q ? '다른 기간이나 [전체]에서 확인해 보세요.' : ''}</div>`;
     }
-    const tr = r => `<tr data-cdu-row><td class="nowrap">${esc(R.cduDayLabel(r.date))}<div class="muted">${esc(r.time)}</div></td><td>${esc(r.card)}</td><td class="cu-place">${esc(r.place)}${r.approvalNo ? `<div class="muted">승인 ${esc(r.approvalNo)}</div>` : ''}</td><td class="num">${won(r.amount)}${r.vat ? `<div class="muted">부가세 ${won(r.vat)}</div>` : ''}</td><td>${cduBadge(r)}</td></tr>`;
+    const tr = r => `<tr data-cdu-row><td class="nowrap">${esc(R.cduDayLabel(r.date))}<div class="muted">${esc(r.time)}</div></td><td>${esc(r.card)}</td><td class="cu-place">${esc(r.place)}${r.approvalNo ? `<div class="muted">승인 ${esc(r.approvalNo)}</div>` : ''}</td><td class="num"><button class="linkbtn" data-act="cduSlip" data-k="${esc(`${r.date}|${r.seq}|${r.approvalNo}`)}" aria-label="${esc(r.place)} 매출전표 보기">${won(r.amount)}</button>${r.vat ? `<div class="muted">부가세 ${won(r.vat)}</div>` : ''}</td><td>${cduBadge(r)}</td></tr>`;
     return `<div class="bm-scroll"><table class="bm-tbl cu-tbl"><tr><th scope="col">승인일시</th><th scope="col">카드</th><th scope="col">사용처</th><th scope="col" class="num">금액</th><th scope="col">결의</th></tr>${v.rows.map(tr).join('')}${v.rows.length > 1 ? `<tr class="sum"><td colspan="3">합계 ${v.rows.length}건</td><td class="num">${won(v.amount)}</td><td></td></tr>` : ''}</table></div>`;
   }
   function vBudgetCard() {
@@ -70,6 +70,13 @@
     CDU.period = 'custom'; CDU.from = p.from; CDU.to = p.to; renderMain();
   };
   HOME_ACTS.cduState = (el, v) => { if (!R.CDU_STATES.some(([k]) => k === v)) return; CDU.state = v; renderMain(); root.querySelector(`[data-act="cduState"][data-v="${v}"]`)?.focus(); };
+  HOME_ACTS.cduSlip = el => {
+    const d = CDU.data, k = el.dataset.k || '';
+    const r = d && d.rows.find(x => `${x.date}|${x.seq}|${x.approvalNo}` === k);
+    if (!r) return;
+    const s = R.cduSlip(r), line = (a, b) => b ? `<tr><th scope="row" style="text-align:left;font-weight:600;padding:4px 12px 4px 0">${a}</th><td>${esc(b)}</td></tr>` : '';
+    $('#overlay').innerHTML = `<div class="modal" data-act="closeOverlay"><div class="dlg" data-stop="1" role="dialog" aria-label="카드 매출전표" style="width:min(460px,94vw)"><h2>카드 매출전표</h2><table class="slip">${line('승인일시', s.at)}${line('카드', r.card)}${line('승인번호', r.approvalNo)}${line('가맹점', r.place)}${line('사업자번호', s.bizNo)}${line('대표자', r.ceo)}${line('전화', s.tel)}${line('주소', r.addr)}${line('공급가액', won(s.supply) + '원')}${line('부가세', won(s.vat) + '원')}${line('합계', won(s.amount) + '원')}${line('결의', R.cduStatusLabel(r))}</table><p class="muted">카드번호는 읽지 않습니다. 그룹웨어 카드승인내역에 있는 값만 보여 드립니다.</p><div class="acts"><button class="btn" data-act="closeOverlay">닫기</button></div></div></div>`;
+  };
   HOME_ACTS.cduCard = el => { CDU.card = el.dataset.c || ''; renderMain(); };
   HOME_ACTS.cduReload = () => { CDU.err = ''; cduLoad(); };
   HOME_ACTS.cduCsv = () => {
