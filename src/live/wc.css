@@ -1566,5 +1566,3 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .linkbtn{background:none;border:0;padding:0;font:inherit;color:inherit;text-decoration:underline dotted;text-underline-offset:3px;cursor:pointer}
 .linkbtn:hover{text-decoration-style:solid}
 .linkbtn:focus-visible{outline:2px solid currentColor;outline-offset:2px}
-table.slip{border-collapse:collapse;margin:8px 0 12px;font-size:13px}
-table.slip td{padding:4px 0}
