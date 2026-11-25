@@ -66,40 +66,10 @@
   const todoErr = e => { const m = String((e && e.message) || e || ''); return m.length > 120 ? m.slice(0, 120) + '…' : m; };
   const todoYmd = iso => String(iso || '').replace(/-/g, '');
 
-  // ISO 값은 유지하고 날짜와 요일을 함께 보여 준다.
-  function todoDateText(value) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return '날짜 없음';
-    const d = new Date(value + 'T00:00:00Z');
-    return value.slice(0, 4) + '. ' + value.slice(5, 7) + '. ' + value.slice(8, 10) + '. (' + ['일','월','화','수','목','금','토'][d.getUTCDay()] + ')';
-  }
+  // 날짜 칸은 모든 화면이 함께 쓰는 날짜 고르기(57번 조각)를 쓴다. 값은 ISO, 버튼에는 날짜와 요일.
   function todoDateField(id, value, label, disabled = '') {
-    return `<span class="td-date-field"><input type="hidden" id="${id}" value="${esc(value || '')}"><button type="button" class="td-date-btn" data-act="tdDateOpen" data-id="${id}" aria-label="${esc(label)}: ${esc(todoDateText(value))}, 날짜 선택" ${disabled}>${ic('cal')}<span>${esc(todoDateText(value))}</span></button></span>`;
+    return typeof dateField === 'function' ? dateField(id, value, label, {clear: true, empty: '날짜 없음', disabled: !!disabled, minOf: id === 'tdeDue' ? 'tdeStart' : '', maxOf: id === 'tdeStart' ? 'tdeDue' : ''}) : '';
   }
-  const TD_DATE_NAMES = {tdQuickDue: '기한', tdeStart: '시작일', tdeDue: '기한(종료일)'};
-  function todoDateDialog(id, month) {
-    const input = $('#' + id); if (!input || !TD_DATE_NAMES[id]) return;
-    const selected = input.value, base = /^\d{4}-\d{2}$/.test(month || '') ? month : (selected || today()).slice(0, 7);
-    const y = Number(base.slice(0, 4)), m = Number(base.slice(5, 7));
-    const first = new Date(Date.UTC(y, m - 1, 1)).getUTCDay(), count = new Date(Date.UTC(y, m, 0)).getUTCDate();
-    const shift = delta => { const d = new Date(Date.UTC(y, m - 1 + delta, 1)); return d.toISOString().slice(0, 7); };
-    const days = Array.from({length: first + count}, (_, i) => {
-      if (i < first) return '<span class="td-cal-blank" aria-hidden="true"></span>';
-      const day = i - first + 1, iso = base + '-' + String(day).padStart(2, '0');
-      return `<button type="button" class="td-cal-day ${iso === selected ? 'selected' : ''} ${iso === today() ? 'today' : ''}" data-act="tdDatePick" data-id="${id}" data-v="${iso}" aria-label="${todoDateText(iso)}${iso === today() ? ' 오늘' : ''}" aria-pressed="${iso === selected}">${day}</button>`;
-    }).join('');
-    closeOverlay(); S.paletteOpen = true;
-    $('#overlay').innerHTML = `<div class="modal" data-act="closeOverlay"><div class="dlg td-cal-dialog" data-stop="1" role="dialog" aria-modal="true" aria-label="${esc(TD_DATE_NAMES[id])} 선택"><div class="td-cal-heading"><div><span class="td-cal-eyebrow">${esc(TD_DATE_NAMES[id])}</span><h2>날짜 선택</h2></div><button class="btn icon ghost" data-act="closeOverlay" aria-label="날짜 선택 닫기">${ic('x')}</button></div><div class="td-cal-nav"><button class="btn sm icon ghost" data-act="tdDateMonth" data-id="${id}" data-v="${shift(-1)}" aria-label="이전 달">‹</button><strong>${y}년 ${m}월</strong><button class="btn sm icon ghost" data-act="tdDateMonth" data-id="${id}" data-v="${shift(1)}" aria-label="다음 달">›</button></div><div class="td-cal-grid" role="group" aria-label="${y}년 ${m}월 달력">${['일','월','화','수','목','금','토'].map(w => `<span class="td-cal-week">${w}</span>`).join('')}${days}</div><div class="td-cal-footer"><button class="btn sm ghost" data-act="tdDatePick" data-id="${id}" data-v="">날짜 지우기</button><button class="btn sm" data-act="tdDatePick" data-id="${id}" data-v="${today()}">오늘</button></div></div></div>`;
-    setTimeout(() => root.querySelector('.td-cal-day.selected, .td-cal-day.today, .td-cal-day')?.focus(), 30);
-  }
-  HOME_ACTS.tdDateOpen = el => todoDateDialog(el.dataset.id);
-  HOME_ACTS.tdDateMonth = el => todoDateDialog(el.dataset.id, el.dataset.v);
-  HOME_ACTS.tdDatePick = el => {
-    const id = el.dataset.id, input = $('#' + id); if (!input || !TD_DATE_NAMES[id]) return;
-    input.value = el.dataset.v || ''; todoChange(input);
-    const button = root.querySelector('[data-act="tdDateOpen"][data-id="' + id + '"]');
-    if (button) { button.querySelector('span').textContent = todoDateText(input.value); button.setAttribute('aria-label', TD_DATE_NAMES[id] + ': ' + todoDateText(input.value) + ', 날짜 선택'); }
-    closeOverlay(); button?.focus();
-  };
 
   // ---------- 쓰기(모두 그룹웨어 ToDo로) ----------
   // 만들기: 체크리스트는 하위 ToDo로 이어서 만든다. 결과를 그대로 돌려준다(하지 않은 일을 했다고 하지 않음).
@@ -356,7 +326,7 @@ ${!isNew && typeof todoEditorInfoHtml === 'function' ? todoEditorInfoHtml(t) : '
 <p class="muted td-hint">반복 할 일은 끝냄으로 표시하면 다음 회차가 그룹웨어 ToDo에 생깁니다. 주말·휴일이면 앞 평일로 당깁니다.</p>
 <label class="td-f">메모<textarea class="inp td-memo" id="tdeMemo" rows="4" ${lock}>${esc(t.memo || '')}</textarea></label>
 <div class="td-sec" id="tdeCl">${todoChecklistHtml(t, isNew)}</div>
-<div class="td-sec"><h3>예산 연결</h3>${opts.length ? `<label class="td-f">사업·세목<select class="inp" id="tdeBud"><option value="">연결 안 함</option>${opts.map(o => `<option value="${esc(o.v)}" ${o.v === bv ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select></label><div class="td-f2"><label class="td-f">집행 예정 금액(원)<input class="inp" id="tdeAmt" inputmode="numeric" value="${b && b.a ? won(b.a) : ''}" placeholder="예: 300,000"></label><label class="td-f">집행 예정일<input class="inp" type="date" id="tdeBudDate" value="${esc((b && b.d) || '')}"></label></div>${b && b.pd ? `<p class="muted">근거 계획서 ${esc(b.pd)}${b.pt ? ' · ' + esc(String(b.pt).slice(0, 40)) : ''}</p>` : ''}${b && Array.isArray(b.m) && b.m.length ? `<p class="muted">짝지은 결의 ${b.m.length}건 · ${won(b.m.reduce((s, x) => s + (Number(x.a) || 0), 0))}원${b.st === 'done' ? ' · 집행됨' : ''}</p>` : ''}<p class="muted td-hint">금액을 넣으면 예산 집행 화면의 '집행 계획' 예상 집행률에 더해집니다.</p>` : `<p class="muted">예산 집행 화면에서 내 관심 사업을 저장하면 여기서 세목을 고를 수 있습니다. ${(S.settings.budget || []).length ? '<span class="spin"></span> 세목을 불러오는 중…' : ''}</p>`}</div>
+<div class="td-sec"><h3>예산 연결</h3>${opts.length ? `<label class="td-f">사업·세목<select class="inp" id="tdeBud"><option value="">연결 안 함</option>${opts.map(o => `<option value="${esc(o.v)}" ${o.v === bv ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select></label><div class="td-f2"><label class="td-f">집행 예정 금액(원)<input class="inp" id="tdeAmt" inputmode="numeric" value="${b && b.a ? won(b.a) : ''}" placeholder="예: 300,000"></label><div class="td-f">집행 예정일${todoDateField('tdeBudDate', (b && b.d) || '', '집행 예정일')}</div></div>${b && b.pd ? `<p class="muted">근거 계획서 ${esc(b.pd)}${b.pt ? ' · ' + esc(String(b.pt).slice(0, 40)) : ''}</p>` : ''}${b && Array.isArray(b.m) && b.m.length ? `<p class="muted">짝지은 결의 ${b.m.length}건 · ${won(b.m.reduce((s, x) => s + (Number(x.a) || 0), 0))}원${b.st === 'done' ? ' · 집행됨' : ''}</p>` : ''}<p class="muted td-hint">금액을 넣으면 예산 집행 화면의 '집행 계획' 예상 집행률에 더해집니다.</p>` : `<p class="muted">예산 집행 화면에서 내 관심 사업을 저장하면 여기서 세목을 고를 수 있습니다. ${(S.settings.budget || []).length ? '<span class="spin"></span> 세목을 불러오는 중…' : ''}</p>`}</div>
 <div class="td-sec" id="tdeLn">${todoLinksHtml(t)}</div>${!isNew && typeof todoCommentsHtml === 'function' ? todoCommentsHtml(t) : ''}
 <div class="acts td-ed-acts"><button class="btn primary" data-act="tdSave" ${TD.saving ? 'disabled' : ''}>${TD.saving ? '<span class="spin"></span> 저장 중…' : isNew ? '그룹웨어 ToDo에 저장' : '저장'}</button>${isNew ? '' : `<button class="btn" data-act="tdToggle" data-id="${esc(t.id)}">${t.done ? '끝냄 취소' : '끝냄'}</button><button class="btn" data-act="openUrl" data-url="${esc(GW.todoLink ? GW.todoLink(t.id) : '')}" data-title="그룹웨어 ToDo">${ic('ext')}그룹웨어에서 보기</button><button class="btn" data-act="tdCopyLink" data-id="${esc(t.id)}">링크 복사</button><button class="btn danger" data-act="tdDel" data-id="${esc(t.id)}">지우기</button>`}</div>
 <p class="muted td-hint">그룹웨어 개인 ToDo에 저장됩니다(나만 보임). 기한을 넣으면 그룹웨어 일정 화면에도 '종일'로 보입니다.</p>`;
@@ -463,7 +433,7 @@ ${!isNew && typeof todoEditorInfoHtml === 'function' ? todoEditorInfoHtml(t) : '
     i.disabled = true; TD.adding = true;
     const r = await todoCreate({title: sp.title, due, start, importance}).finally(() => { TD.adding = false; });
     const i2 = $('#tdQuick'); if (i2) i2.disabled = false;
-    if (r.ok) { const q = $('#tdQuick'); if (q) q.value = ''; const d = $('#tdQuickDue'); if (d) { d.value = today(); delete d.dataset.userSet; const b = root.querySelector('[data-act="tdDateOpen"][data-id="tdQuickDue"]'); if (b) { b.querySelector('span').textContent = todoDateText(d.value); b.setAttribute('aria-label', '기한: ' + todoDateText(d.value) + ', 날짜 선택'); } } const c = $('#tdQuickImp'); if (c) c.value = '0'; toast(`그룹웨어 ToDo에 추가했습니다${due ? ` (${sp.start && due === sp.due && sp.start !== due ? '기간 ' + todoMd(sp.start) + '~' : '기한 '}${todoMd(due)})` : ''}${importance !== '0' ? ' · ' + R.tdImpLabel(importance) : ''}.`); }
+    if (r.ok) { const q = $('#tdQuick'); if (q) q.value = ''; const d = $('#tdQuickDue'); if (d) { d.value = today(); delete d.dataset.userSet; if (typeof dateFieldSync === 'function') dateFieldSync('tdQuickDue'); } const c = $('#tdQuickImp'); if (c) c.value = '0'; toast(`그룹웨어 ToDo에 추가했습니다${due ? ` (${sp.start && due === sp.due && sp.start !== due ? '기간 ' + todoMd(sp.start) + '~' : '기한 '}${todoMd(due)})` : ''}${importance !== '0' ? ' · ' + R.tdImpLabel(importance) : ''}.`); }
     else toast(r.text);
     setTimeout(() => $('#tdQuick')?.focus(), 30);
   }
@@ -580,7 +550,7 @@ ${!isNew && typeof todoEditorInfoHtml === 'function' ? todoEditorInfoHtml(t) : '
     if (t.id === 'tdQuickDue') { t.dataset.userSet = '1'; return; }
     if (/^bp/.test(t.id) && typeof bpChange === 'function') { bpChange(t); return; }
     if (t.id === 'tdeRep') { const v = t.value; const w = $('#tdeRepW'), m = $('#tdeRepM'); if (w) w.hidden = v !== 'w'; if (m) m.hidden = v !== 'm'; TD.dirty = true; return; }
-    if (t.id === 'tdeBud') { const d = $('#tdeBudDate'); if (d && !d.value) d.value = (($('#tdeDue') || {}).value || ''); TD.dirty = true; return; }
+    if (t.id === 'tdeBud') { const d = $('#tdeBudDate'); if (d && !d.value) { d.value = (($('#tdeDue') || {}).value || ''); if (typeof dateFieldSync === 'function') dateFieldSync('tdeBudDate'); } TD.dirty = true; return; }
     if (t.id === 'tdQ') { TD.q = t.value; todoRefreshList(); return; }
     if (t.id === 'tdSort' && R.TD_SORTS.some(s => s[0] === t.value)) { TD.sort = t.value; todoPrefsSave(); renderMain(); root.querySelector('#tdSort')?.focus(); return; }
     if (t.id === 'tdImpF' && (t.value === 'all' || R.TD_IMPS.some(s => s[0] === t.value))) { TD.imp = t.value; todoPrefsSave(); renderMain(); root.querySelector('#tdImpF')?.focus(); return; }

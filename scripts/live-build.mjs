@@ -17,10 +17,10 @@ import {minifySafely, TERSER_VERSION} from './terser-minify.mjs';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const DEFAULT_OUT_DIR = path.join(ROOT, 'build', 'live');
-// 1280KB(v1.17.0, 1120KB에서 상향: 그룹웨어 ToDo 연동 할 일 관리와 예산 집행 계획·예상 집행률 화면 약 85KB 추가, 기존 기능에서 덜어 낼 죽은 코드는 v1.16에서 거의 다 정리함). 1120KB(v1.11.0, 1100KB에서 상향: 노트북 실업무 흐름 보강 뒤 0.5KB 초과, 업데이트 내역 문구를 먼저 줄였으나 부족). 1100KB(v1.7.0, 1080KB에서 상향). 그 전에 덜어 낸 것: 죽은 CSS(v0.98), 쓰지 않는 공개 함수(v1.0), 업데이트 내역 축소(v1.1·v1.6), 덮어쓴 CSS(v1.2).
+// 1300KB(v1.21.0, 1280KB에서 상향: v1.18~v1.20으로 상한에 붙은 뒤 예산 집행 > 카드 사용내역 약 13KB와 모든 날짜 칸의 날짜 고르기 통일 약 7KB 추가로 초과). 1280KB(v1.17.0, 1120KB에서 상향: 그룹웨어 ToDo 연동 할 일 관리와 예산 집행 계획·예상 집행률 화면 약 85KB 추가, 기존 기능에서 덜어 낼 죽은 코드는 v1.16에서 거의 다 정리함). 1120KB(v1.11.0, 1100KB에서 상향: 노트북 실업무 흐름 보강 뒤 0.5KB 초과, 업데이트 내역 문구를 먼저 줄였으나 부족). 1100KB(v1.7.0, 1080KB에서 상향). 그 전에 덜어 낸 것: 죽은 CSS(v0.98), 쓰지 않는 공개 함수(v1.0), 업데이트 내역 축소(v1.1·v1.6), 덮어쓴 CSS(v1.2).
 // 남은 큰 몫은 기능 코드와 AI 도구 설명이다. 번들은 브라우저 저장소에 약 1.0M자로 들어가며 한도(약 5.2M자)에 여유가 크다.
-export const MAX_SHIPPED_BUNDLE_BYTES = 1280 * 1024;
-export const EXTRA_MODULES = ['home-model.mjs', 'chat.mjs', 'chat-understand.mjs', 'gcal-sync.mjs', 'settings-transfer.mjs', 'doc-find.mjs', 'usage.mjs', 'contract.mjs', 'todo-plan.mjs', 'changelog.mjs'];
+export const MAX_SHIPPED_BUNDLE_BYTES = 1300 * 1024;
+export const EXTRA_MODULES = ['home-model.mjs', 'chat.mjs', 'chat-understand.mjs', 'gcal-sync.mjs', 'settings-transfer.mjs', 'doc-find.mjs', 'usage.mjs', 'contract.mjs', 'todo-plan.mjs', 'card-usage.mjs', 'changelog.mjs'];
 const PARTS_MARK = '  /*@WC_PARTS@*/';
 const CSS_MARK = "'/*@WC_CSS@*/'";
 const lf = s => s.replace(/\r\n?/g, '\n');

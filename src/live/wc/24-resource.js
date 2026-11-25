@@ -53,7 +53,7 @@
       : !s.list.length ? '<div class="empty"><b>예약할 수 있는 자원이 없습니다</b></div>'
       : `<div class="bar"><div class="seg">${s.list.map(r => `<button class="${r.resSeq === s.sel ? 'on' : ''}" data-act="resSel" aria-pressed="${r.resSeq === s.sel}" data-v="${esc(r.resSeq)}">${esc(r.name)}</button>`).join('')}</div>
           <button class="btn sm icon" data-act="resDay" data-v="-1" aria-label="이전 날">${ic('back')}</button>
-          <input class="inp" type="date" id="resDate" value="${ymdDash(s.date)}" style="height:34px" aria-label="날짜">
+          ${typeof dateField === 'function' ? dateField('resDate', ymdDash(s.date), '예약 날짜', {}) : ''}
           <button class="btn sm icon" data-act="resDay" data-v="1" aria-label="다음 날" style="transform:scaleX(-1)">${ic('back')}</button>
           <button class="btn sm" data-act="resDay" data-v="0">오늘</button></div>
         <div class="muted" style="margin:4px 0 8px">${esc(sel ? sel.name : '')} · ${esc(ymdDash(s.date))}(${wdName(s.date)})${sel && sel.apprYn === 'Y' ? ' · <b>예약 후 관리자 승인이 필요한 자원입니다</b>' : ''}</div>

@@ -149,7 +149,7 @@ ${S.cal.opts ? `<div class="legend">${legend.map(([c, n]) => `<span><i class="ev
   }
   function vBudget() {
     // v1.18: 하위 탭 [내 사업 한눈에] [사업 상세] [재단 전체]. 이 함수는 '사업 상세'를 그린다(54번 조각).
-    if (typeof budgetMode === 'function') { const m = budgetMode(); if (m === 'mine') return vBudgetMine(); if (m === 'all') return vBudgetAll(); }
+    if (typeof budgetMode === 'function') { const m = budgetMode(); if (m === 'mine') return vBudgetMine(); if (m === 'all') return vBudgetAll(); if (m === 'card' && typeof vBudgetCard === 'function') return vBudgetCard(); }
     const b = S.budget, t = b.table, full = b.full, el = S.a.budget.elapsedPct;
     const pinned = S.settings.budget;
     const curPin = pinned.find(p => p && p.project === b.project && (p.filter || '') === (b.filter || ''));

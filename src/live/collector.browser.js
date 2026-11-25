@@ -15,7 +15,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '1.20.6';
+  const VERSION = '1.21.0';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
@@ -37,6 +37,8 @@
     '/kiss/APIHandler/prj001A12', '/kiss/APIHandler/prj001A05',
     // v1.20.1 ToDo 댓글 목록. 그룹웨어 ToDo 상세의 댓글 칸이 부르는 조회 주소(2026-11-22 확인). 댓글 쓰기는 그룹웨어에서 한다.
     '/gw/api/gw026A03',
+    // v1.21 카드 사용내역. 지출결의서 채주정보의 [카드승인내역] 창이 부르는 조회 주소(2026-11-25 확인). 그룹웨어가 요청·응답을 암호화하는 주소라 cardUsage()에서만 부른다.
+    '/nonprofit/cardAuth/0BN00001',
   ]);
 
   // Left-menu ids of 전자결재(비영리) observed in getMenuCountInfo (2026-11-08).
@@ -148,14 +150,14 @@
     if (path === '/mail/mail002A01' && opts[INTERNAL_CALL] !== true) throw new GwError('USE_MAIL_DETAIL', '메일 상세는 읽음 보호 확인을 위해 mailDetail()로만 조회하세요.');
     return transport(path, body, opts);
   }
-  async function transport(path, body = {}, {timeoutMs = 15000, retries = 1} = {}) {
+  async function transport(path, body = {}, {timeoutMs = 15000, retries = 1, encrypt = false} = {}) {
     const client = findClient();
     for (let attempt = 0; attempt <= retries; attempt++) {
       let timer;
       const ac = typeof AbortController !== 'undefined' ? new AbortController() : null;
       try {
         const res = await Promise.race([
-          client.post(path, body, {contextType: 'application/json', ...(ac ? {signal: ac.signal} : {})}),
+          client.post(path, body, {contextType: 'application/json', ...(encrypt ? {encrypt: true} : {}), ...(ac ? {signal: ac.signal} : {})}),
           new Promise((_, reject) => { timer = setTimeout(() => { try { ac && ac.abort(); } catch {} reject(new GwError('TIMEOUT', `${path} 응답 시간 초과`)); }, timeoutMs); }),
         ]);
         const r = typeof res === 'string' ? JSON.parse(res) : res;
@@ -788,6 +790,63 @@
     return {project, bgtCd, year: y, rows, sum: num(d && d.unitAmSum), checkSum: rows.reduce((s, r) => s + r.amount, 0)};
   }
 
+  // ---------- 카드 사용내역 (v1.21) ----------
+  // 지출결의서의 [카드승인내역] 창과 같은 조회(내가 쓸 수 있는 카드: 권한부여·이관·불출). 그룹웨어가 이 주소만 값을 암호화해 주고받으므로
+  // 그룹웨어 자체 복호화 함수로 푼다. 카드번호·가맹점 사업자번호·대표자·전화·주소는 풀지 않고 버린다. 결의 반영·선택은 하지 않는다(읽기만).
+  let cachedCrypto = null;
+  function findCrypto() {
+    if (cachedCrypto) return cachedCrypto;
+    const chunkName = Object.keys(window).find(k => k === 'webpackChunkklago_ui_gw') || Object.keys(window).find(k => k.startsWith('webpackChunk'));
+    let req = null;
+    if (chunkName) window[chunkName].push([[`bwyfgw-c-${Date.now()}`], {}, r => { req = r; }]);
+    if (req && req.m) for (const id of Object.keys(req.m)) {
+      let src = '';
+      try { src = Function.prototype.toString.call(req.m[id]); } catch { continue; }
+      if (!src.includes('decryptResult') || !src.includes('@!E!@')) continue;
+      let exp;
+      try { exp = req(id); } catch { continue; }
+      const c = [exp && exp.default, ...Object.values(exp || {})].find(v => v && typeof v.decrypt === 'function' && typeof v.encrypt === 'function');
+      if (c) { cachedCrypto = c; return c; }
+    }
+    throw new GwError('DECRYPT_NOT_FOUND', '카드 내역을 풀어 읽는 그룹웨어 기능을 찾지 못했습니다. 그룹웨어 업데이트로 구조가 바뀌었을 수 있습니다.');
+  }
+  const CARD_STATE = {all: '0', done: '1', open: '2'}; // 반영여부: 전체 / 여(결의 반영) / 부(미반영)
+  const CARD_KEEP = ['issDt', 'issSq', 'issTime', 'attrNm', 'trCd', 'chainName', 'sunginNb', 'sunginAm', 'vatAm', 'gisuDt', 'gisuNb', 'isuDt', 'docuNb', 'getNb', 'approState', 'getbackFg', 'transferFg'];
+  const ymd8 = v => /^\d{8}$/.test(String(v || '')) ? String(v) : '';
+  // 상태는 그룹웨어 창의 선택 가능 판정과 같다: 결의일·발행일이 없거나 회수된 건은 '결의 전', 처리상태 0·1·5는 '다른 처리'(지출결의/계산서처리 건).
+  const cardRow = x => {
+    const other = ['0', '1', '5'].includes(String(x.approState ?? '')), returned = x.getbackFg === 'Y';
+    const resolved = !!ymd8(x.gisuDt) || (!!ymd8(x.isuDt) && x.isuDt !== '00000000');
+    return {
+      date: ymd8(x.issDt), time: str(x.issTime, 5), seq: num(x.issSq), card: str(x.attrNm, 80), cardCode: str(x.trCd, 20), place: mask(x.chainName, 120),
+      approvalNo: str(x.sunginNb, 30), amount: num(x.sunginAm), vat: num(x.vatAm), resolution: str(x.gisuNb, 30), resolutionDate: ymd8(x.gisuDt),
+      slip: x.docuNb === '-0' ? '' : str(x.docuNb, 30), proposal: str(x.getNb, 30), returned, transferred: x.transferFg === 'Y',
+      status: other ? 'other' : (resolved && !returned) ? 'done' : 'open',
+    };
+  };
+  async function cardUsage({from, to, state = 'all'} = {}) {
+    const ctx = context();
+    const f = String(from || '').replace(/-/g, ''), t = String(to || '').replace(/-/g, '');
+    if (!ymd8(f) || !ymd8(t) || f > t) throw new GwError('BAD_QUERY', '승인일 기간을 확인하세요.');
+    const day = s => Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8));
+    if ((day(t) - day(f)) / 86400000 > 366) throw new GwError('BAD_QUERY', '카드 사용내역은 1년 이내로 조회하세요.');
+    let erp = null;
+    try { const ui = JSON.parse(sessionStorage.getItem('userInfo') || 'null'); erp = ui && ui.erpUserInfo; if (typeof erp === 'string') erp = JSON.parse(erp); } catch { erp = null; }
+    const body = {trCds: '', issDtFrom: f, issDtTo: t, searchText: '', docuFg: '', commitFg: CARD_STATE[state] || '0', authFg: ['1', '2', '3'], empCd: String((erp && erp.userCode) || ctx.erpEmpSeq || ''), deptCd: String((erp && erp.deptCode) || '')};
+    const d = await call('/nonprofit/cardAuth/0BN00001', body, {encrypt: true, timeoutMs: 30000});
+    if (!Array.isArray(d)) throw new GwError('BAD_RESPONSE', '카드 승인내역 형식을 확인할 수 없습니다.');
+    const key = String(ctx.groupSeq || '');
+    const dec = v => {
+      if (typeof v !== 'string') return v;
+      const a = v.indexOf('@!E!@'), b = v.lastIndexOf('@!E!@');
+      if (a < 0 || b <= a) return v;
+      try { return findCrypto().decrypt(v.substring(a + 5, b), key, 'AES'); } catch (e) { throw e instanceof GwError ? e : new GwError('DECRYPT_FAILED', '카드 내역을 풀어 읽지 못했습니다.'); }
+    };
+    const rows = d.map(r => { const x = {}; for (const k of CARD_KEEP) x[k] = dec(r && r[k]); return cardRow(x); })
+      .sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time) || b.seq - a.seq);
+    return {from: f, to: t, state: CARD_STATE[state] ? state : 'all', rows, url: LINKS.route(ROUTES.expenseEntry), at: new Date().toISOString()};
+  }
+
   // Mail detail: attachments, big-file links and the groupware read-view URL.
   // WARNING: the groupware marks a mail as read when its detail is fetched, so this refuses
   // unread mails unless the caller explicitly accepts that (after asking the user).
@@ -1216,7 +1275,7 @@
   }
 
   window.BWYFGW = Object.freeze({
-    version: VERSION, collect, call, search, organizationTree, organizationMembers, sentMail, budgetCatalog, budgetProject, budgetAll, budgetLedger, budgetMonthly, attendanceDays, teamAttendance, teamPlanned, resourceList, resourceBookings, resourceDetail, resourceCheck, reserveResource, todoList, todoDetail, todoCreate, todoUpdate, todoSetDone, todoSetProgress, todoSetImportance, todoDelete, todoLink, todoComments, readAlert, routingHistory, submittedRange, approvalPage, approvalFallback, docPreview, frequentForms, findReply, mailDetail, mailInlineImage, mailAttachment, mailAttachmentPreview, mailAttachmentPages, docAttachmentPages, synapPageImages, saveBlob,
+    version: VERSION, collect, call, search, organizationTree, organizationMembers, sentMail, budgetCatalog, budgetProject, budgetAll, budgetLedger, budgetMonthly, cardUsage, attendanceDays, teamAttendance, teamPlanned, resourceList, resourceBookings, resourceDetail, resourceCheck, reserveResource, todoList, todoDetail, todoCreate, todoUpdate, todoSetDone, todoSetProgress, todoSetImportance, todoDelete, todoLink, todoComments, readAlert, routingHistory, submittedRange, approvalPage, approvalFallback, docPreview, frequentForms, findReply, mailDetail, mailInlineImage, mailAttachment, mailAttachmentPreview, mailAttachmentPages, docAttachmentPages, synapPageImages, saveBlob,
     context: () => { const c = context(); return {name: c.name, deptName: c.deptName, compName: c.compName, duty: c.duty, position: c.position}; },
     readOnlyEndpoints: () => [...READ_ONLY], routes: ROUTES, links: LINKS, searchLabels: SEARCH_LABELS, defaults: DEFAULTS,
   });
