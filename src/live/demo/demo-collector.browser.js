@@ -339,7 +339,7 @@
     cardUsage: async ({from, to} = {}) => {
       await wait(240);
       const f = String(from || day(0).slice(0, 6) + '01').replace(/-/g, ''), t = String(to || day(0)).replace(/-/g, '');
-      const c = (off, time, card, place, amount, status, resolution = '') => ({date: day(off), time, seq: 0, card, cardCode: '', place, approvalNo: String(30000000 + Math.abs(off) * 7 + amount % 97), amount, vat: 0, resolution, resolutionDate: resolution ? resolution.slice(0, 8) : '', slip: '', proposal: '', returned: false, transferred: false, status});
+      const c = (off, time, card, place, amount, status, resolution = '') => ({date: day(off), time, seq: 0, card, cardCode: '', place, approvalNo: String(30000000 + Math.abs(off) * 7 + amount % 97), amount, vat: 0, resolution, resolutionDate: resolution ? resolution.slice(0, 8) : '', slip: '', proposal: '', returned: false, transferred: false, status, bizNo: '1234567890', ceo: '(예시)대표', tel: '0320001234', addr: '(예시)시 구 로 1'});
       const rows = [c(-1, '12:40', '(예시)법인카드1', '행복한식당', 48000, 'open'), c(-3, '15:10', '(예시)법인카드2', '예시문구', 23500, 'open'), c(-5, '11:20', '(예시)법인카드1', '예시인쇄소', 165000, 'done', day(-4) + '-3'), c(-9, '18:05', '(예시)법인카드2', '예시서점', 31000, 'done', day(-8) + '-11'), c(-12, '10:00', '(예시)법인카드1', '예시우체국', 4200, 'other')]
         .filter(r => r.date >= f && r.date <= t);
       return {from: f, to: t, state: 'all', rows, url: LINKS.route(ROUTES.expenseEntry), at: new Date().toISOString()};

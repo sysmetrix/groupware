@@ -343,7 +343,7 @@
       case 'bpAdd': case 'bpImport': case 'bpImportAdd': case 'bpConfirm': case 'bpReject': case 'bpEdit': case 'bpReload': case 'bpDropRest':
       case 'dpOpen': case 'dpMonth': case 'dpPick': case 'dpClose':
       case 'etxPeriod': case 'etxCustom': case 'etxState': case 'etxReload': case 'etxCsv':
-      case 'cduPeriod': case 'cduCustom': case 'cduState': case 'cduCard': case 'cduReload': case 'cduCsv':
+      case 'cduSlip': case 'cduPeriod': case 'cduCustom': case 'cduState': case 'cduCard': case 'cduReload': case 'cduCsv':
     case 'cduPeriod': case 'cduCustom': case 'cduState': case 'cduCard': case 'cduReload': case 'cduCsv':
         if (HOME_ACTS[act]) HOME_ACTS[act](actEl, v, e); break; // 홈·채팅 화면의 처리기 등록소(29~30번 조각)
       default: break;
