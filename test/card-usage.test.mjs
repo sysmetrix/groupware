@@ -177,3 +177,10 @@ test('매출전표 화면: 금액 단추에 처리기가 있고 카드번호를 
   assert.match(frag, /HOME_ACTS\.cduSlip =/);
   assert.match(frag, /data-act=\"cduSlip\"/);
 });
+
+test('예산 과목표: 전략경영실운영(A201)의 누계예산이 0으로 오지 않도록 예산구분 2로 읽는다', async () => {
+  const {api, calls} = await loadCollector(() => Promise.resolve({resultCode: 0, resultData: {printList: [{bgtCd: '고1', bgtNm: '행정운영비', divFgNm: '관', abgtSumAm: 5229902000, unitAm: 4409561094, subAm: 820340906, bglistCd: '고1|'}]}}));
+  const t = await api.budgetProject({project: 'A201'});
+  assert.equal(calls[0].body.abgtFg, '2');
+  assert.equal(t.rows[0].budget, 5229902000);
+});
