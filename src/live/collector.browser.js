@@ -15,7 +15,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '1.22.1';
+  const VERSION = '1.22.2';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
@@ -642,12 +642,14 @@
     };
   }
 
+  // 2026-11-25: 예산구분(abgtFg) '1'은 전략경영실운영(A201)의 누계예산(abgtSumAm)을 0으로 돌려줘 예산 없는 사업으로 보였다.
+  // '2'는 다른 사업 14곳과 값이 같고 A201도 바르게 준다(실제 계정으로 비교 확인).
   const budgetRow = r => ({code: str(r.bgtCd, 30), name: str(r.bgtNm, 120), level: str(r.divFgNm, 6), path: str(r.bglistCd, 160), budget: num(r.abgtSumAm), executed: num(r.unitAm), balance: num(r.subAm), rate: num(r.sumRt)});
   async function budgetTable(ctx, t, opt = {}) {
     const year = Number(opt.year || t.year || kstParts().y);
     // 기수(회계기수): 2026년 = 12기 (observed). Override with opt.gisu if the foundation renumbers.
     const gisu = String(opt.gisu || t.gisu || year - 2014);
-    const body = {bgtFrYm: `${year}01`, bgtToYm: `${year}12`, bgtBeforeFrYm: '', bgtBeforeToYm: '', bgtStartFrYm: `${year}0101`, summaryYn: 'Y', abgtFg: '1', divCds: `${ctx.erpCompSeq}|`, mgtCds: `${t.project}|`, bottomCds: '', mgtBottomList: [], bgtCnt: '1', abdocuFg: '1', acctdefFg: 'N001', abdocuDtFg: '1', grFg: '0', zeroFg: opt.zero ? '1' : '2', divFg: '8', sumRtFg: '2', ctrCd05: '3', ctrCd10: '1', optionBN03: '1', optionBN10: '1', optionBN11: '0', optionBN14: '0', pOptionBn15: '0', coCd: ctx.erpCompSeq, gisu, empCd: ctx.erpEmpSeq, gisuFrDt: `${year}0101`, gisuToDt: `${year}1231`};
+    const body = {bgtFrYm: `${year}01`, bgtToYm: `${year}12`, bgtBeforeFrYm: '', bgtBeforeToYm: '', bgtStartFrYm: `${year}0101`, summaryYn: 'Y', abgtFg: '2', divCds: `${ctx.erpCompSeq}|`, mgtCds: `${t.project}|`, bottomCds: '', mgtBottomList: [], bgtCnt: '1', abdocuFg: '1', acctdefFg: 'N001', abdocuDtFg: '1', grFg: '0', zeroFg: opt.zero ? '1' : '2', divFg: '8', sumRtFg: '2', ctrCd05: '3', ctrCd10: '1', optionBN03: '1', optionBN10: '1', optionBN11: '0', optionBN14: '0', pOptionBn15: '0', coCd: ctx.erpCompSeq, gisu, empCd: ctx.erpEmpSeq, gisuFrDt: `${year}0101`, gisuToDt: `${year}1231`};
     const d = await call('/nonprofit/NCC0610/0BN00002', body, {timeoutMs: 30000});
     const all = arr(d && d.printList).map(budgetRow);
     const rows = t.filter ? all.filter(r => r.path.split('|').includes(t.filter)) : all;
