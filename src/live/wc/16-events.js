@@ -246,7 +246,7 @@
     case 'calTeamReload': delete (S.team || {})[monthKey()]; renderMain(); break;
     case 'calPrev': S.cal.offset--; teamCfg().day = ''; renderMain(); break;
       case 'calNext': S.cal.offset++; teamCfg().day = ''; renderMain(); break;
-      case 'calToday': S.cal.offset = 0; teamCfg().day = ''; renderMain(); break;
+      case 'calToday': S.cal.offset = 0; teamCfg().day = today().replace(/-/g, ''); renderMain(); break;
       case 'calItem': if (el.dataset.k && S.a.actions.some(x => x.key === el.dataset.k)) { if (go('today')) selectAction(el.dataset.k); } else if (el.dataset.url) openUrl(el.dataset.url, {title: el.textContent.trim()}); break;
       case 'goBudgetPick': S.budget.mode = 'all'; go('budget'); break;
       case 'bTogglePick': S.budget.mode = 'all'; renderMain(); break;

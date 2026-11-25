@@ -24,7 +24,7 @@
   function vApproval() {
     const lists = S.a.approval.lists, counts = S.a.approval.counts;
     const workflow = [['pending', '결재 대기'], ['deptWaiting', '부서 접수 대기'], ['distWaiting', '배부 대기'], ['sendWaiting', '발송 대기']];
-    const history = [['viewing', '열람문서'], ['submitted', '내 상신문서']];
+    const history = [['submitted', '내 상신문서'], ['viewing', '열람문서']];
     const tabs = [...workflow, ...history];
     const isWorkflow = workflow.some(([k]) => k === S.apTab);
     // Automatically select the first tab that has documents if the active tab is empty
@@ -54,7 +54,7 @@
     const note = roleMine === false ? `<div class="box" style="margin:0 0 12px">이 목록은 설정상 <b>참고</b>(부서 담당자가 처리)로 분류되어 그룹웨어 처리·확인 목록에는 나오지 않습니다. 내 업무라면 <a class="btn sm" data-act="view" data-v="settings">설정에서 바꾸기</a></div>` : '';
     const tabGroup = (label, items) => `<div><b>${label}</b><div class="seg" role="tablist" aria-label="${label}">${items.map(([k, n]) => { const c = lists[k]; const cnt = c && !c.error ? c.total ?? c.docs.length : '?'; return `<button role="tab" aria-selected="${S.apTab === k}" class="${S.apTab === k ? 'on' : ''}" data-act="apTab" data-v="${k}">${n}<span class="c">${cnt}</span></button>`; }).join('')}</div></div>`;
     return `${pgh('결재·문서유통', '', `${l ? `<button class="btn sm" data-act="openUrl" data-url="${esc(l.url)}" data-title="그룹웨어 결재 목록">${ic('ext')}그룹웨어 목록</button>` : ''}${docs.length && isWorkflow && roleMine !== false ? `<button class="btn sm primary" data-act="focusList">${ic('play')}이 목록 하나씩 처리</button>` : ''}`)}
-<div class="bar">${tabGroup('처리 대기', workflow)}${tabGroup('열람·상신 내역', history)}</div>
+<div class="bar">${tabGroup('상신·열람 내역', history)}${tabGroup('처리 대기', workflow)}</div>
 ${note}
 ${!l || l.error ? `<div class="box errb" role="status">${esc(l?.message || '이 결재 목록을 읽지 못했습니다.')} <button class="btn sm" data-act="refresh">다시 시도</button></div>` : docs.length ? `<table class="apt"><tr><th>제목</th><th class="ap-from">보낸 곳·기안</th><th class="ap-st">상태</th>${withRec ? `<th class="ap-rec" title="최근 180일 동안 제목 주제가 비슷한 문서가 어디로 갔는지 센 값">비슷한 문서 배부처</th>` : ''}<th>${AP_DATES[S.apTab] || '문서 일자'}</th><th>열기</th></tr>${rows}</table>` : `<div class="list"><div class="empty"><b>${esc((tabs.find(t => t[0] === S.apTab) || [])[1] || '')} ${total ? '문서를 아직 표시하지 못했습니다' : '조회 범위에 문서가 없습니다'}</b>${isWorkflow && otherQueueUnknown ? '<p>다른 처리 목록 중 일부를 확인할 수 없습니다.</p>' : ''}</div></div>`}
 ${l && !l.error && docs.length < total ? `<div class="acts"><button class="btn" data-act="apMore" ${S.apBusy[S.apTab] ? 'disabled' : ''}>${S.apBusy[S.apTab] ? '읽는 중…' : '더 보기'} (${docs.length}/${total})</button></div>` : ''}

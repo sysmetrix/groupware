@@ -71,7 +71,8 @@ test('partial groupware and personal lists do not imply definitive empty results
 test('approval keeps workflow/history routing keys and gives open buttons document names', () => {
   const c = setup();
   c.lists.submitted.docs = [doc('1'), doc('2')];
-  assert.match(c.vApproval(), /aria-label="처리 대기".+aria-label="열람·상신 내역"/);
+  assert.match(c.vApproval(), /aria-label="상신·열람 내역".+aria-label="처리 대기"/);
+  assert.match(c.vApproval(), /data-v="submitted">내 상신문서.+data-v="viewing">열람문서/);
   assert.equal(c.S.apTab, 'pending');
   c.lists.deptWaiting.error = true;
   assert.match(c.vApproval(), /다른 처리 목록 중 일부를 확인할 수 없습니다/);

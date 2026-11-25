@@ -34,6 +34,12 @@
   // Charts: shown on big screens, folded on laptops unless the user chose otherwise.
   const showCharts = () => S.settings.showCharts ?? (window.innerHeight >= 860 && window.innerWidth >= 1500);
   // v1.10.0: 메뉴를 다시 그리면 키보드 포커스가 사라져 화면낭독기 사용자가 위치를 잃었다. 같은 메뉴로 포커스를 돌려 주고, 바뀐 화면 이름을 읽어 준다.
+  // v1.21.1: 화면에 새로 들어올 때의 기본값. 결재·문서유통은 '내 상신문서', 일정·예약은 이번 달과 오늘 날짜를 고른 상태로 연다.
+  // 다른 탭이 필요한 곳(홈의 '결재 대기' 등)은 go() 뒤에 S.apTab을 다시 정한다.
+  function viewDefaults(v) {
+    if (v === 'approval') { S.apTab = 'submitted'; S.apTabPinned = true; }
+    if (v === 'calendar' && S.cal) { S.cal.offset = 0; S.cal.day = today().replace(/-/g, ''); }
+  }
   const go = v => {
     if (!viewAvailable(v)) return false;
     const changed = S.view !== v;
@@ -43,6 +49,7 @@
     const fromViewTabs = active?.closest('.vtabs');
     if (changed) {
       S.apTabPinned = false;
+      viewDefaults(v);
       if (typeof carrySearchInputs === 'function') carrySearchInputs(S.view, v);
     }
     S.view = v; S.multi.clear(); S.pane.expanded = false;
