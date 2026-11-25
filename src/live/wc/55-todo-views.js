@@ -8,7 +8,7 @@
     const due = known ? todoNavDue() : [];
     const dueToday = due.filter(t => t.due === today()).length;
     const count = known ? `${incomplete ? '확인된 ' : ''}오늘 마감 ${dueToday}건 · 기한 지남 ${due.length - dueToday}건` : TD.err ? '개인 ToDo를 읽지 못했습니다' : '개인 ToDo 확인 중';
-    return `<section class="hm-card hm-next" aria-label="개인 ToDo 오늘까지"><div class="hm-card-h"><h2 class="hm-card-k">개인 ToDo · 오늘까지</h2><button class="hm-link" data-act="homeTile" data-v="mytodo">개인 ToDo 보기</button></div><div class="hm-next-s">${count}${known && incomplete ? ' · 전체 목록 확인 불가' : ''}</div>${due.length ? `<ul class="hm-queue">${due.slice(0, 2).map(t => `<li><button class="hm-q" data-act="tdSel" data-id="${esc(t.id)}"><span class="hm-q-t">${esc(t.title)}</span><span class="hm-badge">기한 ${esc(todoMd(t.due))} · 상세 보기</span></button></li>`).join('')}</ul>` : ''}</section>`;
+    return `<section class="hm-card hm-next hm-next-p" aria-label="개인 ToDo 오늘까지"><div class="hm-card-h"><h2 class="hm-card-k">개인 ToDo · 오늘까지</h2><button class="hm-link" data-act="homeTile" data-v="mytodo">개인 ToDo 보기</button></div><div class="hm-next-s">${count}${known && incomplete ? ' · 전체 목록 확인 불가' : ''}</div>${due.length ? `<ul class="hm-queue">${due.slice(0, 2).map(t => `<li><button class="hm-q" data-act="tdSel" data-id="${esc(t.id)}"><span class="hm-q-t">${esc(t.title)}</span><span class="hm-badge">기한 ${esc(todoMd(t.due))} · 상세 보기</span></button></li>`).join('')}</ul>` : ''}</section>`;
   }
 
   const TODO_VIEWS = [['list', '목록'], ['kanban', '칸반'], ['timeline', '일정표']];
