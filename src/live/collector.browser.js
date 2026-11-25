@@ -15,7 +15,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '1.22.2';
+  const VERSION = '1.22.3';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
@@ -815,7 +815,7 @@
     throw new GwError('DECRYPT_NOT_FOUND', '카드 내역을 풀어 읽는 그룹웨어 기능을 찾지 못했습니다. 그룹웨어 업데이트로 구조가 바뀌었을 수 있습니다.');
   }
   const CARD_STATE = {all: '0', done: '1', open: '2'}; // 반영여부: 전체 / 여(결의 반영) / 부(미반영)
-  const CARD_KEEP = ['issDt', 'issSq', 'issTime', 'attrNm', 'trCd', 'chainName', 'sunginNb', 'sunginAm', 'vatAm', 'gisuDt', 'gisuNb', 'isuDt', 'docuNb', 'getNb', 'approState', 'getbackFg', 'transferFg', 'chainRegnb', 'chainCeoNm', 'chainTel', 'chainAddr'];
+  const CARD_KEEP = ['issDt', 'issSq', 'issTime', 'attrNm', 'trCd', 'chainName', 'sunginNb', 'sunginAm', 'vatAm', 'gisuDt', 'gisuNb', 'isuDt', 'docuNb', 'getNb', 'approState', 'getbackFg', 'transferFg', 'ebankKey'];
   const ymd8 = v => /^\d{8}$/.test(String(v || '')) ? String(v) : '';
   // 상태는 그룹웨어 창의 선택 가능 판정과 같다: 결의일·발행일이 없거나 회수된 건은 '결의 전', 처리상태 0·1·5는 '다른 처리'(지출결의/계산서처리 건).
   const cardRow = x => {
@@ -824,8 +824,7 @@
     return {
       date: ymd8(x.issDt), time: str(x.issTime, 5), seq: num(x.issSq), card: str(x.attrNm, 80), cardCode: str(x.trCd, 20), place: mask(x.chainName, 120),
       approvalNo: str(x.sunginNb, 30), amount: num(x.sunginAm), vat: num(x.vatAm),
-      // 매출전표 보기용 가맹점 정보(카드번호는 읽지 않는다)
-      bizNo: str(x.chainRegnb, 12), ceo: mask(x.chainCeoNm, 40), tel: str(x.chainTel, 20), addr: mask(x.chainAddr, 160), resolution: str(x.gisuNb, 30), resolutionDate: ymd8(x.gisuDt),
+      ebankKey: str(x.ebankKey, 40), resolution: str(x.gisuNb, 30), resolutionDate: ymd8(x.gisuDt),
       slip: x.docuNb === '-0' ? '' : str(x.docuNb, 30), proposal: str(x.getNb, 30), returned, transferred: x.transferFg === 'Y',
       status: other ? 'other' : (resolved && !returned) ? 'done' : 'open',
     };
