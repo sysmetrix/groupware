@@ -45,6 +45,7 @@
       const paint = () => {
         const [ts, te, fixed] = attTimesOf(st.type, st.kind);
         const lab = (t, inner) => '<label style="display:flex;flex-direction:column;gap:4px;margin:10px 0 0;font-size:13px;color:var(--muted)">' + t + inner + '</label>';
+        const labd = (t, inner) => '<div style="display:flex;flex-direction:column;gap:4px;margin:10px 0 0;font-size:13px;color:var(--muted)">' + t + inner + '</div>';
         const inp = (id, v, ph = '', typ = 'text') => '<input class="inp" id="' + id + '" type="' + typ + '" value="' + esc(v || '') + '" placeholder="' + esc(ph) + '" autocomplete="off" style="height:40px;font-size:14px;color:var(--fg)">';
         const sel = (id, opts, cur) => '<select class="inp" id="' + id + '" style="height:40px;font-size:14px;color:var(--fg)">' + opts.map(([v, t]) => '<option value="' + esc(v) + '"' + (v === cur ? ' selected' : '') + '>' + esc(t) + '</option>').join('') + '</select>';
         const w = {trip: '출장', leave: '휴가', overtime: '근무'}[st.type];
@@ -56,7 +57,7 @@
           + '<div role="radiogroup" aria-label="신청 구분" style="display:flex;gap:8px;margin:6px 0 2px">' + ATT_TYPES.map(([v, t]) => '<button type="button" class="btn' + (v === st.type ? ' primary' : '') + '" role="radio" aria-checked="' + (v === st.type) + '" data-atype="' + v + '">' + t + '</button>').join('') + '</div>'
           + lab('종류', sel('att_kind', ATT_KINDS[st.type].map(k => [k, k]), st.kind))
           + (st.type === 'overtime' ? lab('신청 구분 (수당 / 보상)', sel('att_pay', [['수당', '수당'], ['보상', '보상']], st.pay)) : '')
-          + lab(w + ' 시작 일시', inp('att_s', st.s, '', 'datetime-local')) + lab(w + ' 종료 일시' + (st.type === 'overtime' ? ' (선택)' : ''), inp('att_e', st.e, '', 'datetime-local'))
+          + (typeof dateTimeField === 'function' ? labd(w + ' 시작 일시', dateTimeField('att_s', st.s, w + ' 시작 일시')) + labd(w + ' 종료 일시' + (st.type === 'overtime' ? ' (선택)' : ''), dateTimeField('att_e', st.e, w + ' 종료 일시', {clear: st.type === 'overtime', minOf: 'att_s'})) : '')
           + '<div class="muted" id="att_note" role="status" style="font-size:13px;margin-top:4px">' + esc(note) + '</div>'
           + (st.type === 'trip' ? lab('방문처', inp('att_visit', st.visit, '예) 부천시청')) + lab('출장목적', inp('att_purpose', st.purpose, '예) 업무 협의')) + lab('업무내용', inp('att_content', st.content, '예) 청소년 정책 협의 회의 참석 (비우면 출장목적과 같게)')) + lab('교통수단', sel('att_tr', [['', '선택 안 함'], ...ATT_TRANSPORTS.map(t => [t, t])], st.transport)) : lab('비고(사유)', inp('att_reason', st.reason, '예) 결과보고서 작성')))
           + lab('제목 (내 지난 근태 문서 형식으로 자동 결정 · 직접 고칠 수 있음)', inp('att_title', st.title, '')) + '<div class="muted" id="att_basis" style="font-size:12.5px;margin-top:4px">' + esc(st.basis || '') + '</div>'
@@ -72,7 +73,7 @@
           if (id === '#att_s' && st.e && st.e.slice(0, 10) < st.s.slice(0, 10)) st.e = st.s.slice(0, 10) + st.e.slice(10);
           if (st.type === 'overtime' && st.e) st.e = st.s.slice(0, 10) + st.e.slice(10);
           if (!fx && (st.s.slice(11, 16) !== a || (st.e && st.e.slice(11, 16) !== b))) st.timeTouched = true;
-          const e2 = $('#att_e'); if (e2) e2.value = st.e || '';
+          const e2 = $('#att_e'); if (e2) { e2.value = st.e || ''; if (typeof dateTimeSync === 'function') dateTimeSync('att_e'); }
           retitle();
           { const n = $('#att_note'), wk = st.type !== 'overtime' && [st.s, st.e].some(v => /^\d{4}-\d{2}-\d{2}/.test(v || '') && [0, 6].includes(new Date(String(v).slice(0, 10) + 'T00:00:00Z').getUTCDay())), msg = '고른 날짜에 토·일요일이 들어 있습니다. 날짜를 확인하세요. '; if (n) { const base = n.textContent.replace(/^같은 기간에 이미 낸 신청이 있습니다: [^.]*\. /, '').replace(msg, ''); n.textContent = attOverlapNote(st) + (wk ? msg : '') + base; } }
         });
@@ -106,7 +107,7 @@
           else done({...common, pay: st.pay === '보상' ? '보상근무 신청' : '수당근무 신청', reason: st.reason});
         });
         obs.observe(ov, {childList: true});
-        setTimeout(() => { const i = $('#att_s'); if (i) i.focus(); }, 30);
+        setTimeout(() => { const i = root.querySelector('[data-act="dpOpen"][data-id="att_s_d"]') || $('#att_s'); if (i) i.focus(); }, 30);
       };
       setDefaults(); retitle(); paint();
     });

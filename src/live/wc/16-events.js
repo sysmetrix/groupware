@@ -335,12 +335,13 @@
       case 'usageToggle':
       case 'usageClear':
       case 'bMode': case 'bOpen': case 'bMineReload': case 'bAllReload':
-      case 'tdDateOpen': case 'tdDateMonth': case 'tdDatePick':
+
       case 'tdReload': case 'tdFilter': case 'tdAdd': case 'tdNew': case 'tdSel': case 'tdClose': case 'tdSave': case 'tdToggle': case 'tdDel': case 'tdDelYes':
       case 'tdView': case 'tdTl': case 'tdKanMove': case 'tdRoSave': case 'tdCopyLink': case 'tdBulk': case 'tdBulkSave':
       case 'tdSubAdd': case 'tdSubToggle': case 'tdSubDel': case 'tdLinkFind': case 'tdLinkAdd': case 'tdLinkDel': case 'tdLinkOpen':
       case 'tdWrap': case 'tdWrapDone': case 'tdWrapNext': case 'tdWrapPick': case 'tdWrapAll': case 'tdMigrate': case 'tdMigrateSkip':
       case 'bpAdd': case 'bpImport': case 'bpImportAdd': case 'bpConfirm': case 'bpReject': case 'bpEdit': case 'bpReload': case 'bpDropRest':
+      case 'dpOpen': case 'dpMonth': case 'dpPick': case 'dpClose':
       case 'cduPeriod': case 'cduCustom': case 'cduState': case 'cduCard': case 'cduReload': case 'cduCsv':
         if (HOME_ACTS[act]) HOME_ACTS[act](actEl, v, e); break; // 홈·채팅 화면의 처리기 등록소(29~30번 조각)
       default: break;
@@ -377,6 +378,7 @@
   }, true);
   root.addEventListener('change', e => {
     const t = e.composedPath()[0];
+    if (t.dataset && t.dataset.dt && typeof dtCompose === 'function') { dtCompose(t.dataset.dt); return; } // 날짜+시각 칸(57번 조각)
     if (t.id && t.id.startsWith('df') && dfChange(t)) return;
     if (t.id && /^(tde\w*|tdQ|tdQuickDue|tdSort|tdImpF|tdDoneSpan|bpTarget|bpClose)$/.test(t.id) && typeof todoChange === 'function') { todoChange(t); return; }
     if (t.id === 'speriod') S.search.period = t.value;

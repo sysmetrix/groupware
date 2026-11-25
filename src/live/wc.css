@@ -1554,3 +1554,11 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 @media(max-width:640px){.wc nav a.nav-counted .n{padding:0;width:7px;height:7px;border-radius:50%;background:var(--accent)}.wc nav a.nav-counted .n span{display:none}}
 /* v1.21 카드 사용내역: 카드명은 한 줄, 사용처는 낱말 단위로 줄바꿈 */
 .wc .cu-tbl td{word-break:keep-all}.wc .cu-tbl td:nth-child(2){white-space:nowrap}.wc .cu-tbl .cu-place{min-width:9em}.wc .cu-tbl .cu-place .muted{font-size:12px}
+/* v1.21 날짜 고르기 통일(57번 조각): 모든 날짜 칸이 할 일과 같은 날짜 버튼·요일 달력을 쓴다 */
+.wc #dpLayer:empty{display:none}.wc #dpLayer .modal{z-index:40}.wc #dpLayer .dlg{animation:stRise var(--t2) var(--e-out) both}
+.wc .rp-date{display:grid;gap:4px;font-size:13px}.wc span.rp-date{display:inline-grid}
+.wc .bar .td-date-btn,.wc .acts .td-date-btn,.wc .rp-date .td-date-btn{min-height:34px}
+.wc .td-cal-week.sat,.wc .td-cal-day.sat:not(.selected):not(.today){color:var(--accent)}.wc .td-cal-day.sun:not(.selected):not(.today){color:var(--hi)}
+.wc .td-cal-day:disabled{opacity:.32;cursor:not-allowed;background:transparent;color:var(--muted)}.wc .td-cal-day:focus-visible,.wc .td-date-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wc .td-cal-nav .btn:disabled{opacity:.35}.wc .td-cal-heading h2{font-variant-numeric:tabular-nums}.wc .td-cal-footer .muted{font-size:12px}.wc .dp-hint{margin:10px 0 0;font-size:12px;color:var(--muted)}
+.wc .dt-field{display:flex;gap:6px;align-items:stretch;flex-wrap:wrap}.wc .dt-field .td-date-field{flex:1 1 180px}.wc .dt-field .td-date-btn{width:100%;min-height:40px;font-size:14px}.wc .dt-field .dt-time{flex:0 0 96px;height:40px;font-size:14px;color:var(--fg)}

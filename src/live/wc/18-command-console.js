@@ -244,7 +244,7 @@
     cmdStep('step1', '1. 날짜를 알아듣지 못했습니다. 아래에서 날짜를 골라 주세요', 'fail');
     const box = cmdResultBox(`<b>어느 날짜로 신청할까요?</b>
       <div class="acts" style="margin-top:8px;align-items:center">
-        <input id="cmdDate" type="date" value="${esc(guess ? guess.iso : '')}" style="font-size:14px;padding:6px 8px;border:1px solid var(--line2);border-radius:8px;background:transparent;color:inherit">
+        ${typeof dateField === 'function' ? dateField('cmdDate', guess ? guess.iso : '', '신청 날짜', {}) : ''}
         <button class="btn sm primary" id="cmdDateGo">이 날짜로 진행</button>
       </div>
       <div class="muted" style="font-size:12px;margin-top:6px">다가오는 토요일을 미리 넣어 두었습니다. 다른 날이면 바꿔 주세요.</div>`, 'tip');

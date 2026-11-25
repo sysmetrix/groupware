@@ -39,6 +39,7 @@
     const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName || '') || t.isContentEditable;
     e.stopPropagation(); // keep groupware shortcuts from firing behind the work center
     if (e.isComposing || e.keyCode === 229) return;
+    if (typeof dpIsOpen === 'function' && dpIsOpen()) { dpKey(e); return; } // 날짜 달력이 열려 있으면 달력이 키를 먼저 받는다(57번 조각)
     if (e.key === 'Tab') {
       const dialog = $('#overlay .modal .dlg, #overlay .menu');
       if (dialog) {
