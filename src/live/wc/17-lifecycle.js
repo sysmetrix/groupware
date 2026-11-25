@@ -30,7 +30,7 @@
     govPurge();
     tipBubble.style.display = 'none';
     const target = !S.open && linkedView();
-    if (target && viewAvailable(target)) { S.view = target; if (target === 'mail') S.mailFilter = 'unread'; }
+    if (target && viewAvailable(target)) { S.view = target; if (target === 'mail') S.mailFilter = 'unread'; if (typeof viewDefaults === 'function') viewDefaults(target); }
     S.open = true; host.style.display = 'block'; fab.style.display = 'none'; prevTitle = document.title;
     armBack();
     showBrandFavicon();
