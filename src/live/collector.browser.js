@@ -39,6 +39,8 @@
     '/gw/api/gw026A03',
     // v1.21 카드 사용내역. 지출결의서 채주정보의 [카드승인내역] 창이 부르는 조회 주소(2026-11-25 확인). 그룹웨어가 요청·응답을 암호화하는 주소라 cardUsage()에서만 부른다.
     '/nonprofit/cardAuth/0BN00001',
+  // v1.22 전자세금계산서 발행내역. 지출결의서 채주정보의 [전자(세금)계산서발행내역] 창이 부르는 조회 주소(2026-11-25 확인, 요청·응답 모두 평문).
+  '/nonprofit/etaxAuth/0BN00001',
   ]);
 
   // Left-menu ids of 전자결재(비영리) observed in getMenuCountInfo (2026-11-08).
@@ -847,6 +849,34 @@
     return {from: f, to: t, state: CARD_STATE[state] ? state : 'all', rows, url: LINKS.route(ROUTES.expenseEntry), at: new Date().toISOString()};
   }
 
+  // ---------- 전자세금계산서 (v1.22) ----------
+  // 지출결의서의 [전자(세금)계산서발행내역] 창과 같은 조회(증빙 과세·면세, 회계단위 전체). 결의 반영·선택은 하지 않는다(읽기만).
+  const ETAX_STATE = {all: '0', done: '1', open: '2'}; // 반영여부: 전체 / 반영 / 미반영
+  const etaxRow = x => {
+    const sum = num(x.sumAm), done = num(x.abdocuAm), balance = num(x.balanceAm);
+    return {
+      date: ymd8(x.issDt), seq: num(x.issSq), supplier: mask(x.trNm, 80), bizNo: str(x.trregNb, 12), issueNo: str(x.issNo, 40),
+      sum, supply: num(x.supAm), vat: num(x.vatAm), taxType: str(x.taxTy, 2), item: mask(x.itemDc, 120),
+      reflected: done, balance, resolution: str(x.gisuNb, 30), resolutionDate: ymd8(x.gisuDt), slip: str(x.docuNb, 30),
+      status: (done <= 0 && !str(x.gisuNb, 30)) ? 'open' : balance > 0 ? 'partial' : 'done',
+    };
+  };
+  async function etaxInvoices({from, to, state = 'all'} = {}) {
+    const ctx = context();
+    const f = String(from || '').replace(/-/g, ''), t = String(to || '').replace(/-/g, '');
+    if (!ymd8(f) || !ymd8(t) || f > t) throw new GwError('BAD_QUERY', '발행일 기간을 확인하세요.');
+    const day = s => Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8));
+    if ((day(t) - day(f)) / 86400000 > 366) throw new GwError('BAD_QUERY', '전자세금계산서는 1년 이내로 조회하세요.');
+    let erp = null;
+    try { const ui = JSON.parse(sessionStorage.getItem('userInfo') || 'null'); erp = ui && ui.erpUserInfo; if (typeof erp === 'string') erp = JSON.parse(erp); } catch { erp = null; }
+    const co = String((erp && erp.companyCode) || ctx.erpCompSeq || '');
+    const body = {issDtFrom: f, issDtTo: t, searchText: '', divObj: [co], docuFg: '4', reflectFg: ETAX_STATE[state] || '0', docuNbText: '지출결의/계산서', evidType: ['2', '4']};
+    const d = await call('/nonprofit/etaxAuth/0BN00001', body, {timeoutMs: 30000});
+    if (!Array.isArray(d)) throw new GwError('BAD_RESPONSE', '전자세금계산서 내역 형식을 확인할 수 없습니다.');
+    const rows = d.map(etaxRow).sort((a, b) => b.date.localeCompare(a.date) || b.seq - a.seq);
+    return {from: f, to: t, state: ETAX_STATE[state] ? state : 'all', rows, url: LINKS.route(ROUTES.expenseEntry), at: new Date().toISOString()};
+  }
+
   // Mail detail: attachments, big-file links and the groupware read-view URL.
   // WARNING: the groupware marks a mail as read when its detail is fetched, so this refuses
   // unread mails unless the caller explicitly accepts that (after asking the user).
@@ -1275,7 +1305,7 @@
   }
 
   window.BWYFGW = Object.freeze({
-    version: VERSION, collect, call, search, organizationTree, organizationMembers, sentMail, budgetCatalog, budgetProject, budgetAll, budgetLedger, budgetMonthly, cardUsage, attendanceDays, teamAttendance, teamPlanned, resourceList, resourceBookings, resourceDetail, resourceCheck, reserveResource, todoList, todoDetail, todoCreate, todoUpdate, todoSetDone, todoSetProgress, todoSetImportance, todoDelete, todoLink, todoComments, readAlert, routingHistory, submittedRange, approvalPage, approvalFallback, docPreview, frequentForms, findReply, mailDetail, mailInlineImage, mailAttachment, mailAttachmentPreview, mailAttachmentPages, docAttachmentPages, synapPageImages, saveBlob,
+    version: VERSION, collect, call, search, organizationTree, organizationMembers, sentMail, budgetCatalog, budgetProject, budgetAll, budgetLedger, budgetMonthly, cardUsage, etaxInvoices, attendanceDays, teamAttendance, teamPlanned, resourceList, resourceBookings, resourceDetail, resourceCheck, reserveResource, todoList, todoDetail, todoCreate, todoUpdate, todoSetDone, todoSetProgress, todoSetImportance, todoDelete, todoLink, todoComments, readAlert, routingHistory, submittedRange, approvalPage, approvalFallback, docPreview, frequentForms, findReply, mailDetail, mailInlineImage, mailAttachment, mailAttachmentPreview, mailAttachmentPages, docAttachmentPages, synapPageImages, saveBlob,
     context: () => { const c = context(); return {name: c.name, deptName: c.deptName, compName: c.compName, duty: c.duty, position: c.position}; },
     readOnlyEndpoints: () => [...READ_ONLY], routes: ROUTES, links: LINKS, searchLabels: SEARCH_LABELS, defaults: DEFAULTS,
   });

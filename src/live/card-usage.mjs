@@ -53,3 +53,22 @@ export function cduAgeDays(ymd, now = new Date()) {
   const {y, m, d} = cduKst(now);
   return Math.round((Date.UTC(y, m - 1, d) - Date.UTC(+ymd.slice(0, 4), +ymd.slice(4, 6) - 1, +ymd.slice(6, 8))) / 86400000);
 }
+
+// ---------- 전자세금계산서 (v1.22) ----------
+// 자료는 BWYFGW.etaxInvoices()가 돌려준 줄: {date, supplier, bizNo, issueNo, sum, supply, vat, taxType:'2'|'4', item, balance, status:'open'|'partial'|'done', resolution}
+export const ETX_STATES = [['open', '결의 전'], ['done', '결의 완료'], ['all', '전체']];
+export const etxTaxLabel = r => r.taxType === '4' ? '면세' : r.taxType === '2' ? '과세' : '기타';
+export const etxBizNo = s => /^\d{10}$/.test(String(s || '')) ? `${s.slice(0, 3)}-${s.slice(3, 5)}-${s.slice(5)}` : String(s || '');
+export const etxStatusLabel = r => r.status === 'open' ? '결의 전' : r.status === 'partial' ? `일부 결의 · 남은 ${Number(r.balance || 0).toLocaleString('ko-KR')}원` : `결의 ${r.resolution || r.slip || '반영'}`;
+// '결의 전'은 일부만 결의된 건(남은 금액이 있는 건)도 포함한다: 아직 더 결의할 수 있는 건이기 때문.
+const etxIsOpen = r => r.status === 'open' || r.status === 'partial';
+export function etxView(rows, {state = 'open', q = ''} = {}) {
+  const list = Array.isArray(rows) ? rows : [];
+  const counts = {open: list.filter(etxIsOpen).length, done: list.filter(r => r.status === 'done').length, all: list.length};
+  const byState = list.filter(r => state === 'all' || (state === 'open' ? etxIsOpen(r) : r.status === 'done'));
+  const s = String(q || '').replace(/\s+/g, '').toLowerCase();
+  const shown = byState.filter(r => !s || `${r.supplier}${r.item}${r.issueNo}${r.bizNo}${r.resolution}${r.sum}`.replace(/\s+/g, '').toLowerCase().includes(s));
+  const amount = shown.reduce((a, r) => a + (Number(r.sum) || 0), 0);
+  const openList = list.filter(etxIsOpen);
+  return {rows: shown, amount, counts, openAmount: openList.reduce((a, r) => a + (Number(r.balance) || 0), 0), oldestOpen: openList.filter(r => r.date).map(r => r.date).sort()[0] || ''};
+}

@@ -3,6 +3,7 @@
 // - 사업 상세: 기존 예산 과목·결의 내역·집행 계획·예상(10·52번 조각). 위에는 사업 선택 칸 하나와 별(내 사업 추가·빼기)만 둔다.
 // - 재단 전체: 모든 사업을 사업별로 접고 펴서 본다. 찾기·정렬·과목 검색, 단위사업마다 별·상세.
 // - 카드 사용내역(v1.21): 결의 전 법인카드 사용을 미리 본다(56번 조각).
+// - 세금계산서(v1.22): 결의 전 전자세금계산서를 미리 본다(58번 조각).
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
 
   const BM = {loading: new Set(), sort: 'order', q: ''};
@@ -25,12 +26,12 @@
   const bmName = p => { const rows = typeof bpRows === 'function' ? bpRows(p.project, p.filter) : null; const r = rows && rows.find(x => x.code === p.filter); return (r && String(r.name).replace(/^[○●·\s]+/, '')) || p.label || p.filter || p.project; };
   function budgetMode() {
     const b = S.budget;
-    if (!['mine', 'detail', 'all', 'card'].includes(b.mode)) b.mode = bmPins().length ? 'mine' : 'all';
+    if (!['mine', 'detail', 'all', 'card', 'etax'].includes(b.mode)) b.mode = bmPins().length ? 'mine' : 'all';
     return b.mode;
   }
   function budgetModeTabs() {
     const m = budgetMode(), tab = (id, label) => `<button role="tab" aria-selected="${m === id}" class="${m === id ? 'on' : ''}" data-act="bMode" data-v="${id}">${label}</button>`;
-    return `<div class="vtabs"><div class="seg" role="tablist" aria-label="예산 집행 보기">${tab('mine', '내 사업 한눈에')}${tab('detail', '사업 상세')}${tab('all', '재단 전체')}${tab('card', '카드 사용내역')}</div></div>`;
+    return `<div class="vtabs"><div class="seg" role="tablist" aria-label="예산 집행 보기">${tab('mine', '내 사업 한눈에')}${tab('detail', '사업 상세')}${tab('all', '재단 전체')}${tab('card', '카드 사용내역')}${tab('etax', '세금계산서')}</div></div>`;
   }
   const bmBar = (rate, plan, el) => `<span class="bm-bar" aria-hidden="true"><i class="ex" style="width:${Math.min(100, Math.max(0, rate))}%"></i>${plan > 0 ? `<i class="pl" style="width:${Math.min(100 - Math.min(100, Math.max(0, rate)), plan)}%"></i>` : ''}${el != null ? `<b style="left:${Math.min(100, Math.max(0, el))}%"></b>` : ''}</span>`;
   // 사업 상세 위쪽: 사업 선택 칸과 별
@@ -130,7 +131,7 @@ ${incomes.length ? `<p class="muted bm-note">세입(수입) 사업 ${incomes.map
 
   // ---------- 처리기 ----------
   HOME_ACTS.bMode = (el, v) => {
-    if (!['mine', 'detail', 'all', 'card'].includes(v)) return;
+    if (!['mine', 'detail', 'all', 'card', 'etax'].includes(v)) return;
     S.budget.mode = v;
     if (v !== 'all') { S.budget.q = ''; }
     renderMain();

@@ -344,6 +344,13 @@
         .filter(r => r.date >= f && r.date <= t);
       return {from: f, to: t, state: 'all', rows, url: LINKS.route(ROUTES.expenseEntry), at: new Date().toISOString()};
     },
+    etaxInvoices: async ({from, to} = {}) => {
+      await wait(240);
+      const f = String(from || day(0).slice(0, 6) + '01').replace(/-/g, ''), t = String(to || day(0)).replace(/-/g, '');
+      const e = (off, supplier, bizNo, item, sum, taxType, status, resolution = '') => ({date: day(off), seq: 1, supplier, bizNo, issueNo: String(20260000000000 + Math.abs(off) * 131), sum, supply: taxType === '2' ? Math.round(sum / 1.1) : sum, vat: taxType === '2' ? sum - Math.round(sum / 1.1) : 0, taxType, item, reflected: status === 'done' ? sum : 0, balance: status === 'done' ? 0 : sum, resolution, resolutionDate: resolution ? resolution.slice(0, 8) : '', slip: '', status});
+      const rows = [e(-2, '(예시)자문세무회계', '1234567890', '자문료', 330000, '2', 'open'), e(-6, '(예시)교육원', '2345678901', '교육 위탁', 2160000, '4', 'open'), e(-10, '(예시)인쇄소', '3456789012', '홍보물 제작', 880000, '2', 'done', day(-8) + '-5')].filter(r => r.date >= f && r.date <= t);
+      return {from: f, to: t, state: 'all', rows, url: LINKS.route(ROUTES.expenseEntry), at: new Date().toISOString()};
+    },
     attendanceDays: async ({from, to} = {}) => { await wait(); const f = from || day(0).slice(0, 6) + '01'; return attendanceRows(f, to || day(0)); },
     teamAttendance, teamPlanned,
     resourceList: async () => { await wait(); return RES.map(r => ({...r})); },
