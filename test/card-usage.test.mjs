@@ -122,10 +122,46 @@ test('카드 사용내역 화면: 예산 집행의 하위 탭으로 연결되고
   const home = readFileSync(new URL('../src/live/wc/54-budget-home.js', import.meta.url), 'utf8');
   const view = readFileSync(new URL('../src/live/wc/10-calendar-budget.js', import.meta.url), 'utf8');
   assert.match(home, /tab\('card', '카드 사용내역'\)/);
-  assert.match(home, /\['mine', 'detail', 'all', 'card'\]\.includes\(v\)/);
+  assert.match(home, /\['mine', 'detail', 'all', 'card', 'etax'\]\.includes\(v\)/);
   assert.match(view, /m === 'card' && typeof vBudgetCard === 'function'/);
   for (const act of new Set([...frag.matchAll(/data-act="(cdu\w+)"/g)].map(m => m[1]))) assert.match(frag, new RegExp(`HOME_ACTS\\.${act} =`), act);
   assert.ok(!/cardNb|chainRegnb/.test(frag), '화면은 카드번호·사업자번호를 다루지 않음');
   assert.match(frag, /esc\(r\.place\)/);
   assert.match(frag, /esc\(r\.card\)/);
+});
+
+test('세금계산서: 결의서 [전자(세금)계산서발행내역]과 같은 조건으로 평문 요청하고 필요한 칸을 돌려준다', async () => {
+  const RAWE = [
+    {issDt: '20261102', issSq: '1', trNm: '자문세무', trregNb: '3053450356', issNo: '202611024100004282156252', sumAm: '330000.0000', supAm: '300000.0000', vatAm: '30000.0000', abdocuAm: 0, balanceAm: 330000, taxTy: '2', itemDc: '8월 자문료', gisuNb: '', gisuDt: null},
+    {issDt: '20261110', issSq: '1', trNm: '교육원', trregNb: '1112233334', issNo: 'N2', sumAm: '2160000.0000', supAm: '2160000.0000', vatAm: '0.0000', abdocuAm: 2160000, balanceAm: 0, taxTy: '4', itemDc: '교육', gisuNb: '20261112-3', gisuDt: '20261112'},
+    {issDt: '20261105', issSq: '1', trNm: '인쇄소', trregNb: '5556677778', issNo: 'N3', sumAm: '100000.0000', supAm: '100000.0000', vatAm: '0.0000', abdocuAm: 40000, balanceAm: 60000, taxTy: '4', itemDc: '', gisuNb: '20261106-1', gisuDt: '20261106'},
+  ];
+  const {api, calls} = await loadCollector(() => Promise.resolve({resultCode: 0, resultData: RAWE}));
+  const r = await api.etaxInvoices({from: '2026-11-01', to: '20261125'});
+  const c = calls.find(x => x.p === '/nonprofit/etaxAuth/0BN00001');
+  assert.ok(c);
+  assert.notEqual(c.opts.encrypt, true);
+  assert.deepEqual(JSON.parse(JSON.stringify(c.body)), {issDtFrom: '20261101', issDtTo: '20261125', searchText: '', divObj: ['1000'], docuFg: '4', reflectFg: '0', docuNbText: '지출결의/계산서', evidType: ['2', '4']});
+  assert.deepEqual(r.rows.map(x => [x.date, x.status, x.sum]), [['20261110', 'done', 2160000], ['20261105', 'partial', 100000], ['20261102', 'open', 330000]]);
+  const v = C.etxView(r.rows, {state: 'open'});
+  assert.deepEqual(v.counts, {open: 2, done: 1, all: 3});
+  assert.equal(v.openAmount, 390000); // 결의 전 330000 + 남은 60000
+  assert.equal(C.etxView(r.rows, {state: 'all', q: '자문'}).rows.length, 1);
+  assert.equal(C.etxTaxLabel(r.rows[0]), '면세');
+  assert.equal(C.etxBizNo('3053450356'), '305-34-50356');
+  await assert.rejects(api.etaxInvoices({from: '20261125', to: '20261101'}), e => e.code === 'BAD_QUERY');
+  const bad = await loadCollector(() => Promise.resolve({resultCode: 0, resultData: {}}));
+  await assert.rejects(bad.api.etaxInvoices({from: '20261101', to: '20261125'}), e => e.code === 'BAD_RESPONSE');
+  const s = await loadCollector(() => Promise.resolve({resultCode: 0, resultData: RAWE}));
+  await s.api.etaxInvoices({from: '20261101', to: '20261125', state: 'open'});
+  assert.equal(s.calls[0].body.reflectFg, '2');
+});
+test('세금계산서 화면: 예산 집행의 하위 탭으로 연결되고 처리기가 있다', () => {
+  const frag = readFileSync(new URL('../src/live/wc/58-budget-etax.js', import.meta.url), 'utf8');
+  const home = readFileSync(new URL('../src/live/wc/54-budget-home.js', import.meta.url), 'utf8');
+  const view = readFileSync(new URL('../src/live/wc/10-calendar-budget.js', import.meta.url), 'utf8');
+  assert.match(home, /tab\('etax', '세금계산서'\)/);
+  assert.match(view, /m === 'etax' && typeof vBudgetEtax === 'function'/);
+  for (const act of new Set([...frag.matchAll(/data-act="(etx\w+)"/g)].map(m => m[1]))) assert.match(frag, new RegExp(`HOME_ACTS\\.${act} =`), act);
+  assert.ok(!/chainRegnb|cardNb/.test(frag));
 });
