@@ -1427,27 +1427,85 @@ export function resSortList(list = []) {
   return (Array.isArray(list) ? list : []).map((r, i) => ({r, i})).sort((a, b) => (car(b.r) - car(a.r)) || a.i - b.i).map(x => x.r);
 }
 // v1.28 자원 종류: 비서의 현황 조회(get_resource_status)와 예약 준비(reserve_vehicle)가 함께 쓰는 한 기준.
-const RES_KIND = {car: [/차량|관용|니로|승용|승합|자동차|카니발|스타리아/, '차량'], room: [/회의실|회의|세미나|강당|교육장/, '회의실'], led: [/LED|패널|전광판/i, 'LED 패널']};
-/** 말(kind 인자·자원 이름 단서) → 'car'|'room'|'led', 모르면 ''. */
+// 말과 자원 모두 LED → 회의실 → 차량 순서로 본다. 장비·소모품 이름(빔프로젝터·화상회의 장비·하이패스 카드·블랙박스)은 어느 종류도 아니다.
+const RES_KIND = {led: [/LED|패널|전광판/i, 'LED 패널'], room: [/회의실|회의|세미나|강당|교육장/, '회의실'], car: [/차량|관용|니로|승용|승합|자동차|카니발|스타리아/, '차량']};
+const RES_KINDS = ['led', 'room', 'car'];
+const RES_GEAR = /프로젝터|빔|장비|카드|블랙박스|노트북|카메라|마이크|스피커|충전기|하이패스|내비|열쇠|(?:회의|차량)용/;
+// 종류만 뜻하는 말(이름 단서가 아님): 차량·회의실·LED 패널 등. 승합차·강당·세미나실·니로처럼 좁은 말은 이름 단서로 쓴다.
+const RES_GENERIC = /^(?:car|room|led|vehicle|meetingroom|차|차량|관용차|관용차량|공용차|공용차량|자동차|회의|회의실|회의공간|회의장소|세미나|교육|행사|업무|led패널|패널|전광판|자원|예약)$/i;
+const resFlat = s => String(s || '').replace(/\s+/g, '').toLowerCase();
+const resGeneric = s => RES_GENERIC.test(resFlat(s));
+const resOwn = k => Object.prototype.hasOwnProperty.call(RES_KIND, k);
+/** 말(kind 인자·자원 이름 단서) → 'led'|'room'|'car', 모르면 ''. */
 export function resKindOfText(v) {
   const t = String(v || '').trim();
-  if (Object.prototype.hasOwnProperty.call(RES_KIND, t)) return t;
-  for (const k of ['room', 'led', 'car']) if (RES_KIND[k][0].test(t)) return k;
+  if (resOwn(t)) return t;
+  if (RES_GEAR.test(t)) return '';
+  for (const k of RES_KINDS) if (RES_KIND[k][0].test(t)) return k;
   return /room/i.test(t) ? 'room' : /^(vehicle|차)$|공용차/i.test(t) ? 'car' : '';
 }
-/** 자원 하나의 종류. 이름이 먼저, 이름으로 모르면 자원 분류(attr). */
-export function resKindOf(r) {
-  for (const s of [r && r.name, r && r.attr]) for (const k of ['car', 'room', 'led']) if (RES_KIND[k][0].test(String(s || ''))) return k;
-  return '';
+// [종류, 이름으로 판정했는지]. 이름이 장비면 분류가 차량·회의실이어도 종류가 없다.
+function resKindBy(r) {
+  const name = String((r && r.name) || ''), attr = String((r && r.attr) || '');
+  if (RES_GEAR.test(name)) return ['', false];
+  for (const k of RES_KINDS) if (RES_KIND[k][0].test(name)) return [k, true];
+  for (const k of RES_KINDS) if (RES_KIND[k][0].test(attr)) return [k, false];
+  return ['', false];
 }
-/** 요청한 종류의 자원. 그 밖의 말(예: 상담실)은 이름·분류에 그 말이 든 자원. hint(자원 이름 단서)가 있으면 종류를 뜻하는 말을 빼고 남은 말이 모두 이름에 든 자원만 pool에 남긴다. */
-export function resPick(list = [], kind = '', hint = '') {
-  const flat = s => String(s || '').replace(/\s+/g, '').toLowerCase(), arr = Array.isArray(list) ? list.filter(Boolean) : [];
-  const k = resKindOfText(kind), lit = k ? '' : flat(kind).slice(0, 20), label = k ? RES_KIND[k][1] : String(kind || '').trim().slice(0, 20);
-  const of = k ? arr.filter(r => resKindOf(r) === k) : lit.length >= 2 ? arr.filter(r => flat(`${r.name}${r.attr || ''}`).includes(lit)) : [];
-  const toks = String(hint || '').split(/\s+/).map(flat).filter(t => t && t !== lit && !/^(차량|관용차|차|회의실|led|패널|자원)$/.test(t));
-  const named = toks.length ? of.filter(r => toks.every(t => flat(r.name).includes(t))) : null;
-  return {kind: k, label, of, pool: named || of};
+/** 자원 하나의 종류. 이름이 먼저, 이름으로 모르면 자원 분류(attr). */
+export function resKindOf(r) { return resKindBy(r)[0]; }
+// name에 clue가 들어 있는지. 숫자는 앞뒤가 숫자가 아니어야 한다(1층 ≠ 11층, 상담실 1 ≠ 상담실 10).
+function resHas(name, clue) {
+  const n = resFlat(name), c = resFlat(clue), dg = ch => /\d/.test(ch || '');
+  if (!c) return false;
+  for (let i = n.indexOf(c); i >= 0; i = n.indexOf(c, i + 1)) if (!(dg(c[0]) && dg(n[i - 1])) && !(dg(c[c.length - 1]) && dg(n[i + c.length]))) return true;
+  return false;
+}
+/** 이름 단서가 자원 이름에 맞는 정도: 3 이름 전체, 2 이어진 일부, 1 낱말마다(종류 말은 그 종류면 맞음), 0 안 맞음. */
+export function resNameScore(r, clue) {
+  const name = String((r && r.name) || ''), c = resFlat(clue);
+  if (!c) return 0;
+  if (resFlat(name) === c || resFlat(name.replace(/\s*\(.*$/, '')) === c) return 3;
+  if (resHas(name, clue)) return 2;
+  const toks = String(clue).trim().split(/\s+/);
+  return toks.length > 1 && toks.every(t => resHas(name, t) || (resGeneric(t) && resKindOfText(t) && resKindOfText(t) === resKindOf(r))) ? 1 : 0;
+}
+// 사용자 문장에서 이 자원들 가운데 일부만 가리키는 낱말(니로·승합차·2층 등). 없으면 [].
+function resTextClues(of, text) {
+  const out = [];
+  for (const raw of String(text || '').split(/[\s,.!?~·]+/)) {
+    // 조사를 뗀 말과 그대로의 말을 함께 본다(니로 → 니로, 승합차로 → 승합차).
+    const ws = [raw, raw.replace(/(?:에서|으로|하고|이랑|로|을|를|이|가|은|는|에|도|만|랑|와|과)$/, '')].filter(w => w.length >= 2 && !resGeneric(w) && !/\d\s*(?:시|분|월|일|:)|^\d+\/\d+$/.test(w));
+    if (!ws.length || resGeneric(raw)) continue;
+    const hit = of.filter(r => ws.some(w => resHas(r.name, w)));
+    if (hit.length && hit.length < of.length) out.push(hit);
+  }
+  return out;
+}
+/**
+ * 요청한 종류의 자원을 고른다. kind: 'car'|'room'|'led'|그 밖의 말, hint: 자원 이름 단서, text: 사용자 문장.
+ * of: 그 종류(이름으로 판정한 자원이 분류로만 판정한 자원보다 앞), pool: 단서에 가장 잘 맞는 자원(단서가 없으면 of).
+ * 좁은 종류 말(강당·승합차)과 이름 단서는 둘 다 맞아야 한다. 단서가 있으면 pool 밖의 자원으로 대신하지 않는다.
+ * kind가 비고 hint만 있으면 전체 자원에서 이름으로 찾아 그 자원의 종류를 따른다. 문장의 낱말이 서로 다른 자원을 가리키면 ambiguous.
+ */
+export function resPick(list = [], kind = '', hint = '', text = '') {
+  const arr = Array.isArray(list) ? list.filter(r => r && typeof r === 'object') : [];
+  const kw = String(kind || '').trim(), hw = String(hint || '').trim();
+  const ofKind = k => arr.map((r, i) => ({r, i, by: resKindBy(r)})).filter(x => x.by[0] === k).sort((a, b) => (b.by[1] - a.by[1]) || a.i - b.i).map(x => x.r);
+  let k = resKindOfText(kw || hw), label, of;
+  const clues = [kw, hw].filter(c => c && !resGeneric(c) && !(c === kw && !k));
+  if (k) { label = RES_KIND[k][1]; of = ofKind(k); }
+  else if (kw) { const lit = resFlat(kw).slice(0, 20); label = kw.slice(0, 20); of = lit.length >= 2 ? arr.filter(r => resHas(`${r.name}${r.attr || ''}`, lit)) : []; }
+  else { label = '자원'; of = arr; }
+  if (!clues.length) {
+    const tc = resTextClues(of, text), pool = tc.length ? of.filter(r => tc.every(h => h.includes(r))) : of;
+    return {kind: k, label, of, pool, clue: '', ambiguous: tc.length > 0 && !pool.length};
+  }
+  const sc = r => clues.reduce((s, c) => { const v = resNameScore(r, c); return s < 0 || !v ? -1 : s + v; }, 0);
+  const scored = (k || kw ? of : arr).map(r => [r, sc(r)]).filter(x => x[1] > 0), top = Math.max(0, ...scored.map(x => x[1]));
+  const pool = scored.filter(x => x[1] === top).map(x => x[0]);
+  if (!k && !kw && pool.length) { const pk = resKindOf(pool[0]); if (pk && pool.every(r => resKindOf(r) === pk)) { k = pk; label = RES_KIND[pk][1]; of = ofKind(pk); } }
+  return {kind: k, label, of, pool, clue: clues[clues.length - 1].slice(0, 30), ambiguous: false};
 }
 /** 겹치는 예약 하나(없으면 null). start·end는 'HH:MM', date는 YYYYMMDD. */
 export function resConflict(bookings = [], date, start, end) {
