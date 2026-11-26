@@ -176,13 +176,19 @@
       if (!S.a) return chatNotReady();
       const all = mineVisible();
       const items = all.map(x => ({key: x.key, title: x.title, state: stateOf(x), base: x.base, type: x.type, area: x.area, deadline: x.deadline && x.deadline.date || '', headline: x.headline, from: x.from || x.sender || '', when: x.when || '', score: x.score}));
-      const n = Math.min(Math.max(Number(a.n) || 3, 1), 5), top = R.cuPriorities(items, {today: today(), n});
-      if (!top.length) return {ok: true, text: '지금 먼저 처리할 일이 없습니다. 기다리는 중인 일은 “기다리는 일 알려줘”로 볼 수 있습니다.', data: {count: 0, items: []}};
-      const rest = Math.max(0, items.filter(x => x.state !== 'wait' && x.state !== 'info').length - top.length);
-      const text = `${top.length === 1 ? '가장 먼저 할 일입니다.' : `먼저 할 일 ${top.length}가지입니다.`}\n${top.map((t, i) => `${i + 1}. ${t.title}${t.why.length ? `\n   → ${t.why.join(' · ')}` : ''}`).join('\n')}${rest ? `\n그 밖에 ${rest}건이 할 일 목록에 있습니다.` : ''}`;
-      return {ok: true, text, llm: `먼저 할 일 ${top.length}건을 화면에 표시했습니다(제목은 외부로 보내지 않음).`,
-        data: {count: top.length, items: top.map(t => ({itemId: t.key, title: t.title, type: (all.find(x => x.key === t.key) || {}).type || ''}))},
-        cards: [{type: 'list', title: '먼저 할 일', items: top.map((t, i) => ({title: `${i + 1}. ${t.title}`, sub: t.why.join(' · '), badge: STATE_NAME[t.state] || '', tone: t.state === 'overdue' || t.state === 'urgent' ? 'urgent' : 'todo', act: {act: 'chatOpenItem', v: t.key}}))}]};
+      const n = Math.min(Math.max(Number(a.n) || 3, 1), 5), gwTop = R.cuPriorities(items, {today: today(), n});
+      // v1.24: 홈 '먼저 할 일'과 같은 순서로 개인 ToDo(기한 지남·오늘 마감)를 넣는다. 그룹웨어 기한 지남·급함 → 개인 기한 지남 → 개인 오늘 마감 → 그룹웨어 나머지.
+      const pd = typeof personalHomeDue === 'function' && typeof TD === 'object' && TD ? personalHomeDue() : null;
+      const pMd = d => String(d || '').slice(5).replace('-', '/');
+      const pItems = pd ? [...pd.late, ...pd.today].map(t => ({key: 'td:' + t.id, td: t.id, title: t.title, state: t.due < today() ? 'overdue' : 'urgent', why: [t.due < today() ? `개인 ToDo · 기한 ${pMd(t.due)} 지남` : '개인 ToDo · 오늘 마감']})) : [];
+      const hot = gwTop.filter(t => ['overdue', 'urgent'].includes(t.state)), top = [...hot, ...pItems, ...gwTop.filter(t => !hot.includes(t))].slice(0, n);
+      const pNote = pd && !pd.known ? '\n개인 ToDo는 아직 읽지 못해 빠졌을 수 있습니다.' : pd && pd.incomplete ? '\n개인 ToDo는 확인된 목록만 반영했습니다.' : '';
+      if (!top.length) return {ok: true, text: `지금 먼저 처리할 일이 없습니다. 기다리는 중인 일은 “기다리는 일 알려줘”로 볼 수 있습니다.${pNote}`, data: {count: 0, items: []}};
+      const rest = Math.max(0, items.filter(x => x.state !== 'wait' && x.state !== 'info').length + pItems.length - top.length);
+      const text = `${top.length === 1 ? '가장 먼저 할 일입니다.' : `먼저 할 일 ${top.length}가지입니다.`}${rest ? ` 그 밖에 ${rest}건이 할 일 목록에 있습니다.` : ''}${pNote}`;
+      return {ok: true, text, llm: `먼저 할 일 ${top.length}건(개인 ToDo ${top.filter(t => t.td).length}건 포함)을 화면에 표시했습니다(제목은 외부로 보내지 않음).`,
+        data: {count: top.length, items: top.map(t => ({itemId: t.key, title: t.title, type: t.td ? 'todo' : (all.find(x => x.key === t.key) || {}).type || ''}))},
+        cards: [{type: 'list', title: '먼저 할 일', items: top.map((t, i) => ({title: `${i + 1}. ${t.title}`, sub: t.why.join(' · '), badge: t.td ? '개인' : STATE_NAME[t.state] || '', tone: t.state === 'overdue' || t.state === 'urgent' ? 'urgent' : 'todo', act: t.td ? {act: 'chatNav', v: 'mytodo|' + t.td} : {act: 'chatOpenItem', v: t.key}}))}]};
     },
   });
 

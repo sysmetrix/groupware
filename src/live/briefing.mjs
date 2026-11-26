@@ -865,6 +865,28 @@ export function budgetRecords(all = {}) {
   for (const r of all.empty || []) out.push(mk(r, null, true));
   return out;
 }
+/**
+ * v1.24 budgetAll() 결과 → 사업별 합계. 예산 집행 > 재단 전체 화면과 같은 계산(관 단위 합, 세입 사업은 income).
+ * 조회 실패한 사업은 빼고, 사업마다 관 단위 내역(top)을 함께 돌려준다.
+ */
+export function budgetProjectTotals(all = {}) {
+  const clean = s => String(s || '').replace(/^[○●·\s]+/, '').trim();
+  return (all.projects || []).filter(p => p && !p.error).map(p => {
+    const gw = (p.rows || []).filter(r => r.level === '관' && (r.budget || r.executed));
+    const budget = gw.reduce((s, r) => s + (Number(r.budget) || 0), 0), executed = gw.reduce((s, r) => s + (Number(r.executed) || 0), 0);
+    const income = /세입/.test(p.name || '') || (!budget && executed > 0);
+    const rate = budget ? Math.round(executed / budget * 1000) / 10 : 0;
+    return {project: String(p.project || ''), name: clean(p.name), budget, executed, balance: budget - executed, rate, income, top: gw.map(r => ({code: r.code, name: clean(r.name), budget: Number(r.budget) || 0, executed: Number(r.executed) || 0, balance: (Number(r.budget) || 0) - (Number(r.executed) || 0), rate: Number(r.budget) ? Math.round(Number(r.executed) / Number(r.budget) * 1000) / 10 : 0}))};
+  });
+}
+/** 질문 남은 말(예: "A201 야", "전략경영실운영")에서 사업 하나를 고른다. 낱말 하나가 사업 코드와 같거나 사업 이름 전체와 같을 때만. 여럿이면 null. */
+export function budgetPickProject(totals = [], query = '') {
+  const n = s => String(s || '').replace(/\s+/g, '').toLowerCase();
+  const toks = String(query || '').split(/\s+/).map(n).filter(t => t.length >= 3);
+  const whole = n(query);
+  const hits = (Array.isArray(totals) ? totals : []).filter(x => !x.income && (toks.some(t => t === n(x.project) || t === n(x.name)) || (whole.length >= 4 && whole === n(x.name))));
+  return hits.length === 1 ? hits[0] : null;
+}
 const BGT_LV = {세: 3, 목: 2, 항: 1, 관: 0};
 export function searchBudget(records = [], query = '', {max = 300} = {}) {
   const toks = String(query || '').trim().split(/\s+/).map(bgtNorm).filter(Boolean);

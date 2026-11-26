@@ -72,3 +72,48 @@
     const v = R.etxView(d.rows, {state: ETX.state, q: ETX.q});
     download(`세금계산서_${d.from}-${d.to}.csv`, R.toCsv(v.rows, [{label: '발행일', value: r => R.cduDash(r.date)}, {label: '공급자', key: 'supplier'}, {label: '사업자번호', value: r => R.etxBizNo(r.bizNo)}, {label: '구분', value: r => R.etxTaxLabel(r)}, {label: '품목', key: 'item'}, {label: '공급가액', key: 'supply'}, {label: '부가세', key: 'vat'}, {label: '합계', key: 'sum'}, {label: '결의', value: r => R.etxStatusLabel(r)}, {label: '승인번호', key: 'issueNo'}]), 'text/csv;charset=utf-8');
   };
+  // ---------- v1.24 비서 대화: 결의 전 증빙(법인카드 사용내역·전자세금계산서) ----------
+  // 예산 집행 > 카드·세금계산서 화면과 같은 조회(GW.cardUsage·GW.etaxInvoices)를 쓴다. 화면이 이미 같은 기간을 읽었으면 그 자료를 다시 쓴다.
+  // 외부 AI에는 건수·금액만 넘기고 사용처·공급자 이름은 화면 카드에만 둔다.
+  if (typeof chatRegisterTool === 'function') chatRegisterTool({
+    name: 'get_unresolved_evidence', label: '결의 전 증빙 확인', kind: 'read',
+    description: '법인카드 사용내역과 전자세금계산서를 이번 달 또는 지난달 기준으로 알려준다. state=open이면 아직 지출결의하지 않은 것(결의 전)만. "결의 안 한 카드", "카드 사용내역", "세금계산서 결의" 같은 질문에 쓴다. 결의서는 작성하지 않는다.',
+    params: {type: 'object', properties: {kind: {type: 'string', enum: ['card', 'etax', 'all']}, period: {type: 'string', enum: ['month', 'last']}, state: {type: 'string', enum: ['open', 'all']}}},
+    run: async a => {
+      const kind = ['card', 'etax'].includes(a.kind) ? a.kind : 'all', period = a.period === 'last' ? 'last' : 'month', state = a.state === 'all' ? 'all' : 'open';
+      const p = R.cduPeriod(period, new Date());
+      const label = `${period === 'last' ? '지난달' : '이번 달'}(${R.cduDayLabel(p.from)}~${R.cduDayLabel(p.to)})`;
+      const nav = {type: 'nav', label: '카드·세금계산서 화면 열기', view: 'budget', v: kind === 'etax' ? 'etax' : 'card'};
+      const get = async (src, fn) => {
+        if (src.data && src.data.from === p.from && src.data.to === p.to) return {d: src.data};
+        if (typeof fn !== 'function') return {err: '그룹웨어 연결에 이 조회가 없습니다'};
+        try { return {d: await fn({from: p.from, to: p.to, state: 'all'})}; } catch (e) { return {err: String((e && e.message) || e).slice(0, 80)}; }
+      };
+      const parts = [], cards = [], data = {period, state};
+      const word = state === 'open' ? '결의 전' : '';
+      if (kind !== 'etax') {
+        const r = await get(CDU, GW.cardUsage);
+        if (r.err) parts.push(`카드 사용내역을 읽지 못했습니다(${r.err}).`);
+        else {
+          const v = R.cduView(r.d.rows, {state});
+          data.card = {count: v.rows.length, amount: v.amount, open: v.counts.open, open_amount: v.openAmount};
+          parts.push(`${word ? word + ' ' : ''}카드 사용 ${v.rows.length}건 ${won(v.amount)}원${state === 'all' ? ` (그중 결의 전 ${v.counts.open}건 ${won(v.openAmount)}원)` : ''}`);
+          if (v.rows.length) cards.push({type: 'list', title: `카드 사용${word ? ' · ' + word : ''}`, items: v.rows.slice(0, 8).map(x => ({title: `${R.cduDayLabel(x.date)} ${x.place}`, sub: `${x.card} · ${won(x.amount)}원`, badge: R.cduStatusLabel(x), tone: x.status === 'open' ? 'todo' : 'info'})), more: Math.max(0, v.rows.length - 8)});
+        }
+      }
+      if (kind !== 'card') {
+        const r = await get(ETX, GW.etaxInvoices);
+        if (r.err) parts.push(`세금계산서를 읽지 못했습니다(${r.err}).`);
+        else {
+          const v = R.etxView(r.d.rows, {state});
+          data.etax = {count: v.rows.length, amount: v.amount, open: v.counts.open, open_amount: v.openAmount};
+          parts.push(`${word ? word + ' ' : ''}세금계산서 ${v.rows.length}건 ${won(v.amount)}원${state === 'all' ? ` (그중 결의 전 ${v.counts.open}건)` : ''}`);
+          if (v.rows.length) cards.push({type: 'list', title: `세금계산서${word ? ' · ' + word : ''}`, items: v.rows.slice(0, 8).map(x => ({title: `${R.cduDayLabel(x.date)} ${x.supplier}`, sub: `${R.etxTaxLabel(x)} · 합계 ${won(x.sum)}원`, badge: R.etxStatusLabel(x), tone: x.status === 'done' ? 'info' : 'todo'})), more: Math.max(0, v.rows.length - 8)});
+        }
+      }
+      const none = state === 'open' && ((data.card ? data.card.count : 0) + (data.etax ? data.etax.count : 0)) === 0 && !parts.some(x => /읽지 못했/.test(x));
+      const tail = state === 'open' && !none ? '\n지출결의는 예산 집행 > 카드·세금계산서의 [지출결의 준비]에서 시작하세요. 상신은 직접 합니다.' : '';
+      const text = `${label} ${parts.join(', ')}${none ? '. 결의할 증빙이 없습니다' : ''}.${tail}`.replace(/\.\./g, '.').replace(/\)\./, ').');
+      return {ok: !parts.every(x => /읽지 못했/.test(x)), text, llm: text.replace(/\n.*/s, ''), data, cards: [...cards, nav]};
+    },
+  });
