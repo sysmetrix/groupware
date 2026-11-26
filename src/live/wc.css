@@ -1566,3 +1566,9 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .linkbtn{background:none;border:0;padding:0;font:inherit;color:inherit;text-decoration:underline dotted;text-underline-offset:3px;cursor:pointer}
 .linkbtn:hover{text-decoration-style:solid}
 .linkbtn:focus-visible{outline:2px solid currentColor;outline-offset:2px}
+
+/* 홈: 개인 ToDo 카드는 밝게. 진한 면은 그룹웨어에서 먼저 볼 업무 한 곳에만 쓴다(강조가 두 곳으로 갈라지지 않게). */
+.wc .desk .hm-next.hm-next-p{background:none;color:var(--fg);border:0;border-bottom:1px solid var(--line);border-radius:0;padding:0 0 18px;margin-bottom:18px}
+.wc .desk .hm-next.hm-next-p .hm-card-k{color:var(--muted)}
+.wc .desk .hm-next.hm-next-p .hm-next-s{color:var(--muted)}
+.wc .desk .hm-next.hm-next-p .hm-link{color:var(--accent);text-decoration:underline;text-underline-offset:3px}

@@ -70,10 +70,10 @@
     const name = (S.raw && S.raw.principal && S.raw.principal.name) || '';
     const day = typeof R.homeDayInfo === 'function' ? R.homeDayInfo({date: R.kstNow(new Date()).date, holidays: d.holidays || []}) : {label: '', weekend: false, holiday: '', nextLabel: ''};
     const g = R.homeGreeting({hour, name, urgent: d.urgent, total: d.urgent + d.todo + d.check, loading: !d.loaded, weekend: day.weekend, nextLabel: day.nextLabel});
-    if (d.loaded) g.sub = `그룹웨어 처리·확인 ${d.mine.length}건`;
+    if (d.loaded) g.sub = '';
     if (!d.loaded && S.error) g.sub = '그룹웨어 자료를 읽지 못했습니다';
     if (d.loaded && d.taskGaps) { g.sub = '일부 자료를 읽지 못해 할 일 현황이 불완전할 수 있습니다'; g.tone = 'warn'; }
-    return `<div class="hm-head"><div class="hm-eyebrow">${esc(day.label)}${day.weekend ? ' · 주말' : ''}</div><h1 class="hm-hello">오늘의 업무</h1><p class="hm-sub hm-tone-${g.tone}">${esc(g.sub)}</p></div>`;
+    return `<div class="hm-head"><div class="hm-eyebrow">${esc(day.label)}${day.weekend ? ' · 주말' : ''}</div><h1 class="hm-hello">오늘의 업무</h1>${g.sub ? `<p class="hm-sub hm-tone-${g.tone}">${esc(g.sub)}</p>` : ''}</div>`;
   }
 
   // 하루 띠: 08~19시를 한 줄로 놓고 오늘 일정과 내 부재를 칸으로, 지금 시각을 바늘로 보여 준다(계산은 R.homeDayRail).

@@ -42,3 +42,9 @@ test('homeAwayLine', () => {
   assert.equal(homeAwayLine([{name: '이승봉', label: '관내출장'}, {name: '김소연', label: '연차'}]), '이승봉 출장 · 김소연 연차');
   assert.equal(homeAwayLine([1, 2, 3, 4, 5].map(i => ({name: 'n' + i, label: '휴가'})), 3), 'n1 휴가 · n2 휴가 · n3 휴가 외 2명');
 });
+
+test('homeNextAction: 같은 단계에서는 기한이 빠른 것이 먼저, 기한 없는 것은 뒤', () => {
+  const a = [{key: 'n', title: '기한 없음', state: 'todo'}, {key: 'late', title: '늦음', state: 'todo', deadline: '12-01'}, {key: 'soon', title: '빠름', state: 'todo', deadline: '11-25 17:00'}];
+  assert.equal(homeNextAction(a).key, 'soon');
+  assert.equal(homeNextAction([a[0], {key: 'same', title: '같음', state: 'todo'}]).key, 'n');
+});
