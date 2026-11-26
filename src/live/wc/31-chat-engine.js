@@ -136,8 +136,9 @@
       { const ty = st.ctx.lastItems[0].type; if (ty && st.ctx.lastItems.every(i => i.type === ty)) st.ctx.byType = {...(st.ctx.byType || {}), [ty]: st.ctx.lastItems}; }
       st.ctx.pendingSlot = null;
     } else if (!res.ok && /^prepare_|^reserve_/.test(name) && /날짜|시간/.test(res.text || '')) {
-      st.ctx.pendingSlot = {tool: name, args: runArgs};
-    } else if (res.ok) {
+      st.ctx.pendingSlot = {tool: name, args: runArgs, text: String(ctx.userText || '').slice(0, 300)};
+    } else if (res.ok || (st.ctx.pendingSlot && st.ctx.pendingSlot.tool === name)) {
+      // v1.28: 날짜·시간을 묻지 않은 실패(예: 그 자원이 없음)에서도 이어 말 슬롯을 지운다. 다음 말에 앞의 자원이 남지 않게.
       st.ctx.pendingSlot = null;
     }
     // 한 통만 찾은 메일 목록이면 다음 말("그거 답장 써줘")의 대상으로 기억한다.
@@ -371,7 +372,12 @@
         if (dt || rg.start) {
           const merged = {...st.ctx.pendingSlot.args, ...(dt ? {date: dt.date, ...(dt.end ? {end_date: dt.end} : {})} : {}), ...(rg.start ? {start: rg.start} : {}), ...(rg.end ? {end: rg.end} : {})};
           if (st.ctx.pendingSlot.tool === 'prepare_schedule' && typeof R.chatScheduleRequest === 'function') { const sr = R.chatScheduleRequest(text, new Date()); Object.assign(merged, sr.date ? {date: sr.date} : {}, sr.start ? {start: sr.start, end: sr.end} : {}); delete merged.end_date; }
-          it = {tool: st.ctx.pendingSlot.tool, args: merged, confidence: 1};
+          // v1.28 자원 예약: 이어 말에 다른 종류·자원(LED 패널, 차량으로 할게)이 있으면 앞의 kind·resource를 버리고 이어 말을 따른다.
+          // 없으면 앞 문장과 이어 말을 함께 도구에 넘긴다(앞 문장의 승용차·"말고"가 사라지지 않게).
+          let slotText = `${st.ctx.pendingSlot.text || ''} ${text}`.trim();
+          const ra = st.ctx.pendingSlot.tool === 'reserve_vehicle' && typeof R.chatResourceAsk === 'function' ? R.chatResourceAsk(text) : null;
+          if (ra && ra.found && !ra.stop) { delete merged.kind; delete merged.resource; Object.assign(merged, ra.kind ? {kind: ra.kind} : {}, ra.resource ? {resource: ra.resource} : {}); slotText = text; }
+          it = ra && ra.stop ? (st.ctx.pendingSlot = null, it) : {tool: st.ctx.pendingSlot.tool, args: merged, confidence: 1, userText: slotText};
         }
       }
       // "그거/그 메일"은 앞에서 다룬 메일(대화 초점)로 채운다(v0.86.0).
@@ -388,7 +394,7 @@
       const preferAi = ready && it.tool !== 'get_leave_status' && !auto && !weekday && !proseCaps && !localSure && !(st.ctx && st.ctx.pendingSlot) && R.chatPreferGemini(text);
       const known = !preferAi && it.tool && it.confidence >= (ready ? 0.9 : 0.6) && CHAT_TOOLS.has(it.tool);
       if (known) {
-        const res = await chatExec(it.tool, it.args, ai, {userText: text, viaAi: false, auto: !!auto});
+        const res = await chatExec(it.tool, it.args, ai, {userText: it.userText || text, viaAi: false, auto: !!auto});
         if (S.userKey !== owner || S.chat !== st || st.seq !== runSeq) return;
         st.ctx.lastRead = res.ok && ['get_schedule', 'get_staff_status', 'get_resource_status'].includes(it.tool) ? {tool: it.tool, args: it.args} : null;
         // 순번으로 고른 도구는 고쳐 말하기에 쓰려고 기억한다(메모리에만)

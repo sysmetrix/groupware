@@ -147,14 +147,18 @@
       const iso = chatDateArg(a.date);
       if (!iso) return {ok: false, text: '날짜를 알아보지 못했습니다. 예) 내일, 11/20'};
       // 종류가 없으면 자원 이름으로 전체에서 찾아 그 종류를 따르고(2층 회의실 → 회의실, 다목적홀 → 회의실), 이름도 없으면 차량
-      const kindIn = String(a.kind || '').trim() || (String(a.resource || '').trim() ? '' : 'car'), d8 = iso.replace(/-/g, '');
+      // 사용자 문장(chat.mjs chatResourceAsk)에서 빼라고 한 자원(말고·빼고)과 남은 말, 인자에 빠진 종류·이름 단서를 읽는다(AI가 인자를 덜 넘겨도 아무 자원이나 고르지 않게).
+      const rx = typeof R.chatResourceAsk === 'function' ? R.chatResourceAsk(String((ctx && ctx.userText) || '')) : null, rk = rx && rx.found ? rx : null;
+      const hint = String(a.resource || '').trim() || (rk && rk.resource && (!rk.kind || !a.kind || R.resKindOfText(a.kind) === rk.kind) ? rk.resource : '');
+      const kindIn = String(a.kind || '').trim() || (rk && rk.kind) || (hint ? '' : 'car'), d8 = iso.replace(/-/g, '');
       let v = R.validateBooking({title: '업무', date: d8, start: a.start, end: a.end});
       if (!v.ok) return {ok: false, text: '예약할 수 없는 조건입니다: ' + v.errors.join(' ')};
       const nav = {type: 'nav', label: '자원 예약 화면 열기', view: 'resource'};
       try {
         const list = ((typeof resState === 'function' && resState().list) || await GW.resourceList()).filter(r => r.useYn !== 'N');
-        const p = R.resPick(list, kindIn, a.resource, ctx && ctx.userText), label = p.label, names = xs => xs.map(r => r.name).join(', ');
+        const p = R.resPick(list, kindIn, hint, rx ? rx.keep : (ctx && ctx.userText), rx ? rx.drop : []), label = p.label, names = xs => xs.map(r => r.name).join(', ');
         const title = String(a.title || '').trim().slice(0, 40) || (p.kind === 'car' ? '업무 이동' : '업무');
+        if (!p.of.length && p.excluded && p.excluded.length) return {ok: false, text: `빼라고 하신 ${names(p.excluded)} 말고는 예약할 ${label}${chatJo(label, '이가')} 없어 다른 자원으로 대신 예약하지 않습니다.`, cards: [nav]};
         if (!p.of.length) return {ok: false, text: `그룹웨어 자원에 ${label}${chatJo(label, '이가')} 없어 다른 자원으로 대신 예약하지 않습니다.${list.length ? ` 있는 자원: ${names(list.slice(0, 6))}` : ''}`, cards: [nav]};
         if (p.ambiguous) return {ok: false, text: `말씀하신 ${label}이 여럿이라 하나로 정하지 못했습니다. 예약할 자원 이름을 하나만 알려 주세요. 있는 ${label}: ${names(p.of)}`, cards: [nav]};
         if (!p.pool.length) return {ok: false, text: `“${p.clue}”에 맞는 ${label}${chatJo(label, '이가')} 없어 다른 자원으로 대신 예약하지 않습니다. 있는 ${label}: ${names(p.of)}`, cards: [nav]};

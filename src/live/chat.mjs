@@ -204,6 +204,49 @@ export function chatMutter(text) {
   return CH_FORGET_RE.test(t) ? 'forget' : CH_VENT_RE.test(t) ? 'vent' : '';
 }
 /** 문장 → {tool, args, confidence}. 못 알아보면 {tool:'', args:{}, confidence:0}. */
+// v1.28 자원 예약 말: 종류(car|room|led)와 자원 이름 단서를 읽는다. 규칙(chatIntent)·되묻기 뒤 이어 말(31)·예약 도구(33)가 함께 쓴다.
+// "X 말고/빼고/아니고/대신 Y"의 X는 drop으로 따로 두고 keep(남은 말)에서 읽는다. "상담 때문에"처럼 목적을 말한 낱말은 keep에서 뺀다.
+const CH_RES_ROOM = /([가-힣A-Za-z0-9]*?)(회의실|회의\s*공간|세미나실|강당|교육장|강의실|다목적홀|상담실|접견실)(\s*(?:\d+\s*(?:호|번)?(?![\d:/~-]|\s*(?:시|분|월|일|층|부터|까지|\d))|[A-Z](?![A-Za-z])))?/;
+const CH_RES_CAR_NAME = /마이크로버스|니로|카니발|스타리아|스타렉스|아반떼|쏘나타|그랜저|아이오닉|쏘렌토|싼타페|봉고|승합차|승용차|버스|트럭/g;
+const CH_RES_CAR = /차량|관용차|자동차|(?<![가-힣\d])차(?=\s|$|[를로는가도])/;
+const CH_RES_LED = /LED|전광판|패널(?!\s*(?:토론|토의|발표|위원|참석))/i;
+// 자원 이름 앞에 띄어 쓴 낱말 가운데 수식어가 아닌 것(날짜·시각·흔한 말·조사로 끝나는 말)
+const CH_RES_NOTMOD = /^(?:내일|오늘|모레|글피|이번|다음|지난|주|오전|오후|아침|저녁|점심|종일|하루|하나|한|두|세|네|.*시간|좀|꼭|빨리|그|이|저|제일|가장|빈|아무|다른|새|우리|팀|부서|저희|제|내|[월화수목금토일](?:요일)?|.*\d\s*(?:시|분|월|일|:)|\d+\s*[/.-]\s*\d+|.*(?:부터|까지|에|에서|로|으로|을|를|이|가|은|는|도|만|랑|하고|좀|때문에|위해|위해서))$/;
+const CH_RES_KINDWORD = /^(?:회의실|회의공간|차|차량|관용차|자동차|led|led패널|패널|전광판|자원|\d+(?:번|호)?)$/i;
+export function chatResourceAsk(text) {
+  const raw = String(text ?? '').replace(/\s+/g, ' ').trim(), drop = [];
+  if (!raw) return null;
+  // 빼라는 자원: 말고 바로 앞 낱말. 그 낱말이 종류 말·번호뿐이면 앞의 수식어까지(3층 회의실 말고, 회의실 2 말고).
+  let keep = raw.replace(/(?:(\S+)\s+)?(\S+?)(?:은|는|이|가|을|를)?\s*(?:말고|빼고|아니고|대신에?)(?=[\s,.!?]|$)/g, (m, w0, w1) => {
+    const two = w0 && CH_RES_KINDWORD.test(w1.replace(/\s/g, '')) && !CH_RES_NOTMOD.test(w0);
+    drop.push(two ? `${w0} ${w1}` : w1);
+    return two || !w0 ? ' ' : ` ${w0} `;
+  });
+  keep = keep.replace(/\S+\s*(?:때문에|위해서?|관련해서?)(?=\s|$)|\S*(?:하려고|하러)(?=\s|$)/g, ' ').replace(/\s+/g, ' ').trim();
+  const room = keep.match(CH_RES_ROOM), cars = [...new Set(keep.match(CH_RES_CAR_NAME) || [])], led = CH_RES_LED.test(keep), car = cars.length > 0 || CH_RES_CAR.test(keep);
+  if (!room && !car && !led) return {kind: '', resource: '', keep, drop, found: false, stop: false, notNew: false};
+  let kind = '', resource = '';
+  if (room) {
+    // 수식어: 붙여 쓴 말(영상·A·대·제1·2층), 바로 앞에 띄어 쓴 말(본관·2층·2번), 뒤의 번호(회의실 2, 회의실 A)
+    const before = keep.slice(0, room.index).trim().split(' ').filter(Boolean), mods = [];
+    // 띄어 쓴 말은 자리·번호를 가리킬 때만 수식어로 본다(본관·별관·2층·2번·B동). "학부모 회의실"의 학부모는 목적이라 버린다.
+    for (let i = before.length - 1; i >= 0 && mods.length < 2; i--) { const w = before[i].replace(/의$/, ''); if (!w || CH_RES_NOTMOD.test(w) || CH_RES_CAR.test(w) || CH_RES_LED.test(w) || !/\d|[A-Za-z]|(?:관|층|동|호|번|센터|건물|사옥|청사|지점|본부|캠퍼스)$/.test(w)) break; mods.unshift(w); }
+    const head = room[2].replace(/\s+/g, ' '), phrase = [...mods, `${room[1]}${head}${room[3] || ''}`].join(' ').trim();
+    let rest = keep.slice(room.index + room[0].length);
+    // "다목적홀 회의실"처럼 이름 뒤에 붙인 종류 말은 같은 자원이다
+    const tail = /^회의/.test(head) ? null : rest.match(/^\s*(?:회의실|회의\s*공간)(?![가-힣])/);
+    if (tail) rest = rest.slice(tail[0].length);
+    // 회의실·세미나실·강당·교육장(또는 회의실을 붙인 이름)은 회의실 종류, 다목적홀·상담실 같은 이름만 말하면 종류 없이 이름으로 찾는다
+    kind = tail || /회의|세미나|강당|교육장|강의실/.test(head) ? 'room' : '';
+    resource = /^회의/.test(head) && !mods.length && !room[1] && !room[3] ? '' : phrase;
+    // 서로 다른 회의실 이름이 둘 이상이면 하나로 정하지 않는다(도구가 되묻는다)
+    if (CH_RES_ROOM.test(rest)) resource = '';
+  } else if (led) kind = 'led';
+  else { kind = 'car'; resource = cars.length === 1 ? cars[0] : ''; }
+  const stop = /하지\s*마|하지\s*말|말아\s*줘|안\s*해도|필요\s*없/.test(raw);
+  const notNew = stop || /했어|했다|했음|했는데|해\s*뒀|해\s*두었|해\s*놨|해\s*놓았|변경|바꿔|바꾸|옮겨|미뤄|연장|취소/.test(raw);
+  return {kind, resource, keep, drop, found: true, car: kind === 'car', place: !kind, stop, notNew};
+}
 export function chatIntent(text, now = new Date(), _nested = false) {
   const said = chatNormalize(text), t = said.replace(CH_MOOD_RE, '');
   const none = {tool: '', args: {}, confidence: 0};
@@ -394,13 +437,16 @@ export function chatIntent(text, now = new Date(), _nested = false) {
     const points = pm && !/^(?:작성|써|만들|해\s*줘|줘)/.test(pm[1].trim()) ? pm[1].replace(/(?:라고|다고|이라고|하겠다고|겠다고)\s*$/, '').trim() : '';
     return make('draft_mail_reply', {query: (pm ? t.slice(0, t.length - pm[1].length) : t).replace(/(메일|답장|회신|초안|써줘|써 줘|작성|해줘|해 줘|[.,:])/g, ' ').replace(/\s+/g, ' ').trim(), ...(points.length >= 4 ? {points: points.slice(0, 200)} : {})});
   }
-  // 잡아·예약·빌려 달라는 말은 자원 종류(차량·회의실·전광판)를 붙여 예약 준비로, 비었는지·현황을 묻는 말은 아래 조회로 간다.
-  { const car = /차량|관용차|니로|자동차|카니발|스타리아|(?<![가-힣])차(?=\s)/.test(t), room = t.match(/(?:(?:\d+\s*층|제?\s*\d+|(?<![가-힣])[대중소])\s*)?(회의실|회의\s*공간|세미나실|강당|교육장)(?:\s*(?:\d+\s*호|[A-Z](?![A-Za-z])))?/), led = /LED|패널|전광판/i.test(t);
-  if ((car || room || led) && (/예약|잡아|잡을|빌려|빌릴/.test(t) || car && /쓰고|쓸/.test(t)) && !/가능|비어|빈|언제|있어|있나|현황|확인|승인|났|됐|상태|보여|알려|목록|내역|누가|누구|뭐|몇\s*[개건]|조회|방법|어떻게|잡혀|잡힌|예약(?:한|된|돼)|할\s*일|투두|메모/.test(t)) {
-    const kind = room ? 'room' : led ? 'led' : 'car', resource = room ? (room[0] === '회의실' || /공간/.test(room[0]) ? '' : room[0]) : kind === 'car' ? (t.match(/니로|카니발|스타리아/) || [''])[0] : '';
-    return make('reserve_vehicle', {date: dt ? dt.date : '', start: rg.start, end: rg.end, title: '', kind, ...(resource ? {resource} : {})});
-  } }
-  if (/(차량|관용차|니로|자동차|회의실|자원|세미나실|강당|LED|패널|전광판|차\s)/i.test(t) && /(가능|비어|빈|언제|있어|있나|현황|확인|예약|잡아|빌려|승인|쓸\s*수)/.test(t) && !/할 ?일|투두/.test(t)) return make('get_resource_status', {date: dt ? dt.date : 'today', ...(/(회의실|회의\s*공간|세미나실|강당|교육장)/.test(t) ? {kind: 'room'} : /(LED|패널|전광판)/i.test(t) ? {kind: 'led'} : {})});
+  // 잡아·예약·빌려 달라는 말은 자원 종류(차량·회의실·전광판)와 이름 단서를 붙여 예약 준비로, 비었는지·현황을 묻는 말은 아래 조회로 간다.
+  // "X 말고 Y"는 Y를, 하지 말라·했어·변경은 새 예약 준비로 읽지 않는다. 다목적홀·상담실처럼 이름만 말하면 종류 없이 이름을 넘긴다.
+  { const ra = chatResourceAsk(t);
+    if (ra && ra.found && ra.stop) return none;
+    if (ra && ra.found && !ra.stop) {
+      const ask = /예약|잡아|잡을|빌려|빌릴/.test(t) || ra.car && /쓰고|쓸/.test(t), sched = ra.place && /일정|스케줄|약속|미팅|회의(?!실|\s*공간)/.test(t) && !/예약/.test(t);
+      if (ask && !ra.notNew && !sched && !/가능|비어|빈|언제|있어|있나|현황|확인|승인|났|됐|상태|보여|알려|목록|내역|누가|누구|뭐|몇\s*[개건]|조회|방법|어떻게|잡혀|잡힌|예약(?:한|된|돼)|할\s*일|투두|메모/.test(t)) return make('reserve_vehicle', {date: dt ? dt.date : '', start: rg.start, end: rg.end, title: '', ...(ra.kind ? {kind: ra.kind} : {}), ...(ra.resource ? {resource: ra.resource} : {})});
+    }
+    if (!(ra && ra.stop) && (/(차량|관용차|니로|자동차|회의실|자원|세미나실|강당|LED|전광판|(?<![가-힣\d])차\s)/i.test(t) || /패널(?!\s*(?:토론|토의|발표|위원|참석))/.test(t)) && /(가능|비어|빈|언제|있어|있나|현황|확인|예약|잡아|빌려|승인|쓸\s*수)/.test(t) && !/할 ?일|투두/.test(t)) return make('get_resource_status', {date: dt ? dt.date : 'today', ...(/(회의실|회의\s*공간|세미나실|강당|교육장)/.test(t) ? {kind: 'room'} : /(LED|패널|전광판)/i.test(t) ? {kind: 'led'} : {})});
+  }
   if (/(시간외|연장근무|야근|휴일근무|조기근무)/.test(t) && want) return make('prepare_overtime_request', {date: dt ? dt.date : '', start: rg.start, end: rg.end, reason: ''});
   if (/출장/.test(t) && /신청|올려|내줘|내 줘|가야|갈래|갑니다|가려/.test(t) && !/언제|누가|있어|있나/.test(t)) return make('prepare_trip_request', {date: dt ? dt.date : '', end_date: dt && dt.end ? dt.end : '', scope: /관외/.test(t) ? '관외' : '관내'});
   // "쉬고 싶다"처럼 휴가 낱말도 날짜도 없는 하소연은 신청 준비로 읽지 않는다.

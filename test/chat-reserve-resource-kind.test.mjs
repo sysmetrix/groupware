@@ -51,7 +51,7 @@ const seq32 = s => ((s.cards || []).find(c => c.type === 'nav' && c.v) || {v: ''
 
 test('resKindOf: 이름이 먼저, 이름으로 모르면 자원 분류(attr)', () => {
   assert.deepEqual([...DEMO, ...REAL_SHAPE].map(R.resKindOf), ['room', 'room', 'room', 'car', 'car', 'car', 'led', 'led']);
-  assert.equal(R.resKindOf({name: '스타렉스', attr: '공용차량'}), 'car', '이름에 종류 말이 없으면 분류로');
+  assert.equal(R.resKindOf({name: '9인승 1호', attr: '공용차량'}), 'car', '이름에 종류 말이 없으면 분류로');
   assert.equal(R.resKindOf({name: '관용차량', attr: '회의실'}), 'car', '이름이 분류보다 앞선다');
   assert.equal(R.resKindOf({name: '빔프로젝터', attr: '기자재'}), '');
   assert.equal(R.resKindOf(null), '');
@@ -62,7 +62,7 @@ test('C: 장비·소모품 이름은 분류가 회의실·차량이어도 어느
   assert.equal(R.resKindOf({name: '화상회의실', attr: ''}), 'room', '장비 말이 없는 회의실 이름은 그대로');
   assert.equal(R.resKindOf({name: '업무용 승합차', attr: ''}), 'car', '업무용은 장비 말이 아니다');
   // 이름으로 판정한 자원이 분류로만 판정한 자원보다 앞선다
-  assert.deepEqual(R.resPick([{resSeq: '1', name: '스타렉스', attr: '공용차량'}, ...REAL_SHAPE], 'car').of.map(r => r.resSeq), ['5', '1']);
+  assert.deepEqual(R.resPick([{resSeq: '1', name: '9인승 1호', attr: '공용차량'}, ...REAL_SHAPE], 'car').of.map(r => r.resSeq), ['5', '1']);
   assert.deepEqual(R.resPick([...GEAR, ...DEMO], 'room').of.map(r => r.resSeq), ['11', '12', '13'], '장비는 빠지고 2층 회의실(이름)이 다목적홀·상담실 1(분류)보다 앞');
 });
 
