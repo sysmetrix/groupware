@@ -28,7 +28,7 @@ test('search tabs carry edited keyword/period without searching or replacing pri
   h.S.search.kw = '실행한 검색'; h.S.search.period = '1'; await h.runSearch();
   h.inputs['#sq'] = {value: '  편집 중인 검색  '}; h.inputs['#speriod'] = {value: '3'};
   h.carrySearchInputs('search', 'docs');
-  assert.match(h.vDocs(), /결재문서 찾기/);
+  assert.match(h.vDocs(), /<h1>찾기<\/h1>결재문서만 찾고/); // v1.23: 제목은 메뉴 이름(찾기), 탭 이름이 결재문서
   assert.match(h.vDocs(), /value="  편집 중인 검색  "/);
   assert.match(h.vDocs(), /value="3" selected/);
   h.dfChange({id: 'dfPeriod', value: '12'});

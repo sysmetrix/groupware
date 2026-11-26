@@ -55,7 +55,7 @@
   check('추천 상세를 열어도 홈을 떠나지 않음', !!$('#hm') && !!pane1, '홈이 사라졌습니다');
   await closeAll();
   check('상세를 닫으면 추천 버튼으로 포커스가 돌아옴', root.activeElement?.dataset.act === 'homeNext', root.activeElement?.outerHTML?.slice(0,80));
-  const leaveStart = $('.desk-start [data-act="quickAtt"][data-t="leave"]');
+  const leaveStart = $('.hm3-core [data-act="quickAtt"][data-t="leave"]');
   click(leaveStart); const prep = await until(() => $('[role="dialog"][aria-label="근태 신청 준비"]'));
   check('홈에서 휴가 준비를 한 번에 시작', prep, '준비 창이 없습니다');
   click(prep && [...prep.querySelectorAll('button')].find(b=>text(b)==='취소')); await wait(200);
@@ -137,8 +137,8 @@
 
   // ---------- 5. 내 할 일(그룹웨어 ToDo): 목록·편집기·칸반·일정표·여러 개 추가(저장은 하지 않는다) ----------
   journey = '5. 내 할 일';
-  await nav('home');
-  click(await until(() => $('[data-act="homeTile"][data-v="mytodo"]'), 5000));
+  await nav('today');
+  click(await until(() => $('[data-act="todoSrc"][data-v="mine"]'), 5000));
   await until(() => $$('[data-act="tdSel"]').length >= 3, 8000);
   click($('[data-act="tdView"][data-v="list"]')); await wait(300);
   check('내 할 일 목록이 보임', $$('.td-row').length >= 3, text(main()).slice(0, 160));

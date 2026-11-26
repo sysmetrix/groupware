@@ -1,5 +1,5 @@
-// GW 비서 · 첫 화면 "홈" (왼쪽: 인사 → 지금 할 일 한 가지 → 숫자 한 줄 → 비서 대화, 오른쪽: 오늘 일정·챙겨 둘 것·자동화)
-// 같은 내용은 한 곳에만 둔다: 할 일 숫자는 숫자 줄, 먼저 할 일은 맨 위 카드, 일정은 오른쪽 '오늘' 카드, 메일·연차는 '챙겨 둘 것'.
+// GW 비서 · 첫 화면 "홈" (v1.23: 왼쪽 먼저 할 일 한 건 → 오늘 현황(핵심 4 줄), 오른쪽 오늘 일정·챙겨 둘 것, 맨 아래 비서 대화)
+// 같은 내용은 한 곳에만 둔다: 건수는 핵심 4 줄, 먼저 할 일은 맨 위 카드, 일정 목록은 오른쪽 '오늘' 카드, 결재·메일은 '챙겨 둘 것'.
 // 읽기 전용 요약. 숫자는 '오늘 할 일'과 같은 기준(mineVisible, stateOf)을 쓴다.
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
 
@@ -26,6 +26,13 @@
     const status = S.raw.status?.leave;
     const lv = !S.error && !S.raw.sessionExpired && status?.ok !== false && !status?.error && S.raw.data?.leave;
     out.unread = mailSnapshot().unread;
+    // 핵심 4의 근태·예산 줄: 수집기가 이미 읽은 오늘 출퇴근·관심 사업 예산만 쓴다. 카드 사용내역은 예산 화면에서 이미 읽었을 때만 보탠다.
+    out.attToday = !S.error && !S.raw.sessionExpired && S.raw.data && S.raw.data.attendance ? S.raw.data.attendance.today || null : null;
+    out.workday = S.a.today ? S.a.today.isWorkday !== false : true;
+    out.attCheck = mine.filter(x => x.area === '근태').length;
+    out.budgetProjects = (S.a.budget && S.a.budget.projects) || [];
+    out.elapsedPct = S.a.budget ? S.a.budget.elapsedPct : null;
+    try { out.cardOpen = typeof CDU === 'object' && CDU && CDU.data && CDU.period === 'month' && Array.isArray(CDU.data.rows) ? CDU.data.rows.filter(r => r.status === 'open').length : null; } catch { out.cardOpen = null; }
     out.leave = Number.isFinite(lv?.remaining) ? fmtDays(lv.remaining) : '';
     out.leaveTypes = lv?.balances ? leaveTypesText(lv) : '유형별 잔여 확인 불가';
     const p = R.kstNow(new Date()), t8 = p.date.replace(/-/g, ''), mk = t8.slice(0, 6);
@@ -94,31 +101,52 @@
     return `<div class="dr" id="dayRail" role="group" aria-label="오늘 하루 시간표 (8시부터 19시)"><div class="dr-track"><i class="dr-past" id="drPast" style="width:${r.now.left}%"></i><i class="dr-lunch" style="left:${r.lunch.left}%;width:${r.lunch.width}%" title="점심"></i>${blocks}</div>${r.now.inRange ? `<div class="dr-now${r.now.edge ? ' dr-edge-' + r.now.edge : ''}" id="drNow" style="left:${r.now.left}%" aria-hidden="true"><b>${esc(r.now.label)}</b></div>` : ''}<div class="dr-ticks" aria-hidden="true">${r.ticks.map(t => `<span class="dr-tick" style="left:${t.left}%">${t.h}</span>`).join('')}</div></div>${notes.length ? `<div class="dr-note">${notes.join('')}</div>` : ''}`;
   }
 
-  // 인사 바로 아래: 지금 가장 먼저 할 일(이어서 볼 일 2건까지)과 핵심 숫자 한 줄.
+  // v1.23 인사 바로 아래: 먼저 할 일 한 건(그룹웨어·개인 ToDo 중 더 급한 것)과 '핵심 4' 줄(할 일 · 일정·예약 · 근태·연차 · 예산 집행).
+  // 숫자는 홈에서 한 번만 나온다: 할 일 건수는 할 일 줄, 일정 수·자리 비움 수는 일정 줄, 남은 연차는 근태 줄, 결재·메일은 오른쪽 '챙겨 둘 것'.
   function homeTopHtml(d) {
     if (!d.loaded && S.error) return `<section class="hm-card hm-next" role="status">그룹웨어 자료를 읽지 못했습니다. 새로 고침 후 다시 확인하세요.</section>`;
-    if (!d.loaded) return `<section class="hm-card hm-stats" aria-label="핵심 현황"><div class="hm-tiles">${'<div class="hm-tile hm-skel" aria-hidden="true"></div>'.repeat(5)}</div></section>`;
-    const tiles = R.homeTiles({urgent: d.urgent, todo: d.todo, check: d.check, wait: d.wait, events: d.events.length, away: d.away.length, loaded: true});
-    const tileHtml = tiles.map(t => {
-      if (t.id === 'away' && (d.teamLoading || d.teamError || d.teamUnknown)) return {...t, value: '–', sub: d.teamError ? '조회 실패' : d.teamLoading ? '확인 중' : '조회 여부 확인 불가'};
-      if (['urgent', 'todo', 'wait'].includes(t.id) && d.taskGaps) return {...t, sub: '일부 자료 누락 가능 · 확인된 건수'};
-      if (t.id === 'urgent') return {...t, label: '그룹웨어 우선 처리', sub: '기한 지남·임박 또는 결재 등'};
-      if (t.id === 'todo') return {...t, label: '그룹웨어 처리·확인', sub: '개인 ToDo 제외'};
-      if (t.id === 'schedule' && (d.scheduleUnknown || d.teamLoading || d.teamError || d.teamUnknown)) return {...t, value: '–', sub: '일부 미확인 · 구글 제외'};
-      return t;
-    }).map(t => `<button class="hm-tile hm-tile-${esc(t.id)} hm-tone-${t.tone}" data-act="homeTile" data-v="${t.id}" aria-label="${esc(t.label + ' ' + t.value + ' ' + t.sub)}"><span class="hm-tile-l">${esc(t.label)}</span><b class="hm-tile-v">${esc(t.value)}</b><span class="hm-tile-s">${esc(t.sub)}</span></button>`).join('');
-    const total = d.mine.length;
+    if (!d.loaded) return `<section class="hm3-core" aria-label="오늘 현황"><ul class="hm3-list">${'<li class="hm3-row hm-skel" aria-hidden="true"></li>'.repeat(4)}</ul></section>`;
+    return homeFirstHtml(d) + homeCoreHtml(d);
+  }
+  const homePersonal = () => (typeof personalHomeDue === 'function' && typeof TD === 'object' && TD ? personalHomeDue() : null);
+  // 먼저 할 일 한 건: 그룹웨어 기한 지남·급함(다른 사람이 기다리는 일) → 개인 기한 지남 → 개인 오늘 마감 → 그룹웨어 나머지 순서.
+  function homeFirstHtml(d) {
     const day = R.kstNow(new Date()).date;
-    const personal = typeof personalHomeDueHtml === 'function' ? personalHomeDueHtml() : '';
+    const p = homePersonal();
     const next = R.homeNextAction(d.mine.map(x => ({key: x.key, title: x.title, headline: x.headline, area: x.area, state: stateOf(x), deadline: x.deadline && x.deadline.date ? x.deadline.date.slice(5) + (x.deadline.time ? ' ' + x.deadline.time : '') : ''})));
     const tone = s => (s === 'overdue' || s === 'urgent' ? 'urgent' : 'todo');
     const picked = next && d.mine.find(x => x.key === next.key);
     const nextLabel = picked?.type === 'mail' ? '메일 읽기' : picked?.area === '결재' ? '결재 문서 열기' : picked?.area === '근태' ? '근태 기록 확인' : '업무 상세 보기';
     const reason = next && (next.state === 'overdue' ? '기한이 지났습니다' : picked?.deadline?.date === day ? '오늘 마감입니다' : next.state === 'urgent' && picked?.deadline?.dday === 1 ? '내일 마감입니다' : ({pending: '내 결재가 대기 중입니다', rejected: '내 문서가 반려되었습니다', conflict: '기한과 일정이 겹칩니다'}[picked?.base] || ({urgent: '우선 확인이 필요한 업무입니다', todo: '내가 처리할 그룹웨어 업무입니다', check: '확인이 필요합니다', confirm: '처리 여부를 확인해야 합니다'}[next.state])));
-    const nextHtml = next
-      ? `<section class="hm-card hm-next" aria-label="그룹웨어에서 먼저 볼 업무"><div class="hm-card-h"><h2 class="hm-card-k"><span class="desk-index" aria-hidden="true">01</span> 그룹웨어에서 먼저 볼 업무</h2><span class="hm-badge hm-tone-${tone(next.state)}">${esc(STATE_NAME[next.state] || '')}</span></div><div class="hm-next-b"><div class="hm-next-t">${esc(next.title)}</div><div class="hm-next-s">${esc(reason)} · ${esc(next.deadline ? '기한 ' + next.deadline : '확인된 기한 없음')}<br>다음: ${esc(next.sub || '업무 상세 확인')}</div></div><div class="hm-next-a"><button class="ch-btn ch-btn-primary" data-act="homeNext" data-v="${esc(next.key)}">${nextLabel}</button><button class="ch-btn ch-btn-ghost" data-act="homeOpenToday">그룹웨어 처리·확인 ${total}건 보기</button></div></section>`
-      : `<section class="hm-card hm-next hm-next-ok" aria-label="지금 할 일"><div class="hm-card-h"><h2 class="hm-card-k">${d.taskGaps ? '그룹웨어 업무를 모두 확인할 수 없습니다' : '그룹웨어: 현재 확인된 내 일 없음'}</h2></div><div class="hm-next-s">${S.lastRefresh ? esc(hhmm(S.lastRefresh)) + ' 조회 기준 · ' : ''}${d.taskGaps ? '일부 자료를 읽지 못해 전체 할 일을 확인할 수 없습니다.' : d.refN ? `부서 참고 공문 ${d.refN}건이 등록되어 있습니다.` : '개인 ToDo는 위에서 별도로 확인하세요.'}</div><div class="hm-next-a"><button class="ch-btn ch-btn-ghost" data-act="homeOpenToday">할 일 목록 열기</button></div></section>`;
-    return `${personal}${nextHtml}<section class="hm-card hm-stats" aria-label="핵심 현황"><div class="hm-tiles">${tileHtml}</div></section>`;
+    const pick = next && ['overdue', 'urgent'].includes(next.state) ? 'gw' : p && p.late.length ? 'late' : p && p.today.length ? 'today' : next ? 'gw' : '';
+    if (pick === 'late' || pick === 'today') {
+      const t = pick === 'late' ? p.late[0] : p.today[0];
+      return `<section class="hm-card hm-next" aria-label="먼저 할 일"><div class="hm-card-h"><h2 class="hm-card-k"><span class="desk-index" aria-hidden="true">01</span> 먼저 할 일 · 개인 ToDo</h2><span class="hm-badge hm-tone-urgent">${pick === 'late' ? '기한 지남' : '오늘 마감'}</span></div><div class="hm-next-b"><div class="hm-next-t">${esc(t.title)}</div><div class="hm-next-s">${pick === 'late' ? '기한이 지났습니다' : '오늘 마감입니다'} · 기한 ${esc(String(t.due || '').slice(5).replace('-', '/'))}${next ? `<br>그룹웨어에서 먼저 볼 업무: ${esc(next.title)}` : ''}</div></div><div class="hm-next-a"><button class="ch-btn ch-btn-primary" data-act="tdSel" data-id="${esc(t.id)}">ToDo 열기</button><button class="ch-btn ch-btn-ghost" data-act="homeOpenToday">할 일 목록 보기</button></div></section>`;
+    }
+    const emptyTail = d.taskGaps ? '일부 자료를 읽지 못해 전체 할 일을 확인할 수 없습니다.' : d.refN ? `부서 참고 공문 ${d.refN}건이 등록되어 있습니다.` : p && p.known ? '오늘까지인 개인 ToDo도 없습니다.' : '개인 ToDo는 할 일 목록에서 확인하세요.';
+    return pick === 'gw'
+      ? `<section class="hm-card hm-next" aria-label="먼저 할 일"><div class="hm-card-h"><h2 class="hm-card-k"><span class="desk-index" aria-hidden="true">01</span> 먼저 할 일 · 그룹웨어</h2><span class="hm-badge hm-tone-${tone(next.state)}">${esc(STATE_NAME[next.state] || '')}</span></div><div class="hm-next-b"><div class="hm-next-t">${esc(next.title)}</div><div class="hm-next-s">${esc(reason)} · ${esc(next.deadline ? '기한 ' + next.deadline : '확인된 기한 없음')}<br>다음: ${esc(next.sub || '업무 상세 확인')}</div></div><div class="hm-next-a"><button class="ch-btn ch-btn-primary" data-act="homeNext" data-v="${esc(next.key)}">${nextLabel}</button><button class="ch-btn ch-btn-ghost" data-act="homeOpenToday">할 일 목록 보기</button></div></section>`
+      : `<section class="hm-card hm-next hm-next-ok" aria-label="먼저 할 일"><div class="hm-card-h"><h2 class="hm-card-k">${d.taskGaps ? '그룹웨어 업무를 모두 확인할 수 없습니다' : '현재 확인된 내 일 없음'}</h2></div><div class="hm-next-s">${S.lastRefresh ? esc(hhmm(S.lastRefresh)) + ' 조회 기준 · ' : ''}${emptyTail}</div></section>`;
+  }
+  // 핵심 4: 줄마다 요약 한 줄 + 주 동작 하나. 줄을 누르면 그 메뉴로 간다. 예산은 수집기가 이미 읽은 값만 쓴다(홈에서 새로 조회하지 않는다).
+  function homeCoreHtml(d) {
+    const p = homePersonal();
+    const gap = d.taskGaps ? '확인된 ' : '';
+    const todoTxt = [`그룹웨어 ${gap}처리·확인 ${d.mine.length}건`, d.urgent ? `우선 ${d.urgent}건` : '', `기다리는 중 ${d.wait}건`, p ? p.text : ''].filter(Boolean).join(' · ') + (d.taskGaps ? ' (일부 자료 누락 가능)' : '');
+    const teamGap = d.teamLoading || d.teamError || d.teamUnknown;
+    const schedTxt = [d.scheduleUnknown ? '오늘 일정 일부 미확인' : `오늘 그룹웨어 일정 ${d.events.length}건${teamGap ? ' (일부 미확인)' : ''}`, d.teamError ? '자리 비움 조회 실패' : d.teamLoading ? '자리 비움 확인 중' : d.teamUnknown ? '자리 비움 확인 불가' : `자리 비움 ${d.away.length}명`, d.resUnknown ? '' : `자원 예약 ${d.resources.length}건${d.resPartial ? '(일부 자원)' : ''}`].filter(Boolean).join(' · ');
+    const hhm = s => (typeof hm4 === 'function' ? hm4(s || '') : String(s || ''));
+    const att = typeof R.homeAttendanceLine === 'function' ? R.homeAttendanceLine({come: hhm(d.attToday && d.attToday.come), leave: hhm(d.attToday && d.attToday.leave), error: !d.attToday || !!d.attToday.error, workday: d.workday, remaining: d.leave, check: d.attCheck}) : {text: '', tone: 'info'};
+    const bud = typeof R.homeBudgetLine === 'function' ? R.homeBudgetLine(d.budgetProjects, d.elapsedPct) : {text: '', tone: 'info'};
+    const cardOpen = d.cardOpen == null ? '' : ` · 이번 달 결의 전 카드 ${d.cardOpen}건`;
+    const row = (v, key, text, tone, act) => `<li class="hm3-row hm3-tone-${tone}"><button class="hm3-go" data-act="homeTile" data-v="${v}" aria-label="${esc(key + ', ' + text)}"><span class="hm3-k">${esc(key)}</span><span class="hm3-v">${esc(text)}</span></button>${act}</li>`;
+    const btn = (attrs, label) => `<button class="ch-btn ch-btn-ghost hm3-act" ${attrs}>${label}</button>`;
+    return `<section class="hm3-core" aria-label="오늘 현황"><h2 class="hm-card-k hm3-h">오늘 현황</h2><ul class="hm3-list">
+      ${row('todo', '할 일', todoTxt, d.urgent ? 'urgent' : d.taskGaps ? 'warn' : 'info', btn('data-act="homeOpenToday"', '할 일 열기'))}
+      ${row('schedule', '일정·예약', schedTxt, d.scheduleUnknown || teamGap ? 'warn' : 'info', typeof allowed === 'function' && allowed('resource') ? btn('data-act="homeTile" data-v="reserve"', '예약하기') : btn('data-act="homeTile" data-v="schedule"', '달력 열기'))}
+      ${row('leave', '근태·연차', att.text, att.tone, btn('data-act="quickAtt" data-t="leave"', '휴가 신청 준비'))}
+      ${row('budget', '예산 집행', bud.text + cardOpen, bud.tone, btn('data-act="openPay"', '지출결의 준비'))}
+    </ul></section>`;
   }
 
   // 오른쪽: 오늘 일정(하루 띠 + 목록 + 자리 비움), 챙겨 둘 것, 자동화, 자원 예약.
@@ -141,8 +169,10 @@
     const resourceHtml = `<section class="hm-card hm-today hm-res" aria-label="오늘 자원 예약"><div class="hm-card-h"><h3 class="hm-card-k hm-today-k">오늘 자원 예약 (직원 전체)</h3></div>${resources.rows.length ? `<ul class="hm-tl">${resources.rows.map(r => `<li class="hm-tl-car"><span class="hm-tl-t">${esc(r.from)}${r.to ? '~' + esc(r.to) : ''}</span><span class="hm-tl-l">${esc(r.label)}</span></li>`).join('')}</ul>${resources.more ? `<div class="hm-more">외 ${resources.more}건</div>` : ''}` : resourceGaps.length ? '' : '<div class="hm-empty">조회된 자원 예약이 없습니다.</div>'}${resourceGaps.map(x => `<div class="hm-empty">${esc(x)}</div>`).join('')}</section>`;
     const sum = (S.a && S.a.summary) || {};
     const sig = (id, icon, k, v) => `<button class="hm-sig" data-act="homeTile" data-v="${id}" aria-label="${esc(k + ' ' + v)}">${typeof ic === 'function' ? ic(icon) : ''}<span class="hm-sig-k">${esc(k)}</span><b class="hm-sig-v">${esc(v)}</b></button>`;
-    const signals = `<section class="hm-card hm-sigs" aria-label="업무 참고 현황"><div class="hm-card-h"><h3 class="hm-card-k hm-today-k">챙겨 둘 것</h3></div><div class="hm-sig-l">${homeRiskSig()}${sig('mail', 'mail', '안 읽은 메일', d.unread == null ? '확인 불가' : '조회분 ' + d.unread + '건')}${sum.pending !== undefined ? sig('approval', 'doc', '내가 결재할 문서', sum.pending == null ? '확인 불가' : sum.pending + '건') : ''}${sig('ref', 'inbox', '부서 참고', (d.taskGaps ? '확인된 ' : '') + d.refN + '건')}<button class="hm-sig" data-act="homeTile" data-v="leave" aria-label="남은 연차 합계 ${esc(d.leave || '확인 불가')} · ${esc(d.leaveTypes)}"><span class="hm-sig-k">남은 연차 합계 <b>${esc(d.leave || '확인 불가')}</b><br><small>${esc(d.leaveTypes)}${S.raw.collectedAt ? '<br>' + leaveStamp() : ''}</small></span></button></div></section>`;
-    return tlHtml + signals + (typeof autoCardHtml === 'function' ? autoCardHtml() : '') + resourceHtml;
+    const signals = `<section class="hm-card hm-sigs" aria-label="업무 참고 현황"><div class="hm-card-h"><h3 class="hm-card-k hm-today-k">챙겨 둘 것</h3></div><div class="hm-sig-l">${homeRiskSig()}${sig('mail', 'mail', '안 읽은 메일', d.unread == null ? '확인 불가' : '조회분 ' + d.unread + '건')}${sum.pending !== undefined ? sig('approval', 'doc', '내가 결재할 문서', sum.pending == null ? '확인 불가' : sum.pending + '건') : ''}</div></section>`;
+    // v1.23: 남은 연차는 핵심 4의 근태 줄, 부서 참고는 할 일(그룹웨어 › 부서 참고)으로 옮겼다. 자동화는 만든 것이 있을 때만 보이고 관리는 설정에서 한다.
+    const autos = typeof autoCardHtml === 'function' && typeof autoList === 'function' && autoList().length ? autoCardHtml() : '';
+    return tlHtml + signals + autos + resourceHtml;
   }
 
   // v0.94.0: "놓치기 쉬운 일"을 묻지 않아도 보이게(지난·임박 기한, 하루 넘게 안 읽은 요청 메일, 오래된 답장 확인, 근태 확인, 반려). 누르면 비서가 이유와 함께 답한다.
@@ -158,7 +188,9 @@
   // 넓은 화면: 왼쪽은 인사 → 지금 할 일 → 숫자 줄 → 대화, 오른쪽은 오늘 일정과 참고. 좁은 화면에서는 같은 순서로 한 줄로 쌓인다(순서는 CSS order).
   function vHome() {
     const d = homeData();
-    return `<div class="hm desk" id="hm"><div id="hmHead">${homeHeadHtml(d)}</div><div class="desk-grid"><div class="hm-main"><div id="hmTop">${homeTopHtml(d)}</div><section class="desk-start" aria-label="바로 시작"><h2>바로 시작</h2><div class="desk-links"><button data-act="quickDraft" data-t="result"><b>결과보고 작성</b><small>내 계획서 선택</small></button><button data-act="quickAtt" data-t="leave"><b>휴가 신청 준비</b><small>종류와 기간 입력</small></button><button data-act="quickAtt" data-t="trip"><b>출장 신청 준비</b><small>출장지와 일시 입력</small></button></div></section></div><div class="hm-chatcol">${typeof chatView === 'function' ? chatView() : ''}</div></div><aside class="hm-rail" aria-label="오늘 일정과 참고"><h2 class="desk-ref">일정과 참고</h2><div id="hmDash">${homeDashHtml(d)}</div></aside></div>`;
+    // v1.23: 왼쪽은 먼저 할 일 → 오늘 현황(핵심 4), 오른쪽은 오늘 일정과 참고. 비서 대화는 아직 기능이 부족해 맨 아래에 둔다.
+    // '바로 시작' 버튼은 핵심 4 줄의 주 동작(휴가 신청 준비 등)과 머리줄 '새로 만들기'(결과보고·출장)가 맡는다.
+    return `<div class="hm desk hm3" id="hm"><div id="hmHead">${homeHeadHtml(d)}</div><div class="hm3-grid"><div class="hm3-main"><div id="hmTop">${homeTopHtml(d)}</div></div><aside class="hm3-rail" aria-label="오늘 일정과 참고"><h2 class="desk-ref">일정과 참고</h2><div id="hmDash">${homeDashHtml(d)}</div></aside></div><section class="hm3-chat" aria-label="비서에게 묻기">${typeof chatView === 'function' ? chatView() : ''}</section></div>`;
   }
   // 홈이 이미 그려져 있으면 입력창을 건드리지 않고 머리말과 요약만 새로 그린다(비동기 자료가 도착할 때 입력 중 포커스를 잃지 않게). 그렸으면 true.
   // Replacing summary regions must not discard the keyboard user's current control.
@@ -190,13 +222,21 @@
 
   HOME_ACTS.homeTile = (el, v) => {
     if (v === 'risks') { if (typeof chatSend === 'function') { const i = $('#chInput'); if (i) i.focus({preventScroll: true}); chatSend('이번 주에 내가 놓치기 쉬운 거 있어?'); } return; }
-    if (['urgent', 'todo', 'wait'].includes(v)) { S.filter = {...S.filter, level: v === 'urgent' ? 'urgent' : v === 'wait' ? 'wait' : 'all', area: 'all', q: '', onlyNew: false, showHidden: false}; S.todayTab = 'mine'; go('today'); }
+    if (['urgent', 'todo', 'wait'].includes(v)) { S.filter = {...S.filter, level: v === 'urgent' ? 'urgent' : v === 'wait' ? 'wait' : 'all', area: 'all', q: '', onlyNew: false, showHidden: false}; S.todayTab = 'mine'; S.todoSrc = 'all'; go('today'); }
     else if (v === 'schedule' || v === 'away') { S.cal.offset = 0; if (v === 'away') teamCfg().day = today().replace(/-/g, ''); go('calendar'); }
     else if (v === 'mail') openUnreadMail();
     else if (v === 'approval') { if (go('approval')) { S.apTab = 'pending'; S.apTabPinned = true; renderMain(); } } // 이동한 뒤 고정해야 빈 목록이어도 '결재 대기'가 열린다
     else if (v === 'leave') go('attendance');
+    else if (v === 'budget') go('budget');
+    else if (v === 'reserve') { if (go('resource') === false) { S.cal.offset = 0; go('calendar'); } }
     else if (v === 'mytodo') go('mytodo');
-    else if (v === 'ref') { S.filter = {...S.filter, level: 'all', area: 'all', q: '', onlyNew: false, showHidden: false}; S.todayTab = 'ref'; go('today'); }
+    else if (v === 'ref') { S.filter = {...S.filter, level: 'all', area: 'all', q: '', onlyNew: false, showHidden: false}; S.todoSrc = 'gw'; S.todayTab = 'ref'; go('today'); }
+  };
+  // v1.23 일정·예약: 달력에서 고른 날의 자원 예약 탭을 연다(예약 자체는 자원 예약 화면의 확인 카드를 눌러야 한다).
+  HOME_ACTS.calReserve = (el, v) => {
+    if (!/^\d{8}$/.test(String(v || '')) || typeof resState !== 'function') return;
+    const s = resState(); if (s.date !== v) { s.date = v; if (typeof resInvalidate === 'function') resInvalidate(); }
+    go('resource');
   };
   HOME_ACTS.homeNext = (el, v) => { if (!v) return; el.focus({preventScroll:true}); selectAction(v); };
-  HOME_ACTS.homeOpenToday = () => { S.filter = {...S.filter, level: 'all', area: 'all', q: '', onlyNew: false, showHidden: false}; S.todayTab = 'mine'; go('today'); };
+  HOME_ACTS.homeOpenToday = () => { S.filter = {...S.filter, level: 'all', area: 'all', q: '', onlyNew: false, showHidden: false}; S.todayTab = 'mine'; S.todoSrc = 'all'; go('today'); };

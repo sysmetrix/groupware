@@ -3,13 +3,23 @@
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
 
   const personalTodoIncomplete = () => TD.complete === false || TD.cached || !!TD.err;
-  function personalHomeDueHtml() {
+  // v1.23 홈 '핵심 4'의 할 일 줄과 '먼저 할 일'이 쓰는 개인 ToDo 오늘까지 현황. 건수 문구는 예전 홈 카드와 같다.
+  function personalHomeDue() {
     const known = Array.isArray(TD.list), incomplete = personalTodoIncomplete();
     const due = known ? todoNavDue() : [];
-    const dueToday = due.filter(t => t.due === today()).length;
-    const count = known ? `${incomplete ? '확인된 ' : ''}오늘 마감 ${dueToday}건 · 기한 지남 ${due.length - dueToday}건` : TD.err ? '개인 ToDo를 읽지 못했습니다' : '개인 ToDo 확인 중';
-    return `<section class="hm-card hm-next hm-next-p" aria-label="개인 ToDo 오늘까지"><div class="hm-card-h"><h2 class="hm-card-k">개인 ToDo · 오늘까지</h2><button class="hm-link" data-act="homeTile" data-v="mytodo">개인 ToDo 보기</button></div><div class="hm-next-s">${count}${known && incomplete ? ' · 전체 목록 확인 불가' : ''}</div>${due.length ? `<ul class="hm-queue">${due.slice(0, 2).map(t => `<li><button class="hm-q" data-act="tdSel" data-id="${esc(t.id)}"><span class="hm-q-t">${esc(t.title)}</span><span class="hm-badge">기한 ${esc(todoMd(t.due))} · 상세 보기</span></button></li>`).join('')}</ul>` : ''}</section>`;
+    const t0 = today(), dueToday = due.filter(t => t.due === t0), late = due.filter(t => t.due && t.due < t0).sort((a, b) => String(a.due).localeCompare(String(b.due)));
+    const text = known ? `개인 ${incomplete ? '확인된 ' : ''}오늘 마감 ${dueToday.length}건 · 기한 지남 ${due.length - dueToday.length}건${incomplete ? ' · 전체 목록 확인 불가' : ''}` : TD.err ? '개인 ToDo를 읽지 못했습니다' : '개인 ToDo 확인 중';
+    return {known, incomplete, text, late, today: dueToday, n: due.length};
   }
+
+  // v1.23 할 일 한 목록: 출처 눌림 버튼(전체 · 그룹웨어 · 개인). 버튼은 06-today.js todoSrcSeg가 그린다.
+  // 전체로 돌아올 때는 그룹웨어 전용 거르기(영역·부서 참고)를 푼다. 그 거르기는 전체 보기에 보이지 않아 숨은 조건이 되기 때문이다.
+  HOME_ACTS.todoSrc = (el, v) => {
+    if (v === 'mine') { go('mytodo'); return; }
+    S.todoSrc = v === 'gw' ? 'gw' : 'all';
+    if (S.todoSrc === 'all') { S.filter = {...S.filter, area: 'all'}; S.todayTab = 'mine'; }
+    if (S.view !== 'today') go('today'); else renderMain();
+  };
 
   const TODO_VIEWS = [['list', '목록'], ['kanban', '칸반'], ['timeline', '일정표']];
   function todoViewSeg() {

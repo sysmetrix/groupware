@@ -342,6 +342,7 @@
       case 'tdWrap': case 'tdWrapDone': case 'tdWrapNext': case 'tdWrapPick': case 'tdWrapAll': case 'tdMigrate': case 'tdMigrateSkip':
       case 'bpAdd': case 'bpImport': case 'bpImportAdd': case 'bpConfirm': case 'bpReject': case 'bpEdit': case 'bpReload': case 'bpDropRest':
       case 'dpOpen': case 'dpMonth': case 'dpPick': case 'dpClose':
+      case 'todoSrc': case 'calReserve':
       case 'etxPeriod': case 'etxCustom': case 'etxState': case 'etxReload': case 'etxCsv':
       case 'cduPeriod': case 'cduCustom': case 'cduState': case 'cduCard': case 'cduReload': case 'cduCsv':
     case 'cduPeriod': case 'cduCustom': case 'cduState': case 'cduCard': case 'cduReload': case 'cduCsv':

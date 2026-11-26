@@ -172,7 +172,7 @@ test('v1.13.0 계획 이행: 숫자→같은 목록, 버튼 이름, 빈 상태 �
   assert.match(hv, /hhmm\(S\.lastRefresh\)\) \+ ' 조회 기준 · '/);
   // 같은 것을 가리키는 숫자는 같은 원천(메뉴와 홈의 안 읽은 메일)
   assert.match(hv, /out\.unread = mailSnapshot\(\)\.unread;/);
-  assert.match(read('wc/05-views.js'), /const n = mailSnapshot\(\)\.unread;/);
+  assert.match(read('wc/05-views.js'), /ml = mailSnapshot\(\)\.unread;/);
   assert.match(read('wc/15-overlays-palette-help-menus.js'), /new MutationObserver\(\(\) => \{ if \(ovEl\.childElementCount\) return;/);
   assert.match(read('wc/31-chat-engine.js'), /role === 'ai' && S\.lastRefresh \? \{dataAt: S\.lastRefresh\.getTime\(\)\}/);
   assert.match(read('wc/30-chat-ui.js'), /그룹웨어 자료 \$\{da\} 기준/);

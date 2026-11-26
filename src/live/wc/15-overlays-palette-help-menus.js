@@ -15,7 +15,7 @@
     const cmds = [];
     const qq = q.trim();
     const add = (label, hint, run, extra = '', icon = 'play') => cmds.push({label, hint, run, icon, text: label + ' ' + hint + ' ' + extra});
-    const VIEW_WORDS = {docs: '문서 찾기 부서 문서 기안 접수 발송 시행 공문 검색 재단 전체', today: '할 일 오늘 긴급 대시보드', approval: '배부 접수 결재 발송 열람 공문 문서유통', mail: '메일 답장 받은메일', search: '검색 찾기', board: '할 일 계획 보드', calendar: '일정 달력 기한', gcal: '구글 일정 캘린더 google calendar 내 일정', gsync: '구글 동기화 캘린더 올리기 등록 연동 근태 출장 시간외', budget: '예산 집행 결의 예실', attendance: '근태 연차 휴가 출근 퇴근', report: '보고서 주간 브리핑 실적', settings: '설정 글자 테마 알림'};
+    const VIEW_WORDS = {docs: '문서 찾기 부서 문서 기안 접수 발송 시행 공문 검색 재단 전체', today: '할 일 오늘 긴급 대시보드', approval: '배부 접수 결재 발송 열람 공문 문서유통', mail: '메일 답장 받은메일', search: '검색 찾기', board: '할 일 계획 보드', calendar: '일정 달력 기한', gcal: '구글 일정 캘린더 google calendar 내 일정', gsync: '구글 동기화 캘린더 올리기 등록 연동 근태 출장 시간외', budget: '예산 집행 결의 예실', attendance: '근태 연차 휴가 출근 퇴근', report: '보고서 주간 브리핑 실적', settings: '설정 글자 테마 알림', notifications: '통합알림 알림 안 읽음', people: '조직 사람 직원 조직도 연락처', mytodo: '내 할 일 개인 todo', resource: '회의실 차량 자원 예약', overview: '현황 차트 통계'};
     for (const v of VIEWS) add(`${v.label}`, '화면으로 이동', () => go(v.id), VIEW_WORDS[v.id] || '', VIEW_ICON[v.id]);
     add('연속 처리 시작', '처리할 일을 하나씩', () => startFocus(), '처리 모드');
     add('새로고침', '자료 다시 읽기', () => refresh());
@@ -96,12 +96,13 @@
     if (!S.helpOpen) { closeOverlay(); return; }
     lastOverlayFocus = root.activeElement;
     $('#overlay').innerHTML = `<div class="modal" data-act="closeOverlay"><div class="dlg" data-stop="1" role="dialog" aria-label="사용법"><button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button><h2 style="margin-top:0">GW 비서 사용법</h2>
+<p><b>메뉴</b> 왼쪽 위에서부터 홈, 자주 쓰는 네 가지(할 일 · 일정·예약 · 근태·연차 · 예산 집행), 그리고 결재·메일(결재·메일·알림) · 찾기(통합검색·결재문서·사람) · 보고 순서입니다. <kbd>Alt</kbd>+<kbd>1</kbd>~<kbd>9</kbd>로 위에서부터 차례로 엽니다.</p>
 <p><b>1. 오늘 할 일</b>에는 <b>내가 처리해야 할 일</b>만 급한 순서로 나옵니다. 위 숫자(급한 일·할 일·확인 필요·끝났는지 확인)를 누르면 그것만 봅니다. 나와 직접 관련이 적은 항목은 맨 아래 <b>참고</b>에 접혀 있습니다.</p>
 <p><b>2. 줄을 누르면</b> 오른쪽에 내용이 나옵니다. <b>열기</b> 또는 <b>원래 화면 열기</b>를 누르면 그룹웨어 원래 화면이 옆에 열리고, 그 화면의 버튼으로 결재·접수·배부·발송·답장을 합니다.</p>
 <p><b>3. 메일 첨부</b>는 오른쪽 창의 <b>받기</b>(또는 <b>모두 받기</b>)로 바로 내려받습니다.</p>
 <p><b>4. 하나씩 처리하기</b>를 누르면 처리할 일을 차례로 엽니다. 처리 후 초록 버튼을 누르면 그룹웨어에서 실제로 처리됐는지 확인합니다.</p>
 <p><b>5. 줄 오른쪽 ⋯</b>에서 내일 다시 보기, 할 일 보드에 추가, 숨기기, 나와 상관없음(같은 보낸 곳·종류 모두 빼기)을 고릅니다. 실수했으면 <kbd>Ctrl</kbd>+<kbd>Z</kbd>.</p>
-<p><b>내 할 일</b>은 할 일 메뉴의 '내 할 일' 탭입니다. 그룹웨어 개인 ToDo에 저장되어 다른 PC·모바일에서도 같습니다. 끝에 '금요일'처럼 쓰면 기한이 되고, 반복·체크리스트·예산 연결은 줄을 눌러 고칩니다. 예산 집행의 '집행 계획·예상' 탭에서 계획을 넣으면 예상 집행률이 나옵니다.</p>
+<p><b>개인 ToDo</b>는 할 일 메뉴 목록에 그룹웨어 업무와 함께 나오며, 위의 '개인'을 누르면 개인 ToDo만 봅니다. 그룹웨어 개인 ToDo에 저장되어 다른 PC·모바일에서도 같습니다. 끝에 '금요일'처럼 쓰면 기한이 되고, 반복·체크리스트·예산 연결은 줄을 눌러 고칩니다. 예산 집행의 '집행 계획·예상' 탭에서 계획을 넣으면 예상 집행률이 나옵니다.</p>
 <p><b>6. 돌아가기</b> 왼쪽 위 <b>GW 비서</b>는 첫 화면, 오른쪽 위 <b>그룹웨어로 돌아가기</b>는 원래 그룹웨어입니다. 다시 열 때는 화면 오른쪽 아래의 <b>GW 비서</b> 버튼(끌어서 옮겼다면 그 자리)이나 <kbd>Alt</kbd>+<kbd>G</kbd>.</p>
 <h3>용어</h3><p><span class="term">배부</span> 기관 밖에서 온 공문을 담당 부서로 나눠 보내는 일 · <span class="term">부서 접수</span> 부서로 온 문서를 담당자가 받는 일 · <span class="term">열람</span> 참고하라고 보내 준 문서 · <span class="term">발송 대기</span> 결재가 끝나 밖으로 보낼 차례인 문서 · <span class="term">근무일대체</span> 휴일 근무 대신 다른 날 쉬는 것</p>
 <h3>안전</h3><p>이 화면이 자료를 읽을 때(목록·검색·미리보기)는 그룹웨어를 바꾸지 않습니다. 처리 창에 열린 그룹웨어 화면의 버튼은 실제로 처리되니 평소처럼 확인하고 누르세요. 미열람 문서를 처리 창에 열면 열람으로 기록되어 미리 물어봅니다.</p>

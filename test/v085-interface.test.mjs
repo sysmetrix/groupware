@@ -48,8 +48,10 @@ test('화면 제목은 왼쪽 메뉴 이름과 같고, 하위 탭은 제목 아�
   const views = await read('wc/05-views.js');
   assert.match(views, /el\.innerHTML = fn\(\);/);
   assert.match(views, /querySelector\(':scope > \.pgh'\)[\s\S]{0,80}insertAdjacentHTML\('afterend', vt\)/);
-  const labels = {'09-search-board.js':"pgh('통합검색'", '35-docs.js':"pgh('결재문서 찾기'", '12-report-settings.js':"pgh('보고·현황'", '07-charts.js':"pgh('보고·현황'", '10-calendar-budget.js':"pgh('일정·예약'", '28-gcal.js':"pgh('일정·예약'", '34-gsync.js':"pgh('일정·예약'", '24-resource.js':"pgh('일정·예약'", '38-notifications-people.js':"pgh('조직·사람'"};
+  // v1.23 메뉴 통폐합: 메뉴 안 탭으로 들어간 화면도 제목은 상위 메뉴 이름이다.
+  const labels = {'09-search-board.js':"pgh('찾기'", '35-docs.js':"pgh('찾기'", '12-report-settings.js':"pgh('보고'", '07-charts.js':"pgh('보고'", '10-calendar-budget.js':"pgh('일정·예약'", '28-gcal.js':"pgh('일정·예약'", '34-gsync.js':"pgh('설정'", '24-resource.js':"pgh('일정·예약'", '38-notifications-people.js':"pgh('찾기'", '08-approval-mail.js':"pgh('결재·메일'"};
   for (const [f, needle] of Object.entries(labels)) assert.ok((await read('wc/' + f)).includes(needle), f + ' 제목');
+  for (const old of ["pgh('통합알림'", "pgh('조직·사람'", "pgh('메일'", "pgh('결재·문서유통'", "pgh('보고·현황'"]) for (const f of ['08-approval-mail.js', '38-notifications-people.js', '12-report-settings.js', '07-charts.js']) assert.ok(!(await read('wc/' + f)).includes(old), f + ' 옛 제목 ' + old);
   const css = await read('wc.css');
   assert.doesNotMatch(css, /#194957|#d8eeed|#b2e6d8/, '홈 강조면은 테마 토큰만 쓴다');
   assert.doesNotMatch(css, /font-size:\s*1[2-5]\.5px/, '반 픽셀 글자 단계는 쓰지 않는다');

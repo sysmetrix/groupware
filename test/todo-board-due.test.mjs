@@ -46,5 +46,5 @@ test('reset hidden/snooze preserves plans todos due and takes undo snapshot',()=
 });
 test('todo keyboard model matches displayed mine/ref filters and grouped order',()=>{
  const {c,S}=setup();S.a.actions=[{key:'wait',state:'wait'},{key:'todo',state:'todo'},{key:'ref',scope:'ref',state:'info'},{key:'urgent',state:'urgent'},{key:'check',state:'check'},{key:'overdue',state:'overdue'}];
- assert.equal(c.api.todayQueue().map(x=>x.key).join(','),'urgent,overdue,todo,check');S.filter.level='urgent';assert.equal(c.api.todayQueue().map(x=>x.key).join(','),'urgent,overdue');S.todayTab='ref';assert.equal(c.api.todayQueue().map(x=>x.key).join(','),'ref');
+ assert.equal(c.api.todayQueue().map(x=>x.key).join(','),'urgent,overdue,todo,check');S.filter.level='urgent';assert.equal(c.api.todayQueue().map(x=>x.key).join(','),'urgent,overdue');S.todayTab='ref';assert.equal(c.api.todayQueue().map(x=>x.key).join(','),'urgent,overdue','전체 보기에서는 부서 참고 탭이 없다');S.todoSrc='gw';assert.equal(c.api.todayQueue().map(x=>x.key).join(','),'ref');
 });

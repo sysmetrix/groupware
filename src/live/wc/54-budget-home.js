@@ -29,9 +29,14 @@
     if (!['mine', 'detail', 'all', 'card', 'etax'].includes(b.mode)) b.mode = bmPins().length ? 'mine' : 'all';
     return b.mode;
   }
+  // v1.23: 탭 5개 → 3개. 사업 상세는 내 사업(또는 재단 전체)에서 사업을 눌러 들어가는 상세로, 카드 사용내역과 세금계산서는
+  // '카드·세금계산서' 한 탭 안의 증빙 종류 눌림 버튼으로 합쳤다. 화면 모드 값(mine·detail·all·card·etax)과 처리기는 그대로다.
   function budgetModeTabs() {
-    const m = budgetMode(), tab = (id, label) => `<button role="tab" aria-selected="${m === id}" class="${m === id ? 'on' : ''}" data-act="bMode" data-v="${id}">${label}</button>`;
-    return `<div class="vtabs"><div class="seg" role="tablist" aria-label="예산 집행 보기">${tab('mine', '내 사업 한눈에')}${tab('detail', '사업 상세')}${tab('all', '재단 전체')}${tab('card', '카드 사용내역')}${tab('etax', '세금계산서')}</div></div>`;
+    const m = budgetMode(), on = ids => ids.includes(m);
+    const tab = (ids, label) => `<button role="tab" aria-selected="${on(ids)}" class="${on(ids) ? 'on' : ''}" data-act="bMode" data-v="${ids[0]}">${label}</button>`;
+    const back = m === 'detail' ? `<button class="btn sm ghost" data-act="bMode" data-v="${bmPins().length ? 'mine' : 'all'}">${ic('back')}${bmPins().length ? '내 사업으로' : '재단 전체로'}</button><span class="muted bm-crumb">사업 상세</span>` : '';
+    const evid = on(['card', 'etax']) ? `<div class="seg" role="group" aria-label="증빙 종류">${[['card', '카드 사용내역'], ['etax', '세금계산서']].map(([k, n]) => `<button class="${m === k ? 'on' : ''}" aria-pressed="${m === k}" data-act="bMode" data-v="${k}">${n}</button>`).join('')}</div>` : '';
+    return `<div class="vtabs"><div class="seg" role="tablist" aria-label="예산 집행 보기">${tab(['mine', 'detail'], '내 사업')}${tab(['card', 'etax'], '카드·세금계산서')}${tab(['all'], '재단 전체')}</div>${evid}${back}</div>`;
   }
   const bmBar = (rate, plan, el) => `<span class="bm-bar" aria-hidden="true"><i class="ex" style="width:${Math.min(100, Math.max(0, rate))}%"></i>${plan > 0 ? `<i class="pl" style="width:${Math.min(100 - Math.min(100, Math.max(0, rate)), plan)}%"></i>` : ''}${el != null ? `<b style="left:${Math.min(100, Math.max(0, el))}%"></b>` : ''}</span>`;
   // 사업 상세 위쪽: 사업 선택 칸과 별
