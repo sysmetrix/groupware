@@ -83,7 +83,8 @@ test('budget: corporate card slang, payment drafts, subject search and comparing
 
 test('hours already worked is a work-hours question, however it is said', () => {
   for (const q of ['지금까지 일한 시간 얼마야', '이번 달 근무한 시간 보여줘', '오늘 얼마나 일했지', '몇 시간 근무했어 오늘', '휴일에 일한 시간 알려줘', '내가 올해 일한 시간 총 몇이야']) assert.equal(tool(q), 'get_work_hours', q);
-  for (const q of ['이번주 내가 일한 시간', '금주 근로한 시간 확인']) assert.equal(tool(q), 'get_work_hours', q);
+  for (const q of ['이번주 내가 일한 시간', '금주 근로한 시간 확인', '이번 주 근무시간 어떻게 돼']) assert.deepEqual([tool(q), args(q).week], ['get_work_hours', true], q);
+  assert.equal(args('이번 달 근무시간 알려줘').week, undefined);
   for (const q of ['내일 한 시간 비어?', '한도윤 과장 이번 주 근무한 시간', '근무한 시간 수정 신청해줘']) assert.notEqual(tool(q), 'get_work_hours', q);
   assert.equal(tool('초과해서 일한 시간만큼 시간외 신청해줘'), 'prepare_overtime_request');
 });
@@ -96,5 +97,12 @@ test('sighs and forgetful mutterings get a short local answer only when no AI is
   for (const q of ['오늘 왜 이렇게 힘들지', '피곤해?', '어제 깜빡하고 결과보고 못 올렸어', '결재 승인해 줘 힘들어', '이 일은 힘들어 보이니까 나눠서 하자']) assert.equal(tool(q), '', q);
   assert.equal(tool('까먹은 거 없나?'), 'check_risks');
   assert.equal(tool('내일 쉬고 싶어'), 'prepare_leave_request');
+});
+
+test('mood words before a request are neither a person name nor a schedule question', () => {
+  for (const q of ['피곤하면 연차 며칠 남았어', '너무 힘들어서 남은 연차 확인', '지치는데 연차 현황 보여줘', '답답해 연차 얼마 남았지', '지치면 휴가 좀 알려줘']) assert.equal(tool(q), 'get_leave_status', q);
+  assert.equal(tool('피곤하니까 내일 일정 알려줘'), 'get_schedule');
+  assert.equal(tool('너무 지쳐서 모레 연차 쓰고 싶어'), 'prepare_leave_request');
+  for (const q of ['보고서 때문에 진짜 힘들다', '일정이 많아서 너무 피곤하네', '오늘 회의 하다가 지쳤어', '아 결재 올리는 거 또 깜빡했네']) assert.equal(tool(q), 'small_talk', q);
 });
 
