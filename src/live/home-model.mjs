@@ -120,3 +120,37 @@ export function homeBriefing({urgent = 0, total = 0, wait = 0, events = 0, away 
   ];
   return {lead, first: first ? hmoCut(first, 60) : '', note: gaps ? '일부 자료를 읽지 못해 확인된 범위만 알려 드립니다.' : '', tone: gaps ? 'warn' : u ? 'urgent' : t ? 'todo' : 'ok', facts};
 }
+
+/**
+ * v1.23 홈 '핵심 4'의 예산 집행 한 줄. projects는 수집기가 이미 읽은 관심 사업 예산(누계)이며 홈은 새로 조회하지 않는다.
+ * 사업마다 rows[0]이 그 사업(또는 단위사업)의 합계다. 조회 실패·예산 0인 사업은 합계에서 빼고 따로 센다.
+ */
+export function homeBudgetLine(projects = [], elapsedPct = null) {
+  const list = (Array.isArray(projects) ? projects : []).filter(Boolean);
+  if (!list.length) return {text: '관심 사업을 정하면 집행률을 보여 드립니다', tone: 'info', rate: null, count: 0, failed: 0};
+  const top = p => (!p.error && Array.isArray(p.rows) && p.rows[0]) || null;
+  const ok = list.filter(p => top(p) && Number(top(p).budget) > 0);
+  const failed = list.filter(p => p.error || !top(p)).length;
+  const el = elapsedPct === null || elapsedPct === undefined || !Number.isFinite(Number(elapsedPct)) ? null : Number(elapsedPct);
+  if (!ok.length) return {text: failed ? `관심 사업 ${list.length}개 모두 조회 실패` : '관심 사업 예산이 0원으로 읽혔습니다', tone: 'warn', rate: null, count: 0, failed};
+  const budget = ok.reduce((s, p) => s + Number(top(p).budget || 0), 0), executed = ok.reduce((s, p) => s + Number(top(p).executed || 0), 0);
+  const rate = Math.round(executed / budget * 1000) / 10;
+  const parts = [`관심 사업 ${ok.length}개 집행률 ${rate}%`];
+  if (el !== null) parts.push(`올해 경과 ${el}%`);
+  if (failed) parts.push(`${failed}개 조회 실패`);
+  return {text: parts.join(' · '), tone: failed ? 'warn' : 'info', rate, count: ok.length, failed};
+}
+
+/**
+ * v1.23 홈 '핵심 4'의 근태·연차 한 줄. 시각은 화면 쪽에서 HH:MM으로 바꿔 넘긴다.
+ * 조회하지 못한 값은 '확인 불가'로 남기고, 근무일이 아니면 출퇴근을 말하지 않는다.
+ */
+export function homeAttendanceLine({come = '', leave = '', error = false, workday = true, remaining = '', check = 0} = {}) {
+  const parts = [];
+  if (error) parts.push('오늘 출퇴근 기록 확인 불가');
+  else if (!workday) parts.push('오늘은 근무일이 아닙니다');
+  else parts.push(`출근 ${come || '기록 없음'} · 퇴근 ${leave || '기록 없음'}`);
+  parts.push(remaining ? `남은 연차 ${remaining}` : '남은 연차 확인 불가');
+  if (hmoN(check)) parts.push(`확인할 근태 ${hmoN(check)}건`);
+  return {text: parts.join(' · '), tone: hmoN(check) ? 'todo' : 'info'};
+}

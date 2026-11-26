@@ -49,7 +49,7 @@
     const count = groups.reduce((n, g) => n + (g.error ? 0 : g.items.length), 0);
     const zero = !!res && !missing && groups.every(g => searchTotal(g) === 0);
     const busy = s.busy ? `<div class="list">${'<div class="sk row"></div>'.repeat(4)}</div><p class="muted"><span class="spin"></span> “${esc(s.kw)}” 검색 중입니다…</p>` : '';
-    return `${pgh('통합검색', '결재문서·메일 등 여러 자료에서 찾습니다')}
+    return `${pgh('찾기', '결재문서·메일 등 여러 자료에서 찾습니다')}
 <div class="bar"><input class="inp grow" id="sq" placeholder="검색어 (예: 월간업무보고, 문서번호, 사람 이름)" value="${esc(s.kw)}" aria-label="검색어"><select class="f" id="speriod" aria-label="기간">${[['', '전체 기간'], ['1', '최근 1개월'], ['3', '최근 3개월'], ['12', '최근 1년']].map(([v, n]) => `<option value="${v}" ${s.period === v ? 'selected' : ''}>${n}</option>`).join('')}</select><button class="btn primary" data-act="doSearch" ${s.busy ? 'disabled' : ''}>${ic('search')}검색</button></div>
 <div class="bar"><span class="muted">찾을 곳</span>${types.map(k => `<button class="chip ${s.types.includes(k) ? 'on' : ''}" data-act="stype" data-v="${k}" aria-pressed="${s.types.includes(k)}">${s.types.includes(k) ? ic('check') : ''}${esc(searchTypeLabel(k))}</button>`).join('')}</div>
 ${busy}

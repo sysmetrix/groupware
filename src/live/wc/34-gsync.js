@@ -34,11 +34,11 @@
 
   const gsyncIsStale = p => !!(p && p.compared && (!p.comparedAt || Date.now() - p.comparedAt > 24 * 60 * 60 * 1000 || p.comparedAt > Date.now() + 5 * 60 * 1000));
   function vGsync() {
-    if (!allowed('googleCalendar')) return pgh('일정·예약', '관리자 설정으로 꺼져 있습니다', '');
+    if (!allowed('googleCalendar')) return pgh('설정', '관리자 설정으로 꺼져 있습니다', '');
     const st = gsyncState(), plan = gsyncGet();
     const stale = gsyncIsStale(plan);
     const cmpBtn = plan ? gsyncCompareButton(st) : '';
-    const head = pgh('일정·예약', '', cmpBtn + (plan && plan.counts.ready && !stale ? `<button class="btn sm primary" data-act="gsyncNext">${ic('plus')}구글에 없는 일정 하나 열기</button>` : ''));
+    const head = pgh('설정', '', cmpBtn + (plan && plan.counts.ready && !stale ? `<button class="btn sm primary" data-act="gsyncNext">${ic('plus')}구글에 없는 일정 하나 열기</button>` : ''));
     const rules = `<details class="box tip gs-rules"><summary style="cursor:pointer"><b>이렇게 올립니다</b></summary><ul><li>그룹웨어에 <b>결재완료</b>된 내 근태(출장·시간외·휴가)와 문서에서 읽은 기한만 후보가 됩니다. 결재 중인 건은 보류합니다.</li><li>근태는 <b>5 BWYF 근태</b>, 기한은 <b>4 BWYF 개인</b> 캘린더로 나눕니다(섞지 않습니다).</li><li>[구글에 올리기]를 누르면 내용이 채워진 구글 일정 작성 화면이 열립니다. <b>캘린더와 내용을 확인하고 [저장]은 직접 누르세요.</b> GW 비서는 대신 저장하지 않습니다.</li><li>이미 올렸는지는 <b>구글 캘린더를 실제로 읽어 대조</b>한 결과로 보여 줍니다(아래 대조 상태 참고). 대조하지 않은 건 “대조 전”이며 “등록 전”이라고 단정하지 않습니다.</li></ul></details>`;
     if (!plan) return `${head}${rules}<div class="list">${'<div class="sk row"></div>'.repeat(4)}</div><p class="muted"><span class="spin"></span> 내 근태 신청 내역을 읽는 중입니다…</p>`;
     const googleCnt = plan.items.filter(i => i.state === 'synced' && i.verified === 'google').length;

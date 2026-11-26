@@ -4,13 +4,17 @@
 // const result = await page.evaluate(code => (0, eval)(code), code); console.log(result);
 (async () => {
   const SIDEBAR = [
-    ['home', '홈'], ['today', '할 일'], ['approval', '결재·문서유통'], ['mail', '메일'],
-    ['calendar', '일정·예약'], ['attendance', '근태·연차'], ['search', '검색·문서'], ['budget', '예산 집행'],
-    ['report', '보고·현황'], ['notifications', '통합알림'], ['people', '조직·사람'], ['settings', '설정'],
+    ['home', '홈'], ['today', '할 일'], ['calendar', '일정·예약'], ['attendance', '근태·연차'], ['budget', '예산 집행'],
+    ['approval', '결재·메일'], ['search', '찾기'], ['report', '보고'], ['settings', '설정'],
   ];
+  // [상위 메뉴, 화면 id, 이름, 여는 버튼 선택자, 고른 상태 속성]. 출처만 바꾸는 화면(개인 ToDo, 구글 캘린더)은 탭이 아니라 눌림 버튼이다.
+  const tabSel = id => `button[role="tab"][data-act="view"][data-v="${id}"]`;
   const SUBTABS = [
-    ['today', 'mytodo', '내 할 일'], ['today', 'board', '보드'], ['calendar', 'resource', '자원 예약'], ['calendar', 'gcal', '구글 일정'],
-    ['calendar', 'gsync', '구글 동기화'], ['search', 'docs', '문서 찾기 (기안·접수·발송)'], ['report', 'overview', '현황 차트'],
+    ['today', 'mytodo', '개인 ToDo', 'button[data-act="todoSrc"][data-v="mine"]', 'aria-pressed'], ['today', 'board', '보드', tabSel('board'), 'aria-selected'],
+    ['calendar', 'resource', '자원 예약', tabSel('resource'), 'aria-selected'], ['calendar', 'gcal', '구글 캘린더', 'button[aria-pressed][data-act="view"][data-v="gcal"]', 'aria-pressed'],
+    ['approval', 'mail', '메일', tabSel('mail'), 'aria-selected'], ['approval', 'notifications', '알림', tabSel('notifications'), 'aria-selected'],
+    ['search', 'docs', '결재문서 찾기', tabSel('docs'), 'aria-selected'], ['search', 'people', '사람·조직', tabSel('people'), 'aria-selected'],
+    ['report', 'overview', '현황 차트', tabSel('overview'), 'aria-selected'], ['settings', 'gsync', '구글 연동', tabSel('gsync'), 'aria-selected'],
   ];
   const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
   const checks = [];
@@ -27,7 +31,7 @@
     const nav = root?.querySelector('#nav');
     const main = root?.querySelector('#main');
     check('workcenter shadow root is available', !!root, root ? '' : '업무센터가 열리지 않았습니다');
-    check('sidebar has exactly 12 items', !!nav && nav.querySelectorAll('a[data-act="view"]').length === 12, nav ? String(nav.querySelectorAll('a[data-act="view"]').length) : 'nav 없음');
+    check('sidebar has exactly 9 items', !!nav && nav.querySelectorAll('a[data-act="view"]').length === 9, nav ? String(nav.querySelectorAll('a[data-act="view"]').length) : 'nav 없음');
     if (!root || !nav || !main) return finish();
 
     const visibleErrors = () => [...root.querySelectorAll('[role="alert"], .err, .errb')]
@@ -49,17 +53,17 @@
       if (!link) continue;
       link.click(); await settle(); verify(id, id, label);
     }
-    for (const [parent, id, label] of SUBTABS) {
+    for (const [parent, id, label, selector, attr] of SUBTABS) {
       const parentLink = nav.querySelector(`a[data-act="view"][data-v="${parent}"]`);
       if (!parentLink) { check(`${label}: parent link`, false, parent); continue; }
       parentLink.click(); await settle();
-      const tab = main.querySelector(`button[role="tab"][data-act="view"][data-v="${id}"]`);
-      check(`${label}: subtab link`, !!tab, tab ? '' : id);
-      if (!tab) continue;
-      tab.click(); await settle();
+      const opener = main.querySelector(selector);
+      check(`${label}: subtab link`, !!opener, opener ? '' : id);
+      if (!opener) continue;
+      opener.click(); await settle();
       verify(parent, id, label);
-      const selectedTab = main.querySelector(`button[role="tab"][data-act="view"][data-v="${id}"]`);
-      check(`${label}: selected subtab`, selectedTab?.getAttribute('aria-selected') === 'true', selectedTab?.getAttribute('aria-selected') || 'missing');
+      const selected = main.querySelector(selector);
+      check(`${label}: selected subtab`, selected?.getAttribute(attr) === 'true', selected?.getAttribute(attr) || 'missing');
     }
     check('page error events', errors.length === 0, errors.join(' | ').slice(0, 240));
     return finish();

@@ -2,13 +2,15 @@
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
   // ---------- views ----------
   const VIEWS = [
-    {id: 'home', label: '홈'}, {id: 'today', label: '할 일'}, {id: 'approval', label: '결재·문서유통'}, {id: 'mail', label: '메일'}, {id: 'calendar', label: '일정·예약'}, {id: 'attendance', label: '근태·연차'}, {id: 'search', label: '검색·문서'},
-    {id: 'budget', label: '예산 집행'}, {id: 'report', label: '보고·현황'}, {id: 'notifications', label: '통합알림'}, {id: 'people', label: '조직·사람'}, {id: 'settings', label: '설정'},
-    {id: 'board', label: '할 일 보드'}, {id: 'resource', label: '자원 예약'}, {id: 'gcal', label: '구글 일정'}, {id: 'gsync', label: '구글 동기화'}, {id: 'docs', label: '문서 찾기'}, {id: 'overview', label: '현황 차트'},
-    {id: 'mytodo', label: '내 할 일'},
+    // v1.23: 핵심 4(할 일·일정·예약·근태·연차·예산 집행)를 홈 다음 1~5번(Alt+1~5)에 고정하고, 나머지는 '문서·소통'으로 내린다.
+    // 배열 순서가 Alt+숫자 순서다. 왼쪽 메뉴 9개가 먼저, 메뉴 안 탭으로 들어가는 화면이 뒤에 온다.
+    {id: 'home', label: '홈'}, {id: 'today', label: '할 일'}, {id: 'calendar', label: '일정·예약'}, {id: 'attendance', label: '근태·연차'}, {id: 'budget', label: '예산 집행'},
+    {id: 'approval', label: '결재·메일'}, {id: 'search', label: '찾기'}, {id: 'report', label: '보고'}, {id: 'settings', label: '설정'},
+    {id: 'mail', label: '메일'}, {id: 'notifications', label: '알림'}, {id: 'mytodo', label: '개인 ToDo'}, {id: 'board', label: '보드'}, {id: 'resource', label: '자원 예약'}, {id: 'gcal', label: '구글 캘린더'},
+    {id: 'gsync', label: '구글 연동'}, {id: 'docs', label: '결재문서 찾기'}, {id: 'people', label: '사람·조직'}, {id: 'overview', label: '현황 차트'},
   ];
-  // 메뉴에 따로 두지 않고 상위 화면 안의 탭으로 들어가는 화면(기능은 그대로, 메뉴만 합침).
-  const VIEW_PARENT = {board: 'today', mytodo: 'today', resource: 'calendar', gcal: 'calendar', gsync: 'calendar', docs: 'search', overview: 'report'};
+  // 메뉴에 따로 두지 않고 상위 화면 안의 탭으로 들어가는 화면(기능과 화면 id는 그대로, 메뉴만 합침). 옛 주소(gw-view)·비서 open_view도 이 표로 새 메뉴 안에서 열린다.
+  const VIEW_PARENT = {mail: 'approval', notifications: 'approval', mytodo: 'today', board: 'today', resource: 'calendar', gcal: 'calendar', gsync: 'settings', docs: 'search', people: 'search', overview: 'report'};
   const navView = () => VIEW_PARENT[S.view] || S.view;
   const viewUrl = v => { const url = new URL(location.href); url.searchParams.set('gw-view', v); return url.href; };
   const linkedView = () => VIEWS.find(v => v.id === new URLSearchParams(location.search).get('gw-view'))?.id;
@@ -24,11 +26,15 @@
   }
   function viewTabs() {
     const tab = (id, label, n) => `<button role="tab" aria-selected="${S.view === id}" class="${S.view === id ? 'on' : ''}" data-act="view" data-v="${id}">${label}${n ? `<span class="c">${n}</span>` : ''}</button>`;
+    // 같은 탭 안에서 출처만 바꾸는 화면(할 일의 개인 ToDo, 달력의 구글 캘린더)은 탭을 나누지 않고 하나의 탭을 고른 것으로 본다.
+    const tabOf = (ids, label, n) => { const on = ids.includes(S.view); return `<button role="tab" aria-selected="${on}" class="${on ? 'on' : ''}" data-act="view" data-v="${ids[0]}">${label}${n ? `<span class="c">${n}</span>` : ''}</button>`; };
     const p = navView();
-    if (p === 'today') return `<div class="vtabs"><div class="seg" role="tablist" aria-label="할 일 보기 방식">${tab('today', '그룹웨어 처리·확인', mineVisible().length)}${tab('mytodo', '개인 ToDo', typeof TD === 'object' && TD.list && typeof R.tdSummary === 'function' ? R.tdSummary(TD.list).total : 0)}${tab('board', '계획 보드 보기')}</div></div>`;
-    if (p === 'calendar') return `<div class="vtabs"><div class="seg" role="tablist" aria-label="일정 및 예약">${tab('calendar', '그룹웨어 일정')}${allowed('resource') ? tab('resource', '자원 예약') : ''}${allowed('googleCalendar') ? tab('gcal', '구글 일정') : ''}</div>${allowed('googleCalendar') ? `<div class="seg" role="group" aria-label="연동 관리"><a class="btn sm ${S.view === 'gsync' ? 'on' : ''}" href="${esc(viewUrl('gsync'))}" ${S.view === 'gsync' ? 'aria-current="page"' : ''} data-act="view" data-v="gsync">${ic('gear')}구글 연동 관리</a></div>` : ''}</div>`;
-    if (p === 'search') return `<div class="vtabs"><div class="seg" role="tablist" aria-label="검색 방식">${tab('search', '통합검색 (여러 자료)')}${tab('docs', '결재문서 찾기 (기안·접수·발송)')}</div></div>`;
+    if (p === 'today') return `<div class="vtabs"><div class="seg" role="tablist" aria-label="할 일 보기 방식">${tabOf(['today', 'mytodo'], '목록')}${tab('board', '보드')}</div></div>`;
+    if (p === 'calendar') return `<div class="vtabs"><div class="seg" role="tablist" aria-label="일정 및 예약">${tabOf(['calendar', 'gcal'], '달력')}${allowed('resource') ? tab('resource', '자원 예약') : ''}</div>${allowed('googleCalendar') && ['calendar', 'gcal'].includes(S.view) ? `<div class="seg" role="group" aria-label="달력 출처">${[['calendar', '그룹웨어'], ['gcal', '구글 캘린더']].map(([id, n]) => `<button class="${S.view === id ? 'on' : ''}" aria-pressed="${S.view === id}" data-act="view" data-v="${id}">${n}</button>`).join('')}</div>` : ''}</div>`;
+    if (p === 'approval') return `<div class="vtabs"><div class="seg" role="tablist" aria-label="결재 메일 알림">${tab('approval', '결재·문서유통')}${tab('mail', '메일')}${tab('notifications', '알림')}</div></div>`;
+    if (p === 'search') return `<div class="vtabs"><div class="seg" role="tablist" aria-label="찾는 자료">${tab('search', '통합검색')}${tab('docs', '결재문서 (기안·접수·발송)')}${tab('people', '사람·조직')}</div></div>`;
     if (p === 'report') return `<div class="vtabs"><div class="seg" role="tablist" aria-label="보고 및 현황">${tab('report', '보고서')}${tab('overview', '현황 차트')}</div></div>`;
+    if (p === 'settings' && allowed('googleCalendar')) return `<div class="vtabs"><div class="seg" role="tablist" aria-label="설정 구분">${tab('settings', '설정')}${tab('gsync', '구글 연동')}</div></div>`;
     return '';
   }
   // Charts: shown on big screens, folded on laptops unless the user chose otherwise.
@@ -152,9 +158,12 @@
     const byArea = a => mine.filter(x => x.area === a).length;
     const counts = {
       today: S.a ? (() => { const td = typeof todoNavDue === 'function' ? todoNavDue() : []; const late = td.some(t => R.dday(t.due) < 0); return {n: mine.length || td.length, text: [mine.length ? '처리·확인 ' + mine.length : '', td.length ? '오늘까지 ' + td.length : ''].filter(Boolean), cls: urgent || late ? 'hot' : 'mine', tip: '그룹웨어 처리·확인 ' + mine.length + '건 · 오늘까지인 개인 할 일 ' + td.length + '건' + (typeof TD === 'object' && (!TD.list || TD.cached || TD.complete === false || TD.err) ? ' (개인 목록 전체 확인 전)' : '')}; })() : null,
-      approval: S.a ? (u.approval ? {n: '?'} : (() => { const n = S.a.approval?.lists?.pending?.total ?? byArea('결재'); return {n, cls: n ? 'mine' : '', tip: '대기 ' + n + '건'}; })()) : null,
-      mail: S.a ? (() => { const n = mailSnapshot().unread; return {n: n ?? '?', text: [n == null ? '조회 확인 불가' : '안 읽음 ' + n + ' · 조회분'], cls: n ? 'mine' : '', tip: n == null ? '안 읽은 메일 확인 불가' : '안 읽은 메일 조회분 ' + n + '건'}; })() : null,
-      notifications: (() => { const n = ntfUnread(); return n == null ? null : {n, text: ['안 읽음 ' + n + ' · 최근'], cls: 'mine', tip: '최근 조회 알림 중 안 읽음 ' + n + '건'}; })(),
+      // 결재·메일: 결재 대기와 안 읽은 메일(조회분)을 따로 쓴다. 조회 범위가 달라 한 숫자로 합치지 않는다.
+      approval: S.a ? (() => {
+        const ap = u.approval ? null : (S.a.approval?.lists?.pending?.total ?? byArea('결재')), ml = mailSnapshot().unread;
+        const text = [u.approval ? '결재 확인 불가' : ap ? '결재 ' + ap : '', ml == null ? '메일 확인 불가' : ml ? '메일 ' + ml : ''].filter(Boolean);
+        return {n: text.length ? (ap || 0) + (ml || 0) || '?' : 0, text, cls: ap || ml ? 'mine' : '', tip: (u.approval ? '결재 대기 확인 불가' : '결재 대기 ' + ap + '건') + ' · ' + (ml == null ? '안 읽은 메일 확인 불가' : '안 읽은 메일 조회분 ' + ml + '건')};
+      })() : null,
       attendance: S.a ? {n: byArea('근태'), cls: byArea('근태') ? 'mine' : '', tip: '퇴근 지문 확인 ' + byArea('근태') + '건'} : null,
       calendar: S.a ? (() => { const n = mine.filter(x => x.deadline && x.deadline.dday >= 0 && x.deadline.dday <= 7).length; return {n, cls: n ? 'mine' : '', tip: '7일 안 기한 ' + n + '건'}; })() : null,
     };
@@ -168,7 +177,7 @@
     const topViews = VIEWS.filter(v => !VIEW_PARENT[v.id] && v.id !== 'settings');
     const settingsView = VIEWS.find(v => v.id === 'settings');
     // 메뉴 묶음: 매일 보는 것 → 처리하는 업무 → 찾아보는 자료 → 사람. 어디에도 없는 화면은 마지막 묶음에 붙는다.
-    const NAV_GROUPS = [['', ['home', 'today']], ['업무', ['approval', 'mail', 'calendar', 'attendance']], ['자료', ['search', 'budget', 'report']], ['조직', ['notifications', 'people']]];
+    const NAV_GROUPS = [['', ['home']], ['핵심', ['today', 'calendar', 'attendance', 'budget']], ['문서·소통', ['approval', 'search', 'report']]];
     const grouped = new Set(NAV_GROUPS.flatMap(g => g[1]));
     const navGroups = NAV_GROUPS.map(([label, ids], gi) => {
       const vs = topViews.filter(v => ids.includes(v.id) || (gi === NAV_GROUPS.length - 1 && !grouped.has(v.id)));

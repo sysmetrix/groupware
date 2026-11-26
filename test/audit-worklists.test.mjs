@@ -45,13 +45,17 @@ test('Home separates personal deadlines from the groupware process/check count',
     {id: '3', title: '다음 주', due: '2026-11-30'}, {id: '4', title: '언젠가', due: ''},
   ];
   const html = c.homeTopHtml(c.homeData());
-  assert.ok(html.indexOf('개인 ToDo · 오늘까지') < html.indexOf('그룹웨어에서 먼저 볼 업무'));
-  assert.match(html, /오늘 마감 2건 · 기한 지남 0건/);
-  assert.match(html, /그룹웨어 처리·확인 14건 보기/);
+  // v1.23: 건수는 '오늘 현황'의 할 일 줄에 출처별로 따로 쓴다(한 숫자로 합치지 않음). 먼저 할 일은 그룹웨어 급함이 개인 오늘 마감보다 먼저다.
+  assert.match(html, /그룹웨어 처리·확인 14건 · 우선 1건 · 기다리는 중 1건 · 개인 오늘 마감 2건 · 기한 지남 0건/);
+  assert.match(html, /먼저 할 일 · 그룹웨어/);
+  assert.doesNotMatch(html, /처리·확인 14건 보기/, '홈에서 같은 숫자는 한 번만');
   assert.match(html, /내 결재가 대기 중입니다 · 확인된 기한 없음<br>다음: 결재하기/);
+  assert.match(c.vToday(), /<h1>할 일<\/h1>그룹웨어 처리·확인 14건/);
+  c.S.todoSrc = 'gw';
   assert.match(c.vToday(), /그룹웨어 처리·확인 14건.*개인 ToDo 제외/);
+  c.S.todoSrc = 'all';
   c.TD.list[0].due = '2026-11-23';
-  assert.match(c.homeTopHtml(c.homeData()), /오늘 마감 1건 · 기한 지남 1건/);
+  assert.match(c.homeTopHtml(c.homeData()), /개인 오늘 마감 1건 · 기한 지남 1건/);
   c.S.filter.level = 'wait';
   assert.equal(c.todayQueue().map(x => x.key).join(','), '대기 중');
 });
@@ -62,7 +66,7 @@ test('partial groupware and personal lists do not imply definitive empty results
   c.TD.complete = false;
   assert.match(c.vToday(), /확인된 그룹웨어 처리·확인 0건/);
   assert.match(c.queueRows(), /전체 목록을 확인할 수 없습니다/);
-  assert.match(c.homeTopHtml(c.homeData()), /오늘 마감 0건 · 기한 지남 0건 · 전체 목록 확인 불가/);
+  assert.match(c.homeTopHtml(c.homeData()), /개인 확인된 오늘 마감 0건 · 기한 지남 0건 · 전체 목록 확인 불가/);
   assert.match(c.todoTimelineHtml(), /전체 목록을 확인할 수 없습니다/);
   c.TD.list = null; c.TD.err = 'ToDo 조회 실패';
   assert.match(c.homeTopHtml(c.homeData()), /개인 ToDo를 읽지 못했습니다/);

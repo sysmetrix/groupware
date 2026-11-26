@@ -122,7 +122,9 @@ test('카드 사용내역 화면: 예산 집행의 하위 탭으로 연결되고
   const frag = readFileSync(new URL('../src/live/wc/56-budget-card.js', import.meta.url), 'utf8');
   const home = readFileSync(new URL('../src/live/wc/54-budget-home.js', import.meta.url), 'utf8');
   const view = readFileSync(new URL('../src/live/wc/10-calendar-budget.js', import.meta.url), 'utf8');
-  assert.match(home, /tab\('card', '카드 사용내역'\)/);
+  // v1.23: 카드 사용내역·세금계산서는 '카드·세금계산서' 한 탭 안의 증빙 종류 버튼이다.
+  assert.match(home, /tab\(\['card', 'etax'\], '카드·세금계산서'\)/);
+  assert.match(home, /\[\['card', '카드 사용내역'\], \['etax', '세금계산서'\]\]/);
   assert.match(home, /\['mine', 'detail', 'all', 'card', 'etax'\]\.includes\(v\)/);
   assert.match(view, /m === 'card' && typeof vBudgetCard === 'function'/);
   for (const act of new Set([...frag.matchAll(/data-act="(cdu\w+)"/g)].map(m => m[1]))) assert.match(frag, new RegExp(`HOME_ACTS\\.${act} =`), act);
@@ -161,7 +163,7 @@ test('세금계산서 화면: 예산 집행의 하위 탭으로 연결되고 처
   const frag = readFileSync(new URL('../src/live/wc/58-budget-etax.js', import.meta.url), 'utf8');
   const home = readFileSync(new URL('../src/live/wc/54-budget-home.js', import.meta.url), 'utf8');
   const view = readFileSync(new URL('../src/live/wc/10-calendar-budget.js', import.meta.url), 'utf8');
-  assert.match(home, /tab\('etax', '세금계산서'\)/);
+  assert.match(home, /data-act="bMode" data-v="\$\{k\}"/);
   assert.match(view, /m === 'etax' && typeof vBudgetEtax === 'function'/);
   for (const act of new Set([...frag.matchAll(/data-act="(etx\w+)"/g)].map(m => m[1]))) assert.match(frag, new RegExp(`HOME_ACTS\\.${act} =`), act);
   assert.ok(!/chainRegnb|cardNb/.test(frag));

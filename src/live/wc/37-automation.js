@@ -36,7 +36,8 @@
     if (autoSave(list) === false) return {ok: false, text: '저장 공간이 부족해 자동화를 저장하지 못했습니다.'};
     return {ok: true, rule, text: `자동화 “${rule.name}”${typeof R === 'object' && R && typeof R.cuJosa === 'function' ? R.cuJosa(String(rule.name), '을를').slice(-1) : '을(를)'} 등록했습니다. ${R.chatScheduleLabel(rule.days, rule.time)}에 실행합니다.`};
   }
-  const autoCardRefresh = () => { try { if (S.view === 'home' && typeof homePartialRefresh === 'function') homePartialRefresh(); } catch (e) { logError('auto.card', e.message); } };
+  // v1.23: 자동화 관리는 설정에도 있다(홈에는 만든 자동화가 있을 때만 보인다).
+  const autoCardRefresh = () => { try { if (S.view === 'home' && typeof homePartialRefresh === 'function') homePartialRefresh(); else if (S.view === 'settings' && typeof renderMain === 'function') renderMain(); } catch (e) { logError('auto.card', e.message); } };
   let autoBusy = false;
   // 실패한 규칙이 다른 규칙을 가로막거나 30초마다 반복되지 않게 잠시 쉰다.
   const autoRetry = new Map();
