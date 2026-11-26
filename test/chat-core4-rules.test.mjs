@@ -55,6 +55,10 @@ test('to-do list, add and delete wording', () => {
   assert.deepEqual(args('보고서 검토 할 일 만들어 줘'), {title: '보고서 검토', due: ''});
   assert.deepEqual(args('다음 주 금요일 마감으로 설문 정리 할 일 하나 만들어 줘'), {title: '설문 정리', due: '2026-11-27'});
   assert.equal(tool('할 일 목록 만들어줘'), 'list_tasks');
+  // "목록에 … 추가/넣어/등록"은 추가이고, 목록을 보거나 묻는 말은 조회다
+  assert.deepEqual(args('할일 목록에 견적 받기 등록해줘'), {title: '견적 받기', due: ''});
+  assert.deepEqual(args('투두 목록에 예산 점검 넣어놔'), {title: '예산 점검', due: ''});
+  for (const q of ['할 일 목록 보여줘', '할 일 목록에 뭐 추가됐어?', '할 일 목록을 만들어 줘']) assert.equal(tool(q), 'list_tasks', q);
   for (const q of ['할 일 삭제해줘', '투두 다 지워', '깜빡했네', '어제 깜빡하고 결과보고 못 올렸어']) assert.equal(tool(q), '', q);
   assert.equal(tool('까먹은 거 없나?'), 'check_risks');
   assert.equal(tool('오늘 제일 중요한 할 일 뭐야?'), 'plan_priorities');
