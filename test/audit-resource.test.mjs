@@ -8,7 +8,8 @@ const source = readFileSync(new URL('../src/live/wc/24-resource.js', import.meta
 const day = '20261124', next = '20261125';
 const list = [{resSeq: '1', name: 'LED 패널'}, {resSeq: '2', name: '회의실'}];
 const booking = (start, end, title = 'LED 점검', resSeq = '1') => ({start, end, title, resSeq, who: '예약자'});
-const timeline = html => html.split('<h2>예약하기</h2>')[0];
+// v1.26: 예약 칸이 시간표 위로 올라갔다. 시간표는 '이 날의 예약 시간표'부터 다음 묶음(내 예약 현황·다가오는 예약) 앞까지.
+const timeline = html => { const a = html.indexOf('이 날의 예약 시간표'); const ends = ['<h2>내 예약 현황', '<h2>다가오는 예약'].map(m => html.indexOf(m)).filter(i => i > a); return html.slice(a, ends.length ? Math.min(...ends) : undefined); };
 const flush = () => new Promise(setImmediate);
 
 function setup() {

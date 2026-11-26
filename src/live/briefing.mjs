@@ -1418,6 +1418,33 @@ export function validateBooking({title = '', date = '', start = '', end = '', no
   return {ok: errors.length === 0, errors, start12: d8 + String(start).replace(':', ''), end12: d8 + String(end).replace(':', '')};
 }
 
+// v1.26 자원 예약: 상태 이름(그룹웨어 자원 화면과 같은 말), 차량 먼저, 기본 시간, 겹침 확인
+const RES_STATUS = {RE: ['승인 대기', 'todo'], '10': ['승인 대기', 'todo'], CO: ['승인 완료', 'ok'], '20': ['승인 완료', 'ok'], RC: ['예약 완료', 'ok'], RJ: ['반려', 'urgent'], CR: ['승인 취소', 'muted'], CA: ['취소', 'muted'], AC: ['자동 취소', 'muted']};
+export function resStatusLabel(code) { const x = RES_STATUS[String(code || '').trim()]; return x ? {label: x[0], tone: x[1]} : {label: '', tone: ''}; }
+/** 자원 목록: 차량(속성·이름에 '차량')을 맨 앞에, 나머지는 그룹웨어 순서 그대로. */
+export function resSortList(list = []) {
+  const car = r => /차량/.test(`${(r && r.attr) || ''} ${(r && r.name) || ''}`);
+  return (Array.isArray(list) ? list : []).map((r, i) => ({r, i})).sort((a, b) => (car(b.r) - car(a.r)) || a.i - b.i).map(x => x.r);
+}
+/** 겹치는 예약 하나(없으면 null). start·end는 'HH:MM', date는 YYYYMMDD. */
+export function resConflict(bookings = [], date, start, end) {
+  const a = toMin(start), z = toMin(end);
+  if (a === null || z === null || z <= a) return null;
+  for (const b of Array.isArray(bookings) ? bookings : []) { const sp = bookingSpanOnDay(b, date); if (sp && sp[0] < z && sp[1] > a) return b; }
+  return null;
+}
+/** 기본 예약 시간: 오늘이면 지금 뒤의 30분 단위, 다른 날이면 09:00부터 len분(기본 1시간). 겹치면 그날의 다음 빈 칸으로 옮기고, 남은 빈 칸이 없으면 null. */
+export function resDefaultTimes({date = '', bookings = [], now = new Date(), len = 60} = {}) {
+  const k = kstNow(now), today = k.date.replace(/-/g, '');
+  const LO = 6 * 60, HI = 23 * 60 + 30;
+  const s = Math.max(LO, String(date) === today ? Math.ceil((k.hh * 60 + k.mm + 1) / 30) * 30 : 9 * 60);
+  for (let t = s; t + 30 <= HI; t += 30) {
+    const e = Math.min(t + len, HI);
+    if (!resConflict(bookings, date, minToHm(t), minToHm(e))) return {start: minToHm(t), end: minToHm(e)};
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // 홈: 오늘 타임라인, 내 상신문서 결재 지연, 퇴근 정리
 // ---------------------------------------------------------------------------

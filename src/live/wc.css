@@ -1570,3 +1570,20 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 @container (max-width:520px){.wc .hm3-row{flex-wrap:wrap;gap:0 8px;padding-bottom:10px}.wc .hm3-go{flex-basis:100%;flex-direction:column;gap:2px;padding-bottom:6px}.wc .hm3-k{width:auto}.wc .hm3-act{margin-left:4px}}
 /* 할 일 전체 보기: 그룹웨어 줄 아래 개인 ToDo 줄이 같은 묶음 안에 이어진다 */
 .wc .today-td{margin:0 0 4px}
+
+/* ---------- v1.26 자원 예약: 그룹웨어 예약 창처럼 예약명 · 일시 · 내용과 [예약하기] 한 번 (그리는 곳: wc/24-resource.js) ---------- */
+.wc .res-book{margin:4px 0 16px;padding:16px 18px;display:flex;flex-direction:column;gap:10px}
+.wc .res-book-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.wc .res-book-h h2{margin:0;font-size:15px}
+.wc .res-f{display:grid;grid-template-columns:72px minmax(0,1fr);align-items:center;gap:10px;font-size:13px;color:var(--muted)}
+.wc .res-f>span{font-weight:600}
+.wc .res-f .inp{height:36px;max-width:560px}
+.wc .res-time{display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:var(--fg)}
+.wc .res-time select.inp{width:auto;min-width:92px}
+.wc .res-time .seg{margin-left:4px}
+.wc .res-act{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding-top:6px;border-top:1px solid var(--line)}
+.wc .res-status{margin:0;font-size:13px}
+.wc .res-status.res-good{color:var(--ok)}
+.wc .res-status.res-bad{color:var(--hi)}
+.wc .res-status.res-muted{color:var(--muted)}
+@container (max-width:560px){.wc .res-f{grid-template-columns:minmax(0,1fr);gap:4px}}

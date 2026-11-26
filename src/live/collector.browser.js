@@ -15,13 +15,13 @@
  */
 (() => {
   'use strict';
-  const VERSION = '1.25.3';
+  const VERSION = '1.26.0';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
   const READ_ONLY = new Set([
-  // 자원(회의실·차량) 조회: 목록, 예약 현황, 자원 상세, 중복·한도 확인(POST지만 읽기 전용), 속성/옵션
-  '/schres/rs121A01', '/schres/rs121A04', '/schres/rs121A05', '/schres/rs121A42', '/schres/rs121A49', '/schres/rs121A24', '/schres/rs121A10',
+  // 자원(회의실·차량) 조회: 목록, 예약 현황, 자원 상세, 중복·한도 확인(POST지만 읽기 전용), 속성/옵션, 나의예약현황(rs121A08, v1.26 승인 여부 확인)
+  '/schres/rs121A01', '/schres/rs121A04', '/schres/rs121A05', '/schres/rs121A42', '/schres/rs121A49', '/schres/rs121A24', '/schres/rs121A10', '/schres/rs121A08',
     '/mail/mail000A01', '/mail/mail000A03', '/mail/mail003A01', '/mail/mail002A01', '/mail/mail002A37', '/mail/mail002A30', '/ecm/ecm001A07',
     '/ea/api/getMenuCountInfo', '/ea/ea036A02', '/ea/ea025A04', '/ea/ea023A02', '/ea/ea027A02',
     '/ea/ea038A09', '/ea/ea038A15',
@@ -368,6 +368,14 @@
     const d = await call('/schres/rs121A42', {resSeq: String(resSeq)});
     return {resSeq: String(resSeq), name: str(d && d.resName, 60), apprYn: str(d && d.apprYn, 1), limitMin: num(String((d && d.limitReservationRange) || '').replace(/,/g, '')), raw: undefined};
   }
+  // v1.26 나의예약현황(그룹웨어 자원 > 나의예약현황과 같은 조회). 상태: RE 승인요청 · CO 승인완료 · RC 예약완료 · RJ 반려 · CR 승인취소 · CA 취소 · AC 자동취소
+  async function myReservations({from, to}) {
+    if (!/^\d{8}$/.test(String(from)) || !/^\d{8}$/.test(String(to))) throw new GwError('BAD_INPUT', '조회 기간이 올바르지 않습니다');
+    const c = context();
+    const d = await call('/schres/rs121A08', {companyInfo: {compSeq: c.compSeq, groupSeq: c.groupSeq, deptSeq: c.deptSeq, emailAddr: c.emailAddr, emailDomain: c.emailDomain}, menuAuth: 'USER', attrSeq: 'A', startDate: String(from), endDate: String(to), statusCode: '', sechText: '', pageNum: 1, pageSize: 50, myResYn: 'N', langCode: c.langCode});
+    if (!Array.isArray(d?.resourceSearchList)) throw new GwError('API_ERROR', '나의예약현황 형식을 확인할 수 없습니다');
+    return d.resourceSearchList.filter(r => r && (r.myResYn === 'Y' || String(r.createSeq || '') === String(c.empSeq))).map(r => ({resSeq: str(r.resSeq, 12), seqNum: str(r.seqNum, 12), name: str(r.resName, 60), title: str(r.reqText, 120), start: str(r.startDate, 12), end: str(r.endDate, 12), status: str(r.statusCode, 4), desc: str(r.descText, 120), createdAt: str(r.createDate, 14)}));
+  }
   async function resourceCheck({resSeq, start, end}) {
     const d = await call('/schres/rs121A04', {resSeq: String(resSeq), startDate: start, endDate: end, alldayYn: 'N', resStartDate: start.slice(0, 8)});
     return {conflict: d && d.reservationYn === 'Y', limit: d && d.limitYn === 'Y'};
@@ -375,14 +383,14 @@
   // 예약 등록: 입력 검증, 과거 시간 거부, 중복·한도 확인 후에만 저장한다. 성공 여부는 서버 응답(successTf)으로 판단한다.
   try { context(); } catch { /* 아직 로그인 전: 처음 로그인 정보를 읽을 때 기록한다 */ }
   let reserveBusy = false;
-  async function reserveResource({resSeq, title, start, end}) {
+  async function reserveResource({resSeq, title, start, end, desc = ''}) {
     // 사용자가 방금 직접 클릭한 경우에만 실행한다(페이지 스크립트가 몰래 부르는 것을 막는다). 동시에 두 번 실행되지 않게 잠근다.
     if (!(navigator.userActivation && navigator.userActivation.isActive)) throw new GwError('NO_GESTURE', '화면에서 직접 누른 경우에만 예약할 수 있습니다');
     if (reserveBusy) throw new GwError('BUSY', '이미 예약을 처리하고 있습니다');
     reserveBusy = true;
-    try { return await reserveResourceInner({resSeq, title, start, end}); } finally { reserveBusy = false; }
+    try { return await reserveResourceInner({resSeq, title, start, end, desc}); } finally { reserveBusy = false; }
   }
-  async function reserveResourceInner({resSeq, title, start, end}) {
+  async function reserveResourceInner({resSeq, title, start, end, desc = ''}) {
     const ctx = context();
     if (!/^\d+$/.test(String(resSeq))) throw new GwError('BAD_INPUT', '자원 번호가 올바르지 않습니다');
     if (!/^\d{8}(?:[01]\d|2[0-3])[0-5]\d$/.test(String(start)) || !/^\d{8}(?:[01]\d|2[0-3])[0-5]\d$/.test(String(end)) || end <= start || start.slice(0, 8) !== end.slice(0, 8)) throw new GwError('BAD_INPUT', '시작·종료 시각이 올바르지 않습니다(같은 날, 종료가 시작보다 뒤)');
@@ -400,7 +408,8 @@
     if (chk.limit) throw new GwError('LIMIT', '예약 한도를 넘었습니다');
     const u = ctx;
     if (!u.empSeq || String(u.empSeq) !== String(loadedEmpSeq)) throw new GwError('IDENTITY', '로그인 정보가 바뀌었습니다. 새로고침 후 다시 시도하세요');
-    const body = {resSeq: String(resSeq), reqText: name, apprYn: detail.apprYn, alldayYn: 'N', startDate: start, endDate: end, descText: '', resSubscriberList: [{groupSeq: u.groupSeq, compSeq: u.compSeq, deptSeq: u.deptSeq, empSeq: u.empSeq}], uidList: '', repeatType: '10', repeatEndDay: '', linkSchList: [], newSchList: []};
+    // v1.26: 그룹웨어 자원 예약 창이 보내는 값과 같게 회사 정보(companyInfo)·언어(langCode)·내용(descText)을 함께 보낸다.
+    const body = {companyInfo: {compSeq: u.compSeq, groupSeq: u.groupSeq, deptSeq: u.deptSeq, emailAddr: u.emailAddr, emailDomain: u.emailDomain}, resSeq: String(resSeq), reqText: name, apprYn: detail.apprYn, alldayYn: 'N', startDate: start, endDate: end, descText: String(desc || '').replace(/\r\n/g, '\n').slice(0, 1000), resSubscriberList: [{groupSeq: u.groupSeq, compSeq: u.compSeq, deptSeq: u.deptSeq, empSeq: u.empSeq}], uidList: '', repeatType: '10', repeatEndDay: '', linkSchList: [], newSchList: [], langCode: u.langCode || 'kr'};
     if (!WRITE_ALLOWED.has('/schres/rs121A06')) throw new GwError('NOT_ALLOWED', '쓰기 허용 목록 오류');
     let r;
     try { r = await transport('/schres/rs121A06', body, {timeoutMs: 20000}); }
@@ -1308,7 +1317,7 @@
   }
 
   window.BWYFGW = Object.freeze({
-    version: VERSION, collect, call, search, organizationTree, organizationMembers, sentMail, budgetCatalog, budgetProject, budgetAll, budgetLedger, budgetMonthly, cardUsage, etaxInvoices, attendanceDays, teamAttendance, teamPlanned, resourceList, resourceBookings, resourceDetail, resourceCheck, reserveResource, todoList, todoDetail, todoCreate, todoUpdate, todoSetDone, todoSetProgress, todoSetImportance, todoDelete, todoLink, todoComments, readAlert, routingHistory, submittedRange, approvalPage, approvalFallback, docPreview, frequentForms, findReply, mailDetail, mailInlineImage, mailAttachment, mailAttachmentPreview, mailAttachmentPages, docAttachmentPages, synapPageImages, saveBlob,
+    version: VERSION, collect, call, search, organizationTree, organizationMembers, sentMail, budgetCatalog, budgetProject, budgetAll, budgetLedger, budgetMonthly, cardUsage, etaxInvoices, attendanceDays, teamAttendance, teamPlanned, resourceList, resourceBookings, resourceDetail, resourceCheck, reserveResource, myReservations, todoList, todoDetail, todoCreate, todoUpdate, todoSetDone, todoSetProgress, todoSetImportance, todoDelete, todoLink, todoComments, readAlert, routingHistory, submittedRange, approvalPage, approvalFallback, docPreview, frequentForms, findReply, mailDetail, mailInlineImage, mailAttachment, mailAttachmentPreview, mailAttachmentPages, docAttachmentPages, synapPageImages, saveBlob,
     context: () => { const c = context(); return {name: c.name, deptName: c.deptName, compName: c.compName, duty: c.duty, position: c.position}; },
     readOnlyEndpoints: () => [...READ_ONLY], routes: ROUTES, links: LINKS, searchLabels: SEARCH_LABELS, defaults: DEFAULTS,
   });
