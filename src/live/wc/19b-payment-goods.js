@@ -5,13 +5,17 @@
   const planDocs = () => ownDocs().filter(d => /계획(\(안\)|\(변경\))?$/.test(String(d.title).trim()) && !/결과/.test(d.title) && /^일반기안문/.test(d.form || '일반기안문')).sort((a, b) => String(b.date).localeCompare(String(a.date)));
   const won0 = n => (n ? n.toLocaleString('en-US') + '원' : '-');
 
+  let payHubSeq = 0;
   async function openPaymentHub() {
     if (gated('draftPay')) return;
     closeOverlay();
     S.paletteOpen = true;
-    const shell = body => `<div class="modal" data-act="closeOverlay"><div class="dlg" data-stop="1" style="width:min(760px,95vw);padding:22px 24px;max-height:88vh;overflow:auto" role="dialog" aria-label="지급 문서"><button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button>${body}</div></div>`;
+    const seq = ++payHubSeq;
+    const shell = body => `<div class="modal" data-act="closeOverlay"><div class="dlg" data-stop="1" data-pay-hub="${seq}" style="width:min(760px,95vw);padding:22px 24px;max-height:88vh;overflow:auto" role="dialog" aria-label="지급 문서"><button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button>${body}</div></div>`;
     $('#overlay').innerHTML = shell('<h2 style="margin:0 0 8px;font-size:18px">지급 문서</h2><div class="mi muted"><span class="spin"></span> 내 지급 문서를 분석하고 있습니다…</div>');
     await learnPatterns({limit: 12, budgetMs: 40000, quiet: true}).catch(() => {});
+    // 분석하는 동안 사용자가 창을 닫았거나 다른 창·다른 지급 문서 창으로 바뀌었으면 다시 그리지 않는다.
+    if (!$(`#overlay [data-pay-hub="${seq}"]`)) return;
     const all = Object.values(patLoad().docs);
     const props = R.listProposals(all).slice(0, 8);
     const pend = R.pendingPayments(all);
