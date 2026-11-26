@@ -13,7 +13,7 @@
     if (!v) return empty;
     return `${v.slice(0, 4)}. ${v.slice(5, 7)}. ${v.slice(8, 10)}. (${['일', '월', '화', '수', '목', '금', '토'][new Date(v + 'T00:00:00Z').getUTCDay()]})`;
   }
-  // opt: clear(날짜 지우기 허용), min·max(YYYY-MM-DD), minOf·maxOf(다른 날짜 칸 id: 시작일 이후·종료일 이전), empty(빈 값 문구), disabled, cls
+  // opt: clear(날짜 지우기 허용), min·max(YYYY-MM-DD), minOf·maxOf(짝 날짜 칸 id: 넘어가게 고르면 짝 칸을 같은 날로 옮김, 막지는 않음), empty(빈 값 문구), disabled, cls
   function dateField(id, value, label, opt = {}) {
     const f = dpFields()[id] = {label: label || '날짜', clear: !!opt.clear, min: opt.min || '', max: opt.max || '', minOf: opt.minOf || '', maxOf: opt.maxOf || '', empty: opt.empty || '날짜 선택'};
     const text = dateText(value, f.empty);
@@ -33,9 +33,30 @@
     const id = l.dataset.open; l.innerHTML = ''; delete l.dataset.open;
     if (focusBack) root.querySelector(`[data-act="dpOpen"][data-id="${id}"]`)?.focus();
   }
+  // 막는 범위는 고정 min·max뿐이다. 짝 칸(minOf·maxOf)은 막지 않고, 넘어가게 고르면 짝 칸을 같은 날로 옮긴다(dpPick).
+  // (v1.25.3) 예전에는 짝 칸 값으로 막아, 시작일·기한이 모두 오늘이면 시작일에 미래 날짜를 고를 수 없었다.
   function dpRange(f) {
-    const other = k => dpIso(k && ($('#' + k) || {}).value);
-    return {min: dpIso(f.min) || other(f.minOf), max: dpIso(f.max) || other(f.maxOf)};
+    return {min: dpIso(f.min), max: dpIso(f.max)};
+  }
+  function dpLinkHint(f) {
+    const lab = k => esc((dpFields()[k] || {}).label || '짝 날짜');
+    const a = f.maxOf && dpIso(($('#' + f.maxOf) || {}).value) ? `${lab(f.maxOf)}보다 뒤를 고르면 ${lab(f.maxOf)}도 같은 날로 옮깁니다.` : '';
+    const b = f.minOf && dpIso(($('#' + f.minOf) || {}).value) ? `${lab(f.minOf)}보다 앞을 고르면 ${lab(f.minOf)}도 같은 날로 옮깁니다.` : '';
+    return a || b ? `<p class="dp-hint">${a}${a && b ? ' ' : ''}${b}</p>` : '';
+  }
+  // 고른 값이 짝 칸을 넘으면 짝 칸을 같은 날로 맞추고 input·change를 보낸다
+  function dpLinkPush(f, val) {
+    if (!val) return;
+    const push = (k, bad) => {
+      const o = k && $('#' + k), ov = o && dpIso(o.value);
+      if (!ov || !bad(ov)) return;
+      o.value = val;
+      dateFieldSync(k);
+      o.dispatchEvent(new Event('input', {bubbles: true, composed: true}));
+      o.dispatchEvent(new Event('change', {bubbles: true, composed: true}));
+    };
+    push(f.maxOf, ov => val > ov);
+    push(f.minOf, ov => val < ov);
   }
   function dpOpen(id, month, focusIso) {
     const input = $('#' + id), f = dpFields()[id], l = $('#dpLayer');
@@ -56,7 +77,7 @@
       cells.push(`<button type="button" class="td-cal-day${iso === sel ? ' selected' : ''}${iso === td ? ' today' : ''}${wd === 0 ? ' sun' : wd === 6 ? ' sat' : ''}" data-act="dpPick" data-id="${esc(id)}" data-v="${iso}" tabindex="${iso === focus ? 0 : -1}" aria-label="${dateText(iso)}${iso === td ? ', 오늘' : ''}${can ? '' : ', 고를 수 없음'}" aria-pressed="${iso === sel}"${can ? '' : ' disabled'}>${d}</button>`);
     }
     const prevOk = !min || shift(-1) >= min.slice(0, 7), nextOk = !max || shift(1) <= max.slice(0, 7);
-    const hint = min || max ? `<p class="dp-hint">${min ? esc(dateText(min)) + ' 이후' : ''}${min && max ? ', ' : ''}${max ? esc(dateText(max)) + ' 이전' : ''}만 고를 수 있습니다.</p>` : '';
+    const hint = (min || max ? `<p class="dp-hint">${min ? esc(dateText(min)) + ' 이후' : ''}${min && max ? ', ' : ''}${max ? esc(dateText(max)) + ' 이전' : ''}만 고를 수 있습니다.</p>` : '') + dpLinkHint(f);
     l.innerHTML = `<div class="modal" data-act="dpClose" data-stop="1"><div class="dlg td-cal-dialog" data-stop="1" role="dialog" aria-modal="true" aria-label="${esc(f.label)} 선택">`
       + `<div class="td-cal-heading"><div><span class="td-cal-eyebrow">${esc(f.label)}</span><h2>${sel ? esc(dateText(sel)) : '날짜 선택'}</h2></div><button type="button" class="btn icon ghost" data-act="dpClose" aria-label="날짜 선택 닫기">${ic('x')}</button></div>`
       + `<div class="td-cal-nav"><button type="button" class="btn sm icon ghost" data-act="dpMonth" data-id="${esc(id)}" data-v="${shift(-1)}" aria-label="이전 달"${prevOk ? '' : ' disabled'}>‹</button><strong aria-live="polite">${y}년 ${m}월</strong><button type="button" class="btn sm icon ghost" data-act="dpMonth" data-id="${esc(id)}" data-v="${shift(1)}" aria-label="다음 달"${nextOk ? '' : ' disabled'}>›</button></div>`
@@ -75,6 +96,7 @@
     dpClose();
     input.dispatchEvent(new Event('input', {bubbles: true, composed: true}));
     input.dispatchEvent(new Event('change', {bubbles: true, composed: true}));
+    dpLinkPush(f, val);
   }
   function dpKey(e) {
     const l = $('#dpLayer'); if (!l || !l.dataset.open) return;
