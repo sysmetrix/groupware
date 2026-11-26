@@ -1,6 +1,6 @@
 // GW 비서 · 채팅 도구(실행): 신청서·기안·메일 답장·예약을 "확인 카드"로 준비한다.
 // 절대 규칙: 도구는 스스로 제출·발송·저장하지 않는다. 카드의 버튼을 사용자가 직접 눌러야 기존의 미리 채워진 흐름이 열리고,
-// 그 흐름에서도 최종 [신청완료]·[보내기]는 사람이 누른다. 차량 예약만 확정 버튼이 곧 저장이므로 위험 표시(high)를 붙인다.
+// 그 흐름에서도 최종 [신청완료]·[보내기]는 사람이 누른다. 자원(차량·회의실 등) 예약만 확정 버튼이 곧 저장이므로 위험 표시(high)를 붙인다.
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
 
   const chatDow = iso => new Date(iso + 'T00:00:00Z').getUTCDay();
@@ -130,40 +130,83 @@
     },
   });
 
+  // v1.28 자원 종류: 차량·회의실·LED 패널은 읽기 도구(get_resource_status)의 KIND와 같은 이름 기준으로 고른다.
+  // 그 밖의 말(예: 상담실)은 자원 이름·분류에 그 말이 든 자원만 고른다. 그 종류가 목록에 없으면 다른 자원으로 대신하지 않는다.
+  const CHAT_RES_KIND = {car: [/차량|관용|니로|승용|승합|자동차|카니발|스타리아/, '차량'], room: [/회의실|회의|세미나|강당|교육장/, '회의실'], led: [/LED|패널|전광판/i, 'LED 패널']};
+  function chatResKindOf(v) {
+    const t = String(v || '').trim();
+    if (Object.prototype.hasOwnProperty.call(CHAT_RES_KIND, t)) return t;
+    for (const k of ['room', 'led', 'car']) if (CHAT_RES_KIND[k][0].test(t)) return k;
+    return !t || /^(car|vehicle|차)$|공용차/i.test(t) ? 'car' : /room/i.test(t) ? 'room' : '';
+  }
+  const chatJo = (w, p) => (typeof R === 'object' && R && typeof R.cuJosa === 'function' ? R.cuJosa(String(w), p).slice(-1) : `${p[0]}(${p[1]})`);
+  function chatResPick(list, kind, hint) {
+    const flat = s => String(s || '').replace(/\s+/g, '').toLowerCase();
+    const k = chatResKindOf(kind), lit = k ? '' : flat(kind).slice(0, 20), label = k ? CHAT_RES_KIND[k][1] : String(kind).trim().slice(0, 20);
+    const of = k ? list.filter(r => CHAT_RES_KIND[k][0].test(r.name)) : lit.length >= 2 ? list.filter(r => flat(`${r.name}${r.attr || ''}`).includes(lit)) : [];
+    // 이름 단서: 종류를 뜻하는 말(회의실·차량 등)은 빼고, 남은 말이 모두 이름에 든 자원만 남긴다.
+    const toks = String(hint || '').split(/\s+/).map(flat).filter(t => t && t !== lit && !/^(차량|관용차|차|회의실|led|패널|자원)$/.test(t));
+    const named = toks.length ? of.filter(r => toks.every(t => flat(r.name).includes(t))) : null;
+    return {label, of, pool: named || of};
+  }
+
   chatRegisterTool({
-    name: 'reserve_vehicle', label: '차량 예약 준비', kind: 'act',
-    description: '공용차량 예약을 준비한다. 가능 여부를 먼저 확인하고, 확인 카드에서 사용자가 [예약 확정]을 눌러야 실제로 예약된다. date, start, end(HH:MM), title(예약명) 필요.',
-    params: {type: 'object', properties: {date: {type: 'string'}, start: {type: 'string'}, end: {type: 'string'}, title: {type: 'string'}}, required: ['date', 'start', 'end']},
+    name: 'reserve_vehicle', label: '자원 예약 준비', kind: 'act',
+    description: '차량·회의실 등 자원 예약 준비(확인 카드만). kind: car(기본)|room|led|종류 이름, resource: 자원 이름 일부. 그 종류가 없으면 대신하지 않는다. date, start, end(HH:MM), title.',
+    params: {type: 'object', properties: {date: {type: 'string'}, start: {type: 'string'}, end: {type: 'string'}, title: {type: 'string'}, kind: {type: 'string'}, resource: {type: 'string'}}, required: ['date', 'start', 'end']},
     run: async a => {
-      if (!allowed('resource')) return {ok: false, text: '자원 예약 기능이 관리자 설정으로 꺼져 있습니다.'};
+      const off = '자원 예약 기능이 관리자 설정으로 꺼져 있습니다.';
+      if (!allowed('resource')) return {ok: false, text: off};
       if (!a.date || !a.start || !a.end) return {ok: false, text: '날짜와 시간을 알려 주세요. 예) 내일 14시부터 16시까지 차량 예약해줘'};
       const iso = chatDateArg(a.date);
       if (!iso) return {ok: false, text: '날짜를 알아보지 못했습니다. 예) 내일, 11/20'};
-      const d8 = iso.replace(/-/g, ''), title = String(a.title || '').trim().slice(0, 40) || '업무 이동';
+      // 종류가 없으면 자원 이름에서 읽고(2층 회의실 → 회의실), 그래도 없으면 차량
+      const hk = a.resource ? chatResKindOf(a.resource) : '', kindIn = a.kind || (hk === 'room' || hk === 'led' ? hk : 'car');
+      const d8 = iso.replace(/-/g, ''), title = String(a.title || '').trim().slice(0, 40) || (chatResKindOf(kindIn) === 'car' ? '업무 이동' : '업무');
       let v = R.validateBooking({title, date: d8, start: a.start, end: a.end});
       if (!v.ok) return {ok: false, text: '예약할 수 없는 조건입니다: ' + v.errors.join(' ')};
+      const nav = {type: 'nav', label: '자원 예약 화면 열기', view: 'resource'}, nmOf = r => String(r.name).replace(/\(.*$/, '').trim() || r.name;
       try {
-        const list = ((resState().list) || await GW.resourceList()).filter(r => r.useYn !== 'N');
-        // 차량이 아닌 자원(회의실 등)을 대신 예약하지 않는다.
-        const car = list.find(r => /차량|관용|니로|승용|승합|자동차|카니발|스타리아/.test(r.name));
-        if (!car) return {ok: false, text: `자원 목록에서 차량을 찾지 못했습니다${list.length ? ` (있는 자원: ${list.slice(0, 5).map(r => r.name).join(', ')})` : ''}. 자원 예약 화면에서 직접 골라 주세요.`, cards: [{type: 'nav', label: '자원 예약 화면 열기', view: 'resource'}]};
-        const det = await GW.resourceDetail(car.resSeq);
-        v = R.validateBooking({title, date: d8, start: a.start, end: a.end, limitMin: det.limitMin});
-        if (!v.ok) return {ok: false, text: '예약할 수 없는 조건입니다: ' + v.errors.join(' ')};
-        const c = await GW.resourceCheck({resSeq: car.resSeq, start: v.start12, end: v.end12});
-        if (c.conflict || c.limit) {
-          const day = (await GW.resourceBookings({from: d8, to: d8, resSeqs: [car.resSeq]})).filter(b => R.bookingSpanOnDay(b, d8)), free = R.freeSlots(day, d8);
-          return {ok: true, text: `${c.limit ? '예약 한도를 넘습니다.' : '그 시간에는 이미 예약이 있습니다.'} 비어 있는 시간: ${free.length ? free.map(f => `${f.start}~${f.end}`).join(', ') : '없음'}`, cards: [{type: 'note', tone: 'warn', text: `${chatMd(iso)} ${a.start}~${a.end}은(는) 예약할 수 없습니다.`}, {type: 'timeline', title: `비어 있는 시간 (${chatMd(iso)})`, items: free.map(f => ({from: f.start, to: f.end, label: '예약 가능'}))}]};
+        const list = ((typeof resState === 'function' && resState().list) || await GW.resourceList()).filter(r => r.useYn !== 'N');
+        const p = chatResPick(list, kindIn, a.resource), label = p.label;
+        if (!p.of.length) return {ok: false, text: `그룹웨어 자원에 ${label}${chatJo(label, '이가')} 없어 다른 자원으로 대신 예약하지 않습니다.${list.length ? ` 있는 자원: ${list.slice(0, 6).map(r => r.name).join(', ')}` : ''}`, cards: [nav]};
+        if (!p.pool.length) return {ok: false, text: `“${String(a.resource).slice(0, 30)}”에 맞는 ${label}${chatJo(label, '이가')} 없습니다. 있는 ${label}: ${p.of.map(r => r.name).join(', ')}`, cards: [nav]};
+        // 같은 종류가 여럿이면 그 시간에 비어 있는 자원을 먼저 고른다.
+        const tried = [];
+        let pick = null;
+        for (const r of p.pool) {
+          const det = await GW.resourceDetail(r.resSeq);
+          const vv = R.validateBooking({title, date: d8, start: a.start, end: a.end, limitMin: det.limitMin});
+          const c = vv.ok ? await GW.resourceCheck({resSeq: r.resSeq, start: vv.start12, end: vv.end12}) : {};
+          if (!vv.ok || c.conflict || c.limit) { tried.push({r, why: !vv.ok ? vv.errors.join(' ') : c.limit ? '예약 한도를 넘습니다.' : '그 시간에는 이미 예약이 있습니다.'}); continue; }
+          pick = {r, det}; v = vv; break;
         }
-        const nm = car.name.replace(/\(.*$/, '');
-        return {ok: true, text: `${nm}${typeof R === 'object' && R && typeof R.cuJosa === 'function' ? R.cuJosa(String(nm), '을를').slice(-1) : '을(를)'} ${chatMd(iso)} ${a.start}~${a.end}에 예약할 수 있습니다. 확정하면 실제로 예약이 올라갑니다.`, cards: [{type: 'confirm', title: '차량 예약 확정', risk: 'high', rows: [['차량', nm], ['일시', `${iso} ${a.start}~${a.end}`], ['예약명', title], ['승인', car.apprYn === 'Y' ? '관리자 승인 필요' : '승인 없이 확정']], warn: '[예약 확정]을 누르면 그룹웨어에 실제로 예약이 올라가고, 취소는 그룹웨어 자원 화면에서 해야 합니다.', confirmLabel: '예약 확정', cancelLabel: '취소',
+        if (!pick) {
+          const first = tried[0].r;
+          const day = (await GW.resourceBookings({from: d8, to: d8, resSeqs: [first.resSeq]})).filter(b => R.bookingSpanOnDay(b, d8)), free = R.freeSlots(day, d8);
+          const why = tried.length > 1 ? `${label} ${tried.length}곳 모두 안 됩니다(${tried.map(t => `${nmOf(t.r)}: ${t.why}`).join(' ')}). ${nmOf(first)}의` : tried[0].why;
+          return {ok: true, text: `${why} 비어 있는 시간: ${free.length ? free.map(f => `${f.start}~${f.end}`).join(', ') : '없음'}`, cards: [{type: 'timeline', title: `${nmOf(first)} 비어 있는 시간 (${chatMd(iso)})`, items: free.map(f => ({from: f.start, to: f.end, label: '예약 가능'}))}]};
+        }
+        // 승인 여부는 저장할 때 수집기가 쓰는 자원 상세 값을 먼저 본다.
+        const r = pick.r, nm = nmOf(r), ay = /^[YN]$/.test(pick.det.apprYn || '') ? pick.det.apprYn : r.apprYn, ask = ay === 'Y' ? ' 신청' : '';
+        const busy = tried.map(t => t.r), others = p.pool.filter(x => x !== r).map(x => nmOf(x) + (busy.includes(x) ? '(예약 있음)' : '')).join(', ');
+        return {ok: true, text: `${nm}${chatJo(nm, '을를')} ${chatMd(iso)} ${a.start}~${a.end}에 예약할 수 있습니다. 확정하면 실제로 예약${ask}이 올라갑니다.`, data: {kind: label, resource: nm, approval: ay || '?'}, cards: [{type: 'confirm', title: `${label} 예약 확정`, risk: 'high', rows: [['종류', label], ['자원', nm], ['일시', `${iso} ${a.start}~${a.end}`], ['예약명', title], ['승인', ay === 'Y' ? '관리자 승인 필요' : ay === 'N' ? '승인 없이 확정' : '확인하지 못함'], ...(others ? [['다른 후보', others]] : [])], warn: `[예약 확정]을 누르면 그룹웨어에 실제로 예약${ask}이 올라가고, 취소는 그룹웨어 자원 화면에서 해야 합니다.`, confirmLabel: '예약 확정', cancelLabel: '취소',
           onConfirm: async () => {
-            const out = await GW.reserveResource({resSeq: car.resSeq, title, start: v.start12, end: v.end12});
-            logActionRecord({command: `채팅 자원 예약: ${nm}`, type: '자원', target: title, summary: `${iso} ${a.start}~${a.end} 예약을 올렸습니다${out.needsApproval ? '(승인 대기)' : ''}.`, steps: [], verified: true});
-            if (S.res) { S.res.bookings = null; }
-            return {ok: true, text: `${nm} ${iso} ${a.start}~${a.end} 예약을 올렸습니다${out.needsApproval ? '(관리자 승인 대기)' : ''}.${out.verifiedAfterTimeout ? ' 응답이 늦었지만 저장된 것을 확인했습니다.' : ''}`};
+            if (typeof allowed === 'function' && !allowed('resource')) return {ok: false, text: off};
+            // 자원 예약 화면(24-resource.js resBook)과 같은 값으로 올리고, 같은 기준으로 결과를 판정한다.
+            const unsure = '저장 여부를 확인하지 못했습니다. 그룹웨어 나의예약현황에서 확인하세요.';
+            let out;
+            try { out = await GW.reserveResource({resSeq: r.resSeq, title, start: v.start12, end: v.end12, desc: ''}); }
+            catch (e) {
+              if (typeof logError === 'function') logError('chat.reserve', e.message);
+              return {ok: false, text: (e.code === 'UNKNOWN' || e.code === 'TIMEOUT' ? unsure + ' ' : '예약하지 못했습니다: ') + String(e.message || e).slice(0, 100), cards: [nav]};
+            }
+            if (!out || out.ok !== true || (out.verifiedAfterTimeout && out.identityVerified !== true)) return {ok: false, text: unsure, cards: [nav]};
+            if (typeof logActionRecord === 'function') logActionRecord({command: `채팅 자원 예약: ${nm}`, type: '자원', target: title, summary: `${iso} ${a.start}~${a.end} 예약을 올렸습니다${out.needsApproval ? '(승인 대기)' : ''}.`, steps: [], verified: true});
+            if (S.res) { S.res.bookings = null; S.res.mine = null; S.res.mineErr = ''; }
+            return {ok: true, text: `${nm} ${iso} ${a.start}~${a.end} 예약${out.needsApproval ? '을 신청했습니다(관리자 승인 대기)' : '을 올렸습니다'}.${out.verifiedAfterTimeout ? ' 응답이 늦었지만 저장된 것을 확인했습니다.' : ''}`};
           }}]};
-      } catch (e) { logError('chat.reserve', e.message); return {ok: false, text: '차량 예약 가능 여부를 확인하지 못했습니다: ' + String(e.message || e).slice(0, 80)}; }
+      } catch (e) { if (typeof logError === 'function') logError('chat.reserve', e.message); return {ok: false, text: '자원 예약 가능 여부를 확인하지 못했습니다: ' + String(e.message || e).slice(0, 80)}; }
     },
   });
 
