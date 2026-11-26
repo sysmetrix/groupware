@@ -2460,6 +2460,164 @@
       "q": "그 돈 어떻게 됐어?",
       "tool": "",
       "why": "어느 돈인지 알 수 없다"
+    },
+    {
+      "id": "p01",
+      "cat": "실행",
+      "q": "어제 올린 출장 신청 철회하고 싶어",
+      "tool": [
+        "",
+        "small_talk",
+        "list_my_requests"
+      ],
+      "notTool": [
+        "prepare_trip_request",
+        "prepare_leave_request"
+      ],
+      "why": "철회 요청을 새 신청 준비로 읽으면 안 된다 (메인이 규칙 수정 뒤 따로 쓴 확인 문항, 2026-11-26)"
+    },
+    {
+      "id": "p02",
+      "cat": "조회",
+      "q": "차량 예약 아직 승인 안 됐나?",
+      "tool": "get_resource_status",
+      "notTool": [
+        "reserve_vehicle"
+      ],
+      "why": "승인 여부는 자원 예약 현황 (메인이 규칙 수정 뒤 따로 쓴 확인 문항, 2026-11-26)"
+    },
+    {
+      "id": "p03",
+      "cat": "실행",
+      "q": "금요일 회의실 예약한 거 빼줘",
+      "tool": [
+        "",
+        "small_talk",
+        "get_resource_status"
+      ],
+      "notTool": [
+        "reserve_vehicle"
+      ],
+      "why": "예약 취소는 대신 하지 않는다 (메인이 규칙 수정 뒤 따로 쓴 확인 문항, 2026-11-26)"
+    },
+    {
+      "id": "p04",
+      "cat": "넘겨짚지 않기",
+      "q": "요즘 너무 피곤하다",
+      "tool": [
+        "",
+        "small_talk"
+      ],
+      "notTool": [
+        "prepare_leave_request"
+      ],
+      "why": "하소연을 연차 준비로 읽지 않는다 (메인이 규칙 수정 뒤 따로 쓴 확인 문항, 2026-11-26)"
+    },
+    {
+      "id": "p05",
+      "cat": "실행",
+      "q": "다음 주 월화 연차 쓰려고 하는데 준비 좀",
+      "tool": "prepare_leave_request",
+      "why": "요일 범위 연차 준비 (메인이 규칙 수정 뒤 따로 쓴 확인 문항, 2026-11-26)"
+    },
+    {
+      "id": "p06",
+      "cat": "조회",
+      "q": "내 남은 연차 며칠이야",
+      "tool": "get_leave_status",
+      "notTool": [
+        "prepare_leave_request"
+      ],
+      "why": "잔여 연차 조회 (메인이 규칙 수정 뒤 따로 쓴 확인 문항, 2026-11-26)"
+    },
+    {
+      "id": "p07",
+      "cat": "조회",
+      "q": "법카 사용내역 이번 달 거 보여줘",
+      "tool": "get_unresolved_evidence",
+      "why": "법인카드 내역 (메인이 규칙 수정 뒤 따로 쓴 확인 문항, 2026-11-26)"
+    },
+    {
+      "id": "p08",
+      "cat": "조회",
+      "q": "우리 부서 사업 예산 얼마 남았어",
+      "tool": [
+        "get_budget",
+        "budget_forecast"
+      ],
+      "why": "사업 잔액 (메인이 규칙 수정 뒤 따로 쓴 확인 문항, 2026-11-26)"
+    },
+    {
+      "id": "p09",
+      "cat": "실행",
+      "q": "할 일 목록에 보고서 검토 추가해 줘",
+      "tool": "add_todo",
+      "why": "\"할 일 목록에 ... 추가\"는 목록 조회가 아니라 추가다 (메인이 규칙 수정 뒤 따로 쓴 확인 문항, 2026-11-26)",
+      "known": true
+    },
+    {
+      "id": "p10",
+      "cat": "조회",
+      "q": "이번 주 금요일 일정 뭐 있지",
+      "tool": "get_schedule",
+      "notTool": [
+        "get_staff_status"
+      ],
+      "why": "내 일정 (메인이 규칙 수정 뒤 따로 쓴 확인 문항, 2026-11-26)"
+    },
+    {
+      "id": "p11",
+      "cat": "실행",
+      "q": "지난번 넣은 시간외 근무 신청 취소할래",
+      "tool": [
+        "",
+        "small_talk",
+        "list_my_requests"
+      ],
+      "notTool": [
+        "prepare_overtime_request"
+      ],
+      "why": "취소를 새 신청 준비로 읽지 않는다 (메인이 규칙 수정 뒤 따로 쓴 확인 문항, 2026-11-26)"
+    },
+    {
+      "id": "p12",
+      "cat": "조회",
+      "q": "이번 주 몇 시간 일했어?",
+      "tool": "get_work_hours",
+      "notTool": [
+        "prepare_overtime_request"
+      ],
+      "why": "근무시간 조회 (메인이 규칙 수정 뒤 따로 쓴 확인 문항, 2026-11-26)"
+    },
+    {
+      "id": "p13",
+      "cat": "조회",
+      "q": "김민수 과장 내일 출근해?",
+      "tool": "get_staff_status",
+      "why": "다른 직원 근무 상태(지어낸 이름) (메인이 규칙 수정 뒤 따로 쓴 확인 문항, 2026-11-26)"
+    },
+    {
+      "id": "p14",
+      "cat": "넘겨짚지 않기",
+      "q": "휴가 가고 싶다 진짜",
+      "tool": [
+        "",
+        "small_talk"
+      ],
+      "notTool": [
+        "prepare_leave_request"
+      ],
+      "why": "날짜 없는 바람은 신청 준비가 아니다 (메인이 규칙 수정 뒤 따로 쓴 확인 문항, 2026-11-26)"
+    },
+    {
+      "id": "p15",
+      "cat": "조회",
+      "q": "관용차 내일 오전에 비어 있어?",
+      "tool": "get_resource_status",
+      "notTool": [
+        "reserve_vehicle"
+      ],
+      "why": "빈 시간 확인은 예약이 아니다 (메인이 규칙 수정 뒤 따로 쓴 확인 문항, 2026-11-26)"
     }
   ]
 }
