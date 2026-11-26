@@ -530,7 +530,7 @@ test('v1.7.0: 직원의 그날 근태, 오늘 출근 시각, 지문 날짜, 이�
   assert.match(h, /집행액은 올해 누계입니다/);
   assert.match(h, /지났으므로 다음 주/);
   const rd = fs.readFileSync(new URL('../src/live/wc/32-chat-tools-read.js', import.meta.url), 'utf8');
-  assert.match(rd, /퇴근 지문 확인이 필요한 날은 \$\{an\.length\}일입니다/);
+  assert.match(rd, /지문 확인이 필요한 날은 \$\{an\.length\}일입니다/);
   assert.match(rd, /nn = name && !a\.exact \? Math\.max\(n, 14\) : n/);
 });
 

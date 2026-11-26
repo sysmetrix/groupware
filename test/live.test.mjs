@@ -596,8 +596,10 @@ test('team calendar: classify leave/trip/overtime and check only for missing lea
 
 test('review fixes: midnight overtime, combined items, amount safety, docNo priority, spaced refs', () => {
   const now = new Date('2026-11-09T20:00:00+09:00');
-  const row = o => ({date: '20261108', name: '가나', dept: 'X', item: '연장근무', appStart: '2200', appEnd: '0200', come: '', leave: '2300', ...o});
+  const row = o => ({date: '20261108', name: '가나', dept: 'X', item: '연장근무', appStart: '2200', appEnd: '0200', come: '1900', leave: '2300', ...o}); // 20261108은 일요일: v1.25부터 근무일이 아닌 날은 출근 지문도 본다
   assert.equal(classifyTeamRow(row(), now).state, 'ok');                                  // 자정 넘김: 일찍 찍어도 정상
+  assert.equal(classifyTeamRow(row({come: ''}), now).state, 'miss');                      // 일요일 시간외: 출근 지문이 없으면 확인 대상
+  assert.equal(classifyTeamRow(row({date: '20261106', come: '', appEnd: '2300', leave: '2310'}), new Date('2026-11-09T20:00:00+09:00')).state, 'ok'); // 평일(금) 시간외는 퇴근 지문만
   assert.equal(classifyTeamRow(row({date: '20261109', leave: ''}), now).state, 'wait');    // 아직 끝나지 않음
   assert.equal(classifyTeamRow(row({appEnd: '2400', leave: '0010'}), now).state, 'ok');
   assert.notEqual(classifyTeamRow(row({appEnd: ''}), now).state, 'ok');                    // 종료 시각 없으면 정상으로 보지 않음

@@ -109,7 +109,14 @@ export function extractAllDeadlines(text, now = new Date(), {strict = false} = {
 // The deadline to act on: the nearest one that has not passed, otherwise the latest.
 export function nextDeadline(list = []) { return list.find(x => x.dday >= 0) || list[list.length - 1] || null; }
 
-// Only a verified personal, approved overtime application with a queried missing departure fingerprint is actionable.
+// v1.25: 근무일이 아닌 날인지(주말·그룹웨어 휴일 표시·휴일근무 신청). 근무일이 아닌 날의 휴일근무·시간외근무는 출근과 퇴근 지문을 모두 본다.
+export function attNonWorkday(date, {rows = [], item = ''} = {}) {
+  const m = String(date || '').match(/^(\d{4})(\d{2})(\d{2})$/);
+  const dow = m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).getUTCDay() : -1;
+  return dow === 0 || dow === 6 || /휴일근무/.test(String(item || '')) || (Array.isArray(rows) ? rows : []).some(r => r && (r.holiday === true || /휴일/.test(String(r.result || ''))));
+}
+// Only a verified personal, approved overtime application with a queried missing fingerprint is actionable.
+// 평일 시간외근무는 퇴근 지문만, 근무일이 아닌 날의 휴일근무·시간외근무는 출근·퇴근 지문을 모두 확인한다. 그 밖의 날에 출근 지문이 없는 것은 보지 않는다.
 export function attendanceAnomalies(days = [], {now = new Date(), apps = [], me = '', daysError = '', appsError = ''} = {}) {
   if (daysError || appsError || !me) return [];
   const today = kstNow(now).date.replace(/-/g, '');
@@ -126,8 +133,13 @@ export function attendanceAnomalies(days = [], {now = new Date(), apps = [], me 
     const endAt = endDay * 1440 + end + (endDate === date && end < start ? 1440 : 0);
     if (!Number.isFinite(endAt) || current < endAt) continue;
     const matches = days.filter(r => r && r.date === date);
-    if (!matches.length || matches.some(r => r.leave) || matches.some(r => r.fingerprintChecked === false)) continue;
-    out.set(date, {date, result: '퇴근 지문 누락', item: a.atNm || a.atItemNm || '시간외근무', status: '승인', applied: false, priority: 'medium', advice: '승인된 시간외근무 종료 후 퇴근 지문 기록이 없습니다. 그룹웨어에서 확인하세요.'});
+    if (!matches.length || matches.some(r => r.fingerprintChecked === false)) continue;
+    const item = a.atNm || a.atItemNm || '시간외근무';
+    const nonWork = attNonWorkday(date, {rows: matches, item: [a.atNm, a.atItemNm].join(' ')});
+    const missing = [nonWork && !matches.some(r => r.come) ? '출근' : '', !matches.some(r => r.leave) ? '퇴근' : ''].filter(Boolean);
+    if (!missing.length) continue;
+    out.set(date, {date, result: `${missing.join('·')} 지문 누락`, missing, nonWork, item, status: '승인', applied: false, priority: 'medium',
+      advice: nonWork ? `근무일이 아닌 날의 승인된 ${item}인데 ${missing.join('·')} 지문 기록이 없습니다. 그룹웨어에서 확인하세요.` : '승인된 시간외근무 종료 후 퇴근 지문 기록이 없습니다. 그룹웨어에서 확인하세요.'});
   }
   return [...out.values()];
 }
@@ -435,9 +447,10 @@ function judge(a, now) {
   } else if (a.type === 'attendance') {
     state = 'check';
     const x = a.att || {};
-    headline = '시간외근무 후 퇴근 지문 확인';
+    const miss = Array.isArray(x.missing) && x.missing.length ? x.missing.join('·') : '퇴근';
+    headline = x.nonWork ? `휴일근무 ${miss} 지문 확인` : '시간외근무 후 퇴근 지문 확인';
     if (x.item) facts.push(x.item);
-    facts.push('승인된 신청의 퇴근 지문 기록 없음');
+    facts.push(`승인된 신청의 ${miss} 지문 기록 없음`);
     a.context = x.advice || '';
   } else if (a.base === 'mailAnswered' || a.base === 'conflictAnswered') {
     state = 'confirm';
@@ -575,7 +588,7 @@ export function analyze(raw, prev = null, now = new Date(), {maxHigh = 6, roles 
   // Use only separately verified past fingerprint rows and approved personal overtime applications.
   const ot = d.attendance?.overtime || {};
   const anomalies = attendanceAnomalies(ot.days || [], {now, apps: ot.apps || [], me: ot.me, daysError: ot.daysError, appsError: ot.appsError});
-  for (const x of anomalies) push({key: `att:${x.date}`, type: 'attendance', base: x.priority === 'high' ? 'attHigh' : 'attMedium', att: x, ref: {date: x.date}, area: '근태', kind: '퇴근 지문 확인 필요', title: `${fmtYmd(x.date).slice(5).replace('-', '/')}(${'일월화수목금토'[new Date(fmtYmd(x.date) + 'T00:00:00Z').getUTCDay()]}) 퇴근 지문 확인${x.item ? ` · ${x.item}` : ''}`, detail: x.advice, when: fmtYmd(x.date), url: d.attendance?.requestUrl || d.attendance?.url, listUrl: d.attendance?.url, isNew: false});
+  for (const x of anomalies) push({key: `att:${x.date}`, type: 'attendance', base: x.priority === 'high' ? 'attHigh' : 'attMedium', att: x, ref: {date: x.date}, area: '근태', kind: `${(x.missing || ['퇴근']).join('·')} 지문 확인 필요`, title: `${fmtYmd(x.date).slice(5).replace('-', '/')}(${'일월화수목금토'[new Date(fmtYmd(x.date) + 'T00:00:00Z').getUTCDay()]}) ${(x.missing || ['퇴근']).join('·')} 지문 확인${x.item ? ` · ${x.item}` : ''}`, detail: x.advice, when: fmtYmd(x.date), url: d.attendance?.requestUrl || d.attendance?.url, listUrl: d.attendance?.url, isNew: false});
 
   // Score -> level. Only the top `maxHigh` can be 긴급 so that red stays meaningful.
   // Is this mine to do, or just something I can see? (참고 = 나와 직접 관련 적음)
@@ -1184,7 +1197,7 @@ export function maskSensitive(s) {
 }
 
 // ---------------------------------------------------------------------------
-// 직원 근태 달력: 휴가·출장(교육 포함)·시간외 근무만 골라 표시하고, 시간외 종료 후 퇴근 지문 누락만 확인한다.
+// 직원 근태 달력: 휴가·출장(교육 포함)·시간외 근무만 골라 표시하고, 시간외 종료 후 퇴근 지문 누락을 확인한다(근무일이 아닌 날은 출근 지문도).
 // 출근 지문과 퇴근 지문을 찍은 시각은 판정하지 않는다.
 // ---------------------------------------------------------------------------
 const hmMin = s => { const m = String(s || '').match(/^(\d{2})(\d{2})$/); if (!m) return null; const h = Number(m[1]), min = Number(m[2]); return min < 60 && (h < 24 || (h === 24 && min === 0)) ? h * 60 + min : null; };
@@ -1234,8 +1247,10 @@ function classifyCore(r, now = new Date()) {
   if (current < end) return {...base, state: 'wait', detail: `신청 ${span}${leave !== null ? ` · 현재 지문 ${hmFmt(r.leave)}` : ''}`};
   if (r.fingerprintChecked === false) return {...base, state: 'wait', detail: `신청 ${span} · 퇴근 지문 미조회`};
   if (r.leave && (leave === null || leave === 0 || leave === 1440)) return {...base, state: 'wait', detail: `신청 ${span} · 퇴근 지문 시각 확인 필요`};
-  if (leave === null) return {...base, state: 'miss', detail: `신청 ${span} · 퇴근 지문 없음`};
-  return {...base, state: 'ok', detail: `신청 ${span} · 퇴근 지문 ${hmFmt(r.leave)}`};
+  // v1.25: 근무일이 아닌 날의 휴일근무·시간외근무는 출근 지문도 본다(평일 시간외는 퇴근 지문만).
+  const nonWork = attNonWorkday(r.date, {item, rows: [r]}), noCome = nonWork && hmMin(r.come) === null;
+  if (leave === null || noCome) return {...base, state: 'miss', nonWork, detail: `신청 ${span} · ${[noCome ? '출근' : '', leave === null ? '퇴근' : ''].filter(Boolean).join('·')} 지문 없음`};
+  return {...base, state: 'ok', nonWork, detail: `신청 ${span} · ${nonWork ? `출근 지문 ${hmFmt(r.come)} · ` : ''}퇴근 지문 ${hmFmt(r.leave)}`};
 }
 export function buildTeamCalendar(rows = [], now = new Date(), idx = null) {
   const byDate = {}, problems = [];

@@ -64,7 +64,7 @@ test('자동화 켜기 스위치는 24px 이상, 좁은 화면 머리글은 한 
 
 test('v1.9.1 검수: 근태 칸은 그룹웨어 판정 대신 지문 기록 유무, 시간외 예정은 말줄임표로 보이지 않는다', () => {
   const att = read('wc/11-attendance.js');
-  assert.match(att, /'출퇴근 기록 없음'/);
+  assert.match(att, /!r\.come && !r\.leave \? '' :/, 'v1.25: 출퇴근 기록이 없는 평일은 표시하지 않는다');
   assert.doesNotMatch(att, /: '그룹웨어 기록';/);
   const cal = read('wc/10-calendar-budget.js');
   assert.match(cal, /wait: \['예정', '아직 진행 전'\]/);

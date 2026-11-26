@@ -18,7 +18,7 @@ test('attendance separates checks, original record and monthly export', () => {
     R:{kstNow:()=> ({y:2026,m:11,d:24}), appInfoLine:()=> ''}, hm4:String, fmtDays:String, mins:String,
     ymd8:String, myAppInfos:()=> [], WD:[], actionRow:()=> '<button data-act="markDone">완료 처리</button>'});
   const html = vAttendance();
-  for (const label of ['오늘 근태', '연차 잔여', '시간외 신청일 퇴근 지문 확인', '월별 근태 달력', '올해 연차·휴가 사용 내역']) assert.ok(html.includes(`aria-label="${label}"`), label);
+  for (const label of ['오늘 근태', '연차 잔여', '시간외·휴일근무 지문 확인', '월별 근태 달력', '올해 연차·휴가 사용 내역']) assert.ok(html.includes(`aria-label="${label}"`), label);
   assert.match(html, /완료 처리.*GW 비서에만.*그룹웨어 근태 기록은 바뀌지 않습니다/);
   assert.match(html, /그룹웨어 근태 상태 정상/);
   assert.match(html, /data-url="\/apply"[^>]*>그룹웨어에서 근태신청/);
