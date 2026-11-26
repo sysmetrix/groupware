@@ -165,6 +165,9 @@
     if (view === 'approval' && ['pending', 'deptWaiting', 'distWaiting', 'sendWaiting', 'submitted', 'viewing'].includes(param)) { if (go('approval') !== false) { S.apTab = param; S.apTabPinned = true; renderMain(); } return; }
     if (view === 'resource' && /^[\w-]+,\d{8}$/.test(param || '') && typeof resState === 'function') { const [seq, d8] = param.split(','), rs = resState(); if (rs.sel !== seq || rs.date !== d8) { rs.sel = seq; rs.date = d8; rs.bookings = null; } go('resource'); return; }
     if (view === 'mytodo' && param === 'wrap' && typeof todoWrapOpen === 'function') { if (go('mytodo') !== false) todoWrapOpen(); return; }
+    // v1.24: 결의 전 증빙 카드는 예산 집행 > 카드·세금계산서로, 먼저 할 일의 개인 ToDo는 그 할 일 자세히로 연다.
+    if (view === 'budget' && ['card', 'etax'].includes(param)) { if (go('budget') !== false) { S.budget.mode = param; renderMain(); } return; }
+    if (view === 'mytodo' && param && param !== 'wrap' && typeof todoOpen === 'function') { todoOpen(param); return; }
     if (view === 'budget' && param === 'mine') { if (go('budget') !== false) { S.budget.mode = 'mine'; renderMain(); } return; }
     if (view === 'budget' && param === 'plan') { if (go('budget') !== false) { S.budget.mode = 'detail'; S.budget.budgetTab = 'plan'; renderMain(); } return; }
     if (view === 'today' && param === 'ref') { S.filter = {...S.filter, level: 'all', area: 'all', q: '', onlyNew: false, showHidden: false}; S.todoSrc = 'gw'; S.todayTab = 'ref'; go('today'); return; }

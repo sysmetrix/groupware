@@ -17,9 +17,9 @@ import {minifySafely, TERSER_VERSION} from './terser-minify.mjs';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const DEFAULT_OUT_DIR = path.join(ROOT, 'build', 'live');
-// 1320KB(v1.21.1, 1300KB에서 상향: v1.21.0 배포 뒤 여유가 177바이트뿐이라 결재 기본 탭·일정 오늘 선택 추가로 17바이트 초과, 다음 수정 여유 확보). 1300KB(v1.21.0, 1280KB에서 상향: v1.18~v1.20으로 상한에 붙은 뒤 예산 집행 > 카드 사용내역 약 13KB와 모든 날짜 칸의 날짜 고르기 통일 약 7KB 추가로 초과). 1280KB(v1.17.0, 1120KB에서 상향: 그룹웨어 ToDo 연동 할 일 관리와 예산 집행 계획·예상 집행률 화면 약 85KB 추가, 기존 기능에서 덜어 낼 죽은 코드는 v1.16에서 거의 다 정리함). 1120KB(v1.11.0, 1100KB에서 상향: 노트북 실업무 흐름 보강 뒤 0.5KB 초과, 업데이트 내역 문구를 먼저 줄였으나 부족). 1100KB(v1.7.0, 1080KB에서 상향). 그 전에 덜어 낸 것: 죽은 CSS(v0.98), 쓰지 않는 공개 함수(v1.0), 업데이트 내역 축소(v1.1·v1.6), 덮어쓴 CSS(v1.2).
+// 1340KB(v1.24.0, 1320KB에서 상향: v1.23 메뉴 통폐합·홈 리뉴얼로 여유가 약 1.9KB만 남은 뒤 비서 대화의 결의 전 증빙 도구·사업 합계 답·먼저 할 일 개인 ToDo 반영 약 6KB 추가로 초과, 다음 수정 여유 확보). 1320KB(v1.21.1, 1300KB에서 상향: v1.21.0 배포 뒤 여유가 177바이트뿐이라 결재 기본 탭·일정 오늘 선택 추가로 17바이트 초과, 다음 수정 여유 확보). 1300KB(v1.21.0, 1280KB에서 상향: v1.18~v1.20으로 상한에 붙은 뒤 예산 집행 > 카드 사용내역 약 13KB와 모든 날짜 칸의 날짜 고르기 통일 약 7KB 추가로 초과). 1280KB(v1.17.0, 1120KB에서 상향: 그룹웨어 ToDo 연동 할 일 관리와 예산 집행 계획·예상 집행률 화면 약 85KB 추가, 기존 기능에서 덜어 낼 죽은 코드는 v1.16에서 거의 다 정리함). 1120KB(v1.11.0, 1100KB에서 상향: 노트북 실업무 흐름 보강 뒤 0.5KB 초과, 업데이트 내역 문구를 먼저 줄였으나 부족). 1100KB(v1.7.0, 1080KB에서 상향). 그 전에 덜어 낸 것: 죽은 CSS(v0.98), 쓰지 않는 공개 함수(v1.0), 업데이트 내역 축소(v1.1·v1.6), 덮어쓴 CSS(v1.2).
 // 남은 큰 몫은 기능 코드와 AI 도구 설명이다. 번들은 브라우저 저장소에 약 1.0M자로 들어가며 한도(약 5.2M자)에 여유가 크다.
-export const MAX_SHIPPED_BUNDLE_BYTES = 1320 * 1024;
+export const MAX_SHIPPED_BUNDLE_BYTES = 1340 * 1024;
 export const EXTRA_MODULES = ['home-model.mjs', 'chat.mjs', 'chat-understand.mjs', 'gcal-sync.mjs', 'settings-transfer.mjs', 'doc-find.mjs', 'usage.mjs', 'contract.mjs', 'todo-plan.mjs', 'card-usage.mjs', 'changelog.mjs'];
 const PARTS_MARK = '  /*@WC_PARTS@*/';
 const CSS_MARK = "'/*@WC_CSS@*/'";

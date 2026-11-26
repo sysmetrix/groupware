@@ -242,6 +242,15 @@
       if (!GW.budgetAll) return {ok: false, text: '전체 사업 예산 조회를 쓸 수 없습니다.', cards: [nav]};
       let all; try { all = await GW.budgetAll({}); } catch (e) { return {ok: false, text: '전체 사업 예산을 읽지 못했습니다: ' + String(e.message || e).slice(0, 80), cards: [nav]}; }
       const recs = R.budgetRecords(all), failed = (all.projects || []).filter(p => p.error).length;
+      // v1.24: 사업 이름이나 코드(전략경영실운영, A201)를 물으면 과목을 나열하지 않고 사업 전체 합계(재단 전체 화면과 같은 계산)를 먼저 답한다.
+      const proj = typeof R.budgetPickProject === 'function' ? R.budgetPickProject(R.budgetProjectTotals(all), q) : null;
+      if (proj) {
+        const el = S.a && S.a.budget ? S.a.budget.elapsedPct : null;
+        return {ok: true, text: `${proj.name}(${proj.project}) 사업 전체: 예산 ${won(proj.budget)}원 · 집행 ${won(proj.executed)}원(${pct(proj.rate)}) · 잔액 ${won(proj.balance)}원입니다.${el != null ? ` (올해 경과율 ${el}%)` : ''}
+과목별 잔액은 “${proj.name} 출장비 잔액”처럼 과목 이름을 붙여 물어봐 주세요.`,
+          data: {project: proj.project, name: proj.name, budget: proj.budget, executed: proj.executed, balance: proj.balance, rate: proj.rate, elapsed_pct: el},
+          cards: [{type: 'list', title: `${proj.name} · 관별`, items: proj.top.map(r => ({title: r.name, sub: `예산 ${won(r.budget)}원 · 집행 ${won(r.executed)}원 / 잔액 ${won(r.balance)}원`, badge: pct(r.rate), tone: 'info'}))}, nav]};
+      }
       let res = R.searchBudget(recs, q, {max: 8});
       // v0.93.0: 여러 사업에 같은 과목이 있으면 내 부서 사업을 먼저(나머지는 개수만)
       const dept = String((S.raw && S.raw.principal && S.raw.principal.deptName) || '').replace(/\s+/g, '');

@@ -132,7 +132,7 @@
   function homeCoreHtml(d) {
     const p = homePersonal();
     const gap = d.taskGaps ? '확인된 ' : '';
-    const todoTxt = [`그룹웨어 ${gap}처리·확인 ${d.mine.length}건`, d.urgent ? `우선 ${d.urgent}건` : '', `기다리는 중 ${d.wait}건`, p ? p.text : ''].filter(Boolean).join(' · ') + (d.taskGaps ? ' (일부 자료 누락 가능)' : '');
+    const todoTxt = [`그룹웨어 ${gap}처리·확인 ${d.mine.length}건`, d.urgent ? `우선 ${d.urgent}건` : '', d.wait ? `기다리는 중 ${d.wait}건` : '', p ? p.text : ''].filter(Boolean).join(' · ') + (d.taskGaps ? ' (일부 자료 누락 가능)' : '');
     const teamGap = d.teamLoading || d.teamError || d.teamUnknown;
     const schedTxt = [d.scheduleUnknown ? '오늘 일정 일부 미확인' : `오늘 그룹웨어 일정 ${d.events.length}건${teamGap ? ' (일부 미확인)' : ''}`, d.teamError ? '자리 비움 조회 실패' : d.teamLoading ? '자리 비움 확인 중' : d.teamUnknown ? '자리 비움 확인 불가' : `자리 비움 ${d.away.length}명`, d.resUnknown ? '' : `자원 예약 ${d.resources.length}건${d.resPartial ? '(일부 자원)' : ''}`].filter(Boolean).join(' · ');
     const hhm = s => (typeof hm4 === 'function' ? hm4(s || '') : String(s || ''));
