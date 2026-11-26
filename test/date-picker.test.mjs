@@ -43,9 +43,8 @@ test('날짜 칸: 숨은 값 칸과 날짜 버튼, 글자는 이스케이프', (
 
 test('달력: 요일 행, 오늘·선택 표시, 범위 밖 날짜는 고를 수 없음', () => {
   const {api, mk, layer} = load();
-  mk('cduFrom', '2026-11-10'); mk('cduTo', '2026-11-20');
-  api.dateField('cduFrom', '2026-11-10', '시작일', {maxOf: 'cduTo'});
-  api.dateField('cduTo', '2026-11-20', '종료일', {minOf: 'cduFrom'});
+  mk('cduTo', '2026-11-20');
+  api.dateField('cduTo', '2026-11-20', '종료일', {min: '2026-11-10'});
   api.dpOpen('cduTo');
   assert.ok(api.dpIsOpen());
   const h = layer.innerHTML;
@@ -57,6 +56,27 @@ test('달력: 요일 행, 오늘·선택 표시, 범위 밖 날짜는 고를 수
   assert.match(h, /이후만 고를 수 있습니다/);
   assert.doesNotMatch(h, /날짜 지우기/); // 지우기는 허용한 칸만
   assert.match(h, /data-act="dpClose" data-stop="1"/); // 뒤 창(명령 창 등)을 닫지 않는다
+});
+
+test('짝 칸은 막지 않고 옮긴다: 시작·기한이 모두 오늘이어도 시작일에 미래를 고를 수 있다', () => {
+  const {api, mk, els, events, layer} = load();
+  mk('tdeStart', '2026-11-25'); mk('tdeDue', '2026-11-25');
+  api.dateField('tdeStart', '2026-11-25', '시작일', {clear: true, maxOf: 'tdeDue'});
+  api.dateField('tdeDue', '2026-11-25', '기한(종료일)', {clear: true, minOf: 'tdeStart'});
+  api.dpOpen('tdeStart');
+  assert.doesNotMatch(layer.innerHTML, /disabled/); // 다음 달·미래 날짜·오늘 모두 고를 수 있다
+  assert.match(layer.innerHTML, /기한\(종료일\)보다 뒤를 고르면 기한\(종료일\)도 같은 날로 옮깁니다/);
+  api.dpPick('tdeStart', '2026-12-03');
+  assert.equal(els.tdeStart.value, '2026-12-03');
+  assert.equal(els.tdeDue.value, '2026-12-03');
+  assert.deepEqual(events.slice(-2), [['tdeDue', 'input', '2026-12-03'], ['tdeDue', 'change', '2026-12-03']]);
+  api.dpOpen('tdeDue');
+  api.dpPick('tdeDue', '2026-11-30'); // 기한을 시작일보다 앞으로 고르면 시작일도 따라온다
+  assert.equal(els.tdeStart.value, '2026-11-30');
+  const n = events.length;
+  api.dpPick('tdeDue', '2026-12-10'); // 범위 안이면 짝 칸은 그대로
+  assert.equal(els.tdeStart.value, '2026-11-30');
+  assert.equal(events.length, n + 2);
 });
 
 test('고르면 값이 바뀌고 input·change를 보내 기존 처리기가 받는다', () => {
