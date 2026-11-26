@@ -548,5 +548,5 @@ test('v1.8.0: 이름으로 열기, 공지 번호, 이번 주 근무시간, 여�
   assert.equal(C14.chatIntent('가을 축제 일정 알려줘', now).tool, '');
   const o = fs.readFileSync(new URL('../src/live/wc/50-chat-open.js', import.meta.url), 'utf8');
   assert.match(o, /열면 그룹웨어에서 읽음으로 바뀝니다/, '안 읽은 메일·공지는 열기 전에 묻는다');
-  assert.match(o, /출근·퇴근 지문이 함께 남은 날이 없어/, '기록이 없으면 0시간이라고 하지 않는다');
+  assert.match(fs.readFileSync(new URL('../src/live/wc/36-chat-tools-more.js', import.meta.url), 'utf8'), /출근·퇴근 지문이 함께 남은 날이 없어/, '기록이 없으면 0시간이라고 하지 않는다');
 });

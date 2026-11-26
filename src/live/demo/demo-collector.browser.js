@@ -161,7 +161,7 @@
       const date = d.toISOString().slice(0, 10).replace(/-/g, ''), wd = d.getUTCDay();
       if (date > today) break;
       const holiday = wd === 0 || wd === 6;
-      const base = {date, weekday: wd, workType: '주간근무', result: holiday ? '휴일' : '정상', item: '', status: '확정', come: holiday ? '' : '0852', leave: holiday ? '' : (date === today ? '' : '1806'), recognizedMin: holiday ? 0 : (date === today ? null : 480), holiday, applied: false, lateMin: 0, earlyLeaveMin: 0};
+      const base = {date, weekday: wd, workType: '주간근무', result: holiday ? '휴일' : '정상', item: '', status: '승인', come: holiday ? '' : '0852', leave: holiday ? '' : (date === today ? '' : '1806'), recognizedMin: holiday ? 0 : (date === today ? null : 480), holiday, applied: false, lateMin: 0, earlyLeaveMin: 0};
       const kind = odd[date];
       if (kind === 'leave') Object.assign(base, {result: '휴가', item: '연차', come: '', leave: '', recognizedMin: 480, applied: true});
       if (kind === 'trip') Object.assign(base, {result: '정상', item: '관내출장', applied: true});
