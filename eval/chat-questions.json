@@ -2039,8 +2039,7 @@
       "tool": "list_todos",
       "args": {
         "scope": "important"
-      },
-      "known": true
+      }
     },
     {
       "id": "k02",
@@ -2064,8 +2063,7 @@
       },
       "notTool": [
         "add_todo"
-      ],
-      "known": true
+      ]
     },
     {
       "id": "k04",
@@ -2074,8 +2072,7 @@
       "tool": "add_todo",
       "args": {
         "due": "2026-11-18"
-      },
-      "known": true
+      }
     },
     {
       "id": "k05",
@@ -2087,8 +2084,7 @@
       },
       "notTool": [
         "prepare_schedule"
-      ],
-      "known": true
+      ]
     },
     {
       "id": "k06",
@@ -2130,8 +2126,7 @@
         "mark_task",
         "add_todo"
       ],
-      "why": "무엇을 언제까지인지 말하지 않은 혼잣말로 할 일을 만들거나 표시하면 안 된다",
-      "known": true
+      "why": "무엇을 언제까지인지 말하지 않은 혼잣말로 할 일을 만들거나 표시하면 안 된다"
     },
     {
       "id": "k10",
@@ -2142,8 +2137,7 @@
         "mark_task",
         "add_todo"
       ],
-      "why": "삭제는 하지 않는다. 끝냄 표시로 바꿔 처리해도 안 된다",
-      "known": true
+      "why": "삭제는 하지 않는다. 끝냄 표시로 바꿔 처리해도 안 된다"
     },
     {
       "id": "k11",
@@ -2152,8 +2146,7 @@
       "tool": "get_schedule",
       "args": {
         "date": "2026-11-25"
-      },
-      "known": true
+      }
     },
     {
       "id": "k12",
@@ -2167,8 +2160,7 @@
         "reserve_vehicle",
         "prepare_schedule"
       ],
-      "why": "회의실 예약 도구는 없다. 현황을 보여 주거나 되묻고, 차량 예약이나 일정 등록으로 바꾸지 않는다",
-      "known": true
+      "why": "회의실 예약 도구는 없다. 현황을 보여 주거나 되묻고, 차량 예약이나 일정 등록으로 바꾸지 않는다"
     },
     {
       "id": "k13",
@@ -2207,8 +2199,7 @@
         "reserve_vehicle",
         "list_my_requests"
       ],
-      "why": "차량 승인 여부는 자원 예약 현황에 있다. 근태 신청 목록이 아니다",
-      "known": true
+      "why": "차량 승인 여부는 자원 예약 현황에 있다. 근태 신청 목록이 아니다"
     },
     {
       "id": "k16",
@@ -2222,8 +2213,7 @@
       "notTool": [
         "reserve_vehicle"
       ],
-      "why": "취소는 대신하지 않는다. 새 예약 준비로 읽으면 안 된다",
-      "known": true
+      "why": "취소는 대신하지 않는다. 새 예약 준비로 읽으면 안 된다"
     },
     {
       "id": "k17",
@@ -2292,8 +2282,7 @@
       "args": {
         "date": "2026-11-26",
         "end_date": "2026-11-27"
-      },
-      "known": true
+      }
     },
     {
       "id": "k23",
@@ -2303,8 +2292,7 @@
       "args": {
         "date": "2026-11-24",
         "kind": "대체휴가"
-      },
-      "known": true
+      }
     },
     {
       "id": "k24",
@@ -2334,8 +2322,7 @@
       "tool": "get_work_hours",
       "notTool": [
         "prepare_overtime_request"
-      ],
-      "known": true
+      ]
     },
     {
       "id": "k27",
@@ -2365,8 +2352,7 @@
       "notTool": [
         "prepare_leave_request"
       ],
-      "why": "취소를 새 휴가 신청으로 읽으면 안 된다",
-      "known": true
+      "why": "취소를 새 휴가 신청으로 읽으면 안 된다"
     },
     {
       "id": "k29",
@@ -2379,8 +2365,7 @@
       "notTool": [
         "prepare_leave_request"
       ],
-      "why": "날짜도 신청 뜻도 없는 하소연",
-      "known": true
+      "why": "날짜도 신청 뜻도 없는 하소연"
     },
     {
       "id": "k30",
@@ -2389,8 +2374,7 @@
       "tool": [
         "get_budget",
         "budget_forecast"
-      ],
-      "known": true
+      ]
     },
     {
       "id": "k31",
@@ -2399,8 +2383,7 @@
       "tool": "search_budget",
       "notTool": [
         "search_documents"
-      ],
-      "known": true
+      ]
     },
     {
       "id": "k32",
@@ -2411,8 +2394,7 @@
         "kind": "card",
         "period": "last",
         "state": "all"
-      },
-      "known": true
+      }
     },
     {
       "id": "k33",
@@ -2433,8 +2415,7 @@
       "args": {
         "kind": "card",
         "state": "open"
-      },
-      "known": true
+      }
     },
     {
       "id": "k35",
@@ -2455,15 +2436,13 @@
       },
       "notTool": [
         "get_unresolved_evidence"
-      ],
-      "known": true
+      ]
     },
     {
       "id": "k37",
       "cat": "조회",
       "q": "연말까지 계획대로 쓰면 목표까지 얼마 모자라?",
-      "tool": "budget_forecast",
-      "known": true
+      "tool": "budget_forecast"
     },
     {
       "id": "k38",
