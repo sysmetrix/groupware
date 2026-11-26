@@ -900,6 +900,20 @@ export function budgetPickProject(totals = [], query = '') {
   const hits = (Array.isArray(totals) ? totals : []).filter(x => !x.income && (toks.some(t => t === n(x.project) || t === n(x.name)) || (whole.length >= 4 && whole === n(x.name))));
   return hits.length === 1 ? hits[0] : null;
 }
+/**
+ * v1.25.1 예산 과목 표시(예산 집행 표의 도장). 잔액이 0인 과목은 '거의 다 씀'이 아니라 '다 씀'이고, 주의 색이 아닌 보통 도장이다(전액 집행은 정상일 수 있다).
+ * 초과(잔액 < 0) → 다 씀(잔액 0) → 거의 다 씀(집행률 95% 이상, 잔액 남음) → 덜 씀(목·세, 올해 경과율보다 35%p 낮음) 순서.
+ */
+export function budgetFlag(r = {}, elapsedPct = null) {
+  const budget = Number(r.budget) || 0, executed = Number(r.executed) || 0;
+  const balance = Number.isFinite(Number(r.balance)) && r.balance !== null && r.balance !== '' ? Number(r.balance) : budget - executed;
+  const rate = Number.isFinite(Number(r.rate)) ? Number(r.rate) : budget ? executed / budget * 100 : 0;
+  if (balance < 0) return {label: '초과', tone: 'urgent'};
+  if (budget > 0 && balance === 0) return {label: '다 씀', tone: 'tag'};
+  if (budget > 0 && rate >= 95) return {label: '거의 다 씀', tone: 'check'};
+  if (budget > 0 && ['목', '세'].includes(r.level) && elapsedPct !== null && elapsedPct !== undefined && Number.isFinite(Number(elapsedPct)) && rate < Number(elapsedPct) - 35) return {label: '덜 씀', tone: 'tag'};
+  return null;
+}
 const BGT_LV = {세: 3, 목: 2, 항: 1, 관: 0};
 export function searchBudget(records = [], query = '', {max = 300} = {}) {
   const toks = String(query || '').trim().split(/\s+/).map(bgtNorm).filter(Boolean);

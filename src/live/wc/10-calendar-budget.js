@@ -156,7 +156,8 @@ ${S.cal.opts ? `<div class="legend">${legend.map(([c, n]) => `<span><i class="ev
     const curCat = (b.catalog || []).find(p => p.project === b.project);
     const subjRow = full && full.rows && full.rows.find(r => r.code === b.filter);
     const curName = (subjRow && subjRow.name) || (curPin && curPin.label) || (curCat && curCat.name) || b.project;
-    const flag = r => r.balance < 0 ? '<span class="bdg urgent">초과</span>' : (r.budget > 0 && r.rate >= 95) ? '<span class="bdg check">거의 다 씀</span>' : (r.budget > 0 && ['목', '세'].includes(r.level) && r.rate < el - 35) ? '<span class="bdg tag">덜 씀</span>' : '';
+    // v1.25.1: 잔액 0은 '다 씀'(보통 도장). 판정은 R.budgetFlag 한 곳(54번 조각 재단 전체 표와 같은 기준).
+    const flag = r => { const f = typeof R === 'object' && R && typeof R.budgetFlag === 'function' ? R.budgetFlag(r, el) : null; return f ? `<span class="bdg ${f.tone}">${esc(f.label)}</span>` : ''; };
     const rows = t && !t.error ? t.rows : [];
     const searching = typeof budgetMode === 'function' ? false : !!(b.q || '').trim(); // v1.18: 과목 검색은 '재단 전체' 탭으로 옮김
     const head = b.filter ? rows.find(r => r.code === b.filter) : (t && t.total ? {...t.total, code: rows[0]?.code, name: (curCat && curCat.name) || t.label || t.project} : null);
