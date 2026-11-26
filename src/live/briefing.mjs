@@ -1426,6 +1426,29 @@ export function resSortList(list = []) {
   const car = r => /차량/.test(`${(r && r.attr) || ''} ${(r && r.name) || ''}`);
   return (Array.isArray(list) ? list : []).map((r, i) => ({r, i})).sort((a, b) => (car(b.r) - car(a.r)) || a.i - b.i).map(x => x.r);
 }
+// v1.28 자원 종류: 비서의 현황 조회(get_resource_status)와 예약 준비(reserve_vehicle)가 함께 쓰는 한 기준.
+const RES_KIND = {car: [/차량|관용|니로|승용|승합|자동차|카니발|스타리아/, '차량'], room: [/회의실|회의|세미나|강당|교육장/, '회의실'], led: [/LED|패널|전광판/i, 'LED 패널']};
+/** 말(kind 인자·자원 이름 단서) → 'car'|'room'|'led', 모르면 ''. */
+export function resKindOfText(v) {
+  const t = String(v || '').trim();
+  if (Object.prototype.hasOwnProperty.call(RES_KIND, t)) return t;
+  for (const k of ['room', 'led', 'car']) if (RES_KIND[k][0].test(t)) return k;
+  return /room/i.test(t) ? 'room' : /^(vehicle|차)$|공용차/i.test(t) ? 'car' : '';
+}
+/** 자원 하나의 종류. 이름이 먼저, 이름으로 모르면 자원 분류(attr). */
+export function resKindOf(r) {
+  for (const s of [r && r.name, r && r.attr]) for (const k of ['car', 'room', 'led']) if (RES_KIND[k][0].test(String(s || ''))) return k;
+  return '';
+}
+/** 요청한 종류의 자원. 그 밖의 말(예: 상담실)은 이름·분류에 그 말이 든 자원. hint(자원 이름 단서)가 있으면 종류를 뜻하는 말을 빼고 남은 말이 모두 이름에 든 자원만 pool에 남긴다. */
+export function resPick(list = [], kind = '', hint = '') {
+  const flat = s => String(s || '').replace(/\s+/g, '').toLowerCase(), arr = Array.isArray(list) ? list.filter(Boolean) : [];
+  const k = resKindOfText(kind), lit = k ? '' : flat(kind).slice(0, 20), label = k ? RES_KIND[k][1] : String(kind || '').trim().slice(0, 20);
+  const of = k ? arr.filter(r => resKindOf(r) === k) : lit.length >= 2 ? arr.filter(r => flat(`${r.name}${r.attr || ''}`).includes(lit)) : [];
+  const toks = String(hint || '').split(/\s+/).map(flat).filter(t => t && t !== lit && !/^(차량|관용차|차|회의실|led|패널|자원)$/.test(t));
+  const named = toks.length ? of.filter(r => toks.every(t => flat(r.name).includes(t))) : null;
+  return {kind: k, label, of, pool: named || of};
+}
 /** 겹치는 예약 하나(없으면 null). start·end는 'HH:MM', date는 YYYYMMDD. */
 export function resConflict(bookings = [], date, start, end) {
   const a = toMin(start), z = toMin(end);

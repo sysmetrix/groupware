@@ -112,7 +112,7 @@ test('같은 종류가 모두 차 있으면 확인 카드 없이 빈 시간을 �
   assert.match(res.text, /비어 있는 시간: 09:00~14:00, 17:00~18:00/);
   assert.equal(writes(s.calls).length, 0);
   // 한 곳뿐이면 예전처럼 짧게
-  const s1 = setup({busy: ['11']}), r1 = await s1.run({kind: 'room'});
+  const s1 = setup({busy: ['11'], list: LIST.filter(r => r.resSeq !== '12')}), r1 = await s1.run({kind: 'room'});
   assert.match(r1.text, /^그 시간에는 이미 예약이 있습니다\. 비어 있는 시간:/);
 });
 

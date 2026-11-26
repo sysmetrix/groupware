@@ -130,25 +130,8 @@
     },
   });
 
-  // v1.28 자원 종류: 차량·회의실·LED 패널은 읽기 도구(get_resource_status)의 KIND와 같은 이름 기준으로 고른다.
-  // 그 밖의 말(예: 상담실)은 자원 이름·분류에 그 말이 든 자원만 고른다. 그 종류가 목록에 없으면 다른 자원으로 대신하지 않는다.
-  const CHAT_RES_KIND = {car: [/차량|관용|니로|승용|승합|자동차|카니발|스타리아/, '차량'], room: [/회의실|회의|세미나|강당|교육장/, '회의실'], led: [/LED|패널|전광판/i, 'LED 패널']};
-  function chatResKindOf(v) {
-    const t = String(v || '').trim();
-    if (Object.prototype.hasOwnProperty.call(CHAT_RES_KIND, t)) return t;
-    for (const k of ['room', 'led', 'car']) if (CHAT_RES_KIND[k][0].test(t)) return k;
-    return !t || /^(car|vehicle|차)$|공용차/i.test(t) ? 'car' : /room/i.test(t) ? 'room' : '';
-  }
+  // v1.28 자원 종류는 읽기 도구와 같은 R.resPick(briefing.mjs)으로 고른다. 그 종류가 목록에 없으면 다른 자원으로 대신하지 않는다.
   const chatJo = (w, p) => (typeof R === 'object' && R && typeof R.cuJosa === 'function' ? R.cuJosa(String(w), p).slice(-1) : `${p[0]}(${p[1]})`);
-  function chatResPick(list, kind, hint) {
-    const flat = s => String(s || '').replace(/\s+/g, '').toLowerCase();
-    const k = chatResKindOf(kind), lit = k ? '' : flat(kind).slice(0, 20), label = k ? CHAT_RES_KIND[k][1] : String(kind).trim().slice(0, 20);
-    const of = k ? list.filter(r => CHAT_RES_KIND[k][0].test(r.name)) : lit.length >= 2 ? list.filter(r => flat(`${r.name}${r.attr || ''}`).includes(lit)) : [];
-    // 이름 단서: 종류를 뜻하는 말(회의실·차량 등)은 빼고, 남은 말이 모두 이름에 든 자원만 남긴다.
-    const toks = String(hint || '').split(/\s+/).map(flat).filter(t => t && t !== lit && !/^(차량|관용차|차|회의실|led|패널|자원)$/.test(t));
-    const named = toks.length ? of.filter(r => toks.every(t => flat(r.name).includes(t))) : null;
-    return {label, of, pool: named || of};
-  }
 
   chatRegisterTool({
     name: 'reserve_vehicle', label: '자원 예약 준비', kind: 'act',
@@ -161,14 +144,14 @@
       const iso = chatDateArg(a.date);
       if (!iso) return {ok: false, text: '날짜를 알아보지 못했습니다. 예) 내일, 11/20'};
       // 종류가 없으면 자원 이름에서 읽고(2층 회의실 → 회의실), 그래도 없으면 차량
-      const hk = a.resource ? chatResKindOf(a.resource) : '', kindIn = a.kind || (hk === 'room' || hk === 'led' ? hk : 'car');
-      const d8 = iso.replace(/-/g, ''), title = String(a.title || '').trim().slice(0, 40) || (chatResKindOf(kindIn) === 'car' ? '업무 이동' : '업무');
+      const hk = R.resKindOfText(a.resource), kindIn = a.kind || (hk === 'room' || hk === 'led' ? hk : 'car');
+      const d8 = iso.replace(/-/g, ''), title = String(a.title || '').trim().slice(0, 40) || (R.resKindOfText(kindIn) === 'car' ? '업무 이동' : '업무');
       let v = R.validateBooking({title, date: d8, start: a.start, end: a.end});
       if (!v.ok) return {ok: false, text: '예약할 수 없는 조건입니다: ' + v.errors.join(' ')};
       const nav = {type: 'nav', label: '자원 예약 화면 열기', view: 'resource'}, nmOf = r => String(r.name).replace(/\(.*$/, '').trim() || r.name;
       try {
         const list = ((typeof resState === 'function' && resState().list) || await GW.resourceList()).filter(r => r.useYn !== 'N');
-        const p = chatResPick(list, kindIn, a.resource), label = p.label;
+        const p = R.resPick(list, kindIn, a.resource), label = p.label;
         if (!p.of.length) return {ok: false, text: `그룹웨어 자원에 ${label}${chatJo(label, '이가')} 없어 다른 자원으로 대신 예약하지 않습니다.${list.length ? ` 있는 자원: ${list.slice(0, 6).map(r => r.name).join(', ')}` : ''}`, cards: [nav]};
         if (!p.pool.length) return {ok: false, text: `“${String(a.resource).slice(0, 30)}”에 맞는 ${label}${chatJo(label, '이가')} 없습니다. 있는 ${label}: ${p.of.map(r => r.name).join(', ')}`, cards: [nav]};
         // 같은 종류가 여럿이면 그 시간에 비어 있는 자원을 먼저 고른다.
