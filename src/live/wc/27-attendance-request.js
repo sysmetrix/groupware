@@ -125,7 +125,9 @@
     const wkNext = type !== 'overtime' && typeof R.homeDayInfo === 'function' ? (d => d.weekend ? d.next : '')(R.homeDayInfo({date: today})) : '';
     const d0 = attYmd(preset.date) || selDate || pickedDay || wkNext || today, d1 = attYmd(preset.to) || d0;
     // 내 지난 근태 신청 제목에서 제목 형식을 배운다(목록을 못 읽으면 기본 형식)
+    const mark = typeof overlayMark === 'function' ? overlayMark() : 0;
     const ap = GW.teamPlanned ? await Promise.race([loadApps().catch(() => null), wait(4000).then(() => null)]) : null;
+    if (typeof overlayLive === 'function' && !overlayLive(mark)) { toast('다른 창이 열려 있어 근태 신청 창을 띄우지 않았습니다.'); return; }
     const model = ap ? R.learnAttendanceTitles(ap.apps, ap.me) : null;
     const pk = String(preset.kind || '').replace(/\s+/g, '');
     const kind = type === 'trip' ? (/관외/.test(pk) ? '관외출장' : '관내출장') : type === 'leave' ? ([...ATT_LEAVE_KINDS].sort((x, y) => y.length - x.length).find(k => pk.includes(k)) || '연차') : (/휴일/.test(pk) ? '휴일근무' : /조기/.test(pk) ? '조기근무' : '연장근무');
@@ -256,6 +258,8 @@
     step('안전장치', AUTO.blocked.length === 0, AUTO.blocked.length ? `자동 실행 중 ${AUTO.blocked.join(', ')} 클릭을 막았습니다` : '[신청완료]는 누르지 않았습니다. 화면에서 확인한 뒤 직접 누르세요');
     const bad = steps.filter(s => !s.ok).length;
     logActionRecord({command: `근태신청 준비: ${ATT_FORM[spec.type]}`, type: '근태', target: `${spec.from} ${spec.kind || ''}`, summary: bad ? `${steps.length - bad}/${steps.length} 항목을 채웠습니다. 신청은 하지 않았습니다.` : '모든 항목을 채웠습니다. 신청은 하지 않았습니다.', steps: steps.map(s => `${s.ok ? '✓' : '✗'} ${s.name}: ${s.detail}`), status: bad ? 'partial' : 'success', verified: !bad});
+    const out = {status: bad ? 'partial' : 'success', total: steps.length, failed: bad};
+    if (typeof overlayYield === 'function' && overlayYield('신청서를 채웠습니다([신청완료]는 누르지 않음).')) return out;
     S.paletteOpen = true;
     $('#overlay').innerHTML = `<div class="modal peek"><div class="dlg" data-stop="1" style="width:min(560px,94vw);padding:20px 24px;position:absolute;right:24px;bottom:24px;top:auto;left:auto;transform:none" role="dialog" aria-label="근태신청 준비 결과">
       <button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button>
@@ -263,5 +267,5 @@
       <div class="muted" style="margin-bottom:8px">${esc(ATT_FORM[spec.type])} · ${esc(spec.from)}${spec.to && spec.to !== spec.from ? ' ~ ' + esc(spec.to) : ''}${spec.time ? ' · ' + hm(spec.time.s) + '~' + hm(spec.time.e) : ''}</div>
       ${steps.map(s => `<div style="display:flex;gap:8px;padding:5px 0;border-top:1px solid var(--line)"><b style="color:${s.ok ? 'var(--ok)' : 'var(--hi)'};width:18px">${s.ok ? '✓' : '✗'}</b><div><b>${esc(s.name)}</b><div class="muted" style="font-size:12.5px">${esc(s.detail)}</div></div></div>`).join('')}
       <div class="acts" style="margin-top:12px;justify-content:flex-end"><button class="btn sm primary" data-act="closeHelp">확인하고 계속</button></div></div></div>`;
-    return {status: bad ? 'partial' : 'success', total: steps.length, failed: bad};
+    return out;
   }

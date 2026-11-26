@@ -59,7 +59,8 @@
       try {
         const sub = await GW.submittedRange({days: 365, size: 400});
         const have = patLoad().docs;
-    const todo = sub.docs.filter(d => !HR_FORMS.test(d.tiKeyCode) && !have[d.docId]).slice(0, limit)
+    const fresh = sub.docs.filter(d => !HR_FORMS.test(d.tiKeyCode) && !have[d.docId]);
+    const todo = fresh.slice(0, limit)
       .map(d => ({id: d.docId, ti: d.tiKeyCode, title: d.title, form: d.form, docNo: d.docNo, date: d.date}));
     if (!todo.length) return {done: 0, errors: 0};
     if (!quiet) toast(`내 기안 패턴을 학습하는 중입니다 (${todo.length}건)…`);
@@ -72,7 +73,7 @@
       }
     };
     await Promise.all(Array.from({length: conc}, worker));
-    return {done, errors};
+    return {done, errors, left: fresh.length - done - errors};
   } catch (e) { logError('learnPatterns', e.message); return {done, errors: 1, errMsg: e.message}; }
   })().finally(() => { learning = null; });
   return learning;
@@ -461,6 +462,7 @@
     const head = bad ? '자동 기입 결과 (확인이 필요한 항목이 있습니다)' : bodyFilled ? '자동 기입 완료 · 상신 전 확인 단계' : '초안 틀만 입력했습니다';
     const summary = bad ? `${steps.length - bad}/${steps.length}개 항목 자동 기입, ${bad}개는 직접 확인이 필요합니다.` : bodyFilled ? `${steps.length}개 항목을 지난 결재문서 패턴대로 기입하고 다시 읽어 확인했습니다.` : `${steps.length}개 항목(본문 제외)을 기입했습니다. ${frameOnly}`;
     logActionRecord({command: title, type: '기안', target: title, summary, steps: steps.map(s => `${s.ok ? '✓' : '✗'} ${s.name}: ${s.detail}`), status: bad ? 'partial' : 'success', verified: !bad, details: notes.join(' / ')});
+    if (typeof overlayYield === 'function' && overlayYield('기안을 채웠습니다(상신 안 함).')) return;
     S.paletteOpen = true; // Esc·바깥 클릭으로 닫히게
     $('#overlay').innerHTML = `
       <div class="modal peek">

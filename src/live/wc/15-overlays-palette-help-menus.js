@@ -185,6 +185,16 @@
     if (lastOverlayFocus && lastOverlayFocus.isConnected && typeof lastOverlayFocus.focus === 'function') { try { lastOverlayFocus.focus(); } catch {} }
     lastOverlayFocus = null;
   }
+  // 덮개 가드: overlayMark()는 지금 창의 순번(비면 0), overlayLive(m)은 await 뒤에도 그 창 그대로인지(0이면 아직 빈지)
+  let ovMarkSeq = 0;
+  function overlayMark() { const el = $('#overlay')?.firstElementChild; if (!el) return 0; if (!el.dataset.ovMark) el.dataset.ovMark = String(++ovMarkSeq); return Number(el.dataset.ovMark); }
+  function overlayLive(mark) { const el = $('#overlay')?.firstElementChild; return mark ? !!el && el.dataset.ovMark === String(mark) : !el; }
+  // 자동 입력 결과: 다른 창이 떠 있으면 덮지 않고 알림으로
+  function overlayYield(what) {
+    if (!$('#overlay')?.firstElementChild) return false;
+    if (typeof toast === 'function') { toast(`${what} 결과는 자동화 작업 내역에 있습니다.`); root.querySelector('.toast')?.insertAdjacentHTML('beforeend', '<button data-act="openHistory">결과 보기</button>'); }
+    return true;
+  }
   const fontStep = n => { const order = ['s', 'm', 'l', 'xl']; const i = Math.max(0, Math.min(3, order.indexOf(S.settings.fontSize) + n)); S.settings.fontSize = order[i]; saveLocal(); applyLook(); };
   const toggleTheme = () => { S.settings.theme = S.settings.theme === 'dark' ? 'light' : 'dark'; saveLocal(); applyLook(); };
 

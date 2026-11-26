@@ -495,8 +495,9 @@ ${!isNew && typeof todoEditorInfoHtml === 'function' ? todoEditorInfoHtml(t) : '
   };
   HOME_ACTS.tdDelYes = async el => {
     const id = el.dataset.id; el.disabled = true;
+    const mark = typeof overlayMark === 'function' ? overlayMark() : 0;
     const r = await todoRemove(id);
-    closeOverlay();
+    if (typeof overlayLive !== 'function' || overlayLive(mark)) closeOverlay();
     toast(r.ok ? '지웠습니다.' : r.text);
   };
   HOME_ACTS.tdSubAdd = async () => {

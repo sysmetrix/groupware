@@ -256,6 +256,7 @@
   async function govUpdate() {
     // 누른 화면(업데이트 내역 또는 진단)을 그대로 다시 그린다.
     const fromLog = !!$('#overlay [aria-label="업데이트 내역"]');
+    const mark = typeof overlayMark === 'function' ? overlayMark() : 0;
     const i = await checkUpdate(true);
     renderHead(); renderNav();
     // 확인하지 못한 것을 "최신"이라고 말하지 않는다.
@@ -263,6 +264,7 @@
     else if (!i.latest) toast(`업데이트를 확인하지 못했습니다${i.err ? `(${i.err})` : ''}.`);
     else if (R.compareVersions(i.latest, VERSION) > 0) toast(`새 버전 v${i.latest} 이 있습니다. 업데이트 내역에서 \"지금 바꾸기\"를 누르면 바로 바뀝니다.`);
     else toast(`최신 버전입니다(v${VERSION}).`);
+    if (typeof overlayLive === 'function' && !overlayLive(mark)) return;
     if (fromLog) openChangelog(); else { closeOverlay(); S.paletteOpen = true; drawDiag(); }
   }
 

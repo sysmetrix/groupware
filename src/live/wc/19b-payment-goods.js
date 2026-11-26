@@ -5,31 +5,40 @@
   const planDocs = () => ownDocs().filter(d => /계획(\(안\)|\(변경\))?$/.test(String(d.title).trim()) && !/결과/.test(d.title) && /^일반기안문/.test(d.form || '일반기안문')).sort((a, b) => String(b.date).localeCompare(String(a.date)));
   const won0 = n => (n ? n.toLocaleString('en-US') + '원' : '-');
 
-  let payHubSeq = 0;
   async function openPaymentHub() {
     if (gated('draftPay')) return;
     closeOverlay();
     S.paletteOpen = true;
-    const seq = ++payHubSeq;
-    const shell = body => `<div class="modal" data-act="closeOverlay"><div class="dlg" data-stop="1" data-pay-hub="${seq}" style="width:min(760px,95vw);padding:22px 24px;max-height:88vh;overflow:auto" role="dialog" aria-label="지급 문서"><button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button>${body}</div></div>`;
-    $('#overlay').innerHTML = shell('<h2 style="margin:0 0 8px;font-size:18px">지급 문서</h2><div class="mi muted"><span class="spin"></span> 내 지급 문서를 분석하고 있습니다…</div>');
-    await learnPatterns({limit: 12, budgetMs: 40000, quiet: true}).catch(() => {});
+    const shell = body => `<div class="modal" data-act="closeOverlay"><div class="dlg" data-stop="1" style="width:min(760px,95vw);padding:22px 24px;max-height:88vh;overflow:auto" role="dialog" aria-label="지급 문서"><button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button>${body}</div></div>`;
+    // 읽어 둔 문서가 있으면 바로 그린다
+    const known = Object.keys(patLoad().docs).length;
+    $('#overlay').innerHTML = known ? shell(payHubBody(null)) : shell('<h2 style="margin:0 0 8px;font-size:18px">지급 문서</h2><div class="mi muted"><span class="spin"></span> 내 지급 문서를 분석하고 있습니다…</div>');
+    const mark = typeof overlayMark === 'function' ? overlayMark() : 0;
+    const res = await learnPatterns({limit: 12, budgetMs: 40000, quiet: true}).catch(() => 0);
     // 분석하는 동안 사용자가 창을 닫았거나 다른 창·다른 지급 문서 창으로 바뀌었으면 다시 그리지 않는다.
-    if (!$(`#overlay [data-pay-hub="${seq}"]`)) return;
+    if (typeof overlayLive === 'function' && !overlayLive(mark)) return;
+    $('#overlay').innerHTML = shell(payHubBody(res || {errMsg: '오류'}));
+  }
+  // res: null이면 확인 중. 조회 실패·못 읽은 범위는 그대로 보인다
+  function payHubBody(res) {
     const all = Object.values(patLoad().docs);
     const props = R.listProposals(all).slice(0, 8);
     const pend = R.pendingPayments(all);
-    $('#overlay').innerHTML = shell(`
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px"><div class="cmd-logo">${ic('doc')}</div><div><h2 style="margin:0;font-size:18px">지급 문서</h2><div class="muted">내가 해 온 순서: 계획서 → 지급 건의(또는 물품매입 품의) → 지출결의서. 앞 문서의 기록물철·기본항목을 이어받습니다.</div></div></div>
+    const miss = !!res && !!(res.errMsg || res.errors || res.left);
+    const note = !res ? '<div class="muted" role="status"><span class="spin"></span> 새 문서 확인 중…</div>'
+      : miss ? `<div class="box warn" role="status">${res.errMsg ? `문서 목록을 읽지 못했습니다(${esc(res.errMsg)}). 전에 읽어 둔 ${all.length}건만 보입니다.` : `확인하지 못한 문서 ${(res.errors || 0) + (res.left || 0)}건이 있어 빠진 것이 있을 수 있습니다.`}</div>` : '';
+    const none = '확인한 문서에서 찾지 못했습니다.';
+    return `
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px"><div class="cmd-logo">${ic('doc')}</div><div><h2 style="margin:0;font-size:18px">지급 문서</h2><div class="muted">내가 해 온 순서: 계획서 → 지급 건의(또는 물품매입 품의) → 지출결의서. 앞 문서의 기록물철·기본항목을 이어받습니다.</div></div></div>${note}
       <div class="sec"><div class="sh">① 지급 건의 새로 작성 <span class="muted">(지난 건의를 틀로 사용)</span></div>
-        ${props.length ? props.map(p => `<div class="cmd-preset" role="button" tabindex="0" data-act="payPickBase" data-id="${esc(p.id)}" style="display:flex;gap:10px;align-items:flex-start"><div style="flex:1;min-width:0"><b>${esc(p.title)}</b><div class="muted" style="font-size:12px">${esc(p.docNo)} · ${esc(won0(R.proposalAmount(p)))} · 기록물철 ${esc(p.binder)}</div></div><button class="btn sm primary">이 건의처럼 작성</button></div>`).join('') : '<div class="muted">학습된 지급 건의가 없습니다.</div>'}
+        ${props.length ? props.map(p => `<div class="cmd-preset" role="button" tabindex="0" data-act="payPickBase" data-id="${esc(p.id)}" style="display:flex;gap:10px;align-items:flex-start"><div style="flex:1;min-width:0"><b>${esc(p.title)}</b><div class="muted" style="font-size:12px">${esc(p.docNo)} · ${esc(won0(R.proposalAmount(p)))} · 기록물철 ${esc(p.binder)}</div></div><button class="btn sm primary">이 건의처럼 작성</button></div>`).join('') : `<div class="muted">${miss ? none : '학습된 지급 건의가 없습니다.'}</div>`}
       </div>
       <div class="sec"><div class="sh">② 물품매입 품의 새로 작성</div><div class="acts"><button class="btn primary" data-act="goodsPickPlan">${ic('plus')}계획서를 고르고 작성</button></div></div>
       <div class="sec"><div class="sh">③ 지출결의서를 올릴 차례인 문서 <span class="muted">(${pend.length}건)</span></div>
-        ${pend.length ? pend.map(p => `<div class="box" style="margin:6px 0"><b>${esc(p.title)}</b> <span class="bdg tag">${esc(p.kind)}</span><div class="muted" style="font-size:12.5px;margin:3px 0">${esc(p.docNo)} 참조 · ${esc(p.expenseForm)} · 기록물철 ${esc(p.binder)}${p.amount ? ' · ' + esc(won0(p.amount)) : ''}</div><div class="acts"><button class="btn sm primary" data-act="expOpen" data-id="${esc(p.id)}">지출 내역 입력하고 확인</button><button class="btn sm" data-act="copy" data-v="${esc(p.expenseTitle)}">제목 복사</button><button class="btn sm" data-act="copy" data-v="${esc(p.ref || p.docNo)}">참조문서 복사</button>${p.amount ? `<button class="btn sm" data-act="copy" data-v="${esc(R.moneyKo(p.amount))}">금액(한글) 복사</button>` : ''}</div></div>`).join('') : '<div class="muted">지출결의서가 필요한 문서가 없습니다.</div>'}
+        ${pend.length ? pend.map(p => `<div class="box" style="margin:6px 0"><b>${esc(p.title)}</b> <span class="bdg tag">${esc(p.kind)}</span><div class="muted" style="font-size:12.5px;margin:3px 0">${esc(p.docNo)} 참조 · ${esc(p.expenseForm)} · 기록물철 ${esc(p.binder)}${p.amount ? ' · ' + esc(won0(p.amount)) : ''}</div><div class="acts"><button class="btn sm primary" data-act="expOpen" data-id="${esc(p.id)}">지출 내역 입력하고 확인</button><button class="btn sm" data-act="copy" data-v="${esc(p.expenseTitle)}">제목 복사</button><button class="btn sm" data-act="copy" data-v="${esc(p.ref || p.docNo)}">참조문서 복사</button>${p.amount ? `<button class="btn sm" data-act="copy" data-v="${esc(R.moneyKo(p.amount))}">금액(한글) 복사</button>` : ''}</div></div>`).join('') : `<div class="muted">${miss ? none : '지출결의서가 필요한 문서가 없습니다.'}</div>`}
         <div class="acts" style="margin-top:8px"><button class="btn sm" data-act="openUrl" data-url="${esc(GW.links.route(GW.routes.expenseEntry))}" data-title="결의서입력 (예산집행)">${ic('ext')}결의서입력 화면 열기</button><button class="btn sm" data-act="openRec">${ic('play')}기록기로 지출결의 입력 기록·재생</button></div>
         <div class="muted" style="font-size:12px;margin-top:6px">지출결의서는 일반기안문이 아니라 지출 메뉴의 별도 양식입니다. 먼저 법인카드·계좌이체 내역을 입력하면 건의·품의 금액과 대조해 확인한 뒤, 값 복사와 기록기 재생으로 이어집니다(상신·결재는 하지 않습니다).</div>
-      </div>`);
+      </div>`;
   }
 
   function payForm(baseId) {
