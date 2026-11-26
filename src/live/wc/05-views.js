@@ -45,6 +45,7 @@
   function viewDefaults(v) {
     if (v === 'approval') { S.apTab = 'submitted'; S.apTabPinned = true; }
     if (v === 'calendar' && S.cal) { S.cal.offset = 0; S.cal.day = today().replace(/-/g, ''); }
+    if (v === 'budget' && typeof BM === 'object' && BM && BM.open) BM.open.clear(); // v1.25.2: 재단 전체 사업은 모두 접힌 채로 시작
   }
   const go = v => {
     if (!viewAvailable(v)) return false;
