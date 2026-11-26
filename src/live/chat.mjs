@@ -186,6 +186,16 @@ export function chatExtractPerson(text) {
 }
 const CH_VIEWS = [[/결재|문서유통/, 'approval'], [/메일/, 'mail'], [/검색/, 'search'], [/보드/, 'board'], [/구글/, 'gcal'], [/캘린더|달력/, 'calendar'], [/예산/, 'budget'], [/근태|연차/, 'attendance'], [/자원|차량|예약/, 'resource'], [/차트|현황/, 'overview'], [/보고서/, 'report'], [/설정/, 'settings'], [/할 ?일 ?목록|오늘 할 일/, 'today'], [/홈/, 'home']];
 const chHas = (t, re) => re.test(t);
+// 하소연·잊음 혼잣말: 문장 끝이 감정·잊음 표현일 때만. 질문·지시가 섞이면 해당하지 않는다.
+const CH_ASK_RE = /[?？]|알려|보여|줘|추가|적어|넣어|등록|메모|신청|뭐|뭘|언제|어떻게|왜|몇|어디/;
+const CH_FORGET_RE = /(?:까먹(?:네|는다|어|었(?:어|네|다)|겠(?:어|네|다))|깜[빡박](?:했(?:어|네|다)|하네|해|한다)?|잊어\s*(?:버려|버리네|버렸(?:어|네|다))|잊었(?:어|네|다))(?:요)?(?:\s*(?:진짜|정말))?[.!~…\s]*$/;
+const CH_VENT_RE = /(?:(?:쉬고|퇴근하고|집에\s*가고|(?:휴가|여행)\s*(?:좀\s*)?가고)\s*싶(?:다|네|어)|일\s*하기\s*싫(?:다|네|어)|(?:피곤|답답|우울|막막)(?:하다|하네|해|함)|힘[들드](?:다|네|어)|지(?:친다|쳤(?:다|네|어)|쳐)|졸(?:려|리다|리네)|짜증\s*(?:나(?:네)?|난다)|스트레스\s*(?:받아|받네|받는다)|(?:피곤해|힘들어|졸려|지쳐)\s*죽겠(?:다|네|어))(?:요)?(?:\s*(?:진짜|정말))?[.!~…\s]*$/;
+/** 감정·혼잣말이면 'vent' | 'forget', 아니면 빈 문자열. */
+export function chatMutter(text) {
+  const t = chatNormalize(text);
+  if (t.length > 40 || CH_ASK_RE.test(t)) return '';
+  return CH_FORGET_RE.test(t) ? 'forget' : CH_VENT_RE.test(t) ? 'vent' : '';
+}
 /** 문장 → {tool, args, confidence}. 못 알아보면 {tool:'', args:{}, confidence:0}. */
 export function chatIntent(text, now = new Date(), _nested = false) {
   const t = chatNormalize(text);
@@ -194,6 +204,8 @@ export function chatIntent(text, now = new Date(), _nested = false) {
   const dt = chatParseDate(t, now), rg = chatParseRange(t);
   const want = /신청|올려|내줘|내 줘|해줘|하고 싶|할래|써줘|쓸게|등록|잡아|예약/.test(t);
   const make = (tool, args, confidence = 1) => ({tool, args, confidence});
+  // 확신도 0.7: AI 키가 없으면 여기서 짧게 받아 주고, 있으면 AI가 답한다.
+  const mutter = () => { const kind = _nested ? '' : chatMutter(t); return kind ? make('small_talk', {kind}, 0.7) : none; };
   if (/공지/.test(t) && /(\d+\s*번|첫|두|세|네|다섯)\s*(?:번째)?/.test(t) && /(열어|내용|보여|뭐래|읽어)/.test(t)) { const m = t.match(/(\d+)\s*번|(첫|두|세|네|다섯)\s*번째/); return make('open_item', {kind: 'board', index: m ? (+m[1] || {첫: 1, 두: 2, 세: 3, 네: 4, 다섯: 5}[m[2]]) : 1}); }
   // 순서 참조("첫 번째 열어줘", "2번 메일 답장")
   const ordM = t.match(/(?:(첫|두|세|네|다섯)\s*번째|([1-5])\s*번)/);
@@ -282,7 +294,7 @@ export function chatIntent(text, now = new Date(), _nested = false) {
   const doAct = /신청|올려|올릴|등록|내줘|내 줘|써줘|써 줘|잡아|예약해|작성|보내줘|보내 줘/.test(t);
   // v1.17: 내 할 일(그룹웨어 ToDo) 조회와 예상 집행률. 추가는 아래 add_todo 규칙이 맡는다.
   //      할 일 지우기는 대신 하지 않고(끝냄 표시로 바꾸지도 않는다), 무엇인지 말하지 않은 "자꾸 까먹네"는 목록으로 답하지 않는다.
-  if (/(할\s*일|투두|to\s*-?do)/i.test(t) && /(지워|지울|삭제|없애|비워)/.test(t) || /(까먹|깜빡)/.test(t) && !/(\?|없|뭐|알려|보여|추가|넣어|적어|등록|메모)/.test(t)) return none;
+  if (/(할\s*일|투두|to\s*-?do)/i.test(t) && /(지워|지울|삭제|없애|비워)/.test(t) || /(까먹|깜빡)/.test(t) && !/(\?|없|뭐|알려|보여|추가|넣어|적어|등록|메모)/.test(t)) return mutter();
   //      "중요 표시해 둔 할 일", "예산 계획으로 적어둔 할 일"처럼 ToDo의 속성으로 꾸민 할 일도 ToDo 조회다.
   { const td = t.replace(/(?:적어|넣어|등록해|추가해)\s*(?:둔|놓은|논|놨던)|(?:추가|등록)한/g, '저장한');
   if ((/(내\s*할\s*일|투두|to\s*-?do)/i.test(td) || /할\s*일/.test(td) && /(중요\s*표시|별표|예산|집행\s*계획|끝낸|완료한|해치운|저장한)/.test(td)) && !/(추가|등록|넣어|적어|메모해)/.test(td)) return make('list_todos', {scope: /(밀린|지난|늦은|오늘까지|오늘)/.test(t) ? 'due' : /(이번\s*주|7일|일주일)/.test(t) ? 'week' : /중요|별표/.test(t) ? 'important' : /(끝낸|완료한|해치운)/.test(t) ? 'done' : /(예산|집행\s*계획)/.test(t) ? 'plan' : 'open'}); }
@@ -333,7 +345,8 @@ export function chatIntent(text, now = new Date(), _nested = false) {
   if (/(자료|데이터|수집|조회)\s*(상태|범위|기준)|(언제|몇\s*시)\s*기준|못\s*읽은\s*자료/.test(t)) return make('get_data_status', {});
   if (/신청\s*(현황|내역|상태|결과|목록|이력)|(내가|제가|내)\s*(올린|낸|신청한)\s*(휴가|연차|출장|시간외|근태|신청)|(휴가|연차|출장|시간외|근태)\s*신청.{0,8}(승인|결재|됐|되었|통과|상태|현황|났)/.test(t)) return make('list_my_requests', {});
   if (/(연차|휴가|반차)/.test(t) && /(현황|내역|사용|잔여|잔액|잔량|종류|유형|남은|남았|남아|조회|얼마|몇|며칠|기록|이력|썼|쓴|예정)/.test(t) && !doAct && !/(쓸래|쓸게|쓰고|낼래|누가)/.test(t) && !chatExtractName(t) && !chatMentionsOther(t)) return make('get_leave_status', {});
-  if (/(근무\s*시간|근로\s*시간|출근\s*(시간|시각|했|언제|기록)|퇴근\s*(시간|시각|했|언제|기록)|몇\s*시에\s*(출근|퇴근)|시간외\s*(시간|누계|얼마|현황|몇)|초과\s*근무\s*(시간|현황))/.test(t) && !doAct && !/보냈/.test(t) && !chatExtractName(t) && !chatMentionsOther(t)) return make('get_work_hours', {});
+  // "지금까지 근무한 시간", "얼마나 일했지"처럼 풀어 말해도 내 근무시간 조회다.
+  if (/((?:근무|근로)(?:한|했던|하신)?\s*(?:총\s*)?시간|(?<![가-힣])일(?:한|했던)\s*(?:총\s*)?시간|(?:몇\s*시간|얼마나)\s*(?:일|근무)(?:했|한)|출근\s*(시간|시각|했|언제|기록)|퇴근\s*(시간|시각|했|언제|기록)|몇\s*시에\s*(출근|퇴근)|시간외\s*(시간|누계|얼마|현황|몇)|초과\s*근무\s*(시간|현황))/.test(t) && !doAct && !/보냈/.test(t) && !/(수정|정정)/.test(t) && !chatExtractName(t.replace(/(?:근무|근로|일)(?:한|했[가-힣]*)|시간/g, ' ')) && !chatMentionsOther(t)) return make('get_work_hours', {});
   if (/메일/.test(t) && !/(답장|회신|처리|해야|써|쓸|쓰기|작성|초안|검색|찾아|화면|열어)/.test(t) && /(안\s*읽|읽지\s*않|새\s*메일|새로\s*온|오늘\s*온|온\s*메일|최근|받은|목록|몇\s*(통|건|개)|뭐\s*왔|왔어|왔나|첨부|보낸\s*메일|한테서|에게서|현황)/.test(t)) {
     const fm = t.match(/([가-힣A-Za-z0-9]{2,15})\s*(?:님|씨|팀장|실장|과장|대리|주임|센터장|선생님)?\s*(?:이|가|에게서|한테서|로부터)\s*(?:보낸|온)/);
     const from = fm && !/^(내|제|내가|제가|오늘|어제|최근|새로)$/.test(fm[1]) ? fm[1] : '';
@@ -408,7 +421,7 @@ export function chatIntent(text, now = new Date(), _nested = false) {
   if (/(요약|브리핑|현황|오늘 어때|어떻게 돼|상황|개요)/.test(t)) return make('get_overview', {});
   if (/(검색|찾아|어디 있)/.test(t)) return make('search_documents', {query: t.replace(/(검색|찾아줘|찾아 줘|찾아|해줘|해 줘|문서|에서)/g, ' ').replace(/\s+/g, ' ').trim(), scope: /메일/.test(t) ? 'mail' : /공지|게시/.test(t) ? 'notice' : /결재|기안|문서/.test(t) ? 'approval' : 'all'});
   if (dt && /(뭐|무슨|있)/.test(t)) return make('get_schedule', {date: dt.date, days: dt.end ? 5 : 1}, 0.6);
-  return none;
+  return mutter();
 }
 
 // ---------- 자동화 일정("매일 9시에 …", "평일 17시 30분마다 …", "매주 월요일 9시 10분에 …") ----------

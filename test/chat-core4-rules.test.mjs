@@ -59,7 +59,7 @@ test('to-do list, add and delete wording', () => {
   assert.deepEqual(args('할일 목록에 견적 받기 등록해줘'), {title: '견적 받기', due: ''});
   assert.deepEqual(args('투두 목록에 예산 점검 넣어놔'), {title: '예산 점검', due: ''});
   for (const q of ['할 일 목록 보여줘', '할 일 목록에 뭐 추가됐어?', '할 일 목록을 만들어 줘']) assert.equal(tool(q), 'list_tasks', q);
-  for (const q of ['할 일 삭제해줘', '투두 다 지워', '깜빡했네', '어제 깜빡하고 결과보고 못 올렸어']) assert.equal(tool(q), '', q);
+  for (const q of ['할 일 삭제해줘', '투두 다 지워', '어제 깜빡하고 결과보고 못 올렸어']) assert.equal(tool(q), '', q);
   assert.equal(tool('까먹은 거 없나?'), 'check_risks');
   assert.equal(tool('오늘 제일 중요한 할 일 뭐야?'), 'plan_priorities');
 });
@@ -80,3 +80,21 @@ test('budget: corporate card slang, payment drafts, subject search and comparing
   assert.equal(tool('가장 많이 남은 과목 뭐야'), 'get_budget');
   assert.equal(tool('연말까지 목표 달성 가능해?'), 'budget_forecast');
 });
+
+test('hours already worked is a work-hours question, however it is said', () => {
+  for (const q of ['지금까지 일한 시간 얼마야', '이번 달 근무한 시간 보여줘', '오늘 얼마나 일했지', '몇 시간 근무했어 오늘', '휴일에 일한 시간 알려줘', '내가 올해 일한 시간 총 몇이야']) assert.equal(tool(q), 'get_work_hours', q);
+  for (const q of ['이번주 내가 일한 시간', '금주 근로한 시간 확인']) assert.equal(tool(q), 'get_work_hours', q);
+  for (const q of ['내일 한 시간 비어?', '한도윤 과장 이번 주 근무한 시간', '근무한 시간 수정 신청해줘']) assert.notEqual(tool(q), 'get_work_hours', q);
+  assert.equal(tool('초과해서 일한 시간만큼 시간외 신청해줘'), 'prepare_overtime_request');
+});
+
+test('sighs and forgetful mutterings get a short local answer only when no AI is connected', () => {
+  const kind = q => { const r = chatIntent(q, now); return [r.tool, r.args.kind, r.confidence >= 0.6 && r.confidence < 0.9]; };
+  for (const q of ['일하기 싫다', '오늘 진짜 지친다', '아 답답해', '힘들어 죽겠네', '졸려 ㅠㅠ', '너무 피곤해 쉬고 싶어']) assert.deepEqual(kind(q), ['small_talk', 'vent', true], q);
+  for (const q of ['깜빡했네', '아 또 깜빡했다', '요즘 자꾸 잊어버려', '그 일 자꾸 까먹어']) assert.deepEqual(kind(q), ['small_talk', 'forget', true], q);
+  // 질문·지시, 뒤에 다른 말이 이어지는 문장은 넘긴다
+  for (const q of ['오늘 왜 이렇게 힘들지', '피곤해?', '어제 깜빡하고 결과보고 못 올렸어', '결재 승인해 줘 힘들어', '이 일은 힘들어 보이니까 나눠서 하자']) assert.equal(tool(q), '', q);
+  assert.equal(tool('까먹은 거 없나?'), 'check_risks');
+  assert.equal(tool('내일 쉬고 싶어'), 'prepare_leave_request');
+});
+
