@@ -401,14 +401,14 @@
     const d = f.contentDocument, w = f.contentWindow;
     const steps = [];
     const bad0 = preflight(f, spec);
-    if (bad0) return [{name: '사전점검', ok: false, detail: bad0}];
+    if (bad0) return [{name: '사전점검', keep: 1, ok: false, detail: bad0}];
     const owner = currentKey, paneUrl = S.pane.url;
     const m = spec.meta || {};
     const classification = ['open', 'urgent', 'sec', 'docKind', 'binder'].filter(k => typeof m[k] === 'string' && m[k].trim());
     const labels = {open: '공개여부', urgent: '긴급여부', sec: '보안여부', docKind: '문서구분', binder: '기록물철'};
     const confirmed = classification.length > 0 && confirm('다음 값은 과거 문서에서 추정한 값이며 현재 문서의 분류 근거가 아닙니다.\n각 값을 현재 문서에 적용해도 되는지 직접 확인해 주세요. 확인하지 않으면 기존 값을 유지합니다.\n' + classification.map(k => labels[k] + ': ' + m[k]).join('\n') + '\n이 값들을 확인하고 적용할까요?');
     const live = () => f.isConnected && f.contentDocument === d && f.contentWindow === w && owner === currentKey && owner === getUserKey() && paneUrl === S.pane.url;
-    if (!live()) return [{name: '사전점검', ok: false, detail: '기안 화면 또는 계정이 변경되어 중단했습니다'}];
+    if (!live()) return [{name: '사전점검', keep: 1, ok: false, detail: '기안 화면 또는 계정이 변경되어 중단했습니다'}];
     installGuard(w); AUTO.running = true; AUTO.blocked = []; const tok = AUTO.tok = {};
     window.addEventListener('beforeunload', () => { AUTO.running = false; }, {once: true});
     setTimeout(() => { if (AUTO.tok === tok) AUTO.running = false; }, 180000); // 어떤 이유로든 3분 뒤에는 반드시 풀린다(사람이 직접 상신·저장할 수 있어야 함)
@@ -459,8 +459,9 @@
     const bodyStep = steps.find(s => s.name === '본문');
     const bodyFilled = !!(bodyStep && bodyStep.ok); // 본문을 실제로 넣고 다시 읽어 일치한 경우만
     const frameOnly = '초안 틀만 입력했습니다. 본문 사실(일시·장소·인원·금액)은 직접 확인하세요.';
-    const head = !got ? '자동 기입하지 못했습니다' : bad ? '자동 기입 결과 (확인이 필요한 항목이 있습니다)' : bodyFilled ? '자동 기입 완료 · 상신 전 확인 단계' : '초안 틀만 입력했습니다';
-    const summary = !got ? '기안을 채우지 못했습니다.' : bad ? `${got}/${fill.length}개 항목 자동 기입, ${bad}개는 직접 확인이 필요합니다.` : bodyFilled ? `${got}개 항목을 지난 결재문서 패턴대로 기입하고 다시 읽어 확인했습니다.` : `${got}개 항목(본문 제외)을 기입했습니다. ${frameOnly}`;
+    if (!got) notes = []; // 넣은 값이 없으면 본문·틀을 이어받았다는 안내도 보이지 않는다
+    const head = !got ? (fill.length ? '자동 기입을 확인하지 못했습니다' : '자동 기입하지 못했습니다') : bad ? '자동 기입 결과 (확인이 필요한 항목이 있습니다)' : bodyFilled ? '자동 기입 완료 · 상신 전 확인 단계' : '초안 틀만 입력했습니다';
+    const summary = !got ? (fill.length ? '기안에 채운 칸을 확인하지 못했습니다. 화면을 확인하세요.' : '기안을 채우지 못했습니다.') : bad ? `${got}/${fill.length}개 항목 자동 기입, ${bad}개는 직접 확인이 필요합니다.` : bodyFilled ? `${got}개 항목을 지난 결재문서 패턴대로 기입하고 다시 읽어 확인했습니다.` : `${got}개 항목(본문 제외)을 기입했습니다. ${frameOnly}`;
     const rec = logActionRecord({command: title, type: '기안', target: title, summary, steps: steps.map(s => `${s.ok ? '✓' : '✗'} ${s.name}: ${s.detail}`), status: !got ? 'error' : bad ? 'partial' : 'success', verified: !bad, details: notes.join(' / ')});
     if (typeof overlayYield === 'function' && overlayYield(summary + (got && bad && !bodyFilled ? ' 본문은 직접 확인하세요.' : '') + ' 상신하지 않았습니다.', rec)) return;
     S.paletteOpen = true; // Esc·바깥 클릭으로 닫히게
@@ -471,7 +472,7 @@
           <h2 style="margin:0 0 4px;font-size:17px">${esc(head)}</h2>
           <div class="muted" style="margin-bottom:10px">${esc(title)}<br>${esc(summary)}</div>
           ${steps.map(s => `<div style="display:flex;gap:8px;padding:5px 0;border-top:1px solid var(--line)"><b style="color:${s.ok ? 'var(--ok)' : 'var(--hi)'};width:18px">${s.ok ? '✓' : '✗'}</b><div><b>${esc(s.name)}</b><div class="muted" style="font-size:12.5px">${esc(s.detail)}</div></div></div>`).join('')}
-          ${!bodyFilled ? `<div class="box warn" style="margin-top:10px"><b>${esc(frameOnly)}</b></div>` : ''}
+          ${got && !bodyFilled ? `<div class="box warn" style="margin-top:10px"><b>${esc(frameOnly)}</b></div>` : ''}
           ${notes.length ? `<div class="box warn" style="margin-top:10px">${notes.map(esc).join('<br>')}</div>` : ''}
           <div class="acts" style="margin-top:12px;justify-content:flex-end"><button class="btn sm primary" data-act="closeHelp">확인하고 계속 작성</button></div>
         </div>

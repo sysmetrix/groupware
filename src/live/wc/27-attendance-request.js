@@ -260,14 +260,15 @@
     finally { AUTO.running = false; try { const pf = $('#frame iframe'), pd = pf && pf.contentDocument, done = pd && [...pd.querySelectorAll('button')].find(x => /신청완료/.test(x.textContent || '')); if (done) done.scrollIntoView({block: 'center', inline: 'nearest'}); } catch {} if (typeof markPaneDirty === 'function') { const pf = $('#frame iframe'); if (pf) markPaneDirty(pf); } }
     step('안전장치', AUTO.blocked.length === 0, AUTO.blocked.length ? `자동 실행 중 ${AUTO.blocked.join(', ')} 클릭을 막았습니다` : '[신청완료]는 누르지 않았습니다. 화면에서 확인한 뒤 직접 누르세요', 1);
     const bad = steps.filter(s => !s.ok).length, fill = steps.filter(s => !s.keep), got = fill.filter(s => s.ok).length;
-    const summary = (got ? `${got}/${fill.length} 항목을 채웠습니다${bad ? `(${bad}개 확인 필요)` : ''}.` : '신청서를 채우지 못했습니다.') + ' 신청은 하지 않았습니다.';
+    const stop = steps.some(s => s.name === '중단'); // 도중에 멈추면 시도하지 않은 칸은 단계에 없어 분모를 쓰지 않는다
+    const summary = (!got ? (fill.length ? '신청서에 채운 칸을 확인하지 못했습니다. 화면을 확인하세요.' : '신청서를 채우지 못했습니다.') : stop ? `도중에 멈췄습니다. ${got}개 항목을 넣었고 나머지는 확인하지 못했습니다.` : `${got}/${fill.length} 항목을 채웠습니다${bad ? `(${bad}개 확인 필요)` : ''}.`) + ' 신청은 하지 않았습니다.';
     const rec = logActionRecord({command: `근태신청 준비: ${ATT_FORM[spec.type]}`, type: '근태', target: `${spec.from} ${spec.kind || ''}`, summary, steps: steps.map(s => `${s.ok ? '✓' : '✗'} ${s.name}: ${s.detail}`), status: !got ? 'error' : bad ? 'partial' : 'success', verified: !bad});
     const out = {status: !got ? 'failed' : bad ? 'partial' : 'success', total: fill.length, failed: bad};
     if (typeof overlayYield === 'function' && overlayYield(summary, rec)) return out;
     S.paletteOpen = true;
     $('#overlay').innerHTML = `<div class="modal peek"><div class="dlg" data-stop="1" style="width:min(560px,94vw);padding:20px 24px;position:absolute;right:24px;bottom:24px;top:auto;left:auto;transform:none" role="dialog" aria-label="근태신청 준비 결과">
       <button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button>
-      <h2 style="margin:0 0 4px;font-size:17px">${!got ? '신청서를 채우지 못했습니다' : bad ? '신청서를 일부 채웠습니다 (확인 필요)' : '신청서를 채웠습니다 · [신청완료] 전 확인'}</h2>
+      <h2 style="margin:0 0 4px;font-size:17px">${!got ? (fill.length ? '입력을 확인하지 못했습니다' : '신청서를 채우지 못했습니다') : bad ? '신청서를 일부 채웠습니다 (확인 필요)' : '신청서를 채웠습니다 · [신청완료] 전 확인'}</h2>
       <div class="muted" style="margin-bottom:8px">${esc(ATT_FORM[spec.type])} · ${esc(spec.from)}${spec.to && spec.to !== spec.from ? ' ~ ' + esc(spec.to) : ''}${spec.time ? ' · ' + hm(spec.time.s) + '~' + hm(spec.time.e) : ''}<br>${esc(summary)}</div>
       ${steps.map(s => `<div style="display:flex;gap:8px;padding:5px 0;border-top:1px solid var(--line)"><b style="color:${s.ok ? 'var(--ok)' : 'var(--hi)'};width:18px">${s.ok ? '✓' : '✗'}</b><div><b>${esc(s.name)}</b><div class="muted" style="font-size:12.5px">${esc(s.detail)}</div></div></div>`).join('')}
       <div class="acts" style="margin-top:12px;justify-content:flex-end"><button class="btn sm primary" data-act="closeHelp">확인하고 계속</button></div></div></div>`;
