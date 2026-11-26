@@ -43,10 +43,12 @@
       ${s.unusedViews.length ? `<div class="muted" style="margin-top:6px">한 번도 열지 않은 화면: ${esc(s.unusedViews.map(viewLabel).join(', '))}</div>` : ''}
       <h3 style="margin:14px 0 4px;font-size:14px">비서에게 시킨 일</h3>
       <table style="width:100%;border-collapse:collapse;font-size:13px"><tbody>${list(s.tools, toolLabel)}</tbody></table>
-      <div class="acts" style="margin-top:14px"><button class="btn sm" data-act="usageExport">파일로 내보내기</button><button class="btn sm" data-act="usageCopy">복사</button><button class="btn sm" data-act="usageToggle">${usageOn() ? '기록 끄기' : '기록 켜기'}</button><button class="btn sm danger" data-act="usageClear">기록 지우기</button></div></div></div>`;
+      <div class="acts" style="margin-top:14px"><button class="btn sm" data-act="usageExport">파일로 내보내기</button><button class="btn sm" data-act="usageExportJson">분석용 파일</button><button class="btn sm" data-act="usageCopy">복사</button><button class="btn sm" data-act="usageToggle">${usageOn() ? '기록 끄기' : '기록 켜기'}</button><button class="btn sm danger" data-act="usageClear">기록 지우기</button></div></div></div>`;
   }
   HOME_ACTS.openUsage = () => openUsage();
   HOME_ACTS.usageExport = () => { const {log, opt} = usageData(USAGE_EXPORT_DAYS); download(`GW 비서_사용기록_${R.usageDay()}.md`, R.usageReport(log, opt), 'text/markdown;charset=utf-8'); toast('사용 기록 파일을 만들었습니다.'); };
+  // 개발자의 usage:report 도구가 읽는 날짜별 원자료. 이름 규칙에 맞는 키와 횟수만 남긴다.
+  HOME_ACTS.usageExportJson = () => { download(`GW 비서_사용기록_${R.usageDay()}.json`, JSON.stringify(R.usageNormalize(store.get('usage', null))), 'application/json;charset=utf-8'); toast('분석용 사용 기록 파일을 만들었습니다.'); };
   HOME_ACTS.usageCopy = () => { const {log, opt} = usageData(USAGE_EXPORT_DAYS); copyText(R.usageReport(log, opt)); toast('사용 기록을 복사했습니다.'); };
   HOME_ACTS.usageToggle = () => { S.settings.usageLog = !usageOn(); saveLocal(); toast(usageOn() ? '사용 기록을 켰습니다.' : '사용 기록을 껐습니다. 이미 적힌 기록은 남아 있습니다.'); openUsage(); };
   HOME_ACTS.usageClear = () => { store.del('usage'); toast('사용 기록을 지웠습니다.'); openUsage(); };
