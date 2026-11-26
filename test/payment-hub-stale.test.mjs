@@ -18,7 +18,7 @@ function fakeOverlay() {
   let html = '', child = null;
   return {
     get innerHTML() { return html; },
-    set innerHTML(v) { html = String(v); child = html.trim() ? {dataset: {}} : null; },
+    set innerHTML(v) { html = String(v); child = html.trim() ? {dataset: {}, dlg: {scrollTop: 0}} : null; }, // 새 창마다 스크롤은 0에서 시작
     get firstElementChild() { return child; },
   };
 }
@@ -38,7 +38,7 @@ function setup({docs = {}, props = []} = {}) {
     R: {listProposals: () => props, pendingPayments: () => [], proposalAmount: () => 0, moneyKo: () => ''},
     GW: {links: {route: () => ''}, routes: {expenseEntry: ''}},
     root: {querySelector: () => null},
-    $: sel => (sel === '#overlay' ? overlay : null)
+    $: sel => (sel === '#overlay' ? overlay : sel === '#overlay .dlg' ? overlay.firstElementChild?.dlg || null : null)
   };
   const open = runInNewContext(guard + body + ';openPaymentHub', ctx);
   return {overlay, open, ctx,
@@ -166,4 +166,14 @@ test('확인이 끝나기 전에는 "없습니다"로 단정하지 않는다', a
   assert.match(overlay.innerHTML, /읽어 둔 문서에는 없습니다\(확인 중\)/);
   finish(); await p;
   assert.match(overlay.innerHTML, /지출결의서가 필요한 문서가 없습니다/);
+});
+
+test('바로 그린 목록을 내려 보던 중 확인이 끝나 다시 그려도 스크롤 위치를 지킨다', async () => {
+  const {overlay, open, finish} = setup({docs: {d1: {id: 'd1'}}});
+  const p = open();
+  const before = overlay.firstElementChild;
+  before.dlg.scrollTop = 240;
+  finish(); await p;
+  assert.notEqual(overlay.firstElementChild, before, '다시 그렸다');
+  assert.equal(overlay.firstElementChild.dlg.scrollTop, 240);
 });

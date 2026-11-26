@@ -302,6 +302,7 @@ test('근태 신청: 아무것도 열지 않았으면 입력 창을 띄운다', 
 
 // ---------- 자동 입력 결과 창: 19-draft-engine.js showDraftReport, 27-attendance-request.js fillAttendanceForm 끝 ----------
 // 작업 내역: saved=false면 저장 실패(store.set 실패)를 흉내 낸다. logActionRecord는 저장 여부와 관계없이 기록을 돌려준다(18-command-console.js).
+// 단계의 keep: 값을 넣지 않는 단계(양식 열기·기본값 유지·안내·안전장치). fillDraft·fillAttendanceForm이 다는 표시와 같다.
 function historyCtx(extra, saved = true) {
   const history = [], logged = [];
   let n = 0;
@@ -317,7 +318,10 @@ function reportCtx(saved) {
   const show = run(ctx, cut('19-draft-engine.js', '  function showDraftReport', '  // ---------- 결과보고: 계획서를 이어받아 작성'), 'showDraftReport');
   return {ctx, show, logged};
 }
-const STEPS = [{name: '제목', ok: true, detail: '가나'}, {name: '본문', ok: true, detail: '넣음'}, {name: '안전장치', ok: true, detail: '막은 것 없음'}];
+const D_SAFE = {name: '안전장치', keep: 1, ok: true, detail: '상신·결재·임시저장·삭제는 실행하지 않았습니다'};
+const D_KEEP = {name: '공개·긴급·보안·문서구분', keep: 1, ok: true, detail: '그룹웨어 기본값 유지'};
+const STEPS = [{name: '제목', ok: true, detail: '가나'}, D_KEEP, {name: '본문', ok: true, detail: '넣음'}, D_SAFE];
+const numbersOf = s => (String(s).match(/\d+\/\d+개 항목|\d+개 항목|\d+개는/g) || []).join(' ');
 
 test('기안 결과: 그 사이 연 다른 창을 덮지 않고, 알림과 작업 내역으로 남긴다', () => {
   const {ctx, show, logged} = reportCtx();
@@ -325,25 +329,36 @@ test('기안 결과: 그 사이 연 다른 창을 덮지 않고, 알림과 작�
   show('가나 지급 건의', STEPS, []);
   assert.equal(ctx.overlay.innerHTML, '<div>다른 창</div>');
   assert.equal(logged.length, 1, '결과는 작업 내역에 남는다');
-  assert.match(ctx.toasts[0], /3개 항목을 지난 결재문서 패턴대로 기입하고 다시 읽어 확인했습니다\. 상신하지 않았습니다\./);
+  assert.match(ctx.toasts[0], /^2개 항목을 지난 결재문서 패턴대로 기입하고 다시 읽어 확인했습니다\. 상신하지 않았습니다\./, '기본값 유지·안전장치는 채운 항목으로 세지 않는다');
   assert.match(ctx.toastEl.html, /openHistory/);
 });
 
-test('기안 결과: 일부 단계가 실패했으면 알림에서 "채웠다"고 하지 않고 확인할 건수를 알린다', () => {
-  const {ctx, show} = reportCtx();
-  openOther(ctx);
-  show('가나 지급 건의', [{name: '제목', ok: true, detail: '가나'}, {name: '기록물철', ok: false, detail: '직접 확인'}, {name: '안전장치', ok: true, detail: ''}], []);
-  assert.match(ctx.toasts[0], /2\/3개 항목 자동 기입, 1개는 직접 확인이 필요합니다/);
-  assert.match(ctx.toasts[0], /본문은 직접 확인하세요/, '본문을 넣지 않았으면 그 안내도 남긴다');
-  assert.doesNotMatch(ctx.toasts[0], /채웠습니다|기입 완료/);
+test('기안 결과: 일부 단계가 실패했으면 채운 칸만 세어 알리고, 결과 창·알림·작업 내역이 같은 숫자를 쓴다', () => {
+  const steps = [{name: '제목', ok: true, detail: '가나'}, D_KEEP, {name: '기록물철', ok: false, detail: '직접 확인'}, {name: '결재라인', ok: false, detail: '못 찾음'}, D_SAFE];
+  const a = reportCtx(); openOther(a.ctx); a.show('가나', steps, []);
+  assert.match(a.ctx.toasts[0], /^1\/3개 항목 자동 기입, 2개는 직접 확인이 필요합니다\./);
+  assert.match(a.ctx.toasts[0], /본문은 직접 확인하세요/, '본문을 넣지 않았으면 그 안내도 남긴다');
+  assert.doesNotMatch(a.ctx.toasts[0], /채웠습니다|기입 완료/);
+  const b = reportCtx(); b.show('가나', steps, []);
+  assert.equal(numbersOf(b.ctx.overlay.innerHTML.match(/<div class="muted" style="margin-bottom:10px">[^]*?<\/div>/)[0]), '1/3개 항목 2개는');
+  assert.equal(numbersOf(a.logged[0].summary), '1/3개 항목 2개는');
+  assert.equal(a.logged[0].status, 'partial');
 });
 
-test('기안 결과: 모든 단계가 실패했으면(안전장치만 통과) "채우지 못했습니다"로 알린다', () => {
-  for (const steps of [[{name: '사전점검', ok: false, detail: '양식이 다름'}], [{name: '제목', ok: false, detail: ''}, {name: '안전장치', ok: true, detail: ''}]]) {
-    const {ctx, show} = reportCtx();
-    openOther(ctx);
-    show('가나 지급 건의', steps, []);
-    assert.match(ctx.toasts[0], /^기안을 채우지 못했습니다\. 상신하지 않았습니다\./);
+test('기안 결과: 값을 넣은 칸이 없으면(사전점검 실패·기본값 유지만 통과) "채우지 못했습니다"로 알린다', () => {
+  const cases = [
+    [{name: '사전점검', ok: false, detail: '양식이 다름'}],
+    [{name: '제목', ok: false, detail: ''}, D_SAFE],
+    [{name: '제목', ok: false, detail: '불일치'}, D_KEEP, {name: '결재라인', ok: false, detail: '못 찾음'}, D_SAFE],
+  ];
+  for (const steps of cases) {
+    const a = reportCtx(); openOther(a.ctx); a.show('가나', steps, []);
+    assert.match(a.ctx.toasts[0], /^기안을 채우지 못했습니다\. 상신하지 않았습니다\./);
+    assert.equal(a.logged[0].summary, '기안을 채우지 못했습니다.');
+    assert.equal(a.logged[0].status, 'error');
+    const b = reportCtx(); b.show('가나', steps, []);
+    assert.match(b.ctx.overlay.innerHTML, /자동 기입하지 못했습니다/);
+    assert.match(b.ctx.overlay.innerHTML, /기안을 채우지 못했습니다\./);
   }
 });
 
@@ -364,46 +379,66 @@ test('기안 결과: 덮개가 비어 있으면 결과 창을 그린다', () => 
 });
 
 function attTail(saved) {
-  const body = cut('27-attendance-request.js', '    const bad = steps.filter(s => !s.ok).length;\n    const summary', '    return out;\n  }') + '    return out;';
+  const body = cut('27-attendance-request.js', '    const bad = steps.filter(s => !s.ok).length, fill', '    return out;\n  }') + '    return out;';
   const {ctx, logged} = historyCtx({ATT_FORM: {leave: '휴가신청서'}, hm: a => a.join(':')}, saved);
   const fin = run(ctx, `function attFinish(steps, spec) {\n${body}\n}`, 'attFinish');
   return {ctx, fin, logged};
 }
 const SPEC = {type: 'leave', from: '2026-11-28', kind: '연차'};
-const SAFE = {name: '안전장치', ok: true, detail: '[신청완료]는 누르지 않았습니다'};
+const SAFE = {name: '안전장치', keep: 1, ok: true, detail: '[신청완료]는 누르지 않았습니다'};
+const OPENED = {name: '양식 열기', keep: 1, ok: true, detail: '휴가신청서'};
 
-test('근태 신청서 결과: 다른 창이 열려 있으면 덮지 않고 알리며, 결과 값은 그대로 돌려준다', () => {
+test('근태 신청서 결과: 다른 창이 열려 있으면 덮지 않고 알리며, 채운 칸만 센다', () => {
   const {ctx, fin, logged} = attTail();
   openOther(ctx);
-  const out = fin([{name: '휴가구분', ok: true, detail: '연차'}, {name: '비고', ok: false, detail: '비어 있음'}], SPEC);
-  assert.deepEqual({...out}, {status: 'partial', total: 2, failed: 1});
+  const out = fin([OPENED, {name: '휴가구분', ok: true, detail: '연차'}, {name: '휴가기간', ok: true, detail: '2026-11-28'}, {name: '비고(사유)', ok: false, detail: '비어 있음'}, SAFE], SPEC);
+  assert.deepEqual({...out}, {status: 'partial', total: 3, failed: 1});
   assert.equal(ctx.overlay.innerHTML, '<div>다른 창</div>');
   assert.equal(logged.length, 1);
-  assert.match(ctx.toasts[0], /^1\/2 항목을 채웠습니다\. 신청은 하지 않았습니다\./);
+  assert.match(ctx.toasts[0], /^2\/3 항목을 채웠습니다\(1개 확인 필요\)\. 신청은 하지 않았습니다\./);
+  assert.equal(logged[0].summary, '2/3 항목을 채웠습니다(1개 확인 필요). 신청은 하지 않았습니다.');
 });
 
-test('근태 신청서 결과: 신청서가 열리지 않아 채운 항목이 없으면 "채우지 못했습니다"로 알린다', () => {
-  const {ctx, fin} = attTail();
-  openOther(ctx);
-  const out = fin([{name: '양식 열기', ok: false, detail: '휴가신청서'}, {name: '중단', ok: false, detail: '신청서 입력 화면이 열리지 않았습니다'}, SAFE], SPEC);
-  assert.equal(out.status, 'partial');
-  assert.match(ctx.toasts[0], /^신청서를 채우지 못했습니다\. 신청은 하지 않았습니다\./);
-  assert.doesNotMatch(ctx.toasts[0], /채웠습니다/);
+test('근태 신청서 결과: 결과 창에도 알림·작업 내역과 같은 숫자를 보인다', () => {
+  const {ctx, fin, logged} = attTail();
+  fin([OPENED, {name: '휴가구분', ok: true, detail: '연차'}, {name: '휴가기간', ok: false, detail: ''}, {name: '비고(사유)', ok: false, detail: '비어 있음'}, SAFE], SPEC);
+  assert.match(ctx.overlay.innerHTML, /1\/3 항목을 채웠습니다\(2개 확인 필요\)/);
+  assert.match(logged[0].summary, /^1\/3 항목을 채웠습니다\(2개 확인 필요\)/);
+});
+
+test('근태 신청서 결과: 신청서가 열리지 않았거나, 열렸어도 값을 넣은 칸이 없으면 "채우지 못했습니다"', () => {
+  const cases = [
+    [{name: '양식 열기', keep: 1, ok: false, detail: '휴가신청서'}, {name: '중단', keep: 1, ok: false, detail: '신청서 입력 화면이 열리지 않았습니다'}, SAFE],
+    [OPENED, {name: '중단', keep: 1, ok: false, detail: '예외'}, SAFE],
+    [OPENED, {name: '휴가구분', ok: false, detail: '연차'}, {name: '휴가기간', ok: false, detail: ''}, {name: '비고(사유)', ok: false, detail: '비어 있음'}, SAFE],
+    [OPENED, {name: '교통수단', keep: 1, ok: true, detail: '선택 안 함(기본값)'}, {name: '출장구분', ok: false, detail: ''}, {name: '제목(예상)', keep: 1, ok: true, detail: '예상'}, SAFE],
+  ];
+  for (const steps of cases) {
+    const a = attTail(); openOther(a.ctx);
+    const out = a.fin(steps, SPEC);
+    assert.equal(out.status, 'failed', '대화 도구가 "일부만 자동 기입했습니다"라고 하지 않게');
+    assert.match(a.ctx.toasts[0], /^신청서를 채우지 못했습니다\. 신청은 하지 않았습니다\./);
+    assert.doesNotMatch(a.ctx.toasts[0], /항목을 채웠습니다/);
+    assert.equal(a.logged[0].status, 'error');
+    const b = attTail(); b.fin(steps, SPEC);
+    assert.match(b.ctx.overlay.innerHTML, /<h2[^>]*>신청서를 채우지 못했습니다<\/h2>/);
+  }
 });
 
 test('근태 신청서 결과: 작업 내역 저장에 실패했으면 결과 창을 그린다', () => {
   const {ctx, fin} = attTail(false);
   openOther(ctx);
-  fin([{name: '휴가구분', ok: true, detail: '연차'}, SAFE], SPEC);
+  fin([OPENED, {name: '휴가구분', ok: true, detail: '연차'}, SAFE], SPEC);
   assert.match(ctx.overlay.innerHTML, /근태신청 준비 결과/);
   assert.equal(ctx.toasts.length, 0);
 });
 
 test('근태 신청서 결과: 덮개가 비어 있으면 결과 창을 그린다', () => {
   const {ctx, fin} = attTail();
-  const out = fin([{name: '휴가구분', ok: true, detail: '연차'}], SPEC);
+  const out = fin([OPENED, {name: '휴가구분', ok: true, detail: '연차'}, SAFE], SPEC);
   assert.equal(out.status, 'success');
   assert.match(ctx.overlay.innerHTML, /근태신청 준비 결과/);
+  assert.match(ctx.overlay.innerHTML, /1\/1 항목을 채웠습니다\. 신청은 하지 않았습니다\./);
 });
 
 // ---------- 검토 R2A 뒤 더한 회귀 검사 ----------
@@ -500,4 +535,19 @@ test('근태 신청: 기다리는 동안 다시 부르면 나중 요청의 창�
   assert.deepEqual(asked.map(s => s.type), ['leave']);
   assert.match(ctx.overlay.innerHTML, /근태 신청 준비/);
   assert.equal(ctx.toasts.length, 0);
+});
+
+test('값을 넣지 않는 단계에 keep 표시를 단다(기안: 기본값 유지·안전장치, 근태: 양식 열기·기본값·안내·중단·안전장치)', () => {
+  const d = cut('19-draft-engine.js', '  async function fillDraft', '  function showDraftReport');
+  assert.match(d, /steps\.push\(\{name, ok: !!r\.ok, detail: r\.detail \|\| '', keep: r\.keep\}\)/, 'run이 단계의 keep을 넘긴다');
+  assert.equal((d.match(/return \{ok: true, keep: 1, detail: '그룹웨어 기본값 유지/g) || []).length, 2);
+  assert.match(d, /name: '안전장치', keep: 1/);
+  const a = cut('27-attendance-request.js', '  async function fillAttendanceForm', '    const bad = steps.filter');
+  for (const name of ['양식 열기', '교통수단\', true', '신청일수', '작성기준·시간', '제목(예상)', '중단', '안전장치']) {
+    const at = a.indexOf(`step('${name}`);
+    assert.ok(at >= 0, name);
+    const call = a.slice(at, a.indexOf(');', at));
+    assert.match(call, /, 1$/, `${name} 단계에 keep`);
+  }
+  assert.equal((a.match(/화면의 중복근태 목록 확인'\), 1\)/g) || []).length, 3, '중복 근태 안내 3곳');
 });
