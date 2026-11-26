@@ -78,6 +78,7 @@
     const sessionOnly = !!($('#aiSessionOnly') && $('#aiSessionOnly').checked);
     if (!R.isGeminiKey(key)) { aiSetup('키 형식이 맞지 않습니다. AIza 또는 AQ. 로 시작하는 긴 글자를 그대로 붙여넣으세요(앞뒤 공백, 줄바꿈 없이).'); return; }
     $('#overlay').innerHTML = aiShell('<div class="muted"><span class="spin"></span> 연결을 시험하고 있습니다…</div>');
+    const mark = typeof overlayMark === 'function' ? overlayMark() : 0, live = () => typeof overlayLive !== 'function' || overlayLive(mark);
     try {
       const list = await aiRequest('models?pageSize=100', null, key);
       const names = (list.models || []).filter(m => (m.supportedGenerationMethods || []).includes('generateContent')).map(m => m.name.replace(/^models\//, ''));
@@ -94,11 +95,12 @@
       if (sessionOnly) { store.del('ai'); try { sessionStorage.setItem(aiSessKey(), JSON.stringify({key, model: pick, sessionOnly: true})); } catch {} }
       else { try { sessionStorage.removeItem(aiSessKey()); } catch {} store.set('ai', {key, model: pick}); }
       toast(`AI 도우미가 연결되었습니다 (${pick}${sessionOnly ? ' · 세션 전용' : ''})`);
-      closeOverlay();
+      if (live()) closeOverlay();
       if (typeof chatRefresh === 'function') chatRefresh();
     } catch (e) {
       logError('aiSaveKey', e.message);
-      aiSetup(e.status === 400 || e.status === 403 ? '키가 거절되었습니다. 키를 다시 복사해 붙여넣거나 새 키를 만들어 보세요. (' + e.message.slice(0, 80) + ')' : '연결하지 못했습니다: ' + e.message.slice(0, 120));
+      const msg = e.status === 400 || e.status === 403 ? '키가 거절되었습니다. 키를 다시 복사해 붙여넣거나 새 키를 만들어 보세요. (' + e.message.slice(0, 80) + ')' : '연결하지 못했습니다: ' + e.message.slice(0, 120);
+      if (live()) aiSetup(msg); else toast('AI 연결 시험 실패: ' + msg);
     }
   }
   async function aiAsk(q) {

@@ -1,0 +1,601 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {runInNewContext} from 'node:vm';
+
+// 덮개 가드(15-overlays-palette-help-menus.js)와, 기다린(await) 뒤 덮개를 다시 그리거나 닫던 곳의 회귀 검사.
+// 조각의 일부만 떼어 vm으로 돌린다. 덮개(#overlay)는 innerHTML을 바꿀 때마다 새 창 요소가 생기는 가짜로 흉내 낸다.
+const read = f => readFileSync(new URL('../src/live/wc/' + f, import.meta.url), 'utf8');
+function cut(file, from, to) {
+  const s = read(file), a = s.indexOf(from), b = s.indexOf(to, a + from.length);
+  if (a < 0 || b < 0) throw new Error(`${file}: 구간을 찾지 못함 (${from.slice(0, 30)})`);
+  return s.slice(a, b);
+}
+const GUARD = cut('15-overlays-palette-help-menus.js', '  let ovMarkSeq', '  const fontStep');
+
+function fakeOverlay() {
+  let html = '', child = null;
+  return {
+    get innerHTML() { return html; },
+    set innerHTML(v) { html = String(v); child = html.trim() ? {dataset: {}} : null; },
+    get firstElementChild() { return child; },
+  };
+}
+function deferred() { let resolve, reject; const promise = new Promise((r, j) => { resolve = r; reject = j; }); return {promise, resolve, reject}; }
+const tick = () => new Promise(r => setTimeout(r, 0));
+
+// 공통 문맥: 덮개, 알림, 창 닫기. extra로 조각마다 필요한 것을 더한다.
+function context(extra = {}, sel = {}) {
+  const overlay = fakeOverlay(), toasts = [], toastEl = {html: '', insertAdjacentHTML(_p, h) { this.html += h; }};
+  const S = {paletteOpen: false, helpOpen: false, menuOpen: '', coach: null};
+  const ctx = {
+    S, overlay, toasts, toastEl,
+    $: q => (q === '#overlay' ? overlay : q in sel ? sel[q](overlay) : null),
+    root: {querySelector: q => (q === '.toast' && toasts.length ? toastEl : null)},
+    toast: m => { toasts.push(m); toastEl.html = ''; },
+    closeOverlay: () => { S.paletteOpen = false; S.helpOpen = false; S.menuOpen = ''; overlay.innerHTML = ''; },
+    ic: () => '', esc: s => String(s ?? ''), logError: () => {}, setTimeout: () => 0,
+    ...extra,
+  };
+  return ctx;
+}
+const run = (ctx, src, name) => runInNewContext(GUARD + '\n' + src + `\n;${name}`, ctx);
+// 사용자가 다른 창을 엶(팔레트 같은 창: S.paletteOpen을 켜고 덮개에 그림)
+const openOther = ctx => { ctx.S.paletteOpen = true; ctx.overlay.innerHTML = '<div>다른 창</div>'; };
+
+// ---------- 공통 가드 ----------
+test('가드: 빈 덮개는 0, 그 뒤 창이 생기면 0은 더 이상 살아 있지 않다', () => {
+  const ctx = context();
+  const g = run(ctx, '', '({overlayMark, overlayLive})');
+  const m = g.overlayMark();
+  assert.equal(m, 0);
+  assert.equal(g.overlayLive(m), true);
+  ctx.overlay.innerHTML = '<div>창</div>';
+  assert.equal(g.overlayLive(m), false);
+});
+
+test('가드: 같은 창이면 살아 있고, 닫거나 바꾸면 아니다', () => {
+  const ctx = context();
+  const g = run(ctx, '', '({overlayMark, overlayLive})');
+  ctx.overlay.innerHTML = '<div>A</div>';
+  const a = g.overlayMark();
+  assert.ok(a > 0);
+  assert.equal(g.overlayMark(), a, '같은 창에 다시 표식을 달면 같은 순번');
+  assert.equal(g.overlayLive(a), true);
+  ctx.overlay.innerHTML = '<div>B</div>';
+  const b = g.overlayMark();
+  assert.notEqual(b, a);
+  assert.equal(g.overlayLive(a), false, '다른 창으로 바뀜');
+  assert.equal(g.overlayLive(b), true);
+  ctx.overlay.innerHTML = '';
+  assert.equal(g.overlayLive(b), false, '닫힘');
+});
+
+test('가드: 결과 알림은 빈 덮개면 그리게 두고, 다른 창이 있으면 덮지 않고 알림과 결과 보기 단추를 준다', () => {
+  const ctx = context();
+  const g = run(ctx, '', '({overlayYield})');
+  assert.equal(g.overlayYield('끝났습니다.'), false);
+  assert.equal(ctx.toasts.length, 0);
+  ctx.overlay.innerHTML = '<div>다른 창</div>';
+  assert.equal(g.overlayYield('끝났습니다.'), true);
+  assert.equal(ctx.overlay.innerHTML, '<div>다른 창</div>');
+  assert.match(ctx.toasts[0], /끝났습니다\. 결과는 자동화 작업 내역에 있습니다/);
+  assert.match(ctx.toastEl.html, /data-act="openHistory"/);
+});
+
+// ---------- 23-ai.js aiSaveKey: 연결 시험(최대 30초) 뒤 ----------
+function aiSetupCtx() {
+  const first = deferred();
+  let calls = 0;
+  const ctx = context({
+    R: {isGeminiKey: () => true},
+    aiShell: b => `<div>시험 ${b}</div>`,
+    aiSetup: msg => { ctx.overlay.innerHTML = `<div>키 설정 ${msg || ''}</div>`; },
+    aiRequest: () => (calls++ ? Promise.resolve({}) : first.promise),
+    aiSessKey: () => 'k', store: {set() {}, del() {}}, sessionStorage: {setItem() {}, removeItem() {}},
+  }, {'#aiKey': () => ({value: 'AIzaTEST'}), '#aiSessionOnly': () => ({checked: false})});
+  const save = run(ctx, cut('23-ai.js', '  async function aiSaveKey', '  async function aiAsk'), 'aiSaveKey');
+  return {ctx, save, first};
+}
+const MODELS = {models: [{name: 'models/gemini-9-flash', supportedGenerationMethods: ['generateContent']}]};
+
+test('AI 키: 시험 중 창을 닫으면 실패해도 키 설정 창이 다시 뜨지 않고 알림으로 알린다', async () => {
+  const {ctx, save, first} = aiSetupCtx();
+  const p = save();
+  ctx.closeOverlay();
+  const e = new Error('네트워크'); first.reject(e); await p;
+  assert.equal(ctx.overlay.innerHTML, '');
+  assert.match(ctx.toasts.join(' '), /연결하지 못했습니다: 네트워크/);
+});
+
+test('AI 키: 시험 중 연 다른 창은 성공해도 닫지 않는다', async () => {
+  const {ctx, save, first} = aiSetupCtx();
+  const p = save();
+  openOther(ctx);
+  first.resolve(MODELS); await p;
+  assert.equal(ctx.overlay.innerHTML, '<div>다른 창</div>');
+  assert.match(ctx.toasts.join(' '), /연결되었습니다/);
+});
+
+test('AI 키: 열어 둔 채면 실패 시 키 설정 창을, 성공 시 창을 닫는다', async () => {
+  let t = aiSetupCtx(), p = t.save();
+  t.first.reject(new Error('네트워크')); await p;
+  assert.match(t.ctx.overlay.innerHTML, /키 설정 연결하지 못했습니다/);
+  t = aiSetupCtx(); p = t.save();
+  t.first.resolve(MODELS); await p;
+  assert.equal(t.ctx.overlay.innerHTML, '');
+});
+
+// ---------- 21-governance.js govUpdate: 업데이트 확인 뒤 ----------
+function govCtx(kind) {
+  const d = deferred();
+  const ctx = context({
+    checkUpdate: () => d.promise, renderHead() {}, renderNav() {}, VERSION: '1.0.0', R: {compareVersions: () => 0},
+    openChangelog: () => { ctx.overlay.innerHTML = '<div aria-label="업데이트 내역">내역</div>'; },
+    drawDiag: () => { ctx.overlay.innerHTML = '<div aria-label="진단">진단</div>'; },
+  }, {'#overlay [aria-label="업데이트 내역"]': ov => (/업데이트 내역/.test(ov.innerHTML) ? {} : null)});
+  ctx.overlay.innerHTML = kind === 'log' ? '<div aria-label="업데이트 내역">내역</div>' : '<div aria-label="진단">진단</div>';
+  const upd = run(ctx, cut('21-governance.js', '  async function govUpdate', '  // ---------- 최초 사용 안내'), 'govUpdate');
+  return {ctx, upd, d};
+}
+
+test('업데이트 다시 확인: 확인 중 창을 닫으면 다시 뜨지 않는다', async () => {
+  for (const kind of ['log', 'diag']) {
+    const {ctx, upd, d} = govCtx(kind);
+    const p = upd(); ctx.closeOverlay();
+    d.resolve({latest: '1.0.0'}); await p;
+    assert.equal(ctx.overlay.innerHTML, '', kind);
+    assert.match(ctx.toasts.join(' '), /최신 버전/);
+  }
+});
+
+test('업데이트 다시 확인: 그 사이 연 다른 창을 덮지 않고, 열려 있으면 다시 그린다', async () => {
+  let {ctx, upd, d} = govCtx('diag');
+  let p = upd(); openOther(ctx);
+  d.resolve({latest: '1.0.0'}); await p;
+  assert.equal(ctx.overlay.innerHTML, '<div>다른 창</div>');
+  ({ctx, upd, d} = govCtx('log'));
+  p = upd(); d.resolve({latest: '1.0.0'}); await p;
+  assert.match(ctx.overlay.innerHTML, /업데이트 내역/);
+});
+
+// ---------- 55-todo-views.js todoWrapOpen: 목록을 읽은 뒤 ----------
+function wrapCtx() {
+  const d = deferred();
+  const ctx = context({TD: {list: null, err: ''}, todoGwOk: () => true, todoWrapHtml: () => '<div>퇴근 전 마무리</div>'});
+  ctx.todoLoad = () => d.promise.then(() => { ctx.TD.list = []; });
+  const open = run(ctx, cut('55-todo-views.js', '  function todoWrapOpen', '  const todoWrapRefresh'), 'todoWrapOpen');
+  return {ctx, open, d};
+}
+
+test('퇴근 전 마무리: 목록을 읽는 동안 연 다른 창을 닫고 뜨지 않는다', async () => {
+  const {ctx, open, d} = wrapCtx();
+  open(); openOther(ctx);
+  d.resolve(); await tick(); await tick();
+  assert.equal(ctx.overlay.innerHTML, '<div>다른 창</div>');
+});
+
+test('퇴근 전 마무리: 아무것도 열지 않았으면 읽은 뒤 뜬다', async () => {
+  const {ctx, open, d} = wrapCtx();
+  open(); d.resolve(); await tick(); await tick();
+  assert.match(ctx.overlay.innerHTML, /퇴근 전 마무리/);
+});
+
+// ---------- 55-todo-views.js todoBulkSave / 51-todo.js tdDelYes: 저장·삭제 뒤 닫기 ----------
+function bulkCtx() {
+  const d = deferred();
+  const ctx = context({
+    TD: {}, R: {tdParseBulk: () => ({rows: [{title: '가'}]})}, today: () => '2026-11-27', todoGwOk: () => true,
+    GW: {todoCreate: () => d.promise}, todoYmd: s => s, todoLoad: async () => {}, todoBulkPreview() {},
+  }, {'#tdeBulk': () => ({value: '가'})});
+  ctx.overlay.innerHTML = '<div>할 일 여러 개 추가</div>';
+  const save = run(ctx, cut('55-todo-views.js', '  async function todoBulkSave', '  // ---------- 처리기 ----------'), 'todoBulkSave');
+  return {ctx, save, d};
+}
+
+test('할 일 여러 개 추가: 저장 중 연 다른 창은 저장이 끝나도 닫지 않는다', async () => {
+  const {ctx, save, d} = bulkCtx();
+  const p = save(null); openOther(ctx);
+  d.resolve(); await p;
+  assert.equal(ctx.overlay.innerHTML, '<div>다른 창</div>');
+  assert.match(ctx.toasts.join(' '), /1건을 추가했습니다/);
+});
+
+test('할 일 여러 개 추가: 창을 열어 둔 채면 저장 뒤 닫는다', async () => {
+  const {ctx, save, d} = bulkCtx();
+  const p = save(null); d.resolve(); await p;
+  assert.equal(ctx.overlay.innerHTML, '');
+});
+
+function delCtx() {
+  const d = deferred();
+  const ctx = context({HOME_ACTS: {}, todoRemove: () => d.promise});
+  ctx.overlay.innerHTML = '<div>할 일 지우기</div>';
+  run(ctx, cut('51-todo.js', '  HOME_ACTS.tdDelYes', '  HOME_ACTS.tdSubAdd'), '0');
+  return {ctx, yes: () => ctx.HOME_ACTS.tdDelYes({dataset: {id: 'td1'}}), d};
+}
+
+test('할 일 지우기: 지우는 중 연 다른 창은 닫지 않고, 열어 둔 채면 닫는다', async () => {
+  let {ctx, yes, d} = delCtx();
+  let p = yes(); openOther(ctx);
+  d.resolve({ok: true}); await p;
+  assert.equal(ctx.overlay.innerHTML, '<div>다른 창</div>');
+  assert.match(ctx.toasts.join(' '), /지웠습니다/);
+  ({ctx, yes, d} = delCtx());
+  p = yes(); d.resolve({ok: true}); await p;
+  assert.equal(ctx.overlay.innerHTML, '');
+});
+
+// ---------- 52-budget-plan.js bpImportOpen / bpImportAdd ----------
+function bpCtx() {
+  const d = deferred();
+  const ctx = context({
+    BP: {}, HOME_ACTS: {}, learnPatterns: () => d.promise, patLoad: () => ({docs: {}}), bpLoadLedger: async () => null, bpRows: () => [{code: 'c1', name: '세목'}],
+    bpAllPlans: () => [], R: {bpPlanCandidates: () => []}, today: () => '2026-11-27', bpAmt: v => Number(String(v).replace(/\D/g, '')) || 0,
+  }, {'#bpImpCode0': () => ({value: 'c1'}), '#bpImpAmt0': () => ({value: '1000'}), '#bpImpDate0': () => ({value: '2026-12-01'})});
+  ctx.S.budget = {project: 'p', filter: 'h'};
+  ctx.bpImportHtml = () => `<div>계획서에서 가져오기 ${ctx.BP.impBusy ? '읽는 중' : '다 읽음'}</div>`;
+  const g = run(ctx, cut('52-budget-plan.js', '  async function bpImportOpen', '  function bpImportHtml') + cut('52-budget-plan.js', '  HOME_ACTS.bpImportAdd', '  HOME_ACTS.bpConfirm'), '({bpImportOpen})');
+  return {ctx, open: g.bpImportOpen, d};
+}
+
+test('계획서에서 가져오기: 읽는 중 닫고 다른 창을 열면 그 창을 덮지 않는다', async () => {
+  const {ctx, open, d} = bpCtx();
+  const p = open();
+  assert.match(ctx.overlay.innerHTML, /읽는 중/);
+  ctx.closeOverlay(); openOther(ctx);
+  d.resolve({}); await p;
+  assert.equal(ctx.overlay.innerHTML, '<div>다른 창</div>');
+});
+
+test('계획서에서 가져오기: 열어 둔 채면 다 읽은 뒤 다시 그린다', async () => {
+  const {ctx, open, d} = bpCtx();
+  const p = open(); d.resolve({}); await p;
+  assert.match(ctx.overlay.innerHTML, /다 읽음/);
+});
+
+test('계획으로 추가: 저장 중 연 다른 창을 덮지 않고, 열어 둔 채면 다시 그린다', async () => {
+  for (const other of [true, false]) {
+    const {ctx} = bpCtx();
+    const d = deferred();
+    ctx.todoCreate = () => d.promise;
+    ctx.BP.imp = [{title: '2026년 가나 운영계획', docNo: 'D-1', date: '2026-01-01'}];
+    ctx.S.paletteOpen = true; ctx.overlay.innerHTML = ctx.bpImportHtml();
+    const p = ctx.HOME_ACTS.bpImportAdd({dataset: {i: '0'}, disabled: false});
+    if (other) openOther(ctx);
+    d.resolve({ok: true}); await p;
+    if (other) assert.equal(ctx.overlay.innerHTML, '<div>다른 창</div>');
+    else assert.match(ctx.overlay.innerHTML, /계획서에서 가져오기/);
+    assert.equal(ctx.BP.imp[0].taken, true);
+  }
+});
+
+// ---------- 27-attendance-request.js quickAttendanceApplication: 지난 신청 목록을 최대 4초 기다린 뒤 ----------
+function attCtx() {
+  const d = deferred(), asked = [];
+  const ctx = context({
+    ATT_FORM: {trip: '출장신청서', leave: '휴가신청서', overtime: '시간외근무신청서'}, R: {kstNow: () => ({date: '2026-11-27'}), learnAttendanceTitles: () => null},
+    selectedAction: () => null, attYmd: () => '', GW: {teamPlanned: true}, loadApps: () => d.promise, wait: () => new Promise(() => {}),
+    ATT_LEAVE_KINDS: ['연차'], ATT_TRANSPORTS: [], fillAttendanceForm: async () => ({status: 'success'}),
+    askAttendance: async st => { asked.push(st); ctx.overlay.innerHTML = '<div>근태 신청 준비</div>'; return null; },
+  });
+  ctx.S.view = 'home';
+  const q = run(ctx, cut('27-attendance-request.js', '  let attAskSeq', '  async function fillAttendanceForm'), 'quickAttendanceApplication');
+  return {ctx, q, d, asked};
+}
+
+test('근태 신청: 목록을 기다리는 동안 연 다른 창을 덮지 않고 알린다', async () => {
+  const {ctx, q, d, asked} = attCtx();
+  const p = q('leave'); openOther(ctx);
+  d.resolve({apps: [], me: ''}); await p;
+  assert.equal(asked.length, 0);
+  assert.equal(ctx.overlay.innerHTML, '<div>다른 창</div>');
+  assert.match(ctx.toasts.join(' '), /근태 신청 창을 띄우지 않았습니다/);
+});
+
+test('근태 신청: 아무것도 열지 않았으면 입력 창을 띄운다', async () => {
+  const {ctx, q, d, asked} = attCtx();
+  const p = q('leave'); d.resolve({apps: [], me: ''}); await p;
+  assert.equal(asked.length, 1);
+  assert.match(ctx.overlay.innerHTML, /근태 신청 준비/);
+});
+
+// ---------- 자동 입력 결과 창: 19-draft-engine.js showDraftReport, 27-attendance-request.js fillAttendanceForm 끝 ----------
+// 작업 내역: saved=false면 저장 실패(store.set 실패)를 흉내 낸다. logActionRecord는 저장 여부와 관계없이 기록을 돌려준다(18-command-console.js).
+// 단계의 keep: 값을 넣지 않는 단계(양식 열기·기본값 유지·안내·안전장치). fillDraft·fillAttendanceForm이 다는 표시와 같다.
+function historyCtx(extra, saved = true) {
+  const history = [], logged = [];
+  let n = 0;
+  const ctx = context({
+    ...extra,
+    getActionHistory: () => history,
+    logActionRecord: r => { const rec = {...r, id: 'a' + (++n)}; logged.push(rec); if (saved) history.unshift(rec); return rec; },
+  });
+  return {ctx, logged};
+}
+function reportCtx(saved) {
+  const {ctx, logged} = historyCtx({}, saved);
+  const show = run(ctx, cut('19-draft-engine.js', '  function showDraftReport', '  // ---------- 결과보고: 계획서를 이어받아 작성'), 'showDraftReport');
+  return {ctx, show, logged};
+}
+const D_SAFE = {name: '안전장치', keep: 1, ok: true, detail: '상신·결재·임시저장·삭제는 실행하지 않았습니다'};
+const D_KEEP = {name: '공개·긴급·보안·문서구분', keep: 1, ok: true, detail: '그룹웨어 기본값 유지'};
+const STEPS = [{name: '제목', ok: true, detail: '가나'}, D_KEEP, {name: '본문', ok: true, detail: '넣음'}, D_SAFE];
+const numbersOf = s => (String(s).match(/\d+\/\d+개 항목|\d+개 항목|\d+개는/g) || []).join(' ');
+
+test('기안 결과: 그 사이 연 다른 창을 덮지 않고, 알림과 작업 내역으로 남긴다', () => {
+  const {ctx, show, logged} = reportCtx();
+  openOther(ctx);
+  show('가나 지급 건의', STEPS, []);
+  assert.equal(ctx.overlay.innerHTML, '<div>다른 창</div>');
+  assert.equal(logged.length, 1, '결과는 작업 내역에 남는다');
+  assert.match(ctx.toasts[0], /^2개 항목을 지난 결재문서 패턴대로 기입하고 다시 읽어 확인했습니다\. 상신하지 않았습니다\./, '기본값 유지·안전장치는 채운 항목으로 세지 않는다');
+  assert.match(ctx.toastEl.html, /openHistory/);
+});
+
+test('기안 결과: 일부 단계가 실패했으면 채운 칸만 세어 알리고, 결과 창·알림·작업 내역이 같은 숫자를 쓴다', () => {
+  const steps = [{name: '제목', ok: true, detail: '가나'}, D_KEEP, {name: '기록물철', ok: false, detail: '직접 확인'}, {name: '결재라인', ok: false, detail: '못 찾음'}, D_SAFE];
+  const a = reportCtx(); openOther(a.ctx); a.show('가나', steps, []);
+  assert.match(a.ctx.toasts[0], /^1\/3개 항목 자동 기입, 2개는 직접 확인이 필요합니다\./);
+  assert.match(a.ctx.toasts[0], /본문은 직접 확인하세요/, '본문을 넣지 않았으면 그 안내도 남긴다');
+  assert.doesNotMatch(a.ctx.toasts[0], /채웠습니다|기입 완료/);
+  const b = reportCtx(); b.show('가나', steps, []);
+  assert.equal(numbersOf(b.ctx.overlay.innerHTML.match(/<div class="muted" style="margin-bottom:10px">[^]*?<\/div>/)[0]), '1/3개 항목 2개는');
+  assert.equal(numbersOf(a.logged[0].summary), '1/3개 항목 2개는');
+  assert.equal(a.logged[0].status, 'partial');
+});
+
+test('기안 결과: 아무 값도 넣지 못했으면(사전점검 실패) "채우지 못했습니다", 틀·본문 안내는 보이지 않는다', () => {
+  for (const steps of [[{name: '사전점검', keep: 1, ok: false, detail: '양식이 다름'}], [{name: '사전점검', keep: 1, ok: false, detail: '계정이 바뀜'}]]) {
+    const notes = ['본문 뼈대: 과거 계획서 “가나”의 서식을 이어받았습니다.'];
+    const a = reportCtx(); openOther(a.ctx); a.show('가나', steps, notes);
+    assert.match(a.ctx.toasts[0], /^기안을 채우지 못했습니다\. 상신하지 않았습니다\./);
+    assert.equal(a.logged[0].summary, '기안을 채우지 못했습니다.');
+    assert.equal(a.logged[0].status, 'error');
+    assert.equal(a.logged[0].details, '', '작업 내역에도 이어받았다는 안내를 남기지 않는다');
+    const b = reportCtx(); b.show('가나', steps, notes);
+    assert.match(b.ctx.overlay.innerHTML, /자동 기입하지 못했습니다/);
+    assert.match(b.ctx.overlay.innerHTML, /기안을 채우지 못했습니다\./);
+    assert.doesNotMatch(b.ctx.overlay.innerHTML, /초안 틀만 입력|본문 뼈대|이어받았습니다/);
+  }
+});
+
+test('기안 결과: 칸을 시도했지만 확인된 값이 없으면(기본값 유지만 통과) "확인하지 못했습니다"로 알리고, 틀 안내 상자는 없다', () => {
+  for (const steps of [[{name: '제목', ok: false, detail: ''}, D_SAFE], [{name: '제목', ok: false, detail: '불일치'}, D_KEEP, {name: '결재라인', ok: false, detail: '못 찾음'}, {name: '본문', ok: false, detail: '넣지 못함'}, D_SAFE]]) {
+    const a = reportCtx(); openOther(a.ctx); a.show('가나', steps, ['본문은 메일에서 뼈대만 만들었습니다.']);
+    assert.match(a.ctx.toasts[0], /^기안에 채운 칸을 확인하지 못했습니다\. 화면을 확인하세요\. 상신하지 않았습니다\./);
+    assert.doesNotMatch(a.ctx.toasts[0], /채웠습니다|기입했습니다/);
+    assert.equal(a.logged[0].status, 'error');
+    const b = reportCtx(); b.show('가나', steps, ['본문은 메일에서 뼈대만 만들었습니다.']);
+    assert.match(b.ctx.overlay.innerHTML, /자동 기입을 확인하지 못했습니다/);
+    assert.doesNotMatch(b.ctx.overlay.innerHTML, /초안 틀만 입력|뼈대만 만들었습니다/);
+  }
+});
+
+test('기안 결과: 일부라도 채웠고 본문이 없으면 틀 안내 상자와 안내 글을 그대로 보인다', () => {
+  const b = reportCtx();
+  b.show('가나', [{name: '제목', ok: true, detail: '가나'}, D_KEEP, D_SAFE], ['물품 내역·금액은 양식의 표에 직접 입력하세요.']);
+  assert.match(b.ctx.overlay.innerHTML, /초안 틀만 입력했습니다\. 본문 사실/);
+  assert.match(b.ctx.overlay.innerHTML, /물품 내역·금액은/);
+});
+
+test('기안 결과: 작업 내역 저장에 실패했으면 결과를 잃지 않게 결과 창을 그린다', () => {
+  const {ctx, show} = reportCtx(false);
+  openOther(ctx);
+  show('가나 지급 건의', STEPS, []);
+  assert.match(ctx.overlay.innerHTML, /자동 기입 완료/);
+  assert.equal(ctx.toasts.length, 0, '"작업 내역에 있습니다"라고 하지 않는다');
+});
+
+test('기안 결과: 덮개가 비어 있으면 결과 창을 그린다', () => {
+  const {ctx, show, logged} = reportCtx();
+  show('가나 지급 건의', STEPS, []);
+  assert.match(ctx.overlay.innerHTML, /자동 기입 완료/);
+  assert.equal(logged.length, 1);
+  assert.equal(ctx.toasts.length, 0);
+});
+
+function attTail(saved) {
+  const body = cut('27-attendance-request.js', '    const bad = steps.filter(s => !s.ok).length, fill', '    return out;\n  }') + '    return out;';
+  const {ctx, logged} = historyCtx({ATT_FORM: {leave: '휴가신청서'}, hm: a => a.join(':')}, saved);
+  const fin = run(ctx, `function attFinish(steps, spec) {\n${body}\n}`, 'attFinish');
+  return {ctx, fin, logged};
+}
+const SPEC = {type: 'leave', from: '2026-11-28', kind: '연차'};
+const SAFE = {name: '안전장치', keep: 1, ok: true, detail: '[신청완료]는 누르지 않았습니다'};
+const OPENED = {name: '양식 열기', keep: 1, ok: true, detail: '휴가신청서'};
+
+test('근태 신청서 결과: 다른 창이 열려 있으면 덮지 않고 알리며, 채운 칸만 센다', () => {
+  const {ctx, fin, logged} = attTail();
+  openOther(ctx);
+  const out = fin([OPENED, {name: '휴가구분', ok: true, detail: '연차'}, {name: '휴가기간', ok: true, detail: '2026-11-28'}, {name: '비고(사유)', ok: false, detail: '비어 있음'}, SAFE], SPEC);
+  assert.deepEqual({...out}, {status: 'partial', total: 3, failed: 1});
+  assert.equal(ctx.overlay.innerHTML, '<div>다른 창</div>');
+  assert.equal(logged.length, 1);
+  assert.match(ctx.toasts[0], /^2\/3 항목을 채웠습니다\(1개 확인 필요\)\. 신청은 하지 않았습니다\./);
+  assert.equal(logged[0].summary, '2/3 항목을 채웠습니다(1개 확인 필요). 신청은 하지 않았습니다.');
+});
+
+test('근태 신청서 결과: 결과 창에도 알림·작업 내역과 같은 숫자를 보인다', () => {
+  const {ctx, fin, logged} = attTail();
+  fin([OPENED, {name: '휴가구분', ok: true, detail: '연차'}, {name: '휴가기간', ok: false, detail: ''}, {name: '비고(사유)', ok: false, detail: '비어 있음'}, SAFE], SPEC);
+  assert.match(ctx.overlay.innerHTML, /1\/3 항목을 채웠습니다\(2개 확인 필요\)/);
+  assert.match(logged[0].summary, /^1\/3 항목을 채웠습니다\(2개 확인 필요\)/);
+});
+
+test('근태 신청서 결과: 신청서가 열리지 않았으면 "채우지 못했습니다"', () => {
+  const cases = [
+    [{name: '양식 열기', keep: 1, ok: false, detail: '휴가신청서'}, {name: '중단', keep: 1, ok: false, detail: '신청서 입력 화면이 열리지 않았습니다'}, SAFE],
+    [OPENED, {name: '중단', keep: 1, ok: false, detail: '예외'}, SAFE],
+  ];
+  for (const steps of cases) {
+    const a = attTail(); openOther(a.ctx);
+    const out = a.fin(steps, SPEC);
+    assert.equal(out.status, 'failed', '대화 도구가 "일부만 자동 기입했습니다"라고 하지 않게');
+    assert.match(a.ctx.toasts[0], /^신청서를 채우지 못했습니다\. 신청은 하지 않았습니다\./);
+    assert.equal(a.logged[0].status, 'error');
+    const b = attTail(); b.fin(steps, SPEC);
+    assert.match(b.ctx.overlay.innerHTML, /<h2[^>]*>신청서를 채우지 못했습니다<\/h2>/);
+  }
+});
+
+test('근태 신청서 결과: 칸을 시도했지만 확인된 값이 없으면 "확인하지 못했습니다"', () => {
+  const cases = [
+    [OPENED, {name: '휴가구분', ok: false, detail: '연차'}, {name: '휴가기간', ok: false, detail: ''}, {name: '비고(사유)', ok: false, detail: '비어 있음'}, SAFE],
+    [OPENED, {name: '교통수단', keep: 1, ok: true, detail: '선택 안 함(기본값)'}, {name: '출장구분', ok: false, detail: ''}, {name: '제목(예상)', keep: 1, ok: true, detail: '예상'}, SAFE],
+  ];
+  for (const steps of cases) {
+    const a = attTail(); openOther(a.ctx);
+    const out = a.fin(steps, SPEC);
+    assert.equal(out.status, 'failed');
+    assert.match(a.ctx.toasts[0], /^신청서에 채운 칸을 확인하지 못했습니다\. 화면을 확인하세요\. 신청은 하지 않았습니다\./);
+    assert.doesNotMatch(a.ctx.toasts[0], /항목을 채웠습니다/);
+    assert.equal(a.logged[0].status, 'error');
+    const b = attTail(); b.fin(steps, SPEC);
+    assert.match(b.ctx.overlay.innerHTML, /<h2[^>]*>입력을 확인하지 못했습니다<\/h2>/);
+  }
+});
+
+test('근태 신청서 결과: 몇 칸을 넣은 뒤 도중에 멈췄으면 분모 없이 "도중에 멈췄습니다"로 알리고 완료로 남기지 않는다', () => {
+  const steps = [{name: '양식 열기', keep: 1, ok: true, detail: '출장신청서'}, {name: '출장구분', ok: true, detail: '관내출장'}, {name: '출장기간', ok: true, detail: '2026-11-28'}, {name: '중단', keep: 1, ok: false, detail: '예외'}, SAFE];
+  const a = attTail(); openOther(a.ctx);
+  const out = a.fin(steps, {type: 'leave', from: '2026-11-28', kind: '관내출장'});
+  assert.equal(out.status, 'partial');
+  const msg = '도중에 멈췄습니다. 2개 항목을 넣었고 나머지는 확인하지 못했습니다. 신청은 하지 않았습니다.';
+  assert.equal(a.ctx.toasts[0].startsWith(msg), true, a.ctx.toasts[0]);
+  assert.doesNotMatch(a.ctx.toasts[0], /2\/2/);
+  assert.equal(a.logged[0].summary, msg);
+  assert.equal(a.logged[0].status, 'partial');
+  assert.equal(a.logged[0].verified, false);
+  const b = attTail(); b.fin(steps, SPEC);
+  assert.match(b.ctx.overlay.innerHTML, /도중에 멈췄습니다\. 2개 항목을 넣었고/);
+  assert.match(b.ctx.overlay.innerHTML, /<h2[^>]*>신청서를 일부 채웠습니다 \(확인 필요\)<\/h2>/);
+});
+
+test('근태 신청서 결과: 작업 내역 저장에 실패했으면 결과 창을 그린다', () => {
+  const {ctx, fin} = attTail(false);
+  openOther(ctx);
+  fin([OPENED, {name: '휴가구분', ok: true, detail: '연차'}, SAFE], SPEC);
+  assert.match(ctx.overlay.innerHTML, /근태신청 준비 결과/);
+  assert.equal(ctx.toasts.length, 0);
+});
+
+test('근태 신청서 결과: 덮개가 비어 있으면 결과 창을 그린다', () => {
+  const {ctx, fin} = attTail();
+  const out = fin([OPENED, {name: '휴가구분', ok: true, detail: '연차'}, SAFE], SPEC);
+  assert.equal(out.status, 'success');
+  assert.match(ctx.overlay.innerHTML, /근태신청 준비 결과/);
+  assert.match(ctx.overlay.innerHTML, /1\/1 항목을 채웠습니다\. 신청은 하지 않았습니다\./);
+});
+
+// ---------- 검토 R2A 뒤 더한 회귀 검사 ----------
+test('가드: overlayRedraw는 같은 창이면 다시 그리고 표식을 이어 주며, 다른 창이면 그리지 않는다', () => {
+  const ctx = context();
+  const g = run(ctx, '', '({overlayMark, overlayLive, overlayRedraw})');
+  ctx.overlay.innerHTML = '<div>A</div>';
+  const m = g.overlayMark();
+  assert.equal(g.overlayRedraw(m, '<div>A2</div>'), true);
+  assert.equal(ctx.overlay.innerHTML, '<div>A2</div>');
+  assert.equal(g.overlayLive(m), true, '다시 그린 창도 같은 창');
+  assert.equal(g.overlayRedraw(m, () => { ctx.overlay.innerHTML = '<div>A3</div>'; }), true);
+  assert.equal(g.overlayLive(m), true);
+  ctx.overlay.innerHTML = '<div>다른 창</div>';
+  assert.equal(g.overlayRedraw(m, '<div>A4</div>'), false);
+  assert.equal(ctx.overlay.innerHTML, '<div>다른 창</div>');
+});
+
+test('계획으로 추가: 두 건을 연달아 누르면 두 번째가 끝난 뒤에도 창을 다시 그린다(중복 저장 단추가 남지 않음)', async () => {
+  const {ctx} = bpCtx();
+  const saves = [deferred(), deferred()];
+  let k = 0;
+  ctx.todoCreate = () => saves[k++].promise;
+  ctx.BP.imp = [{title: '2026년 가나 운영계획', docNo: 'D-1', date: '2026-01-01'}, {title: '2026년 다라 운영계획', docNo: 'D-2', date: '2026-01-02'}];
+  ctx.bpImportHtml = () => `<div>계획서에서 가져오기 ${ctx.BP.imp.map(c => (c.taken ? '추가됨' : '[계획으로 추가]')).join(' ')}</div>`;
+  const sel = ctx.$;
+  ctx.$ = q => (/^#bpImp(Code|Amt|Date)1$/.test(q) ? sel(q.replace(/1$/, '0')) : sel(q));
+  ctx.S.paletteOpen = true; ctx.overlay.innerHTML = ctx.bpImportHtml();
+  const a = ctx.HOME_ACTS.bpImportAdd({dataset: {i: '0'}, disabled: false});
+  const b = ctx.HOME_ACTS.bpImportAdd({dataset: {i: '1'}, disabled: false});
+  saves[0].resolve({ok: true}); await a;
+  saves[1].resolve({ok: true}); await b;
+  assert.equal(ctx.overlay.innerHTML, '<div>계획서에서 가져오기 추가됨 추가됨</div>');
+});
+
+test('진단: 처음 확인 중에 [업데이트 다시 확인]을 누르면 끝난 뒤 알림과 같은 새 결과를 보인다', async () => {
+  const checks = [deferred(), deferred()];
+  let k = 0, info = {latest: '1.0.0'};
+  const ctx = context({
+    checkUpdate: () => checks[k++].promise, renderHead() {}, renderNav() {}, VERSION: '1.0.0', R: {compareVersions: (a, b) => (a > b ? 1 : a < b ? -1 : 0)},
+    store: {get: () => info}, openChangelog() {},
+  }, {'#overlay [aria-label="진단"]': ov => (/진단/.test(ov.innerHTML) ? {} : null), '#overlay [aria-label="업데이트 내역"]': () => null});
+  ctx.drawDiag = () => { ctx.overlay.innerHTML = `<div aria-label="진단">진단 ${info.latest}</div>`; };
+  const src = cut('21-governance.js', '  async function openDiag', '  function drawDiag') + cut('21-governance.js', '  async function govUpdate', '  // ---------- 최초 사용 안내');
+  const g = run(ctx, src, '({openDiag, govUpdate})');
+  const first = g.openDiag();
+  const again = g.govUpdate();
+  info = {latest: '1.0.1'};
+  checks[0].resolve(info); await first; // 첫 확인이 끝나며 1.0.1로 다시 그림
+  assert.match(ctx.overlay.innerHTML, /진단 1.0.1/);
+  info = {latest: '1.0.2'};
+  checks[1].resolve(info); await again; // 다시 확인은 1.0.2
+  assert.match(ctx.overlay.innerHTML, /진단 1\.0\.2/);
+  assert.match(ctx.toasts.join(' '), /v1\.0\.2/);
+});
+
+test('퇴근 전 마무리 [날짜]: 저장 중 연 다른 창을 닫지 않고, 그대로면 마무리 창으로 돌아온다', async () => {
+  for (const other of [true, false]) {
+    const {ctx} = wrapCtx();
+    ctx.TD.list = [];
+    const save = deferred();
+    Object.assign(ctx, {HOME_ACTS: {}, askForm: async () => ['11/28'], R: {tdParseDue: () => '2026-11-28'}, todoSave: () => save.promise});
+    runInNewContext(cut('55-todo-views.js', '  HOME_ACTS.tdWrapPick', '  HOME_ACTS.tdWrapAll'), ctx); // 가드는 wrapCtx에서 이미 올림
+    const p = ctx.HOME_ACTS.tdWrapPick({dataset: {id: 't1'}});
+    await tick();
+    if (other) openOther(ctx);
+    save.resolve({ok: true}); await p;
+    if (other) assert.equal(ctx.overlay.innerHTML, '<div>다른 창</div>');
+    else assert.match(ctx.overlay.innerHTML, /퇴근 전 마무리/);
+  }
+});
+
+test('할 일 여러 개 추가: 창을 닫은 뒤 일부가 실패하면 "입력칸에 남겼다"고 하지 않고 실패 제목을 알린다', async () => {
+  const {ctx, save, d} = bulkCtx();
+  ctx.R.tdParseBulk = () => ({rows: [{title: '자료 준비'}, {title: '회의록 정리'}]});
+  let k = 0;
+  ctx.GW.todoCreate = () => (k++ ? Promise.reject(new Error('저장 실패')) : d.promise);
+  const p = save(null); ctx.closeOverlay();
+  d.resolve(); await p;
+  const msg = ctx.toasts.join(' ');
+  assert.match(msg, /1건 추가, 저장 못 한 1건: 회의록 정리/);
+  assert.doesNotMatch(msg, /입력칸에 남겼습니다/);
+});
+
+test('근태 신청: 기다리는 동안 다시 부르면 나중 요청의 창만 뜬다', async () => {
+  const {ctx, q, d, asked} = attCtx();
+  const loads = [d, deferred()];
+  let k = 0;
+  ctx.loadApps = () => loads[k++].promise;
+  const first = q('trip');
+  const second = q('leave');
+  loads[0].resolve({apps: [], me: ''}); await first;
+  loads[1].resolve({apps: [], me: ''}); await second;
+  assert.deepEqual(asked.map(s => s.type), ['leave']);
+  assert.match(ctx.overlay.innerHTML, /근태 신청 준비/);
+  assert.equal(ctx.toasts.length, 0);
+});
+
+test('값을 넣지 않는 단계에 keep 표시를 단다(기안: 기본값 유지·안전장치, 근태: 양식 열기·기본값·안내·중단·안전장치)', () => {
+  const d = cut('19-draft-engine.js', '  async function fillDraft', '  function showDraftReport');
+  assert.match(d, /steps\.push\(\{name, ok: !!r\.ok, detail: r\.detail \|\| '', keep: r\.keep\}\)/, 'run이 단계의 keep을 넘긴다');
+  assert.equal((d.match(/return \{ok: true, keep: 1, detail: '그룹웨어 기본값 유지/g) || []).length, 2);
+  assert.match(d, /name: '안전장치', keep: 1/);
+  assert.equal((d.match(/name: '사전점검', keep: 1/g) || []).length, 2, '사전점검 실패는 값을 넣기 전');
+  const a = cut('27-attendance-request.js', '  async function fillAttendanceForm', '    const bad = steps.filter');
+  for (const name of ['양식 열기', '교통수단\', true', '신청일수', '작성기준·시간', '제목(예상)', '중단', '안전장치']) {
+    const at = a.indexOf(`step('${name}`);
+    assert.ok(at >= 0, name);
+    const call = a.slice(at, a.indexOf(');', at));
+    assert.match(call, /, 1$/, `${name} 단계에 keep`);
+  }
+  assert.equal((a.match(/화면의 중복근태 목록 확인'\), 1\)/g) || []).length, 3, '중복 근태 안내 3곳');
+});

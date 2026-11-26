@@ -113,8 +113,10 @@
     });
   }
 
+  let attAskSeq = 0;
   async function quickAttendanceApplication(type, preset = {}) {
     closeOverlay();
+    const req = ++attAskSeq;
     type = ATT_FORM[type] ? type : 'trip';
     const today = R.kstNow(new Date()).date;
     const sel = selectedAction();
@@ -125,7 +127,10 @@
     const wkNext = type !== 'overtime' && typeof R.homeDayInfo === 'function' ? (d => d.weekend ? d.next : '')(R.homeDayInfo({date: today})) : '';
     const d0 = attYmd(preset.date) || selDate || pickedDay || wkNext || today, d1 = attYmd(preset.to) || d0;
     // 내 지난 근태 신청 제목에서 제목 형식을 배운다(목록을 못 읽으면 기본 형식)
+    const mark = typeof overlayMark === 'function' ? overlayMark() : 0;
     const ap = GW.teamPlanned ? await Promise.race([loadApps().catch(() => null), wait(4000).then(() => null)]) : null;
+    if (req !== attAskSeq) return; // 기다리는 동안 다시 불렀으면 나중 요청만 창을 띄운다
+    if (typeof overlayLive === 'function' && !overlayLive(mark)) { toast('다른 창이 열려 있어 근태 신청 창을 띄우지 않았습니다.'); return; }
     const model = ap ? R.learnAttendanceTitles(ap.apps, ap.me) : null;
     const pk = String(preset.kind || '').replace(/\s+/g, '');
     const kind = type === 'trip' ? (/관외/.test(pk) ? '관외출장' : '관내출장') : type === 'leave' ? ([...ATT_LEAVE_KINDS].sort((x, y) => y.length - x.length).find(k => pk.includes(k)) || '연차') : (/휴일/.test(pk) ? '휴일근무' : /조기/.test(pk) ? '조기근무' : '연장근무');
@@ -153,7 +158,7 @@
     if (leaf(d, '신청정보') && !confirm('근태신청 화면에 이미 열려 있는 신청서가 있습니다. 자동 기입으로 덮어쓸까요?')) { toast('열려 있는 신청서를 그대로 두었습니다.'); return {status: 'cancelled'}; }
     installGuard(w); AUTO.running = true; AUTO.blocked = []; AUTO.tok = {};
     const steps = [];
-    const step = (name, ok, detail = '') => steps.push({name, ok: !!ok, detail});
+    const step = (name, ok, detail = '', keep) => steps.push({name, ok: !!ok, detail, keep});
     const press = el => { for (const ev of ['mousedown', 'mouseup', 'click']) el.dispatchEvent(new w.MouseEvent(ev, {bubbles: true, cancelable: true, view: w})); };
     const btn = t => [...d.querySelectorAll('button')].filter(vis).find(b => (b.innerText || '').trim() === t);
     const rowInputs = (label, sel = 'input:not([type=radio]):not([type=checkbox]):not([type=hidden]):not([type=button]), textarea') => { const lab = leaf(d, label); if (!lab) return []; const lq = lab.getBoundingClientRect(), cy = lq.top + lq.height / 2; return [...d.querySelectorAll(sel)].filter(vis).filter(i => { const q = i.getBoundingClientRect(); return Math.abs(q.top + q.height / 2 - cy) < 16 && q.left > lq.right - 2; }).sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left); };
@@ -195,13 +200,13 @@
         if (card) { const li = card.closest('li') || card; press(k % 2 ? card : li); }
         opened = await waitFor(() => leaf(d, '신청정보'), k ? 3000 : 4000);
       }
-      step('양식 열기', opened, ATT_FORM[spec.type]);
+      step('양식 열기', opened, ATT_FORM[spec.type], 1);
       if (!opened) throw new Error('신청서 입력 화면이 열리지 않았습니다(이미 작성 중인 신청서가 있으면 닫고 다시 시도하세요)');
       if (await waitFor(() => infoDlgs().length, 3000)) await dismissInfo(); // 오늘 날짜로 열릴 때 뜨는 중복 안내는 닫는다
       if (spec.type === 'trip') {
         const kb = btn(spec.kind); if (kb) { kb.click(); await wait(500); } step('출장구분', !!kb, spec.kind);
         step('출장기간', await setDates('출장기간', spec.from, spec.to), spec.from === spec.to ? spec.from : `${spec.from} ~ ${spec.to}`);
-        { const dup = (await waitFor(() => infoDlgs().length, 2000)) ? await dismissInfo() : ''; if (dup) step('중복 근태', false, '같은 기간에 이미 근태가 있습니다: ' + (dupOf(dup) || '화면의 중복근태 목록 확인')); }
+        { const dup = (await waitFor(() => infoDlgs().length, 2000)) ? await dismissInfo() : ''; if (dup) step('중복 근태', false, '같은 기간에 이미 근태가 있습니다: ' + (dupOf(dup) || '화면의 중복근태 목록 확인'), 1); }
         if (spec.time) step('시작/종료시간', await setTimes('시작/종료시간', spec.time), hm(spec.time.s) + '~' + hm(spec.time.e) + (spec.from !== spec.to ? ' (매일)' : ''));
         if (spec.transport) {
           const dd = rowInputs('교통수단', '[class*=OBTDropDownList_default], [class*=OBTDropDownList_root]')[0];
@@ -212,7 +217,7 @@
             const opt = [...d.querySelectorAll('*')].filter(vis).filter(e => e.children.length === 0 && (e.textContent || '').trim() === spec.transport).pop(); if (opt) { press(opt); await wait(700); }
           }
           step('교통수단', !!(dd && (dd.innerText || '').trim() === spec.transport), spec.transport);
-        } else step('교통수단', true, '선택 안 함(기본값) — 신청서의 교통수단 칸은 비워 둡니다');
+        } else step('교통수단', true, '선택 안 함(기본값) — 신청서의 교통수단 칸은 비워 둡니다', 1);
         for (const [lab, val] of [['방문처', spec.visit], ['출장목적', spec.purpose], ['업무내용', spec.content]]) {
           if (!val) { step(lab, false, '비어 있음(직접 입력)'); continue; }
           const i = rowInputs(lab)[0]; if (i) await type(i, val);
@@ -226,16 +231,16 @@
       } else if (spec.type === 'leave') {
         const kb = btn(spec.kind); if (kb) { kb.click(); await wait(600); } step('휴가구분', !!kb, spec.kind);
         step('휴가기간', await setDates('휴가기간', spec.from, spec.to), spec.from === spec.to ? spec.from : `${spec.from} ~ ${spec.to}`);
-        { const dup = (await waitFor(() => infoDlgs().length, 2000)) ? await dismissInfo() : ''; if (dup) step('중복 근태', false, '같은 기간에 이미 근태가 있습니다: ' + (dupOf(dup) || '화면의 중복근태 목록 확인')); }
+        { const dup = (await waitFor(() => infoDlgs().length, 2000)) ? await dismissInfo() : ''; if (dup) step('중복 근태', false, '같은 기간에 이미 근태가 있습니다: ' + (dupOf(dup) || '화면의 중복근태 목록 확인'), 1); }
         if (spec.time) step('시작/종료시간', await setTimes('시작/종료시간', spec.time), hm(spec.time.s) + '~' + hm(spec.time.e));
         if (spec.reason) { const i = rowInputs('비고(사유)')[0]; if (i) await type(i, spec.reason); step('비고(사유)', !!(i && rowInputs('비고(사유)')[0].value === spec.reason), spec.reason); } else step('비고(사유)', false, '비어 있음(직접 입력)');
         const days = (rowInputs('신청일수')[0] || {}).value || '';
-        if (days) step('신청일수', true, `${days}일 (화면 계산)`);
+        if (days) step('신청일수', true, `${days}일 (화면 계산)`, 1);
       } else {
         const radio = [...d.querySelectorAll('input[type=radio]')].filter(vis).find(r => { const lab = r.closest('label') || r.parentElement; return lab && (lab.innerText || '').trim() === spec.pay; }) || (() => { const l = leaf(d, spec.pay); return l && l.closest('label') && l.closest('label').querySelector('input[type=radio]'); })();
         if (radio) { radio.click(); await wait(400); } step('신청구분', !!(radio && radio.checked), spec.pay);
         step('근무일', await setDates('연장근무시작일', spec.from, spec.to), spec.from);
-        { const dup = (await waitFor(() => infoDlgs().length, 2000)) ? await dismissInfo() : ''; if (dup) step('중복 근태', false, '같은 날에 이미 근태가 있습니다: ' + (dupOf(dup) || '화면의 중복근태 목록 확인')); }
+        { const dup = (await waitFor(() => infoDlgs().length, 2000)) ? await dismissInfo() : ''; if (dup) step('중복 근태', false, '같은 날에 이미 근태가 있습니다: ' + (dupOf(dup) || '화면의 중복근태 목록 확인'), 1); }
         // 근무구분 버튼은 신청구분이 보상이면 ‘휴일근무(보상)’처럼 이름이 바뀌고, 휴일근무는 근무일을 넣은 뒤에야 누를 수 있다
         { const names = /보상/.test(spec.pay) ? [spec.kind + '(보상)', spec.kind] : [spec.kind]; const kb = names.map(btn).find(Boolean); if (kb) { kb.click(); await wait(600); } step('근무구분', !!(kb && !kb.disabled), kb ? (kb.innerText || '').trim() : names[0]); }
         if (spec.reason) { const i = rowInputs('비고(사유)')[0]; if (i) await type(i, spec.reason); step('비고(사유)', !!(i && rowInputs('비고(사유)')[0].value === spec.reason), spec.reason); } else step('비고(사유)', false, '비어 있음(직접 입력)');
@@ -244,24 +249,28 @@
           if (r2) { r2.click(); await wait(600); }
           const okT = await setTimes('연장근무시작일', spec.time);
           step('근무 시간', !!(r2 && r2.checked && okT), hm(spec.time.s) + '~' + hm(spec.time.e) + ' (작성기준: 시작/종료시간)');
-        } else step('작성기준·시간', true, '시간은 화면의 작성기준(태깅시간 등)대로 둡니다. 다르면 화면에서 고치세요');
+        } else step('작성기준·시간', true, '시간은 화면의 작성기준(태깅시간 등)대로 둡니다. 다르면 화면에서 고치세요', 1);
       }
       if (spec.title) {
         const ti = rowInputs('제목')[0];
         if (ti) { await type(ti, spec.title); step('제목', ti.value === spec.title, spec.title); }
-        else step('제목(예상)', true, spec.title + ' — 근태신청서에는 제목 칸이 없어, 신청완료 때 그룹웨어가 정하는 제목입니다(내 지난 신청 형식 기준)');
+        else step('제목(예상)', true, spec.title + ' — 근태신청서에는 제목 칸이 없어, 신청완료 때 그룹웨어가 정하는 제목입니다(내 지난 신청 형식 기준)', 1);
       }
-    } catch (e) { step('중단', false, e.message); }
+    } catch (e) { step('중단', false, e.message, 1); }
     finally { AUTO.running = false; try { const pf = $('#frame iframe'), pd = pf && pf.contentDocument, done = pd && [...pd.querySelectorAll('button')].find(x => /신청완료/.test(x.textContent || '')); if (done) done.scrollIntoView({block: 'center', inline: 'nearest'}); } catch {} if (typeof markPaneDirty === 'function') { const pf = $('#frame iframe'); if (pf) markPaneDirty(pf); } }
-    step('안전장치', AUTO.blocked.length === 0, AUTO.blocked.length ? `자동 실행 중 ${AUTO.blocked.join(', ')} 클릭을 막았습니다` : '[신청완료]는 누르지 않았습니다. 화면에서 확인한 뒤 직접 누르세요');
-    const bad = steps.filter(s => !s.ok).length;
-    logActionRecord({command: `근태신청 준비: ${ATT_FORM[spec.type]}`, type: '근태', target: `${spec.from} ${spec.kind || ''}`, summary: bad ? `${steps.length - bad}/${steps.length} 항목을 채웠습니다. 신청은 하지 않았습니다.` : '모든 항목을 채웠습니다. 신청은 하지 않았습니다.', steps: steps.map(s => `${s.ok ? '✓' : '✗'} ${s.name}: ${s.detail}`), status: bad ? 'partial' : 'success', verified: !bad});
+    step('안전장치', AUTO.blocked.length === 0, AUTO.blocked.length ? `자동 실행 중 ${AUTO.blocked.join(', ')} 클릭을 막았습니다` : '[신청완료]는 누르지 않았습니다. 화면에서 확인한 뒤 직접 누르세요', 1);
+    const bad = steps.filter(s => !s.ok).length, fill = steps.filter(s => !s.keep), got = fill.filter(s => s.ok).length;
+    const stop = steps.some(s => s.name === '중단'); // 도중에 멈추면 시도하지 않은 칸은 단계에 없어 분모를 쓰지 않는다
+    const summary = (!got ? (fill.length ? '신청서에 채운 칸을 확인하지 못했습니다. 화면을 확인하세요.' : '신청서를 채우지 못했습니다.') : stop ? `도중에 멈췄습니다. ${got}개 항목을 넣었고 나머지는 확인하지 못했습니다.` : `${got}/${fill.length} 항목을 채웠습니다${bad ? `(${bad}개 확인 필요)` : ''}.`) + ' 신청은 하지 않았습니다.';
+    const rec = logActionRecord({command: `근태신청 준비: ${ATT_FORM[spec.type]}`, type: '근태', target: `${spec.from} ${spec.kind || ''}`, summary, steps: steps.map(s => `${s.ok ? '✓' : '✗'} ${s.name}: ${s.detail}`), status: !got ? 'error' : bad ? 'partial' : 'success', verified: !bad});
+    const out = {status: !got ? 'failed' : bad ? 'partial' : 'success', total: fill.length, failed: bad};
+    if (typeof overlayYield === 'function' && overlayYield(summary, rec)) return out;
     S.paletteOpen = true;
     $('#overlay').innerHTML = `<div class="modal peek"><div class="dlg" data-stop="1" style="width:min(560px,94vw);padding:20px 24px;position:absolute;right:24px;bottom:24px;top:auto;left:auto;transform:none" role="dialog" aria-label="근태신청 준비 결과">
       <button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button>
-      <h2 style="margin:0 0 4px;font-size:17px">${bad ? '신청서를 일부 채웠습니다 (확인 필요)' : '신청서를 채웠습니다 · [신청완료] 전 확인'}</h2>
-      <div class="muted" style="margin-bottom:8px">${esc(ATT_FORM[spec.type])} · ${esc(spec.from)}${spec.to && spec.to !== spec.from ? ' ~ ' + esc(spec.to) : ''}${spec.time ? ' · ' + hm(spec.time.s) + '~' + hm(spec.time.e) : ''}</div>
+      <h2 style="margin:0 0 4px;font-size:17px">${!got ? (fill.length ? '입력을 확인하지 못했습니다' : '신청서를 채우지 못했습니다') : bad ? '신청서를 일부 채웠습니다 (확인 필요)' : '신청서를 채웠습니다 · [신청완료] 전 확인'}</h2>
+      <div class="muted" style="margin-bottom:8px">${esc(ATT_FORM[spec.type])} · ${esc(spec.from)}${spec.to && spec.to !== spec.from ? ' ~ ' + esc(spec.to) : ''}${spec.time ? ' · ' + hm(spec.time.s) + '~' + hm(spec.time.e) : ''}<br>${esc(summary)}</div>
       ${steps.map(s => `<div style="display:flex;gap:8px;padding:5px 0;border-top:1px solid var(--line)"><b style="color:${s.ok ? 'var(--ok)' : 'var(--hi)'};width:18px">${s.ok ? '✓' : '✗'}</b><div><b>${esc(s.name)}</b><div class="muted" style="font-size:12.5px">${esc(s.detail)}</div></div></div>`).join('')}
       <div class="acts" style="margin-top:12px;justify-content:flex-end"><button class="btn sm primary" data-act="closeHelp">확인하고 계속</button></div></div></div>`;
-    return {status: bad ? 'partial' : 'success', total: steps.length, failed: bad};
+    return out;
   }
