@@ -1561,9 +1561,10 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .hm3-tone-todo .hm3-v{color:var(--fg)}
 .wc .hm3-act{flex:none;white-space:nowrap}
 .wc .hm3-chat{margin-top:36px;padding-top:8px;border-top:1px solid var(--line)}
-.wc .hm3 .ch{height:auto;min-height:0}
-.wc .hm3 .ch-log{max-height:360px;min-height:0}
-.wc .hm3 .ch-log:has(.ch-msg:not(.ch-brief)){min-height:220px}
+/* v1.25: 대화 칸은 늘어나는 상자 안에서 줄어들지 않게 높이를 직접 준다(예전엔 .desk #chLog의 flex:1 1 0 때문에 28px로 눌려 대화가 안 보였다. id 규칙을 이기도록 #chLog로 쓴다) */
+.wc .hm3 .ch{height:auto;min-height:0;overflow:visible}
+.wc .hm3 #chLog{flex:none;height:auto;min-height:0;max-height:none}
+.wc .hm3 #chLog:has(.ch-msg:not(.ch-brief)){height:clamp(280px,calc(100vh - 420px),560px);overflow-y:auto}
 .wc .hm3 .ch-dock{position:static}
 @container (max-width:900px){.wc .hm3-grid{grid-template-columns:minmax(0,1fr)}.wc .hm3-rail{margin-top:28px;padding:24px 0 0;border-left:0;border-top:1px solid var(--line)}}
 @container (max-width:520px){.wc .hm3-row{flex-wrap:wrap;gap:0 8px;padding-bottom:10px}.wc .hm3-go{flex-basis:100%;flex-direction:column;gap:2px;padding-bottom:6px}.wc .hm3-k{width:auto}.wc .hm3-act{margin-left:4px}}

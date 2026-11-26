@@ -19,7 +19,11 @@ test('예산 한 줄: 수집기가 읽은 관심 사업 합계만 쓰고, 실패
 });
 
 test('근태 한 줄: 확인하지 못한 값은 확인 불가로 남기고, 근무일이 아니면 출퇴근을 말하지 않는다', () => {
-  assert.equal(home.homeAttendanceLine({come: '08:52', leave: '', remaining: '6일', check: 0}).text, '출근 08:52 · 퇴근 기록 없음 · 남은 연차 6일');
+  // v1.25: 출근 지문이 없으면 말하지 않고, 출근 뒤 지난 시간은 nowMin으로 센다(홈에서 30초마다 다시 셈)
+  assert.equal(home.homeAttendanceLine({come: '08:52', leave: '', remaining: '6일', check: 0, nowMin: 14 * 60 + 2}).text, '출근 08:52 · 출근 후 5시간 10분 · 남은 연차 6일');
+  assert.equal(home.homeAttendanceLine({come: '08:52', leave: '', remaining: '6일'}).live, true);
+  assert.equal(home.homeAttendanceLine({come: '', leave: '', remaining: '6일', nowMin: 600}).text, '남은 연차 6일', '출근 기록 없음은 쓰지 않는다');
+  assert.equal(home.homeAttendanceLine({come: '08:50', leave: '18:20', remaining: null}).text, '출근 08:50 · 퇴근 18:20 · 출근부터 9시간 30분');
   assert.equal(home.homeAttendanceLine({error: true, remaining: ''}).text, '오늘 출퇴근 기록 확인 불가 · 남은 연차 확인 불가');
   const w = home.homeAttendanceLine({workday: false, remaining: '3일', check: 2});
   assert.equal(w.text, '오늘은 근무일이 아닙니다 · 남은 연차 3일 · 확인할 근태 2건');

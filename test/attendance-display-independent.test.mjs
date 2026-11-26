@@ -15,7 +15,7 @@ function chat({fail = false, anomalies = [], attendance = {today: {come: '0900',
 }
 test('AI 응답은 출근 지문을 표시하지 않고 시간외 퇴근 지문만 안내', async () => {
   const r = await chat({anomalies: [{date: '20261101', item: '시간외', advice: '결근'}]});
-  assert.equal(r.ok, true); assert.match(r.text, /시간외 신청일 중 퇴근 지문/); assert.doesNotMatch(r.text, /출근/);
+  assert.equal(r.ok, true); assert.match(r.text, /시간외·휴일근무 신청일 중 지문 확인/); assert.doesNotMatch(r.text, /출근/);
   assert.doesNotMatch(JSON.stringify(r.cards), /결근/);
 });
 test('조회 실패는 정상으로 판정하지 않음', async () => {

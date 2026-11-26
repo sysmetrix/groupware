@@ -216,7 +216,7 @@
 
   chatRegisterTool({
     name: 'get_my_attendance', label: '내 근태 확인', kind: 'read',
-    description: '내 남은 연차와 이번 달(또는 month=YYYY-MM) 시간외 신청일 중 퇴근 지문 확인이 필요한 날짜. 출근 지문 누락은 판정하지 않는다.',
+    description: '내 남은 연차와 이번 달(또는 month=YYYY-MM) 시간외·휴일근무 신청일 중 지문 확인이 필요한 날짜(평일 시간외는 퇴근 지문, 근무일이 아닌 날의 휴일근무·시간외는 출근·퇴근 지문). 그 밖의 날 출근 지문 누락은 판정하지 않는다.',
     params: {type: 'object', properties: {month: {type: 'string'}}},
     run: async (a, ctx) => {
       if (!S.a || !S.raw) return chatNotReady();
@@ -229,22 +229,22 @@
       const lv = S.raw.data?.leave && chatModuleOk('leave') && S.raw.data.leave, at = S.raw.data?.attendance;
       const ot = at && at.overtime;
       const cutoff = new Date(Date.UTC(+p.date.slice(0, 4), +p.date.slice(5, 7) - 1, +p.date.slice(8, 10) - 150)).toISOString().slice(0, 10).replace(/-/g, '');
-      if (!ot || !ot.me || !Array.isArray(ot.apps) || ot.appsError || (m === thisM && (!Array.isArray(ot.days) || ot.daysError)) || mm + '01' < cutoff || m > thisM) return {ok: false, text: '시간외 신청 또는 퇴근 지문 자료를 확인할 수 없어 누락 여부를 판단할 수 없습니다.'};
+      if (!ot || !ot.me || !Array.isArray(ot.apps) || ot.appsError || (m === thisM && (!Array.isArray(ot.days) || ot.daysError)) || mm + '01' < cutoff || m > thisM) return {ok: false, text: '시간외·휴일근무 신청 또는 지문 자료를 확인할 수 없어 누락 여부를 판단할 수 없습니다.'};
       const an = R.attendanceAnomalies(m === thisM ? ot.days : rows, {apps: ot.apps, me: ot.me, daysError: m === thisM ? ot.daysError : '', appsError: ot.appsError}).filter(x => x.date.startsWith(mm));
       const bits = [];
       if (lv) bits.push(`남은 연차는 ${fmtDays(lv.remaining)}입니다(받은 ${fmtDays(lv.granted)}, 쓴 ${fmtDays(lv.used)}) · ${leaveTypesText(lv)}`);
-      bits.push(m === thisM ? '시간외 퇴근 지문 확인은 신청일 기준 최근 150일 내 신청과 어제까지의 자료 기준입니다' : '시간외 신청은 신청일 기준 최근 150일 이내 자료입니다');
-      bits.push(an.length ? `${Number(m.slice(5))}월에 시간외 신청일 중 퇴근 지문 확인이 필요한 날이 ${an.length}일 있습니다` : `${Number(m.slice(5))}월에 조회된 시간외 신청일 중 퇴근 지문 확인이 필요한 날은 없습니다`);
-      if (/(지문|안\s*찍|누락|빠진)/.test((ctx && ctx.userText) || '') && !R.chatParseDate((ctx && ctx.userText) || '', new Date())) { const md8 = d => `${+d.slice(4, 6)}/${+d.slice(6, 8)}`; return {ok: true, text: an.length ? `${Number(m.slice(5))}월에 퇴근 지문 확인이 필요한 날은 ${an.length}일입니다: ${an.map(x => `${md8(x.date)}(${x.item || '시간외'})`).join(', ')}.\n승인된 시간외 신청이 있는데 신청 종료 뒤의 퇴근 지문이 조회되지 않은 날입니다. 출근 지문 누락은 판정하지 않습니다.` : `${Number(m.slice(5))}월에 시간외 신청일 중 퇴근 지문 확인이 필요한 날은 없습니다. 출근 지문 누락은 판정하지 않습니다.`, data: {count: an.length}, cards: [{type: 'nav', label: '근태·연차 화면 열기', view: 'attendance'}]}; } // v1.7.0
+      bits.push(m === thisM ? '시간외·휴일근무 지문 확인은 신청일 기준 최근 150일 내 신청과 어제까지의 자료 기준입니다' : '시간외 신청은 신청일 기준 최근 150일 이내 자료입니다');
+      bits.push(an.length ? `${Number(m.slice(5))}월에 시간외·휴일근무 신청일 중 지문 확인이 필요한 날이 ${an.length}일 있습니다` : `${Number(m.slice(5))}월에 조회된 시간외·휴일근무 신청일 중 지문 확인이 필요한 날은 없습니다`);
+      if (/(지문|안\s*찍|누락|빠진)/.test((ctx && ctx.userText) || '') && !R.chatParseDate((ctx && ctx.userText) || '', new Date())) { const md8 = d => `${+d.slice(4, 6)}/${+d.slice(6, 8)}`; return {ok: true, text: an.length ? `${Number(m.slice(5))}월에 지문 확인이 필요한 날은 ${an.length}일입니다: ${an.map(x => `${md8(x.date)}(${x.item || '시간외'})`).join(', ')}.\n승인된 시간외 신청이 있는데 신청 종료 뒤의 퇴근 지문이 조회되지 않은 날입니다. 출근 지문 누락은 판정하지 않습니다.` : `${Number(m.slice(5))}월에 시간외 신청일 중 퇴근 지문 확인이 필요한 날은 없습니다. 출근 지문 누락은 판정하지 않습니다.`, data: {count: an.length}, cards: [{type: 'nav', label: '근태·연차 화면 열기', view: 'attendance'}]}; } // v1.7.0
       // 특정 날짜를 물었으면 그날이 확인 대상인지 먼저 답한다(v0.86.0)
       const asked = /지문|퇴근|출근|근태/.test((ctx && ctx.userText) || '') ? R.chatParseDate(ctx.userText, new Date()) : null;
       if (asked && asked.date && asked.date.slice(0, 7) === m) {
         const d8 = asked.date.replace(/-/g, ''), hit = an.find(x => x.date === d8), md = `${+asked.date.slice(5, 7)}월 ${+asked.date.slice(8, 10)}일`; // '일은'으로 끝나 조사가 맞는다
         const applied = (ot.apps || []).some(x => x && String(x.startDt || '') === d8 && String(x.empCd || '') === String(ot.me) && String(x.approState) === '1' && /연장근무|휴일근무|조기근무|시간외/.test([x.atNm, x.atItemNm].join(' ')));
-        bits.unshift(hit ? `${md}은 승인된 시간외(${hit.item || '연장근무'}) 신청이 있는데 신청 종료 뒤의 퇴근 지문이 조회되지 않아 확인 대상입니다` : asked.date >= p.date ? `${md}은 아직 지나지 않아 퇴근 지문을 판단하지 않습니다` : `${md}은 현재 확인 대상이 아닙니다(${applied ? '퇴근 지문 기록이 있거나 판정 기준을 충족합니다' : '그날의 승인된 시간외 신청이 조회되지 않았습니다'})`);
+        bits.unshift(hit ? `${md}은 승인된 시간외(${hit.item || '연장근무'}) 신청이 있는데 ${(hit.missing || ['퇴근']).join('·')} 지문이 조회되지 않아 확인 대상입니다${hit.nonWork ? '(근무일이 아닌 날이라 출근·퇴근 지문을 모두 봅니다)' : ''}` : asked.date >= p.date ? `${md}은 아직 지나지 않아 퇴근 지문을 판단하지 않습니다` : `${md}은 현재 확인 대상이 아닙니다(${applied ? '퇴근 지문 기록이 있거나 판정 기준을 충족합니다' : '그날의 승인된 시간외 신청이 조회되지 않았습니다'})`);
       }
       return {ok: true, text: bits.join('. ') + '.', data: {remaining_leave: lv ? fmtDays(lv.remaining) : '', anomalies: an.length},
-        cards: [{type: 'kpi', items: [{label: '남은 연차', value: lv ? fmtDays(lv.remaining) : '-', tone: 'info'}, {label: '퇴근 지문 확인 필요한 날', value: an.length, tone: an.length ? 'urgent' : 'ok'}]}, ...(an.length ? [{type: 'list', title: '시간외 신청일 퇴근 지문 확인', items: an.slice(0, 8).map(x => ({title: `${ymd8(x.date).slice(5).replace('-', '/')} ${x.item || ''}`.trim(), sub: '시간외 신청일의 퇴근 지문 기록을 확인해 주세요', tone: 'urgent'}))}] : []), {type: 'nav', label: '근태·연차 화면 열기', view: 'attendance'}]};
+        cards: [{type: 'kpi', items: [{label: '남은 연차', value: lv ? fmtDays(lv.remaining) : '-', tone: 'info'}, {label: '지문 확인 필요한 날', value: an.length, tone: an.length ? 'urgent' : 'ok'}]}, ...(an.length ? [{type: 'list', title: '시간외·휴일근무 지문 확인', items: an.slice(0, 8).map(x => ({title: `${ymd8(x.date).slice(5).replace('-', '/')} ${x.item || ''}`.trim(), sub: '시간외 신청일의 퇴근 지문 기록을 확인해 주세요', tone: 'urgent'}))}] : []), {type: 'nav', label: '근태·연차 화면 열기', view: 'attendance'}]};
     },
   });
 

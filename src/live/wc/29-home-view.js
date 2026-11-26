@@ -86,8 +86,25 @@
   // 하루 띠: 08~19시를 한 줄로 놓고 오늘 일정과 내 부재를 칸으로, 지금 시각을 바늘로 보여 준다(계산은 R.homeDayRail).
   // 칸을 누르면 일정 달력으로 간다. 바늘은 wc/39-motion.js가 1분마다 옮긴다.
   const homeNowMin = () => { const k = new Date(Date.now() + 9 * 3600000); return k.getUTCHours() * 60 + k.getUTCMinutes(); };
+  // 지문 시각 HH:MM. 수집기는 HHMM·HHMMSS·YYYYMMDDHHMM 중 하나로 줄 수 있어 숫자만 보고 고른다.
+  const homeHm = s => { const n = String(s || '').replace(/\D/g, ''), x = n.length >= 12 ? n.slice(8, 12) : n.length >= 4 ? n.slice(0, 4) : ''; return /^([01]\d|2[0-3])[0-5]\d$/.test(x) ? x.slice(0, 2) + ':' + x.slice(2) : ''; };
+  function homeLiveTick() {
+    try {
+      if (!S.open) return;
+      const nowMin = homeNowMin();
+      const box = $('#hmRailBox'), a = root.activeElement;
+      if (S.view === 'home' && box && homeRailLast && !(a && box.contains(a))) box.innerHTML = homeRailHtml(homeRailLast.d, homeRailLast.day);
+      const att = $('[data-live="att"]');
+      if (att && homeAttLast && typeof R.homeAttendanceLine === 'function') { const x = R.homeAttendanceLine({...homeAttLast, nowMin}); if (att.textContent !== x.text) { att.textContent = x.text; const b = att.closest('button'); if (b) b.setAttribute('aria-label', '근태·연차, ' + x.text); } }
+      const at = $('[data-live="att-today"]');
+      if (at && typeof attTodayText === 'function') { const x = attTodayText(); if (x && at.textContent !== x) at.textContent = x; }
+    } catch (e) { logError('home.live', e.message); }
+  }
   const homeDur = m => (m >= 60 ? Math.floor(m / 60) + '시간' + (m % 60 ? ' ' + (m % 60) + '분' : '') : m + '분');
+  // v1.25: 하루 띠와 '다음 일정 N분 뒤 · 퇴근까지' 글자, 근태 줄의 '출근 후 N시간'은 homeLiveTick이 30초마다 다시 센다(홈 전체를 다시 그리지 않는다).
+  let homeRailLast = null, homeAttLast = null;
   function homeRailHtml(d, day) {
+    homeRailLast = {d, day};
     if (!d.loaded || d.scheduleUnknown || typeof R.homeDayRail !== 'function') return '';
     const r = R.homeDayRail(d.timeline, {nowMin: homeNowMin()});
     const off = day && (day.weekend || day.holiday);
@@ -135,11 +152,11 @@
     const todoTxt = [`그룹웨어 ${gap}처리·확인 ${d.mine.length}건`, d.urgent ? `우선 ${d.urgent}건` : '', d.wait ? `기다리는 중 ${d.wait}건` : '', p ? p.text : ''].filter(Boolean).join(' · ') + (d.taskGaps ? ' (일부 자료 누락 가능)' : '');
     const teamGap = d.teamLoading || d.teamError || d.teamUnknown;
     const schedTxt = [d.scheduleUnknown ? '오늘 일정 일부 미확인' : `오늘 그룹웨어 일정 ${d.events.length}건${teamGap ? ' (일부 미확인)' : ''}`, d.teamError ? '자리 비움 조회 실패' : d.teamLoading ? '자리 비움 확인 중' : d.teamUnknown ? '자리 비움 확인 불가' : `자리 비움 ${d.away.length}명`, d.resUnknown ? '' : `자원 예약 ${d.resources.length}건${d.resPartial ? '(일부 자원)' : ''}`].filter(Boolean).join(' · ');
-    const hhm = s => (typeof hm4 === 'function' ? hm4(s || '') : String(s || ''));
-    const att = typeof R.homeAttendanceLine === 'function' ? R.homeAttendanceLine({come: hhm(d.attToday && d.attToday.come), leave: hhm(d.attToday && d.attToday.leave), error: !d.attToday || !!d.attToday.error, workday: d.workday, remaining: d.leave, check: d.attCheck}) : {text: '', tone: 'info'};
+    homeAttLast = {come: homeHm(d.attToday && d.attToday.come), leave: homeHm(d.attToday && d.attToday.leave), error: !d.attToday || !!d.attToday.error, workday: d.workday, remaining: d.leave, check: d.attCheck};
+    const att = typeof R.homeAttendanceLine === 'function' ? R.homeAttendanceLine({...homeAttLast, nowMin: homeNowMin()}) : {text: '', tone: 'info'};
     const bud = typeof R.homeBudgetLine === 'function' ? R.homeBudgetLine(d.budgetProjects, d.elapsedPct) : {text: '', tone: 'info'};
     const cardOpen = d.cardOpen == null ? '' : ` · 이번 달 결의 전 카드 ${d.cardOpen}건`;
-    const row = (v, key, text, tone, act) => `<li class="hm3-row hm3-tone-${tone}"><button class="hm3-go" data-act="homeTile" data-v="${v}" aria-label="${esc(key + ', ' + text)}"><span class="hm3-k">${esc(key)}</span><span class="hm3-v">${esc(text)}</span></button>${act}</li>`;
+    const row = (v, key, text, tone, act) => `<li class="hm3-row hm3-tone-${tone}"><button class="hm3-go" data-act="homeTile" data-v="${v}" aria-label="${esc(key + ', ' + text)}"><span class="hm3-k">${esc(key)}</span><span class="hm3-v"${v === 'leave' ? ' data-live="att"' : ''}>${esc(text)}</span></button>${act}</li>`;
     const btn = (attrs, label) => `<button class="ch-btn ch-btn-ghost hm3-act" ${attrs}>${label}</button>`;
     return `<section class="hm3-core" aria-label="오늘 현황"><h2 class="hm-card-k hm3-h">오늘 현황</h2><ul class="hm3-list">
       ${row('todo', '할 일', todoTxt, d.urgent ? 'urgent' : d.taskGaps ? 'warn' : 'info', btn('data-act="homeOpenToday"', '할 일 열기'))}
@@ -164,7 +181,7 @@
     const holiday = (d.holidays || []).map(h => h.title || '휴일').join(' · ');
     const dayInfo = typeof R.homeDayInfo === 'function' ? R.homeDayInfo({date: R.kstNow(new Date()).date, holidays: d.holidays || []}) : null;
     const rowHtml = r => `<li class="hm-tl-${esc(r.kind)}"><span class="hm-tl-t">${r.allDay ? '종일' : esc(r.from) + (r.to ? '~' + esc(r.to) : '')}</span><span class="hm-tl-l">${esc(r.label)}</span></li>`;
-    const tlHtml = `<section class="hm-card hm-today" aria-label="오늘 일정"><div class="hm-card-h"><h3 class="hm-card-k hm-today-k">오늘 그룹웨어 일정</h3><button class="hm-link" data-act="homeTile" data-v="schedule">달력 열기</button></div>${homeRailHtml(d, dayInfo)}${holiday ? `<div class="hm-empty">그룹웨어 휴일 정보: ${esc(holiday)} (근무 여부는 별도 확인)</div>` : ''}${tl.rows.length ? `<ul class="hm-tl">${tl.rows.map(rowHtml).join('')}</ul>${tl.more ? `<div class="hm-more">외 ${tl.more}건 · <button class="hm-link" data-act="homeTile" data-v="schedule">일정 달력에서 보기</button></div>` : ''}` : d.scheduleUnknown || d.teamLoading || d.teamError || d.teamUnknown ? '<div class="hm-empty">일정 일부가 미확인입니다. 확인 후 다시 안내합니다.</div>' : '<div class="hm-empty">조회된 그룹웨어 일정이 없습니다. 구글 일정은 별도로 확인하세요.</div>'}${awayLine ? `<div class="hm-away"><span class="hm-away-k">자리 비움</span> ${esc(awayLine)}</div>` : ''}${d.teamError ? '<div class="hm-empty">직원 근태를 조회하지 못해 자리 비움 현황을 확인할 수 없습니다.</div>' : d.teamLoading ? '<div class="hm-empty">직원 근태를 확인하는 중입니다.</div>' : d.teamUnknown ? '<div class="hm-empty">직원 근태 조회 여부를 확인할 수 없습니다.</div>' : ''}${gaps.map(x => `<div class="hm-empty">${esc(x)}</div>`).join('')}</section>`;
+    const tlHtml = `<section class="hm-card hm-today" aria-label="오늘 일정"><div class="hm-card-h"><h3 class="hm-card-k hm-today-k">오늘 그룹웨어 일정</h3><button class="hm-link" data-act="homeTile" data-v="schedule">달력 열기</button></div><div id="hmRailBox">${homeRailHtml(d, dayInfo)}</div>${holiday ? `<div class="hm-empty">그룹웨어 휴일 정보: ${esc(holiday)} (근무 여부는 별도 확인)</div>` : ''}${tl.rows.length ? `<ul class="hm-tl">${tl.rows.map(rowHtml).join('')}</ul>${tl.more ? `<div class="hm-more">외 ${tl.more}건 · <button class="hm-link" data-act="homeTile" data-v="schedule">일정 달력에서 보기</button></div>` : ''}` : d.scheduleUnknown || d.teamLoading || d.teamError || d.teamUnknown ? '<div class="hm-empty">일정 일부가 미확인입니다. 확인 후 다시 안내합니다.</div>' : '<div class="hm-empty">조회된 그룹웨어 일정이 없습니다. 구글 일정은 별도로 확인하세요.</div>'}${awayLine ? `<div class="hm-away"><span class="hm-away-k">자리 비움</span> ${esc(awayLine)}</div>` : ''}${d.teamError ? '<div class="hm-empty">직원 근태를 조회하지 못해 자리 비움 현황을 확인할 수 없습니다.</div>' : d.teamLoading ? '<div class="hm-empty">직원 근태를 확인하는 중입니다.</div>' : d.teamUnknown ? '<div class="hm-empty">직원 근태 조회 여부를 확인할 수 없습니다.</div>' : ''}${gaps.map(x => `<div class="hm-empty">${esc(x)}</div>`).join('')}</section>`;
     const resources = R.homeTimelineCompact(d.resources, 5);
     const resourceHtml = `<section class="hm-card hm-today hm-res" aria-label="오늘 자원 예약"><div class="hm-card-h"><h3 class="hm-card-k hm-today-k">오늘 자원 예약 (직원 전체)</h3></div>${resources.rows.length ? `<ul class="hm-tl">${resources.rows.map(r => `<li class="hm-tl-car"><span class="hm-tl-t">${esc(r.from)}${r.to ? '~' + esc(r.to) : ''}</span><span class="hm-tl-l">${esc(r.label)}</span></li>`).join('')}</ul>${resources.more ? `<div class="hm-more">외 ${resources.more}건</div>` : ''}` : resourceGaps.length ? '' : '<div class="hm-empty">조회된 자원 예약이 없습니다.</div>'}${resourceGaps.map(x => `<div class="hm-empty">${esc(x)}</div>`).join('')}</section>`;
     const sum = (S.a && S.a.summary) || {};

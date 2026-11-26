@@ -142,15 +142,21 @@ export function homeBudgetLine(projects = [], elapsedPct = null) {
 }
 
 /**
- * v1.23 홈 '핵심 4'의 근태·연차 한 줄. 시각은 화면 쪽에서 HH:MM으로 바꿔 넘긴다.
- * 조회하지 못한 값은 '확인 불가'로 남기고, 근무일이 아니면 출퇴근을 말하지 않는다.
+ * 홈 '핵심 4'의 근태·연차 한 줄(v1.23, v1.25 바꿈). 시각은 화면 쪽에서 HH:MM으로 바꿔 넘긴다.
+ * v1.25: 출근 지문이 없는 것은 말하지 않는다(지문은 시간외·휴일근무 날만 확인한다). 출근 지문이 있고 퇴근 전이면 nowMin(한국 시각, 분)으로 출근 뒤 지난 시간을 센다.
+ * remaining이 null이면 남은 연차는 빼고(근태 화면 '오늘 근태'용), 조회하지 못한 값은 '확인 불가'로 남긴다.
  */
-export function homeAttendanceLine({come = '', leave = '', error = false, workday = true, remaining = '', check = 0} = {}) {
-  const parts = [];
+export function homeAttendanceLine({come = '', leave = '', error = false, workday = true, remaining = '', check = 0, nowMin = null} = {}) {
+  const parts = [], m = hmoMin(come), l = hmoMin(leave);
   if (error) parts.push('오늘 출퇴근 기록 확인 불가');
-  else if (!workday) parts.push('오늘은 근무일이 아닙니다');
-  else parts.push(`출근 ${come || '기록 없음'} · 퇴근 ${leave || '기록 없음'}`);
-  parts.push(remaining ? `남은 연차 ${remaining}` : '남은 연차 확인 불가');
+  else {
+    if (!workday && !come && !leave) parts.push('오늘은 근무일이 아닙니다');
+    if (come) parts.push(`출근 ${come}`);
+    if (leave) parts.push(`퇴근 ${leave}`);
+    else if (m !== null && Number.isFinite(nowMin) && nowMin >= m) { const d = Math.round(nowMin) - m; parts.push(`출근 후 ${d >= 60 ? Math.floor(d / 60) + '시간' + (d % 60 ? ' ' + (d % 60) + '분' : '') : d + '분'}`); }
+    if (l !== null && m !== null && l > m) { const d = l - m; parts.push(`출근부터 ${Math.floor(d / 60)}시간${d % 60 ? ' ' + (d % 60) + '분' : ''}`); }
+  }
+  if (remaining !== null) parts.push(remaining ? `남은 연차 ${remaining}` : '남은 연차 확인 불가');
   if (hmoN(check)) parts.push(`확인할 근태 ${hmoN(check)}건`);
-  return {text: parts.join(' · '), tone: hmoN(check) ? 'todo' : 'info'};
+  return {text: parts.join(' · '), tone: hmoN(check) ? 'todo' : 'info', live: !error && !leave && m !== null};
 }

@@ -76,8 +76,9 @@
   });
   motionShellObs.observe(wcEl, {attributes: true, attributeFilter: ['class']});
 
-  // 하루 띠의 바늘: 30초마다 지금 시각으로 옮긴다(홈을 다시 그리지 않는다).
+  // 하루 띠의 바늘: 30초마다 지금 시각으로 옮긴다(홈을 다시 그리지 않는다). 글자 시각은 homeLiveTick이 맡는다.
   function motionNeedle() {
+    if (typeof homeLiveTick === 'function') homeLiveTick(); // v1.25: 다음 일정·퇴근까지·출근 후 시간도 같은 주기로 다시 센다
     const now = $('#drNow'), past = $('#drPast');
     if (!now || typeof R.homeDayRail !== 'function' || typeof homeNowMin !== 'function') return;
     const n = R.homeDayRail([], {nowMin: homeNowMin()}).now;

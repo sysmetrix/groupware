@@ -127,7 +127,7 @@
     const h = $('#chHeadA'); if (h) replace(h, chatHeadActsHtml());
     const last = st.msgs[st.msgs.length - 1];
     if (!hasCurrent) log.scrollTop = top; // 환영 화면은 읽던 위치를 지킨다
-    else if (force || near) { log.scrollTop = log.scrollHeight; const col = log.closest('.hm-main'); if (col) col.scrollTop = col.scrollHeight; } // 홈에서는 대화가 보이도록 왼쪽 단도 끝까지 내린다
+    else if (force || near) { log.scrollTop = log.scrollHeight; const sec = force && log.closest('.hm3-chat'); if (sec && root.activeElement && sec.contains(root.activeElement) && typeof sec.scrollIntoView === 'function') sec.scrollIntoView({block: 'nearest'}); } // 홈에서는 묻고 답할 때 맨 아래 대화 칸이 화면 안에 들어오게 한다
     else log.scrollTop = top;
     st.logTop = log.scrollTop;
     const fresh = log.querySelector('[data-autofocus]');

@@ -164,7 +164,7 @@
         const text = [u.approval ? '결재 확인 불가' : ap ? '결재 ' + ap : '', ml == null ? '메일 확인 불가' : ml ? '메일 ' + ml : ''].filter(Boolean);
         return {n: text.length ? (ap || 0) + (ml || 0) || '?' : 0, text, cls: ap || ml ? 'mine' : '', tip: (u.approval ? '결재 대기 확인 불가' : '결재 대기 ' + ap + '건') + ' · ' + (ml == null ? '안 읽은 메일 확인 불가' : '안 읽은 메일 조회분 ' + ml + '건')};
       })() : null,
-      attendance: S.a ? {n: byArea('근태'), cls: byArea('근태') ? 'mine' : '', tip: '퇴근 지문 확인 ' + byArea('근태') + '건'} : null,
+      attendance: S.a ? {n: byArea('근태'), cls: byArea('근태') ? 'mine' : '', tip: '지문 확인 ' + byArea('근태') + '건'} : null,
       calendar: S.a ? (() => { const n = mine.filter(x => x.deadline && x.deadline.dday >= 0 && x.deadline.dday <= 7).length; return {n, cls: n ? 'mine' : '', tip: '7일 안 기한 ' + n + '건'}; })() : null,
     };
     // 읽히는 이름은 보이는 메뉴 이름으로 시작한다(WCAG 2.5.3). 숫자 뜻은 뒤에 붙인다.
