@@ -62,7 +62,7 @@ export function chatParseTime(text) {
   const t = String(text ?? '');
   let m = t.match(/(\d{1,2})\s*:\s*(\d{2})/);
   if (m) { const h = +m[1], mi = +m[2]; return h < 24 && mi < 60 ? `${String(h).padStart(2, '0')}:${m[2]}` : ''; }
-  m = t.match(/(오전|오후|아침|저녁|밤)?\s*(\d{1,2})\s*시\s*(?:(\d{1,2})\s*분|(반))?/);
+  m = t.match(/(오전|오후|아침|저녁|밤)?\s*(\d{1,2})\s*시(?!간)\s*(?:(\d{1,2})\s*분|(반))?/);
   if (!m) return '';
   let h = +m[2]; const mi = m[4] ? 30 : m[3] ? +m[3] : 0;
   if (/오후|저녁|밤/.test(m[1] || '') && h < 12) h += 12;
@@ -73,12 +73,17 @@ export function chatParseTime(text) {
 export function chatParseRange(text) {
   const t = String(text ?? '');
   const parts = t.split(/~|부터|에서|-|–|까지/).map(s => chatParseTime(s)).filter(Boolean);
+  const len = t.match(/(\d{1,2}|한|두|세|네)\s*시간(?!대|\s*(?:전|뒤|후))(?:\s*(반))?/);
   // v1.14.0: "오후 2시부터 5시까지"의 5시는 오후다. 끝이 시작보다 이르고 12시 전이면 12시간을 더한다.
   //          오전·오후를 하나도 말하지 않은 "2시부터 5시까지"는 업무 시간으로 보아 1~7시를 오후로 본다.
   const marked = /(오전|오후|아침|저녁|밤|새벽)/.test(t) || /\d{1,2}\s*:\s*\d{2}/.test(t);
   const add12 = x => { const [h, m] = x.split(':').map(Number); return String(h + 12).padStart(2, '0') + ':' + String(m).padStart(2, '0'); };
   if (!marked && parts[0] && +parts[0].slice(0, 2) >= 1 && +parts[0].slice(0, 2) <= 7) parts[0] = add12(parts[0]);
   if (parts.length >= 2 && parts[1] <= parts[0] && +parts[1].slice(0, 2) < 12 && add12(parts[1]) > parts[0]) parts[1] = add12(parts[1]);
+  if (len && parts.length === 1) {
+    const [h, m] = parts[0].split(':').map(Number), to = h * 60 + m + (+len[1] || '한두세네'.indexOf(len[1]) + 1) * 60 + (len[2] ? 30 : 0);
+    if (to < 1440) parts.push(String(Math.floor(to / 60)).padStart(2, '0') + ':' + String(to % 60).padStart(2, '0'));
+  }
   return parts.length >= 2 ? {start: parts[0], end: parts[1]} : parts.length === 1 ? {start: parts[0], end: ''} : {start: '', end: ''};
 }
 
@@ -389,8 +394,13 @@ export function chatIntent(text, now = new Date(), _nested = false) {
     const points = pm && !/^(?:작성|써|만들|해\s*줘|줘)/.test(pm[1].trim()) ? pm[1].replace(/(?:라고|다고|이라고|하겠다고|겠다고)\s*$/, '').trim() : '';
     return make('draft_mail_reply', {query: (pm ? t.slice(0, t.length - pm[1].length) : t).replace(/(메일|답장|회신|초안|써줘|써 줘|작성|해줘|해 줘|[.,:])/g, ' ').replace(/\s+/g, ' ').trim(), ...(points.length >= 4 ? {points: points.slice(0, 200)} : {})});
   }
-  if (/(차량|관용차|니로|자동차)/.test(t) && /(예약|잡아|빌려|쓰고|쓸)/.test(t) && !/(가능|비어|빈|언제|있어|있나|현황|확인|승인|났|됐|상태)/.test(t)) return make('reserve_vehicle', {date: dt ? dt.date : '', start: rg.start, end: rg.end, title: ''});
-  if (/(차량|관용차|니로|자동차|회의실|자원|세미나실|강당|LED|패널|전광판|차\s)/i.test(t) && /(가능|비어|빈|언제|있어|있나|현황|확인|예약|잡아|빌려|승인|쓸\s*수)/.test(t)) return make('get_resource_status', {date: dt ? dt.date : 'today', ...(/(회의실|회의\s*공간|세미나실|강당|교육장)/.test(t) ? {kind: 'room'} : /(LED|패널|전광판)/i.test(t) ? {kind: 'led'} : {})});
+  // 잡아·예약·빌려 달라는 말은 자원 종류(차량·회의실·전광판)를 붙여 예약 준비로, 비었는지·현황을 묻는 말은 아래 조회로 간다.
+  { const car = /차량|관용차|니로|자동차|카니발|스타리아|(?<![가-힣])차(?=\s)/.test(t), room = t.match(/(?:(?:\d+\s*층|제?\s*\d+|(?<![가-힣])[대중소])\s*)?(회의실|회의\s*공간|세미나실|강당|교육장)(?:\s*(?:\d+\s*호|[A-Z](?![A-Za-z])))?/), led = /LED|패널|전광판/i.test(t);
+  if ((car || room || led) && (/예약|잡아|잡을|빌려|빌릴/.test(t) || car && /쓰고|쓸/.test(t)) && !/가능|비어|빈|언제|있어|있나|현황|확인|승인|났|됐|상태|보여|알려|목록|내역|누가|누구|뭐|몇\s*[개건]|조회|방법|어떻게|잡혀|잡힌|예약(?:한|된|돼)|할\s*일|투두|메모/.test(t)) {
+    const kind = room ? 'room' : led ? 'led' : 'car', resource = room ? (room[0] === '회의실' || /공간/.test(room[0]) ? '' : room[0]) : kind === 'car' ? (t.match(/니로|카니발|스타리아/) || [''])[0] : '';
+    return make('reserve_vehicle', {date: dt ? dt.date : '', start: rg.start, end: rg.end, title: '', kind, ...(resource ? {resource} : {})});
+  } }
+  if (/(차량|관용차|니로|자동차|회의실|자원|세미나실|강당|LED|패널|전광판|차\s)/i.test(t) && /(가능|비어|빈|언제|있어|있나|현황|확인|예약|잡아|빌려|승인|쓸\s*수)/.test(t) && !/할 ?일|투두/.test(t)) return make('get_resource_status', {date: dt ? dt.date : 'today', ...(/(회의실|회의\s*공간|세미나실|강당|교육장)/.test(t) ? {kind: 'room'} : /(LED|패널|전광판)/i.test(t) ? {kind: 'led'} : {})});
   if (/(시간외|연장근무|야근|휴일근무|조기근무)/.test(t) && want) return make('prepare_overtime_request', {date: dt ? dt.date : '', start: rg.start, end: rg.end, reason: ''});
   if (/출장/.test(t) && /신청|올려|내줘|내 줘|가야|갈래|갑니다|가려/.test(t) && !/언제|누가|있어|있나/.test(t)) return make('prepare_trip_request', {date: dt ? dt.date : '', end_date: dt && dt.end ? dt.end : '', scope: /관외/.test(t) ? '관외' : '관내'});
   // "쉬고 싶다"처럼 휴가 낱말도 날짜도 없는 하소연은 신청 준비로 읽지 않는다.

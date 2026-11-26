@@ -33,11 +33,11 @@ test('weekday spans and colloquial day names reach the leave request', () => {
   assert.equal(args('다음 주 목금 연차 써도 돼?').end, '2026-11-27');
 });
 
-test('vehicle approval questions show reservation status, and rooms are never booked as a car', () => {
+test('vehicle approval questions show reservation status, and a room request carries its own kind', () => {
   for (const q of ['차량 예약 승인됐어?', '관용차 예약 어떻게 됐어?']) assert.equal(tool(q), 'get_resource_status', q);
-  assert.deepEqual(args('내일 세미나실 빌려줘'), {date: '2026-11-17', kind: 'room'});
-  assert.equal(tool('회의실 예약해줘'), 'get_resource_status');
-  assert.equal(tool('관용차 예약해줘'), 'reserve_vehicle');
+  assert.deepEqual(args('내일 세미나실 빌려줘'), {date: '2026-11-17', start: '', end: '', title: '', kind: 'room', resource: '세미나실'});
+  assert.deepEqual([tool('회의실 예약해줘'), args('회의실 예약해줘').kind], ['reserve_vehicle', 'room']);
+  assert.deepEqual([tool('관용차 예약해줘'), args('관용차 예약해줘').kind], ['reserve_vehicle', 'car']);
 });
 
 test('"뭐 잡혀 있어" is a schedule question, not a person called 잡혀', () => {
@@ -104,5 +104,17 @@ test('mood words before a request are neither a person name nor a schedule quest
   assert.equal(tool('피곤하니까 내일 일정 알려줘'), 'get_schedule');
   assert.equal(tool('너무 지쳐서 모레 연차 쓰고 싶어'), 'prepare_leave_request');
   for (const q of ['보고서 때문에 진짜 힘들다', '일정이 많아서 너무 피곤하네', '오늘 회의 하다가 지쳤어', '아 결재 올리는 거 또 깜빡했네']) assert.equal(tool(q), 'small_talk', q);
+});
+
+test('booking words reserve the resource kind that was named, with the time range', () => {
+  const book = q => { const r = chatIntent(q, now), a = r.args; return [r.tool, a.kind, a.resource || '', a.start, a.end]; };
+  assert.deepEqual(book('내일 3층 회의실 14시부터 한 시간 반 잡아 줄래'), ['reserve_vehicle', 'room', '3층 회의실', '14:00', '15:30']);
+  assert.deepEqual(book('수요일 오전 10시부터 두 시간 소회의실 빌려줘'), ['reserve_vehicle', 'room', '소회의실', '10:00', '12:00']);
+  assert.deepEqual(book('모레 오후 1시에서 3시 강당 예약 부탁해'), ['reserve_vehicle', 'room', '강당', '13:00', '15:00']);
+  assert.deepEqual(book('내일 4시부터 5시까지 전광판 잡아줘'), ['reserve_vehicle', 'led', '', '16:00', '17:00']);
+  assert.deepEqual(book('금요일 2시부터 1시간 회의실 예약'), ['reserve_vehicle', 'room', '', '14:00', '15:00']);
+  assert.deepEqual(book('내일 카니발 9시부터 11시까지 빌려줘'), ['reserve_vehicle', 'car', '카니발', '09:00', '11:00']);
+  for (const q of ['모레 세미나실 비어 있나', '회의실 예약 내역 보여줘', '강당 예약한 팀 누구야', '대회의실 언제 비어?', '전광판 예약 현황', '회의실 예약은 어떻게 해']) assert.equal(tool(q), 'get_resource_status', q);
+  assert.equal(tool('회의실 예약 할 일 추가해줘'), 'add_todo');
 });
 
