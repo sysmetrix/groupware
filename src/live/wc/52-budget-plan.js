@@ -161,7 +161,7 @@ ${bpChart(c)}` : ''}
     BP.imp = null; BP.impErr = ''; BP.impBusy = true;
     $('#overlay').innerHTML = bpImportHtml();
     const mark = typeof overlayMark === 'function' ? overlayMark() : 0;
-    const render = () => { if (typeof overlayLive === 'function' ? overlayLive(mark) : S.paletteOpen) $('#overlay').innerHTML = bpImportHtml(); };
+    const render = () => { if (typeof overlayRedraw === 'function') overlayRedraw(mark, bpImportHtml()); else if (S.paletteOpen) $('#overlay').innerHTML = bpImportHtml(); };
     try {
       if (typeof learnPatterns === 'function') await learnPatterns({limit: 12, budgetMs: 30000, quiet: true}).catch(() => null);
       const docs = typeof patLoad === 'function' ? Object.values(patLoad().docs || {}).filter(d => d && d.binder && !/^접수문서/.test(d.binder)) : [];
@@ -222,7 +222,7 @@ ${BP.impBusy ? '<p><span class="spin"></span> 내 결재문서와 결의 내역�
     const short = c.title.replace(/^20\d\d년?\.?\s*/, '').replace(/\s*(운영|참가)?\s*계획(\s*\((안|변경)\))?$/, '').replace(/[『』「」‘’“”"']/g, '').replace(/\s+/g, ' ').trim().slice(0, 60);
     const r = await todoCreate({title: `${short} 집행(${name.split(/\s+/).pop().slice(0, 20)})`.slice(0, 100), due: date, meta: {b: {p: b.project, h: b.filter, c: code, n: name, a: amt, d: date, st: 'plan', pd: c.docNo, pdDate: c.date, pt: c.title.slice(0, 80)}}});
     if (r.ok) { c.taken = true; toast(`“${short}” 계획을 추가했습니다.`); } else { el.disabled = false; toast(r.text); }
-    if (typeof overlayLive === 'function' ? overlayLive(mark) : S.paletteOpen) $('#overlay').innerHTML = bpImportHtml();
+    if (typeof overlayRedraw === 'function') overlayRedraw(mark, bpImportHtml()); else if (S.paletteOpen) $('#overlay').innerHTML = bpImportHtml();
   };
   HOME_ACTS.bpConfirm = async el => {
     const b = S.budget, c = bpCompute(b.project, b.filter), id = el.dataset.id, s = c.sug[id], p = c.plans.find(x => x.id === id);

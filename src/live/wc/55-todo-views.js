@@ -164,8 +164,10 @@ ${t.canProgress ? `<div class="td-sec"><label class="td-f">진행률 <b id="tdeR
       }
     } finally { TD.bulkBusy = false; }
     await todoLoad({force: true});
+    const live = typeof overlayLive !== 'function' || overlayLive(mark);
+    if (failed.length && !live) { toast(`${ok}건 추가, 저장 못 한 ${failed.length}건: ${failed.join(', ').slice(0, 120)}`); return; }
     if (failed.length) { const ta = $('#tdeBulk'); if (ta) { ta.value = failed.join('\n'); todoBulkPreview(); } if (el) el.disabled = false; toast(`${ok}건을 추가했습니다. ${failed.length}건은 저장하지 못해 입력칸에 남겼습니다.`); return; }
-    if (typeof overlayLive !== 'function' || overlayLive(mark)) closeOverlay();
+    if (live) closeOverlay();
     toast(`그룹웨어 ToDo에 ${ok}건을 추가했습니다.`);
   }
 
@@ -199,8 +201,9 @@ ${list.length ? `<p class="muted">${personalTodoIncomplete() ? '확인된 ' : ''
     if (!v) { todoWrapOpen(); return; }
     const due = R.tdParseDue(v[0]);
     if (!due) { toast('날짜를 알아보지 못했습니다.'); todoWrapOpen(); return; }
+    const mark = typeof overlayMark === 'function' ? overlayMark() : 0;
     const r = await todoSave(id, {due}); if (!r.ok) toast(r.text);
-    todoWrapOpen();
+    if (typeof overlayLive !== 'function' || overlayLive(mark)) todoWrapOpen();
   };
   HOME_ACTS.tdWrapAll = async () => {
     const list = TD.list ? R.tdWrapUp(TD.list) : [], nx = todoNextWorkday();

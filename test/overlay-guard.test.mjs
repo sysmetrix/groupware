@@ -280,7 +280,7 @@ function attCtx() {
     askAttendance: async st => { asked.push(st); ctx.overlay.innerHTML = '<div>근태 신청 준비</div>'; return null; },
   });
   ctx.S.view = 'home';
-  const q = run(ctx, cut('27-attendance-request.js', '  async function quickAttendanceApplication', '  async function fillAttendanceForm'), 'quickAttendanceApplication');
+  const q = run(ctx, cut('27-attendance-request.js', '  let attAskSeq', '  async function fillAttendanceForm'), 'quickAttendanceApplication');
   return {ctx, q, d, asked};
 }
 
@@ -301,13 +301,23 @@ test('근태 신청: 아무것도 열지 않았으면 입력 창을 띄운다', 
 });
 
 // ---------- 자동 입력 결과 창: 19-draft-engine.js showDraftReport, 27-attendance-request.js fillAttendanceForm 끝 ----------
-function reportCtx() {
-  const logged = [];
-  const ctx = context({logActionRecord: r => logged.push(r)});
+// 작업 내역: saved=false면 저장 실패(store.set 실패)를 흉내 낸다. logActionRecord는 저장 여부와 관계없이 기록을 돌려준다(18-command-console.js).
+function historyCtx(extra, saved = true) {
+  const history = [], logged = [];
+  let n = 0;
+  const ctx = context({
+    ...extra,
+    getActionHistory: () => history,
+    logActionRecord: r => { const rec = {...r, id: 'a' + (++n)}; logged.push(rec); if (saved) history.unshift(rec); return rec; },
+  });
+  return {ctx, logged};
+}
+function reportCtx(saved) {
+  const {ctx, logged} = historyCtx({}, saved);
   const show = run(ctx, cut('19-draft-engine.js', '  function showDraftReport', '  // ---------- 결과보고: 계획서를 이어받아 작성'), 'showDraftReport');
   return {ctx, show, logged};
 }
-const STEPS = [{name: '제목', ok: true, detail: '가나'}, {name: '본문', ok: true, detail: '넣음'}];
+const STEPS = [{name: '제목', ok: true, detail: '가나'}, {name: '본문', ok: true, detail: '넣음'}, {name: '안전장치', ok: true, detail: '막은 것 없음'}];
 
 test('기안 결과: 그 사이 연 다른 창을 덮지 않고, 알림과 작업 내역으로 남긴다', () => {
   const {ctx, show, logged} = reportCtx();
@@ -315,8 +325,34 @@ test('기안 결과: 그 사이 연 다른 창을 덮지 않고, 알림과 작�
   show('가나 지급 건의', STEPS, []);
   assert.equal(ctx.overlay.innerHTML, '<div>다른 창</div>');
   assert.equal(logged.length, 1, '결과는 작업 내역에 남는다');
-  assert.match(ctx.toasts.join(' '), /상신 안 함/);
+  assert.match(ctx.toasts[0], /3개 항목을 지난 결재문서 패턴대로 기입하고 다시 읽어 확인했습니다\. 상신하지 않았습니다\./);
   assert.match(ctx.toastEl.html, /openHistory/);
+});
+
+test('기안 결과: 일부 단계가 실패했으면 알림에서 "채웠다"고 하지 않고 확인할 건수를 알린다', () => {
+  const {ctx, show} = reportCtx();
+  openOther(ctx);
+  show('가나 지급 건의', [{name: '제목', ok: true, detail: '가나'}, {name: '기록물철', ok: false, detail: '직접 확인'}, {name: '안전장치', ok: true, detail: ''}], []);
+  assert.match(ctx.toasts[0], /2\/3개 항목 자동 기입, 1개는 직접 확인이 필요합니다/);
+  assert.match(ctx.toasts[0], /본문은 직접 확인하세요/, '본문을 넣지 않았으면 그 안내도 남긴다');
+  assert.doesNotMatch(ctx.toasts[0], /채웠습니다|기입 완료/);
+});
+
+test('기안 결과: 모든 단계가 실패했으면(안전장치만 통과) "채우지 못했습니다"로 알린다', () => {
+  for (const steps of [[{name: '사전점검', ok: false, detail: '양식이 다름'}], [{name: '제목', ok: false, detail: ''}, {name: '안전장치', ok: true, detail: ''}]]) {
+    const {ctx, show} = reportCtx();
+    openOther(ctx);
+    show('가나 지급 건의', steps, []);
+    assert.match(ctx.toasts[0], /^기안을 채우지 못했습니다\. 상신하지 않았습니다\./);
+  }
+});
+
+test('기안 결과: 작업 내역 저장에 실패했으면 결과를 잃지 않게 결과 창을 그린다', () => {
+  const {ctx, show} = reportCtx(false);
+  openOther(ctx);
+  show('가나 지급 건의', STEPS, []);
+  assert.match(ctx.overlay.innerHTML, /자동 기입 완료/);
+  assert.equal(ctx.toasts.length, 0, '"작업 내역에 있습니다"라고 하지 않는다');
 });
 
 test('기안 결과: 덮개가 비어 있으면 결과 창을 그린다', () => {
@@ -327,27 +363,141 @@ test('기안 결과: 덮개가 비어 있으면 결과 창을 그린다', () => 
   assert.equal(ctx.toasts.length, 0);
 });
 
-function attTail() {
-  const body = cut('27-attendance-request.js', "    const bad = steps.filter(s => !s.ok).length;\n    logActionRecord({command: `근태신청 준비", '    return out;\n  }') + '    return out;';
-  const logged = [];
-  const ctx = context({logActionRecord: r => logged.push(r), ATT_FORM: {leave: '휴가신청서'}, hm: a => a.join(':')});
+function attTail(saved) {
+  const body = cut('27-attendance-request.js', '    const bad = steps.filter(s => !s.ok).length;\n    const summary', '    return out;\n  }') + '    return out;';
+  const {ctx, logged} = historyCtx({ATT_FORM: {leave: '휴가신청서'}, hm: a => a.join(':')}, saved);
   const fin = run(ctx, `function attFinish(steps, spec) {\n${body}\n}`, 'attFinish');
   return {ctx, fin, logged};
 }
+const SPEC = {type: 'leave', from: '2026-11-28', kind: '연차'};
+const SAFE = {name: '안전장치', ok: true, detail: '[신청완료]는 누르지 않았습니다'};
 
 test('근태 신청서 결과: 다른 창이 열려 있으면 덮지 않고 알리며, 결과 값은 그대로 돌려준다', () => {
   const {ctx, fin, logged} = attTail();
   openOther(ctx);
-  const out = fin([{name: '휴가구분', ok: true, detail: '연차'}, {name: '비고', ok: false, detail: '비어 있음'}], {type: 'leave', from: '2026-11-28', kind: '연차'});
+  const out = fin([{name: '휴가구분', ok: true, detail: '연차'}, {name: '비고', ok: false, detail: '비어 있음'}], SPEC);
   assert.deepEqual({...out}, {status: 'partial', total: 2, failed: 1});
   assert.equal(ctx.overlay.innerHTML, '<div>다른 창</div>');
   assert.equal(logged.length, 1);
-  assert.match(ctx.toasts.join(' '), /\[신청완료\]는 누르지 않음/);
+  assert.match(ctx.toasts[0], /^1\/2 항목을 채웠습니다\. 신청은 하지 않았습니다\./);
+});
+
+test('근태 신청서 결과: 신청서가 열리지 않아 채운 항목이 없으면 "채우지 못했습니다"로 알린다', () => {
+  const {ctx, fin} = attTail();
+  openOther(ctx);
+  const out = fin([{name: '양식 열기', ok: false, detail: '휴가신청서'}, {name: '중단', ok: false, detail: '신청서 입력 화면이 열리지 않았습니다'}, SAFE], SPEC);
+  assert.equal(out.status, 'partial');
+  assert.match(ctx.toasts[0], /^신청서를 채우지 못했습니다\. 신청은 하지 않았습니다\./);
+  assert.doesNotMatch(ctx.toasts[0], /채웠습니다/);
+});
+
+test('근태 신청서 결과: 작업 내역 저장에 실패했으면 결과 창을 그린다', () => {
+  const {ctx, fin} = attTail(false);
+  openOther(ctx);
+  fin([{name: '휴가구분', ok: true, detail: '연차'}, SAFE], SPEC);
+  assert.match(ctx.overlay.innerHTML, /근태신청 준비 결과/);
+  assert.equal(ctx.toasts.length, 0);
 });
 
 test('근태 신청서 결과: 덮개가 비어 있으면 결과 창을 그린다', () => {
   const {ctx, fin} = attTail();
-  const out = fin([{name: '휴가구분', ok: true, detail: '연차'}], {type: 'leave', from: '2026-11-28', kind: '연차'});
+  const out = fin([{name: '휴가구분', ok: true, detail: '연차'}], SPEC);
   assert.equal(out.status, 'success');
   assert.match(ctx.overlay.innerHTML, /근태신청 준비 결과/);
+});
+
+// ---------- 검토 R2A 뒤 더한 회귀 검사 ----------
+test('가드: overlayRedraw는 같은 창이면 다시 그리고 표식을 이어 주며, 다른 창이면 그리지 않는다', () => {
+  const ctx = context();
+  const g = run(ctx, '', '({overlayMark, overlayLive, overlayRedraw})');
+  ctx.overlay.innerHTML = '<div>A</div>';
+  const m = g.overlayMark();
+  assert.equal(g.overlayRedraw(m, '<div>A2</div>'), true);
+  assert.equal(ctx.overlay.innerHTML, '<div>A2</div>');
+  assert.equal(g.overlayLive(m), true, '다시 그린 창도 같은 창');
+  assert.equal(g.overlayRedraw(m, () => { ctx.overlay.innerHTML = '<div>A3</div>'; }), true);
+  assert.equal(g.overlayLive(m), true);
+  ctx.overlay.innerHTML = '<div>다른 창</div>';
+  assert.equal(g.overlayRedraw(m, '<div>A4</div>'), false);
+  assert.equal(ctx.overlay.innerHTML, '<div>다른 창</div>');
+});
+
+test('계획으로 추가: 두 건을 연달아 누르면 두 번째가 끝난 뒤에도 창을 다시 그린다(중복 저장 단추가 남지 않음)', async () => {
+  const {ctx} = bpCtx();
+  const saves = [deferred(), deferred()];
+  let k = 0;
+  ctx.todoCreate = () => saves[k++].promise;
+  ctx.BP.imp = [{title: '2026년 가나 운영계획', docNo: 'D-1', date: '2026-01-01'}, {title: '2026년 다라 운영계획', docNo: 'D-2', date: '2026-01-02'}];
+  ctx.bpImportHtml = () => `<div>계획서에서 가져오기 ${ctx.BP.imp.map(c => (c.taken ? '추가됨' : '[계획으로 추가]')).join(' ')}</div>`;
+  const sel = ctx.$;
+  ctx.$ = q => (/^#bpImp(Code|Amt|Date)1$/.test(q) ? sel(q.replace(/1$/, '0')) : sel(q));
+  ctx.S.paletteOpen = true; ctx.overlay.innerHTML = ctx.bpImportHtml();
+  const a = ctx.HOME_ACTS.bpImportAdd({dataset: {i: '0'}, disabled: false});
+  const b = ctx.HOME_ACTS.bpImportAdd({dataset: {i: '1'}, disabled: false});
+  saves[0].resolve({ok: true}); await a;
+  saves[1].resolve({ok: true}); await b;
+  assert.equal(ctx.overlay.innerHTML, '<div>계획서에서 가져오기 추가됨 추가됨</div>');
+});
+
+test('진단: 처음 확인 중에 [업데이트 다시 확인]을 누르면 끝난 뒤 알림과 같은 새 결과를 보인다', async () => {
+  const checks = [deferred(), deferred()];
+  let k = 0, info = {latest: '1.0.0'};
+  const ctx = context({
+    checkUpdate: () => checks[k++].promise, renderHead() {}, renderNav() {}, VERSION: '1.0.0', R: {compareVersions: (a, b) => (a > b ? 1 : a < b ? -1 : 0)},
+    store: {get: () => info}, openChangelog() {},
+  }, {'#overlay [aria-label="진단"]': ov => (/진단/.test(ov.innerHTML) ? {} : null), '#overlay [aria-label="업데이트 내역"]': () => null});
+  ctx.drawDiag = () => { ctx.overlay.innerHTML = `<div aria-label="진단">진단 ${info.latest}</div>`; };
+  const src = cut('21-governance.js', '  async function openDiag', '  function drawDiag') + cut('21-governance.js', '  async function govUpdate', '  // ---------- 최초 사용 안내');
+  const g = run(ctx, src, '({openDiag, govUpdate})');
+  const first = g.openDiag();
+  const again = g.govUpdate();
+  info = {latest: '1.0.1'};
+  checks[0].resolve(info); await first; // 첫 확인이 끝나며 1.0.1로 다시 그림
+  assert.match(ctx.overlay.innerHTML, /진단 1.0.1/);
+  info = {latest: '1.0.2'};
+  checks[1].resolve(info); await again; // 다시 확인은 1.0.2
+  assert.match(ctx.overlay.innerHTML, /진단 1\.0\.2/);
+  assert.match(ctx.toasts.join(' '), /v1\.0\.2/);
+});
+
+test('퇴근 전 마무리 [날짜]: 저장 중 연 다른 창을 닫지 않고, 그대로면 마무리 창으로 돌아온다', async () => {
+  for (const other of [true, false]) {
+    const {ctx} = wrapCtx();
+    ctx.TD.list = [];
+    const save = deferred();
+    Object.assign(ctx, {HOME_ACTS: {}, askForm: async () => ['11/28'], R: {tdParseDue: () => '2026-11-28'}, todoSave: () => save.promise});
+    runInNewContext(cut('55-todo-views.js', '  HOME_ACTS.tdWrapPick', '  HOME_ACTS.tdWrapAll'), ctx); // 가드는 wrapCtx에서 이미 올림
+    const p = ctx.HOME_ACTS.tdWrapPick({dataset: {id: 't1'}});
+    await tick();
+    if (other) openOther(ctx);
+    save.resolve({ok: true}); await p;
+    if (other) assert.equal(ctx.overlay.innerHTML, '<div>다른 창</div>');
+    else assert.match(ctx.overlay.innerHTML, /퇴근 전 마무리/);
+  }
+});
+
+test('할 일 여러 개 추가: 창을 닫은 뒤 일부가 실패하면 "입력칸에 남겼다"고 하지 않고 실패 제목을 알린다', async () => {
+  const {ctx, save, d} = bulkCtx();
+  ctx.R.tdParseBulk = () => ({rows: [{title: '자료 준비'}, {title: '회의록 정리'}]});
+  let k = 0;
+  ctx.GW.todoCreate = () => (k++ ? Promise.reject(new Error('저장 실패')) : d.promise);
+  const p = save(null); ctx.closeOverlay();
+  d.resolve(); await p;
+  const msg = ctx.toasts.join(' ');
+  assert.match(msg, /1건 추가, 저장 못 한 1건: 회의록 정리/);
+  assert.doesNotMatch(msg, /입력칸에 남겼습니다/);
+});
+
+test('근태 신청: 기다리는 동안 다시 부르면 나중 요청의 창만 뜬다', async () => {
+  const {ctx, q, d, asked} = attCtx();
+  const loads = [d, deferred()];
+  let k = 0;
+  ctx.loadApps = () => loads[k++].promise;
+  const first = q('trip');
+  const second = q('leave');
+  loads[0].resolve({apps: [], me: ''}); await first;
+  loads[1].resolve({apps: [], me: ''}); await second;
+  assert.deepEqual(asked.map(s => s.type), ['leave']);
+  assert.match(ctx.overlay.innerHTML, /근태 신청 준비/);
+  assert.equal(ctx.toasts.length, 0);
 });

@@ -243,7 +243,7 @@
     const before = JSON.stringify(store.get('updateInfo', null));
     await checkUpdate(false);
     renderHead();
-    if (S.paletteOpen && $('#overlay [aria-label="진단"]') && JSON.stringify(store.get('updateInfo', null)) !== before) drawDiag();
+    if (S.paletteOpen && $('#overlay [aria-label="진단"]') && JSON.stringify(store.get('updateInfo', null)) !== before) { if (typeof overlayRedraw === 'function') overlayRedraw(overlayMark(), drawDiag); else drawDiag(); }
   }
   function drawDiag() {
     const rows = diagChecks();
@@ -264,8 +264,8 @@
     else if (!i.latest) toast(`업데이트를 확인하지 못했습니다${i.err ? `(${i.err})` : ''}.`);
     else if (R.compareVersions(i.latest, VERSION) > 0) toast(`새 버전 v${i.latest} 이 있습니다. 업데이트 내역에서 \"지금 바꾸기\"를 누르면 바로 바뀝니다.`);
     else toast(`최신 버전입니다(v${VERSION}).`);
-    if (typeof overlayLive === 'function' && !overlayLive(mark)) return;
-    if (fromLog) openChangelog(); else { closeOverlay(); S.paletteOpen = true; drawDiag(); }
+    const redraw = () => { if (fromLog) openChangelog(); else { closeOverlay(); S.paletteOpen = true; drawDiag(); } };
+    if (typeof overlayRedraw === 'function') overlayRedraw(mark, redraw); else redraw();
   }
 
   // ---------- 최초 사용 안내 ----------

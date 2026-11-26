@@ -157,3 +157,13 @@ test('learnPatterns: 읽은 것·못 읽은 것·남은 것을 따로 돌려준�
   const f = await learn({limit: 12});
   assert.equal(f.errMsg, '목록 실패');
 });
+
+test('확인이 끝나기 전에는 "없습니다"로 단정하지 않는다', async () => {
+  const {overlay, open, finish} = setup({docs: {d1: {id: 'd1'}}});
+  const p = open();
+  assert.match(overlay.innerHTML, /새 문서 확인 중/);
+  assert.doesNotMatch(overlay.innerHTML, /지출결의서가 필요한 문서가 없습니다|학습된 지급 건의가 없습니다/);
+  assert.match(overlay.innerHTML, /읽어 둔 문서에는 없습니다\(확인 중\)/);
+  finish(); await p;
+  assert.match(overlay.innerHTML, /지출결의서가 필요한 문서가 없습니다/);
+});

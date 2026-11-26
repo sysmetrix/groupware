@@ -189,9 +189,18 @@
   let ovMarkSeq = 0;
   function overlayMark() { const el = $('#overlay')?.firstElementChild; if (!el) return 0; if (!el.dataset.ovMark) el.dataset.ovMark = String(++ovMarkSeq); return Number(el.dataset.ovMark); }
   function overlayLive(mark) { const el = $('#overlay')?.firstElementChild; return mark ? !!el && el.dataset.ovMark === String(mark) : !el; }
-  // 자동 입력 결과: 다른 창이 떠 있으면 덮지 않고 알림으로
-  function overlayYield(what) {
+  // 같은 창이면 다시 그리고(html: 글자 또는 그리는 함수) 새 요소에 표식을 이어 준다. 연달아 기다린 쪽도 같은 창으로 본다.
+  function overlayRedraw(mark, html) {
+    if (!overlayLive(mark)) return false;
+    const ov = $('#overlay');
+    if (typeof html === 'function') html(); else ov.innerHTML = html;
+    const el = ov.firstElementChild; if (el && mark) el.dataset.ovMark = String(mark);
+    return true;
+  }
+  // 자동 입력 결과: 다른 창이 떠 있으면 덮지 않고 알림으로. rec(logActionRecord 결과)가 작업 내역에 저장되지 않았으면 false(결과 창을 그리게)
+  function overlayYield(what, rec) {
     if (!$('#overlay')?.firstElementChild) return false;
+    if (rec && typeof getActionHistory === 'function' && (getActionHistory()[0] || {}).id !== rec.id) return false;
     if (typeof toast === 'function') { toast(`${what} 결과는 자동화 작업 내역에 있습니다.`); root.querySelector('.toast')?.insertAdjacentHTML('beforeend', '<button data-act="openHistory">결과 보기</button>'); }
     return true;
   }

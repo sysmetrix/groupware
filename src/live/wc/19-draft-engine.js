@@ -461,8 +461,9 @@
     const frameOnly = '초안 틀만 입력했습니다. 본문 사실(일시·장소·인원·금액)은 직접 확인하세요.';
     const head = bad ? '자동 기입 결과 (확인이 필요한 항목이 있습니다)' : bodyFilled ? '자동 기입 완료 · 상신 전 확인 단계' : '초안 틀만 입력했습니다';
     const summary = bad ? `${steps.length - bad}/${steps.length}개 항목 자동 기입, ${bad}개는 직접 확인이 필요합니다.` : bodyFilled ? `${steps.length}개 항목을 지난 결재문서 패턴대로 기입하고 다시 읽어 확인했습니다.` : `${steps.length}개 항목(본문 제외)을 기입했습니다. ${frameOnly}`;
-    logActionRecord({command: title, type: '기안', target: title, summary, steps: steps.map(s => `${s.ok ? '✓' : '✗'} ${s.name}: ${s.detail}`), status: bad ? 'partial' : 'success', verified: !bad, details: notes.join(' / ')});
-    if (typeof overlayYield === 'function' && overlayYield('기안을 채웠습니다(상신 안 함).')) return;
+    const rec = logActionRecord({command: title, type: '기안', target: title, summary, steps: steps.map(s => `${s.ok ? '✓' : '✗'} ${s.name}: ${s.detail}`), status: bad ? 'partial' : 'success', verified: !bad, details: notes.join(' / ')});
+    const did = steps.some(s => s.ok && s.name !== '안전장치');
+    if (typeof overlayYield === 'function' && overlayYield((did ? summary + (bad && !bodyFilled ? ' 본문은 직접 확인하세요.' : '') : '기안을 채우지 못했습니다.') + ' 상신하지 않았습니다.', rec)) return;
     S.paletteOpen = true; // Esc·바깥 클릭으로 닫히게
     $('#overlay').innerHTML = `
       <div class="modal peek">

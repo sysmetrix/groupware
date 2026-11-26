@@ -113,8 +113,10 @@
     });
   }
 
+  let attAskSeq = 0;
   async function quickAttendanceApplication(type, preset = {}) {
     closeOverlay();
+    const req = ++attAskSeq;
     type = ATT_FORM[type] ? type : 'trip';
     const today = R.kstNow(new Date()).date;
     const sel = selectedAction();
@@ -127,6 +129,7 @@
     // 내 지난 근태 신청 제목에서 제목 형식을 배운다(목록을 못 읽으면 기본 형식)
     const mark = typeof overlayMark === 'function' ? overlayMark() : 0;
     const ap = GW.teamPlanned ? await Promise.race([loadApps().catch(() => null), wait(4000).then(() => null)]) : null;
+    if (req !== attAskSeq) return; // 기다리는 동안 다시 불렀으면 나중 요청만 창을 띄운다
     if (typeof overlayLive === 'function' && !overlayLive(mark)) { toast('다른 창이 열려 있어 근태 신청 창을 띄우지 않았습니다.'); return; }
     const model = ap ? R.learnAttendanceTitles(ap.apps, ap.me) : null;
     const pk = String(preset.kind || '').replace(/\s+/g, '');
@@ -257,9 +260,11 @@
     finally { AUTO.running = false; try { const pf = $('#frame iframe'), pd = pf && pf.contentDocument, done = pd && [...pd.querySelectorAll('button')].find(x => /신청완료/.test(x.textContent || '')); if (done) done.scrollIntoView({block: 'center', inline: 'nearest'}); } catch {} if (typeof markPaneDirty === 'function') { const pf = $('#frame iframe'); if (pf) markPaneDirty(pf); } }
     step('안전장치', AUTO.blocked.length === 0, AUTO.blocked.length ? `자동 실행 중 ${AUTO.blocked.join(', ')} 클릭을 막았습니다` : '[신청완료]는 누르지 않았습니다. 화면에서 확인한 뒤 직접 누르세요');
     const bad = steps.filter(s => !s.ok).length;
-    logActionRecord({command: `근태신청 준비: ${ATT_FORM[spec.type]}`, type: '근태', target: `${spec.from} ${spec.kind || ''}`, summary: bad ? `${steps.length - bad}/${steps.length} 항목을 채웠습니다. 신청은 하지 않았습니다.` : '모든 항목을 채웠습니다. 신청은 하지 않았습니다.', steps: steps.map(s => `${s.ok ? '✓' : '✗'} ${s.name}: ${s.detail}`), status: bad ? 'partial' : 'success', verified: !bad});
+    const summary = bad ? `${steps.length - bad}/${steps.length} 항목을 채웠습니다. 신청은 하지 않았습니다.` : '모든 항목을 채웠습니다. 신청은 하지 않았습니다.';
+    const rec = logActionRecord({command: `근태신청 준비: ${ATT_FORM[spec.type]}`, type: '근태', target: `${spec.from} ${spec.kind || ''}`, summary, steps: steps.map(s => `${s.ok ? '✓' : '✗'} ${s.name}: ${s.detail}`), status: bad ? 'partial' : 'success', verified: !bad});
     const out = {status: bad ? 'partial' : 'success', total: steps.length, failed: bad};
-    if (typeof overlayYield === 'function' && overlayYield('신청서를 채웠습니다([신청완료]는 누르지 않음).')) return out;
+    const did = steps.some(s => s.ok && s.name !== '안전장치');
+    if (typeof overlayYield === 'function' && overlayYield(did ? summary : '신청서를 채우지 못했습니다. 신청은 하지 않았습니다.', rec)) return out;
     S.paletteOpen = true;
     $('#overlay').innerHTML = `<div class="modal peek"><div class="dlg" data-stop="1" style="width:min(560px,94vw);padding:20px 24px;position:absolute;right:24px;bottom:24px;top:auto;left:auto;transform:none" role="dialog" aria-label="근태신청 준비 결과">
       <button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button>
