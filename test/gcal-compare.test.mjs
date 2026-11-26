@@ -27,21 +27,27 @@ test('failed imported days stay unverified and produce no orphan/cancel assertio
   assert.equal(plan.items[0].state,'unverified'); assert.deepEqual(plan.diffs,[]); assert.equal(plan.compared,false);
 });
 const source=readFileSync(new URL('../src/live/wc/24-resource.js',import.meta.url),'utf8');
-function setup(out) {
-  let finish, calls=0; const wait=new Promise(r=>finish=r);
-  const p=Object.freeze({resSeq:'r',title:'original',start12:'202611150900',end12:'202611151000'});
-  const s={date:'20261115',list:[{resSeq:'r',name:'Car'}],sel:'r',bookings:[],busy:false,err:'',form:{title:'original',start:'09:00',end:'10:00'},check:{ok:true,payload:p},confirm:false,done:null,seq:0,rev:1};
+// v1.26 자원 예약은 [예약하기] 한 번: 누른 순간 화면의 값(예약명·일시·내용)을 고정해 그룹웨어에 올린다.
+function setup(out, {valid = true} = {}) {
+  let finish, calls=0; const wait=new Promise(r=>finish=r); const sent=[];
+  const s={owner:'A',date:'20261115',list:[{resSeq:'r',name:'Car',apprYn:'Y'}],sel:'r',bookings:[],busy:false,err:'',form:{title:'original',start:'09:00',end:'10:00',desc:'행선지 시청',auto:false},check:null,confirm:false,done:null,seq:0,rev:1,request:{owner:'A',date:'20261115',sel:'r'}};
   const records=[],toasts=[];
-  const c={S:{res:s,view:'other'},currentKey:'A', gated:()=>false,$:()=>null,renderMain:()=>{},toast:x=>toasts.push(x),logError:()=>{},logActionRecord:x=>records.push(x),GW:{reserveResource:async()=>{calls++;await wait;return out},resourceBookings:async()=>[]},R:{validateBooking:()=>({ok:true}),kstNow:()=>({date:'2026-11-15'})}};
-  vm.createContext(c);vm.runInContext(source+'\nthis.api={resBook,resCheck,vResource};',c);
-  return {c,s,records,toasts,finish,calls:()=>calls,...c.api};
+  const c={S:{res:s,view:'other'},currentKey:'A', gated:()=>false,$:()=>null,renderMain:()=>{},toast:x=>toasts.push(x),logError:()=>{},logActionRecord:x=>records.push(x),GW:{reserveResource:async a=>{calls++;sent.push(a);await wait;return out},resourceBookings:async()=>[]},R:{validateBooking:()=>(valid?{ok:true,errors:[]}:{ok:false,errors:['이미 지난 시각은 예약할 수 없습니다']}),kstNow:()=>({date:'2026-11-15'}),bookingSpanOnDay:()=>null}};
+  vm.createContext(c);vm.runInContext(source+'\nthis.api={resBook,vResource};',c);
+  return {c,s,records,toasts,finish,sent,calls:()=>calls,...c.api};
 }
-test('booking title is part of the confirmed immutable payload',async()=>{
-  const h=setup({ok:true});h.s.form.title='changed';await h.resBook({isTrusted:true});assert.equal(h.calls(),0);assert.equal(h.s.check,null);
+test('booking sends the on-screen title, time and 내용 in one click',async()=>{
+  const h=setup({ok:true,needsApproval:true});const pending=h.resBook({isTrusted:true});h.finish();await pending;
+  assert.equal(h.calls(),1);assert.deepEqual(JSON.parse(JSON.stringify(h.sent[0])),{resSeq:'r',title:'original',start:'202611150900',end:'202611151000',desc:'행선지 시청'});
+  assert.match(h.s.done.head,/승인 대기/);assert.match(h.s.done.text,/2026-11-15\(일\) 09:00~10:00/);
+});
+test('invalid or past time is stopped before anything is sent',async()=>{
+  const h=setup({ok:true},{valid:false});await h.resBook({isTrusted:true});assert.equal(h.calls(),0);assert.match(h.s.check.errors[0],/이미 지난 시각/);
+  const u=setup({ok:true});await u.resBook({isTrusted:false});assert.equal(u.calls(),0,'사람이 직접 누른 클릭만');
 });
 test('booking completion and audit use submitted values when current form changes',async()=>{
   const h=setup({ok:true});const pending=h.resBook({isTrusted:true});h.s.date='20261116';h.s.form.start='12:00';h.s.form.title='next booking';h.s.rev++;h.finish();await pending;
-  assert.match(h.s.done,/2026-11-15 09:00~10:00/);assert.match(h.records[0].summary,/2026-11-15 09:00~10:00/);assert.equal(h.s.form.title,'next booking');
+  assert.match(h.records[0].summary,/2026-11-15 09:00~10:00/);assert.equal(h.s.form.title,'next booking');
 });
 test('typing a new title during confirmation preserves it after the previous booking succeeds',async()=>{
   const h=setup({ok:true}); const pending=h.resBook({isTrusted:true});
@@ -57,8 +63,7 @@ test('unproven timeout success remains unknown and is not logged as saved',async
 });
 test('late booking response cannot write into a different account state',async()=>{
   const h=setup({ok:true});const pending=h.resBook({isTrusted:true});h.c.currentKey='B';h.c.S.res={date:'new'};h.finish();await pending;assert.deepEqual(h.c.S.res,{date:'new'});assert.equal(h.records.length,0);
-});
-test('calendar/resource controls expose selected, expanded and live status semantics',()=>{
+});test('calendar/resource controls expose selected, expanded and live status semantics',()=>{
   const sync=readFileSync(new URL('../src/live/wc/34-gsync.js',import.meta.url),'utf8');
   const gcal=readFileSync(new URL('../src/live/wc/28-gcal.js',import.meta.url),'utf8');
   for(const text of [source,sync,gcal]) assert.match(text,/aria-pressed/);

@@ -9,7 +9,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '1.25.3';
+  const VERSION = '1.26.0';
   let api = null;
   const lazy = {
     version: VERSION,

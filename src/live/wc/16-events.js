@@ -69,9 +69,8 @@
     case 'resSel': resSel(el.dataset.v); break;
     case 'resDay': resDay(el.dataset.v); break;
     case 'resFree': resFree(el.dataset.s, el.dataset.e); break;
-    case 'resCheck': resCheck(); break;
     case 'resBook': resBook(e); break;
-    case 'resCancelForm': resCancelForm(); break;
+    case 'resDur': resDur(el.dataset.v); break;
     case 'resReload': resReload(); break;
     case 'openAi': openAi(); break;
     case 'aiSetup': aiSetup(); break;
@@ -394,7 +393,7 @@
     if (t.id === 'resDate') resGo();
     if (t.id === 'payPlan') payPlanChanged();
     if (t.id === 'resTitle') { resSyncForm(); const rs = resState(); if (rs.confirm) rs.rev++; } // 저장 중 새 입력은 이전 요청 완료로 지우지 않는다
-    if (t.id === 'resStart' || t.id === 'resEnd') { resSyncForm(); const rs = resState(); if (rs.check) { rs.rev++; rs.check = null; renderMain(); } }
+    if (t.id === 'resStart' || t.id === 'resEnd' || t.id === 'resDesc') { const rs = resState(); if (t.id !== 'resDesc') rs.form.auto = false; resSyncForm(); if (rs.check) { rs.check = null; renderMain(); } else if (typeof resPaintStatus === 'function') resPaintStatus(); }
     if (t.id === 'setImportFile') settingsImport(t);
     if (t.classList && t.classList.contains('setc')) saveSettingField(t);
     if (t.dataset && t.dataset.b) saveBudgetRows();
