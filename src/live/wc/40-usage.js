@@ -31,13 +31,16 @@
     // 화면에는 내부 이름 대신 사람이 읽는 이름을 보인다(내보내는 파일에는 바뀌지 않는 내부 이름을 쓴다).
     const toolLabel = k => { const name = k.replace(/:err$/, ''), def = CHAT_TOOLS.get(name); return ((def && def.label) || name) + (k.endsWith(':err') ? ' (하지 못함)' : ''); };
     const list = (rows, name = k => k, n = 8) => rows.length ? rows.slice(0, n).map(([k, v]) => `<tr style="border-top:1px solid var(--line)"><td style="padding:5px 4px">${esc(name(k))}</td><td style="text-align:right;white-space:nowrap">${v}회</td></tr>`).join('') : '<tr><td class="muted" style="padding:5px 4px">아직 기록이 없습니다.</td></tr>';
+    const jobs = etc => s.journeys.filter(j => j.etc === etc).map(j => [j.label, j.total]);
     $('#overlay').innerHTML = `<div class="modal" data-act="closeOverlay"><div class="dlg" data-stop="1" style="width:min(680px,95vw);padding:22px 24px;max-height:88vh;overflow:auto" role="dialog" aria-label="사용 기록">
       <button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button>
       <h2 style="margin:0 0 4px;font-size:18px">사용 기록</h2>
       <div class="muted" style="margin-bottom:10px">${esc(s.from)} ~ ${esc(s.to)} · 쓴 날 ${s.activeDays}일. 화면·버튼·비서 도구의 이름과 횟수만 이 브라우저에 남깁니다. 제목·본문·이름·질문 내용은 적지 않고, 어디로도 보내지 않습니다.</div>
       ${usageOn() ? '' : '<div class="box warn" style="margin-bottom:10px">기록이 꺼져 있습니다. 아래 버튼으로 다시 켤 수 있습니다.</div>'}
       <h3 style="margin:12px 0 4px;font-size:14px">자주 하는 일</h3>
-      <table style="width:100%;border-collapse:collapse;font-size:13px"><tbody>${s.journeys.map(j => `<tr style="border-top:1px solid var(--line)"><td style="padding:5px 4px">${esc(j.label)}</td><td style="text-align:right;white-space:nowrap">${j.total}회</td></tr>`).join('')}</tbody></table>
+      <table style="width:100%;border-collapse:collapse;font-size:13px"><tbody>${list(jobs(false))}</tbody></table>
+      <h3 style="margin:14px 0 4px;font-size:14px">그 밖의 일</h3>
+      <table style="width:100%;border-collapse:collapse;font-size:13px"><tbody>${list(jobs(true))}</tbody></table>
       <h3 style="margin:14px 0 4px;font-size:14px">많이 연 화면</h3>
       <table style="width:100%;border-collapse:collapse;font-size:13px"><tbody>${list(s.views, viewLabel)}</tbody></table>
       ${s.unusedViews.length ? `<div class="muted" style="margin-top:6px">한 번도 열지 않은 화면: ${esc(s.unusedViews.map(viewLabel).join(', '))}</div>` : ''}

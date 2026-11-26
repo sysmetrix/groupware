@@ -47,16 +47,30 @@ export function usageBump(log, kind, key, now = Date.now()) {
   return cur;
 }
 
-// 핵심 여정: 어떤 화면·버튼·도구가 그 여정에 속하는지. docs/engineering/direction.md 의 다섯 가지와 같다.
+// 자주 하는 일: 핵심 4(docs/design/principles.md '메뉴 체계')와 그 밖의 일(etc). 화면은 VIEW_PARENT 로 묶인 id, 나머지는 data-act·비서 도구 이름이다.
+// 버튼은 조회·준비·저장하는 것만 센다(거르기·넘기기·닫기는 빼서 횟수가 부풀지 않게 한다).
+const usWords = s => s.split(' ');
+const usJourney = (id, label, view, act, tool, etc = false) => ({id, label, etc, view: usWords(view), act: usWords(act), tool: usWords(tool)});
 export const USAGE_JOURNEYS = [
-  {id: 'approval', label: '홈 확인 뒤 결재 처리', view: ['approval'], act: ['focusStart', 'focusNext', 'apOpen', 'selDoc', 'apTab', 'batchFocus'], tool: ['list_approvals', 'prepare_approval_queue']},
-  {id: 'attendance', label: '근태 신청 준비', view: ['attendance'], act: ['quickAtt', 'autoFillAtt'], tool: ['prepare_leave_request', 'prepare_trip_request', 'prepare_overtime_request']},
-  {id: 'draft', label: '결과보고·계획서 기안', view: [], act: ['quickDraft', 'selectPlanForResult', 'payRun', 'goodsRun', 'mailToDraft', 'openPay'], tool: ['prepare_draft']},
-  {id: 'budget', label: '예산 집행 조회', view: ['budget'], act: ['ledger', 'ledgerRow', 'ledgerSearch', 'bSearch', 'bPick', 'budgetTab'], tool: ['get_budget']},
-  {id: 'chat', label: '비서에게 묻기', view: [], act: ['chatSend', 'chatChip'], tool: ['*']},
+  usJourney('todo', '할 일', 'today mytodo board',
+    'tdNew tdAdd tdSave tdSel tdToggle tdDel tdSubAdd tdSubToggle tdBulk tdKanMove tdWrap addTodo todoEdit todoDel todoFromSel todoFromExtract markDone batchTodo focusStart focusNext boardMove homeNext homeOpenToday',
+    'list_tasks list_deadlines list_todos add_todo mark_task plan_priorities check_risks prepare_task_screen'),
+  usJourney('calendar', '일정·예약', 'calendar gcal resource',
+    'calDay calItem calReserve resSel resBook gcalNew gcalSave',
+    'get_schedule prepare_schedule busy_days find_when get_resource_status reserve_vehicle get_gcal_access get_gcal_sync'),
+  usJourney('attendance', '근태·연차', 'attendance',
+    'quickAtt autoFillAtt attDay goAttendanceDay csvAtt',
+    'prepare_leave_request prepare_trip_request prepare_overtime_request get_leave_status check_leave_day get_work_hours get_my_attendance get_staff_status list_my_requests'),
+  usJourney('budget', '예산 집행', 'budget',
+    'ledger ledgerRow ledgerSearch bOpen bPick bSearch csvBudget csvLedger richBudget openPay payRun goodsRun expAdd expGo cduReload cduCsv etxReload etxCsv bpAdd bpImport bpConfirm',
+    'get_budget search_budget budget_forecast get_unresolved_evidence'),
+  usJourney('approval', '결재·메일', 'approval mail notifications',
+    'apOpen selDoc selMail mailToDraft autoFillMail quickDraft selectPlanForResult notificationOpen',
+    'list_approvals prepare_approval_queue prepare_draft list_mail read_mail digest_mail read_doc draft_mail_reply compose_mail check_sent_reply list_sent_mail list_alerts', true),
+  {id: 'chat', label: '비서에게 묻기', etc: true, view: [], act: ['chatSend', 'chatChip'], tool: ['*']},
 ];
 
-/** 기간 요약: 날짜 범위, 쓴 날 수, 종류별 합계(많은 순), 핵심 여정별 횟수, 한 번도 안 쓴 화면. */
+/** 기간 요약: 날짜 범위, 쓴 날 수, 종류별 합계(많은 순), 자주 하는 일별 횟수, 한 번도 안 쓴 화면. */
 export function usageSummary(log, {now = Date.now(), days = 28, views = []} = {}) {
   const cur = usageNormalize(log);
   const to = usageDay(now), from = usageDay(Number(now) - (Math.max(1, days) - 1) * 86400000);
@@ -73,7 +87,7 @@ export function usageSummary(log, {now = Date.now(), days = 28, views = []} = {}
   for (const [k, n] of Object.entries(sum.toolAi)) tools[k] = (tools[k] || 0) + n;
   const okTools = Object.fromEntries(Object.entries(tools).filter(([k]) => !k.endsWith(':err')));
   const pick = (o, names) => names.includes('*') ? total(o) : names.reduce((a, n) => a + (o[n] || 0), 0);
-  const journeys = USAGE_JOURNEYS.map(j => ({id: j.id, label: j.label, views: pick(sum.view, j.view), acts: pick(sum.act, j.act), tools: pick(okTools, j.tool)})).map(j => ({...j, total: j.views + j.acts + j.tools}));
+  const journeys = USAGE_JOURNEYS.map(j => ({id: j.id, label: j.label, etc: j.etc, views: pick(sum.view, j.view), acts: pick(sum.act, j.act), tools: pick(okTools, j.tool)})).map(j => ({...j, total: j.views + j.acts + j.tools}));
   return {
     from, to, days, activeDays,
     views: rank(sum.view), acts: rank(sum.act), tools: rank(tools),
@@ -91,14 +105,18 @@ export function usageReport(log, {now = Date.now(), days = 28, views = [], versi
   const errs = (Array.isArray(errors) ? errors : []).filter(e => e && Number(e.at) >= Number(now) - days * 86400000);
   const byWhere = {};
   for (const e of errs) { const w = String(e.where || '').replace(/[^\w가-힣 .:-]/g, '').slice(0, 40) || '(알 수 없음)'; byWhere[w] = (byWhere[w] || 0) + 1; }
+  const lines = etc => s.journeys.filter(j => j.etc === etc).map(j => `- ${j.label}: ${j.total}회 (화면 ${j.views}, 버튼 ${j.acts}, 비서 도구 ${j.tools})`);
   return [
     `# GW 비서 사용 기록 ${s.from} ~ ${s.to}`,
     '',
     `버전 ${version || '(알 수 없음)'} · 쓴 날 ${s.activeDays}일 / ${s.days}일`,
     '화면·버튼·도구의 이름과 횟수만 들어 있습니다. 제목·본문·이름·질문 내용은 없습니다.',
     '',
-    '## 핵심 여정',
-    ...s.journeys.map(j => `- ${j.label}: ${j.total}회 (화면 ${j.views}, 버튼 ${j.acts}, 비서 도구 ${j.tools})`),
+    '## 자주 하는 일',
+    ...lines(false),
+    '',
+    '## 그 밖의 일',
+    ...lines(true),
     '',
     '## 화면',
     table(s.views),
