@@ -20,4 +20,6 @@ test('복수 시간외 및 자정 경계의 종료 시각을 보존한다', () =
   const rail = homeDayRail([{from:'18:00',to:'20:00',label:'시간외',kind:'ot'}], {nowMin: 19*60, endH:20, workEndMin:1200});
   assert.equal(rail.leftMin, 60); assert.equal(rail.blocks[0].kind, 'ot'); assert.equal(rail.blocks[0].width > 0, true);
   assert.equal(homeDayRail([], {nowMin: 17*60}).leftMin, 60);
+  assert.equal(homeDayRail([], {nowMin: 30, workEndMin:90}).leftMin, 60);
+  assert.equal(homeDayRail([], {nowMin: 30}).leftMin, 0);
 });

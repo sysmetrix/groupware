@@ -97,7 +97,7 @@ export function homeDayRail(items = [], {nowMin = 540, startH = 8, endH = 19, wo
     lunch: {left: pct(720), width: +(pct(780) - pct(720)).toFixed(2)},
     now: {left: pct(now), label: hmoHm(((now % 1440) + 1440) % 1440), inRange: now >= s && now <= e, edge: now <= s + span * 0.04 ? 'l' : now >= e - span * 0.04 ? 'r' : ''},
     next: next ? {label: next.label, inMin: next.fromMin - now} : null,
-    leftMin: now >= s && now < workEnd ? workEnd - now : 0,
+    leftMin: now < workEnd && (now >= s || workEndMin !== null) ? workEnd - now : 0,
   };
 }
 

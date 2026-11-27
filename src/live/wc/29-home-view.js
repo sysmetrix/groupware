@@ -120,7 +120,7 @@
     const useOtEnd = activeOt.length > 0 && (off || otEnd >= 18 * 60);
     const end = useOtEnd ? otEnd : 18 * 60;
     const endH = Math.min(24, Math.max(19, Math.ceil(end / 60)));
-    const r = R.homeDayRail(d.timeline, {nowMin: homeNowMin(), endH, workEndMin: end});
+    const r = R.homeDayRail(d.timeline, {nowMin: homeNowMin(), endH, workEndMin: useOtEnd ? end : null});
     const blocks = r.blocks.map((b, i) => `<button class="dr-b dr-${b.kind}${b.done ? ' dr-done' : ''}" style="left:${b.left}%;width:${b.width}%;--i:${i}" data-act="homeTile" data-v="schedule" title="${esc(b.time + ' ' + b.label)}" aria-label="${esc(b.time + ' ' + b.label + (b.done ? ' (지남)' : ''))}">${esc(b.label)}</button>`).join('');
     const notes = [];
     if (r.allDay.length) notes.push(`<span class="dr-allday"><i aria-hidden="true"></i>종일 <b>${esc(r.allDay.slice(0, 2).join(', '))}</b>${r.allDay.length > 2 ? ` 외 ${r.allDay.length - 2}건` : ''}</span>`);
@@ -165,7 +165,7 @@
     const gap = d.taskGaps ? '확인된 ' : '';
     const todoTxt = [`그룹웨어 ${gap}처리·확인 ${d.mine.length}건`, d.urgent ? `우선 ${d.urgent}건` : '', d.wait ? `기다리는 중 ${d.wait}건` : '', p ? p.text : ''].filter(Boolean).join(' · ') + (d.taskGaps ? ' (일부 자료 누락 가능)' : '');
     const teamGap = d.teamLoading || d.teamError || d.teamUnknown;
-    const schedTxt = [d.scheduleUnknown ? '오늘 일정 일부 미확인' : `오늘 그룹웨어 일정 ${d.events.length}건${teamGap ? ' (일부 미확인)' : ''}`, d.teamError ? '자리 비움 조회 실패' : d.teamLoading ? '자리 비움 확인 중' : d.teamUnknown ? '자리 비움 확인 불가' : `자리 비움 ${d.away.length}명`, d.resUnknown ? '' : `자원 예약 ${d.resources.length}건${d.resPartial ? '(일부 자원)' : ''}`].filter(Boolean).join(' · ');
+    const schedTxt = [d.scheduleUnknown ? '오늘 일정 일부 미확인' : `오늘 그룹웨어 일정 ${d.events.length}건${teamGap || d.otUnknown ? ' (일부 미확인)' : ''}`, d.teamError ? '자리 비움 조회 실패' : d.teamLoading ? '자리 비움 확인 중' : d.teamUnknown ? '자리 비움 확인 불가' : `자리 비움 ${d.away.length}명`, d.resUnknown ? '' : `자원 예약 ${d.resources.length}건${d.resPartial ? '(일부 자원)' : ''}`].filter(Boolean).join(' · ');
     homeAttLast = {come: homeHm(d.attToday && d.attToday.come), leave: homeHm(d.attToday && d.attToday.leave), error: !d.attToday || !!d.attToday.error, workday: d.workday, remaining: d.leave, check: d.attCheck};
     const att = typeof R.homeAttendanceLine === 'function' ? R.homeAttendanceLine({...homeAttLast, nowMin: homeNowMin()}) : {text: '', tone: 'info'};
     const bud = typeof R.homeBudgetLine === 'function' ? R.homeBudgetLine(d.budgetProjects, d.elapsedPct) : {text: '', tone: 'info'};
