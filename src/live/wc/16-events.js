@@ -73,6 +73,7 @@
     case 'resDur': resDur(el.dataset.v); break;
     case 'resReload': resReload(); break;
     case 'resHistory': resHistory(); break;
+    case 'resMineMore': resMineMore(); break;
     case 'openAi': openAi(); break;
     case 'aiSetup': aiSetup(); break;
     case 'aiSaveKey': aiSaveKey(); break;

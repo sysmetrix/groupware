@@ -94,7 +94,7 @@
     const mineList = mine ? mine.filter(b => s.showInactive || !inactive(b)).sort((a, b) => (a.end < resToday() + '0000') - (b.end < resToday() + '0000') || a.start.localeCompare(b.start)) : null;
     const mineHtml = s.mineOff ? '' : `<h2>내 예약 현황 ${mineList ? `<span class="muted">${mineList.length}건 · 승인 대기 ${mineList.filter(x => ['RE', '10'].includes(x.status)).length}건</span>` : ''}</h2>
       ${mine ? `<div class="bar"><button type="button" class="btn sm" data-act="resHistory" aria-pressed="${!!s.showInactive}">${s.showInactive ? '취소·반려 숨기기' : `취소·반려 보기${hidden ? ` ${hidden}건` : ''}`}</button><span class="muted">최근 30일~앞으로 90일 · 조회된 예약</span></div>` : ''}
-      ${mineErr ? retry('내 예약 현황을 확인할 수 없습니다', mineErr) : !mine ? '<div class="list"><div class="empty" role="status">내 예약 현황을 조회하는 중입니다…</div></div>' : mineList.length ? `<div class="list">${mineList.slice(0, 15).map(b => `<div class="row res-mine" style="grid-template-columns:150px 1fr auto"><span class="muted">${esc(fmtB(b))}</span><div class="mn"><div class="t">${esc(b.title)}</div><div class="muted">${esc(b.name)}${b.desc ? ' · ' + esc(b.desc) : ''}</div></div><div class="w">${resBadge(b.status)}</div></div>`).join('')}</div>${mineList.length > 15 ? `<p class="muted">${mineList.length}건 중 15건 표시 · 전체 내역은 그룹웨어 자원 화면에서 확인하세요.</p>` : ''}` : `<div class="list"><div class="empty"><b>${hidden && !s.showInactive ? '표시할 예약이 없습니다. 취소·반려 이력은 위에서 확인할 수 있습니다.' : '조회된 내 예약이 없습니다'}</b></div></div>`}`;
+      ${mineErr ? retry('내 예약 현황을 확인할 수 없습니다', mineErr) : !mine ? '<div class="list"><div class="empty" role="status">내 예약 현황을 조회하는 중입니다…</div></div>' : mineList.length ? `<div class="list">${mineList.slice(0, s.mineShowAll ? undefined : 15).map(b => `<div class="row res-mine" style="grid-template-columns:150px 1fr auto"><span class="muted">${esc(fmtB(b))}</span><div class="mn"><div class="t">${esc(b.title)}</div><div class="muted">${esc(b.name)}${b.desc ? ' · ' + esc(b.desc) : ''}</div></div><div class="w">${resBadge(b.status)}</div></div>`).join('')}</div>${mineList.length > 15 ? `<button type="button" class="btn sm" data-act="resMineMore">${s.mineShowAll ? '간단히 보기' : `나머지 ${mineList.length - 15}건 더 보기`}</button>` : ''}` : `<div class="list"><div class="empty"><b>${hidden && !s.showInactive ? '표시할 예약이 없습니다. 취소·반려 이력은 위에서 확인할 수 있습니다.' : '조회된 내 예약이 없습니다'}</b></div></div>`}`;
     const body = !s.list ? err ? retry('자원 정보를 읽지 못했습니다', err) : '<div role="status">자원 목록을 조회하는 중입니다…</div>'
       : !s.list.length ? '<div class="empty"><b>예약할 수 있는 자원이 없습니다</b></div>'
       : `<div class="bar"><div class="seg">${s.list.map(r => `<button class="${r.resSeq === s.sel ? 'on' : ''}" data-act="resSel" aria-pressed="${r.resSeq === s.sel}" data-v="${esc(r.resSeq)}">${esc(r.name)}</button>`).join('')}</div>
@@ -204,7 +204,8 @@
     else { const n = Number(v); if (!(n > 0)) return; s.form.end = R.minToHm(Math.min(m(s.form.start) + n, 23 * 60 + 30)); }
     s.form.auto = false; s.check = null; s.done = null; renderMain();
   }
-  function resHistory() { resSyncForm(); const s = resState(); s.showInactive = !s.showInactive; resRender(); }
+  function resHistory() { resSyncForm(); const s = resState(); s.showInactive = !s.showInactive; s.mineShowAll = false; resRender(); }
+  function resMineMore() { resSyncForm(); const s = resState(); s.mineShowAll = !s.mineShowAll; resRender(); }
   function resReload() { resSyncForm(); resInvalidate(); const s = resState(); s.mine = null; s.mineErr = ''; return resLoad(true); }
   // [예약하기] 한 번: 화면의 값을 그 순간 고정해 확인하고 그룹웨어에 올린다(그룹웨어가 중복·한도·지난 시각을 저장 직전에 다시 확인).
   async function resBook(ev) {
