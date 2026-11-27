@@ -4,6 +4,7 @@
 //        내 예약은 그룹웨어 '나의예약현황'과 같은 조회로 승인 대기·승인 완료·반려·취소를 보여 준다. 취소·변경은 그룹웨어 자원 화면에서 한다.
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
 
+  const resDefaultTitle = resource => /관용차량/.test(resource?.name || '') ? '관용차량 예약' : '';
   const resOwner = () => typeof currentKey === 'undefined' ? S.userKey || '' : currentKey;
   const resOwnerValid = owner => owner === resOwner() && (typeof getUserKey !== 'function' || getUserKey() === owner);
   const ymdDash = d8 => `${d8.slice(0, 4)}-${d8.slice(4, 6)}-${d8.slice(6)}`;
@@ -148,6 +149,12 @@
       if (!active()) return;
       s.list = list;
       s.sel = q.sel = (list.find(r => r.resSeq === q.sel) || list[0])?.resSeq || '';
+      if (s.titleSel !== s.sel) {
+        const previous = list.find(r => r.resSeq === s.titleSel);
+        const selected = list.find(r => r.resSeq === s.sel);
+        if (!s.form.title || s.form.title === resDefaultTitle(previous)) s.form.title = resDefaultTitle(selected);
+        s.titleSel = s.sel;
+      }
       if (!q.sel) { s.bookings = []; return; }
       const today = resToday();
       q.upFrom = q.date > today ? q.date : today;
@@ -217,7 +224,7 @@
       const appr = !!out.needsApproval;
       s.done = {head: appr ? '예약을 신청했습니다(승인 대기).' : '예약했습니다.', text: `${sel.name} ${ymdDash(p.date)}(${wdName(p.date)}) ${p.start}~${p.end} “${p.title}”`, appr};
       logActionRecord({command: `자원 예약: ${sel.name}`, type: '자원', target: p.title, summary: `${ymdDash(p.date)} ${p.start}~${p.end} 예약을 올렸습니다${appr ? '(승인 대기)' : ''}.`, steps: [], verified: true});
-      if (s.rev === submittedRev) { s.form.title = ''; s.form.desc = ''; s.form.auto = true; }
+      if (s.rev === submittedRev) { s.form.title = resDefaultTitle(sel); s.form.desc = ''; s.form.auto = true; }
       toast(appr ? '예약을 신청했습니다. 관리자 승인을 기다립니다.' : '예약했습니다.');
       s.confirm = false; s.mine = null; s.mineErr = '';
       const done = s.done; await resLoad(true); if (S.res === s) { s.done = done; resRender(); }
