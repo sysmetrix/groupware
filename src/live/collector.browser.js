@@ -130,8 +130,11 @@
     throw new GwError('CLIENT_NOT_FOUND', '그룹웨어 API 클라이언트를 찾지 못했습니다. 그룹웨어 업데이트로 구조가 바뀌었을 수 있습니다.');
   }
 
+  const NET_ERR = /failed to fetch|network|load failed|abort|econnreset|etimedout|epipe|socket hang up|offline|네트워크|통신\s*오류|연결.*끊|\b50[234]\b|bad gateway|service unavailable|gateway timeout/i;
+  const UNK_HEAD = '통신 오류 또는 응답 지연으로 ';
+  const isUnk = e => !!(e && (e.code === 'TIMEOUT' || e.uncertain));
   function parseRejection(reason) {
-    if (reason instanceof GwError) return reason;
+    if (reason instanceof GwError) { if (reason.code === 'TIMEOUT') reason.uncertain = true; return reason; }
     const text = typeof reason === 'string' ? reason : (reason && reason.message) || (reason && typeof reason === 'object' ? JSON.stringify(reason) : String(reason));
     try {
       const j = JSON.parse(text);
@@ -139,8 +142,15 @@
       const msg = j && (j.errors && j.errors.message || j.resultMsg || j.errorMsg || j.error) || '';
       if (code === 'E002' || /Token is not exists|Session is not exists/i.test(msg)) return new GwError('SESSION_EXPIRED', '그룹웨어 로그인 세션이 만료되었습니다.');
       if (code === 601) return new GwError('ORIGIN_REJECTED', '허용된 쿠키 인증 URL이 아닙니다(601).');
-      return new GwError('API_ERROR', `${code || ''} ${msg}`.trim() || 'API 오류');
-    } catch { return new GwError('API_ERROR', text.slice(0, 200)); }
+      const err = new GwError('API_ERROR', `${code || ''} ${msg}`.trim() || 'API 오류');
+      if (/^50[234]$/.test(String(code ?? '')) || (j && (/^50[234]$/.test(String(j.status || '')) || (j.status === 0 && j.resultCode === undefined)))) err.uncertain = true;
+      return err;
+    } catch {
+      const st = reason && (reason.status ?? (reason.response && reason.response.status));
+      const err = new GwError('API_ERROR', text.slice(0, 200));
+      if (NET_ERR.test(`${reason && reason.name || ''} ${reason && reason.code || ''} ${st ?? ''} ${text}`) || st === 0 || (reason && /^(Type|Abort)Error$/.test(reason.name))) err.uncertain = true;
+      return err;
+    }
   }
 
   // 쓰기는 이 목록의 주소만, 전용 함수(reserveResource)에서만 허용한다. 상신·결재·삭제·발송 계열은 여기에 절대 넣지 않는다.
@@ -162,8 +172,14 @@
           client.post(path, body, {contextType: 'application/json', ...(encrypt ? {encrypt: true} : {}), ...(ac ? {signal: ac.signal} : {})}),
           new Promise((_, reject) => { timer = setTimeout(() => { try { ac && ac.abort(); } catch {} reject(new GwError('TIMEOUT', `${path} 응답 시간 초과`)); }, timeoutMs); }),
         ]);
-        const r = typeof res === 'string' ? JSON.parse(res) : res;
-        if (!r || (r.resultCode !== 0 && r.resultCode !== 200 && r.resultCode !== 'SUCCESS')) throw new GwError('API_ERROR', `${path}: ${r && r.resultCode} ${r && r.resultMsg || ''}`.trim());
+        let r;
+        try { r = typeof res === 'string' ? JSON.parse(res) : res; }
+        catch { const err = new GwError('API_ERROR', `${path}: 응답 형식 오류`); err.uncertain = true; throw err; }
+        if (!r || (r.resultCode !== 0 && r.resultCode !== 200 && r.resultCode !== 'SUCCESS')) {
+          const err = new GwError('API_ERROR', `${path}: ${r && r.resultCode} ${r && r.resultMsg || ''}`.trim());
+          if (r && /^50[234]$/.test(String(r.resultCode || r.status || ''))) err.uncertain = true;
+          throw err;
+        }
         return r.resultData;
       } catch (e) {
         const err = parseRejection(e);
@@ -412,14 +428,9 @@
     const body = {companyInfo: {compSeq: u.compSeq, groupSeq: u.groupSeq, deptSeq: u.deptSeq, emailAddr: u.emailAddr, emailDomain: u.emailDomain}, resSeq: String(resSeq), reqText: name, apprYn: detail.apprYn, alldayYn: 'N', startDate: start, endDate: end, descText: String(desc || '').replace(/\r\n/g, '\n').slice(0, 1000), resSubscriberList: [{groupSeq: u.groupSeq, compSeq: u.compSeq, deptSeq: u.deptSeq, empSeq: u.empSeq}], uidList: '', repeatType: '10', repeatEndDay: '', linkSchList: [], newSchList: [], langCode: u.langCode || 'kr'};
     if (!WRITE_ALLOWED.has('/schres/rs121A06')) throw new GwError('NOT_ALLOWED', '쓰기 허용 목록 오류');
     let r;
-    try { r = await transport('/schres/rs121A06', body, {timeoutMs: 20000}); }
+    try { r = await transport('/schres/rs121A06', body, {timeoutMs: 20000, retries: 0}); }
     catch (e) {
-      // 응답이 늦어도 서버에는 저장됐을 수 있다: 같은 시간·제목의 내 예약이 있는지 다시 조회해 확인한다(다시 눌러 중복 예약하지 않도록)
-      if (e && e.code === 'TIMEOUT') {
-        // 시간과 제목만 같은 예약은 다른 사람의 것일 수 있으므로 성공으로 판정하지 않는다.
-        // 예약자와 요청을 연결할 수 없는 경우 원본 화면에서 확인하도록 한다.
-        throw new GwError('UNKNOWN', '응답이 늦어 저장 여부를 확인하지 못했습니다. 그룹웨어 자원 화면에서 확인한 뒤 다시 시도하세요');
-      }
+      if (isUnk(e)) throw new GwError('UNKNOWN', UNK_HEAD + '저장 여부를 확인하지 못했습니다. 그룹웨어 자원 화면에서 확인한 뒤 다시 시도하세요');
       throw e;
     }
     if (!r || Number(r.successTf) !== 1) throw new GwError('SAVE_FAILED', '서버가 예약을 저장하지 못했습니다');
@@ -481,7 +492,11 @@
   const todoWrite = async (path, body) => {
     if (!WRITE_ALLOWED.has(path)) throw new GwError('NOT_ALLOWED', '쓰기 허용 목록 오류');
     todoBudget();
-    return transport(path, body, {timeoutMs: 20000, retries: 0});
+    try { return await transport(path, body, {timeoutMs: 20000, retries: 0}); }
+    catch (e) {
+      if (isUnk(e) && !path.endsWith('A01')) throw new GwError('UNKNOWN', UNK_HEAD + '반영 여부를 확인하지 못했습니다. 목록을 새로 고쳐 확인하세요');
+      throw e;
+    }
   };
   // 만들기. parent가 있으면 하위 ToDo(체크리스트 한 줄). 응답이 늦으면 목록을 다시 읽어 같은 제목의 새 항목이 있는지 본다(중복 생성 방지).
   async function todoCreate({title, start = '', due = '', contents = '', important = false, importance, dday = false, parent = ''} = {}) {
@@ -497,11 +512,13 @@
     let id;
     try { id = await todoWrite(TODO_P + 'prj001A01', body); }
     catch (e) {
-      if (e && e.code === 'TIMEOUT' && before) {
-        const after = await todoList().catch(() => null);
-        const hit = (after ? after.todos : []).find(t => !before.has(t.todoSeq) && t.todoName === name && t.createDate === ymd());
-        if (hit) return {ok: true, id: hit.todoSeq, recovered: true};
-        throw new GwError('UNKNOWN', '응답이 늦어 저장 여부를 확인하지 못했습니다. 목록을 새로 고친 뒤 확인하세요');
+      if (isUnk(e)) {
+        if (before) {
+          const after = await todoList().catch(() => null);
+          const hit = (after ? after.todos : []).find(t => !before.has(t.todoSeq) && t.todoName === name && t.createDate === ymd());
+          if (hit) return {ok: true, id: hit.todoSeq, recovered: true};
+        }
+        throw new GwError('UNKNOWN', UNK_HEAD + '저장 여부를 확인하지 못했습니다. 목록을 새로 고친 뒤 확인하세요');
       }
       throw e;
     }
@@ -564,7 +581,9 @@
     if (!/^[\w-]{6,60}$/.test(alertId)) throw new GwError('BAD_ID', '알림 ID가 올바르지 않습니다');
     if (!WRITE_ALLOWED.has('/event/event02A03')) throw new GwError('NOT_ALLOWED', '쓰기 허용 목록 오류');
     const ctx = context();
-    const r = await transport('/event/event02A03', {header: {groupSeq: ctx.groupSeq, empSeq: ctx.empSeq, pid: '', tid: ''}, body: {companyInfo: {compSeq: ctx.compSeq, bizSeq: ctx.bizSeq, deptSeq: ctx.deptSeq, emailAddr: ctx.emailAddr, emailDomain: ctx.emailDomain}, alertIds: [alertId]}}, {timeoutMs: 10000, retries: 0});
+    let r;
+    try { r = await transport('/event/event02A03', {header: {groupSeq: ctx.groupSeq, empSeq: ctx.empSeq, pid: '', tid: ''}, body: {companyInfo: {compSeq: ctx.compSeq, bizSeq: ctx.bizSeq, deptSeq: ctx.deptSeq, emailAddr: ctx.emailAddr, emailDomain: ctx.emailDomain}, alertIds: [alertId]}}, {timeoutMs: 10000, retries: 0}); }
+    catch (e) { if (isUnk(e)) throw new GwError('UNKNOWN', UNK_HEAD + '반영 여부를 확인하지 못했습니다'); throw e; }
     return {ok: true, id: alertId, result: r == null ? null : true};
   }
   async function todoDelete(id) {
