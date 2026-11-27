@@ -152,3 +152,24 @@ test('timeout and malformed data stay unknown, upcoming success is independent, 
   assert.doesNotMatch(h.timeline(), /별도 조회 실패/);
   assert.match(h.c.vResource(), /다가오는 예약을 확인할 수 없습니다.*별도 조회 실패/);
 });
+
+
+test('취소·반려는 기본 목록에서 숨기고 이력 보기로 복원한다', async () => {
+  const h = setup();
+  const s = h.c.resState();
+  s.date = day; s.list = list; s.sel = '1'; s.request = {owner:'A',date:day,sel:'1'}; s.bookings = []; s.upcoming = [];
+  s.mine = [{start:day+'0900',end:day+'1000',title:'유효 예약',name:'차량',status:'CO'}, {start:day+'1100',end:day+'1200',title:'취소 예약',name:'차량',status:'CA'}, {start:day+'1300',end:day+'1400',title:'반려 예약',name:'차량',status:'RJ'}];
+  let html = h.c.vResource();
+  assert.match(html, /유효 예약/); assert.doesNotMatch(html, /취소 예약|반려 예약/); assert.match(html, /취소·반려 보기 2건/);
+  h.c.resHistory(); html = h.c.vResource();
+  assert.match(html, /취소 예약/); assert.match(html, /반려 예약/); assert.match(html, /취소·반려 숨기기/);
+});
+
+test('내 예약 조회는 늦은 이전 응답보다 최신 응답을 우선한다', async () => {
+  const h = setup(), pending = [];
+  h.c.GW.myReservations = () => new Promise(resolve => pending.push(resolve));
+  const s = h.c.resState(), old = h.c.resLoadMine(s), fresh = h.c.resLoadMine(s);
+  pending[1]([{title:'최신'}]); await fresh;
+  pending[0]([{title:'오래됨'}]); await old;
+  assert.equal(s.mine[0].title, '최신');
+});
