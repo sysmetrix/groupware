@@ -85,16 +85,12 @@ Windows CI는 서비스 시작 테스트가 가끔 시간 초과로 실패합니
 | `src/live/ext/` | 확장 프로그램의 서비스 워커와 다리 스크립트 |
 | `scripts/` | 빌드, 하네스, E2E, 둘러보기 서버, 시작 페이지 생성 |
 | `test/` `eval/` | 단위 테스트와 대화 평가 문항 |
-| `docs/` | 설계 원칙, 개발 하네스, 상용화 검토, 보관 문서 |
+| `docs/` | 설계 원칙, 개발 하네스, 보관 문서 |
 | `src/*.mjs` `public/` `desktop/` | 2026년 10월 로컬 서버 도우미(보관) |
 
 고치는 순서와 규칙은 [개발 하네스](docs/engineering/HARNESS.md), 평가와 방향은 [평가와 지향점](docs/engineering/direction.md), 화면 기준은 [디자인 원칙](docs/design/principles.md), AI 비서 기준은 [성공 기준](docs/ai-success-criteria.md), 에이전트 작업 규칙은 [CLAUDE.md](CLAUDE.md)에 있습니다.
 
 실제 그룹웨어 화면의 동작은 둘러보기로 확인되지 않습니다. 출시 전에는 그룹웨어 탭에서 `scripts/live-smoke.browser.js`(읽기 전용)를 돌려 확인합니다.
-
-## 판매 준비 상태
-
-동종 기관 판매를 염두에 둔 문서 초안이 [docs/commercial](docs/commercial/01-readiness-assessment.md)에 있습니다. 더존 이용약관, 기관 정보보안 승인, 법률 검토, 지원 체계는 확인되지 않았고, 확인 전에는 판매하지 않습니다. 저장소에는 라이선스 파일이 없으며 사용 조건은 정해지지 않았습니다([라이선스 초안](docs/commercial/05-license-draft.md)).
 
 ## 보관: 로컬 서버 도우미
 
