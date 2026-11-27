@@ -51,7 +51,7 @@ const seq32 = s => ((s.cards || []).find(c => c.type === 'nav' && c.v) || {v: ''
 
 test('resKindOf: 이름이 먼저, 이름으로 모르면 자원 분류(attr)', () => {
   assert.deepEqual([...DEMO, ...REAL_SHAPE].map(R.resKindOf), ['room', 'room', 'room', 'car', 'car', 'car', 'led', 'led']);
-  assert.equal(R.resKindOf({name: '스타렉스', attr: '공용차량'}), 'car', '이름에 종류 말이 없으면 분류로');
+  assert.equal(R.resKindOf({name: '9인승 1호', attr: '공용차량'}), 'car', '이름에 종류 말이 없으면 분류로');
   assert.equal(R.resKindOf({name: '관용차량', attr: '회의실'}), 'car', '이름이 분류보다 앞선다');
   assert.equal(R.resKindOf({name: '빔프로젝터', attr: '기자재'}), '');
   assert.equal(R.resKindOf(null), '');
@@ -62,7 +62,7 @@ test('C: 장비·소모품 이름은 분류가 회의실·차량이어도 어느
   assert.equal(R.resKindOf({name: '화상회의실', attr: ''}), 'room', '장비 말이 없는 회의실 이름은 그대로');
   assert.equal(R.resKindOf({name: '업무용 승합차', attr: ''}), 'car', '업무용은 장비 말이 아니다');
   // 이름으로 판정한 자원이 분류로만 판정한 자원보다 앞선다
-  assert.deepEqual(R.resPick([{resSeq: '1', name: '스타렉스', attr: '공용차량'}, ...REAL_SHAPE], 'car').of.map(r => r.resSeq), ['5', '1']);
+  assert.deepEqual(R.resPick([{resSeq: '1', name: '9인승 1호', attr: '공용차량'}, ...REAL_SHAPE], 'car').of.map(r => r.resSeq), ['5', '1']);
   assert.deepEqual(R.resPick([...GEAR, ...DEMO], 'room').of.map(r => r.resSeq), ['11', '12', '13'], '장비는 빠지고 2층 회의실(이름)이 다목적홀·상담실 1(분류)보다 앞');
 });
 
@@ -102,13 +102,16 @@ test('resPick: 알려진 종류·좁은 종류 말·그 밖의 말·이름 단�
   assert.equal(R.resPick(list, '승합차').label, '차량');
   assert.deepEqual(R.resPick(list, '카니발').pool, []);
   assert.deepEqual(R.resPick(list, '강당').pool, []);
-  assert.deepEqual(R.resPick(list, 'car', '니로').pool.map(r => r.resSeq), ['5']);
+  // v1.28 보수 규칙: 이름 일부만 겹치는 단서(니로 ↔ 관용차량(니로EV))는 고르지 않는다(도구가 묻는다). 이름의 한 낱말(승용차)은 맞는다.
+  assert.deepEqual(R.resPick(list, 'car', '니로').pool, []); assert.equal(R.resPick(list, 'car', '니로').unsure, true);
+  assert.deepEqual(R.resPick(list, 'car', '승용차').pool.map(r => r.resSeq), ['22']);
   assert.deepEqual(R.resPick(list, 'led', '1층 LED패널(2)').pool.map(r => r.resSeq), ['8']);
   assert.deepEqual(R.resPick(list, 'led', '1층 LED 패널').pool.map(r => r.resSeq), ['7', '8'], '둘 다 맞으면 둘 다 후보');
   // 문장 단서
-  assert.deepEqual(R.resPick(list, 'car', '', '내일 15~16시 니로 예약해줘').pool.map(r => r.resSeq), ['5']);
+  assert.deepEqual(R.resPick(list, 'car', '', '내일 15~16시 니로 예약해줘').pool, []);
+  assert.equal(R.resPick(list, 'car', '', '내일 15~16시 니로 예약해줘').unsure, true);
   assert.deepEqual(R.resPick(list, 'car', '', '승합차로 잡아줘').pool.map(r => r.resSeq), ['21']);
-  assert.equal(R.resPick(list, 'car', '', '니로 말고 승합차').ambiguous, true);
+  assert.deepEqual(R.resPick(list, 'car', '', '니로 말고 승합차').pool, []);
   assert.deepEqual(R.resPick(list, 'room', '', '내일 3시 회의실 예약').pool.length, 3);
   // F: 종류 없이 이름만 오면 전체에서 찾아 그 종류를 따른다
   let p = R.resPick(list, '', '다목적홀');
@@ -120,18 +123,21 @@ test('resPick: 알려진 종류·좁은 종류 말·그 밖의 말·이름 단�
   assert.deepEqual(R.resPick(null, 'car').of, []);
 });
 
-test('현황 조회(32)와 예약 준비(33)는 같은 종류에 같은 자원을 고른다', async () => {
+const NOT_CAR = '회의실 등 차량이 아닌 자원은 여기서 예약을 준비하지 않습니다. 자원 예약 화면에서 예약해 주세요.';
+test('현황 조회(32)와 예약 준비(33)는 같은 종류에 같은 자원을 고른다(축소: 33은 차량만, 다른 종류는 화면 안내)', async () => {
   for (const list of [DEMO, REAL_SHAPE, [...DEMO, ...REAL_SHAPE], [...REAL_SHAPE].reverse(), [...GEAR, ...DEMO, ...REAL_SHAPE], GEAR]) {
     const {status, reserve} = tools(list);
     for (const kind of ['car', 'room', 'led']) {
       const s = await status({kind}), r = await reserve({kind});
       const want = R.resPick(list, kind).of[0];
+      if (kind !== 'car') { assert.equal(r.ok, false); assert.equal(r.text, NOT_CAR); assert.ok(!(r.cards || []).some(c => c.type === 'confirm')); }
       if (!want) {
         assert.equal(r.ok, false, kind); assert.ok(!(r.cards || []).some(c => c.type === 'confirm'));
         if (kind !== 'car') assert.match(s.text, /등록되어 있지 않아/, kind); else assert.equal(s.ok, false);
         continue;
       }
       assert.equal(seq32(s), want.resSeq, `32 ${kind}`);
+      if (kind !== 'car') continue;
       assert.equal(r.data.resSeq, want.resSeq, `33 ${kind}`);
       assert.equal(r.data.resource, want.name, '33은 이름 전체');
       assert.equal(r.data.kind, R.resPick(list, kind).label);
@@ -144,8 +150,20 @@ test('자원 하나하나: 두 도구가 그 자원의 종류로 물었을 때 �
     const kind = R.resKindOf(one), {status, reserve} = tools([one]);
     const s = await status({kind}), r = await reserve({kind});
     assert.equal(seq32(s), one.resSeq, one.name);
-    assert.equal(r.data.resSeq, one.resSeq, one.name);
+    if (kind === 'car') assert.equal(r.data.resSeq, one.resSeq, one.name); else assert.equal(r.text, NOT_CAR, one.name);
   }
+});
+
+test('축소: 차량이 아닌 자원의 예약 말(reserve_ask)은 그 종류 현황에 "여기서 준비하지 않음"과 화면 열기를 붙인다', async () => {
+  for (const [kind, list, want] of [['room', DEMO, '2층 회의실'], ['led', REAL_SHAPE, '1층 LED패널(1)'], ['led', DEMO, '']]) {
+    const s = await tools(list).status({kind, reserve_ask: true});
+    assert.equal(s.text.indexOf(NOT_CAR), 0, kind);
+    if (want) assert.match(s.text, new RegExp(want.replace(/[()]/g, '\\$&')), kind); else assert.match(s.text, /등록되어 있지 않아/);
+    assert.ok((s.cards || []).some(c => c.type === 'nav' && c.view === 'resource'), kind);
+    assert.ok(!(s.cards || []).some(c => c.type === 'confirm'));
+  }
+  // 그냥 현황을 물은 말에는 붙이지 않는다
+  assert.doesNotMatch((await tools(DEMO).status({kind: 'room'})).text, /준비하지 않습니다/);
 });
 
 test('C: 장비만 있으면 32도 33도 회의실·차량으로 답하지 않는다', async () => {

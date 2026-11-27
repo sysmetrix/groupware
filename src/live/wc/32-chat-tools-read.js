@@ -318,6 +318,14 @@
     params: {type: 'object', properties: {date: {type: 'string'}, kind: {type: 'string', enum: ['car', 'room', 'led']}}},
     run: async a => {
       if (typeof allowed === 'function' && !allowed('resource')) return {ok: false, text: '자원 예약 기능이 관리자 설정으로 꺼져 있습니다.'};
+      // v1.28 축소: 차량이 아닌 자원의 예약 말(reserve_ask)은 그 종류 현황만 보이고, 대화에서 예약을 준비하지 않았다고 사실대로 덧붙인다.
+      const r0 = await chatResStatus(a);
+      if (!a.reserve_ask) return r0;
+      const nav = {type: 'nav', label: '자원 예약 화면 열기', view: 'resource'}, cards = r0.cards || [];
+      return {...r0, text: `회의실 등 차량이 아닌 자원은 여기서 예약을 준비하지 않습니다. 자원 예약 화면에서 예약해 주세요. ${r0.text || ''}`.trim(), cards: cards.some(c => c && c.type === 'nav') ? cards : [...cards, nav]};
+    },
+  });
+  async function chatResStatus(a) {
       const iso = chatDateArg(a.date);
       if (!iso) return {ok: false, text: '날짜를 알아보지 못했습니다. 예) 내일, 11/20'};
       const d8 = iso.replace(/-/g, '');
@@ -333,12 +341,11 @@
         const all = await GW.resourceBookings({from: d8, to: d8, resSeqs: [car.resSeq]});
         const day = all.filter(b => R.bookingSpanOnDay(b, d8)).sort((x, y) => x.start.localeCompare(y.start));
         const free = R.freeSlots(day, d8);
-        const nm = car.name.replace(/\(.*$/, '');
+        const nm = car.name; // v1.28: 이름 전체(1층 LED패널(1)·(2)를 구분)
         const text = `${nm} ${chatMd(iso)}: 예약 ${day.length}건${day.length ? '(' + day.map(b => `${b.start.slice(8, 10)}:${b.start.slice(10)}~${b.end.slice(8, 10)}:${b.end.slice(10)}`).join(', ') + ')' : ''}. 비어 있는 시간은 ${free.length ? free.map(f => `${f.start}~${f.end}`).join(', ') : '없습니다'}${free.length ? '입니다' : ''}.`;
         return {ok: true, text, data: {resource: nm, date: iso, bookings: day.length, free: free.map(f => `${f.start}~${f.end}`)}, cards: [{type: 'timeline', title: `${nm} ${chatMd(iso)} 예약`, items: day.map(b => ({from: b.start.slice(8, 10) + ':' + b.start.slice(10), to: b.end.slice(8, 10) + ':' + b.end.slice(10), label: (b.title || '예약') + (b.who ? ' · ' + b.who : '')}))}, {type: 'nav', label: '자원 예약 화면 열기', view: 'resource', v: `${car.resSeq},${d8}`}]};
       } catch (e) { return {ok: false, text: '자원 현황을 읽지 못했습니다: ' + String(e.message || e).slice(0, 80)}; }
-    },
-  });
+  }
 
   chatRegisterTool({
     name: 'open_view', label: '화면 열기', kind: 'read',
