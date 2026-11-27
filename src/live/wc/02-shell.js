@@ -143,7 +143,7 @@
 <button class="hb" data-act="menuNew" title="새 메일·새 기안·근태신청">${ic('plus')}새로 만들기</button>
 <button class="hb icon" data-act="menuBell" id="bell" title="통합알림" aria-label="통합알림" aria-haspopup="dialog" aria-expanded="false">${ic('bell')}</button>
 <button class="hb icon" data-act="menuView" title="더 보기: 화면 모드·글자 크기·사용법·작업 내역·업데이트 내역" aria-label="더 보기" aria-haspopup="menu">${ic('more')}</button>
-<button class="hb back" data-act="close" aria-label="그룹웨어로 돌아가기" title="GW 비서를 접고 원래 그룹웨어 화면으로 (화면 위 가운데 'GW 비서' 버튼이나 Alt+G로 다시 열기)">${ic('back')}그룹웨어로 돌아가기</button></header>
+<button class="hb back" data-act="close" aria-label="그룹웨어로 돌아가기" title="GW 비서를 접고 원래 그룹웨어 화면으로 (화면 오른쪽 아래 'GW 비서' 버튼이나 Alt+G로 다시 열기)">${ic('back')}그룹웨어로 돌아가기</button></header>
 <div class="band" id="band" role="status" aria-live="polite"></div><div class="vh" id="srAnnounce" role="status" aria-live="polite"></div><nav id="nav" aria-label="GW 비서 메뉴"></nav><main id="main" tabindex="-1"></main><div class="split" id="split" role="separator" tabindex="0" aria-orientation="vertical" aria-label="화면 분할 너비 조절" aria-valuemin="360" aria-valuemax="1200" aria-valuenow="560" title="끌거나 좌우 방향키로 오른쪽 창 너비 조절"></div><aside id="pane" aria-label="선택한 항목"></aside><div id="overlay"></div><div id="dpLayer"></div></div>`;
   const $ = sel => root.querySelector(sel);
   const wcEl = $('#wc');
