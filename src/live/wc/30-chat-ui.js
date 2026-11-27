@@ -153,7 +153,7 @@
   HOME_ACTS.chatClear = () => { chatClear(); const st = chatState(); st.logTop = 0; const log = $('#chLog'); if (log) log.scrollTop = 0; const input = $('#chInput'); if (input) { input.value = ''; chatAutosize(input); } chatRefresh(); };
   HOME_ACTS.chatConfirm = (el, v, e) => chatConfirm(v, e);
   HOME_ACTS.chatCancel = (el, v) => chatCancel(v);
-  HOME_ACTS.chatSetupAi = () => { if (typeof openAi === 'function') openAi(); };
+  HOME_ACTS.chatSetupAi = () => { if (typeof openAi === 'function') openAi(true); };
   HOME_ACTS.chatFocus = () => chatFocusInput();
   HOME_ACTS.chatOpenItem = (el, v) => { if (v && go('today')) selectAction(v); };
   // 대화 카드의 원문 링크: 그룹웨어 같은 출처의 주소만 연다(저장된 대화 기록이 바뀌어도 다른 곳으로 가지 않게).

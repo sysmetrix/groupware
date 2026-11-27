@@ -12,7 +12,7 @@
   // 채팅 엔진이 쓰는 연결 상태: 키가 형식에 맞고 관리자 정책이 허용할 때만 AI 모드
   const aiReady = () => { const k = aiCfg().key; return !!k && R.isGeminiKey(k) && allowed('aiAssistant'); };
   const aiModelName = () => aiCfg().model || 'gemini-flash-latest';
-  const aiShell = body => `<div class="modal"><div class="dlg" data-stop="1" style="width:min(780px,96vw);padding:24px 26px;max-height:90vh;overflow:auto" role="dialog" aria-label="AI 도우미"><button class="btn icon ghost x" data-act="aiClose" aria-label="닫기">${ic('x')}</button>${body}</div></div>`;
+  const aiShell = (body, label = 'AI 도우미') => `<div class="modal"><div class="dlg" data-stop="1" style="width:min(780px,96vw);padding:24px 26px;max-height:90vh;overflow:auto" role="dialog" aria-label="${esc(label)}"><button class="btn icon ghost x" data-act="aiClose" aria-label="닫기">${ic('x')}</button>${body}</div></div>`;
   const aiRich = s => esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/^[ \t]*[*-] /gm, '• ').replace(/\n/g, '<br>');
 
   function aiContext() {
@@ -27,13 +27,19 @@
   }
   const STATE_LABEL_OF = x => ({overdue: '기한 지남', urgent: '급함', todo: '할 일', check: '확인', confirm: '제출 확인', wait: '기다리는 중', verify: '확인'}[stateOf(x)] || stateOf(x));
 
-  function openAi() {
+  function openAi(settingsOnly = false) {
     if (gated('aiAssistant')) return;
     S.paletteOpen = true;
+    S.aiSettingsOnly = !!settingsOnly;
     const c = aiCfg();
     if (!c.key) { aiSetup(); return; }
+    const ctxHtml = `<details style="margin-top:10px"><summary class="muted" style="cursor:pointer">AI에게 보내는 내용 보기</summary><pre style="white-space:pre-wrap;font:inherit;font-size:12.5px;margin:6px 0 0">${esc(aiContext())}</pre><div class="muted" style="font-size:12px">업무 제목·상태·마감과 직원 휴가 구분만 보냅니다. 메일 본문은 대화에서 메일 정리·AI 답장 초안을 고를 때 그 한 통만 가려서 보내며, 계좌번호·비밀번호는 보내지 않습니다.</div></details>`;
+    if (settingsOnly) {
+      $('#overlay').innerHTML = aiShell(`<div id="aiSettingsBox"><h2 style="margin:0 0 4px;font-size:18px">AI 설정</h2><div class="muted">AI 연결됨 · 모델: <b>${esc(c.model || 'gemini-flash-latest')}</b>${c.sessionOnly ? ' · 세션 전용' : ''}</div>${cuBodyModeHtml()}${ctxHtml}<div class="acts"><button class="btn sm ghost" data-act="aiSetup">키 바꾸기</button><button class="btn sm ghost danger" data-act="aiForget">키 지우기</button><button class="btn sm ghost" data-act="aiClose">닫기</button></div></div>`, 'AI 설정');
+      return;
+    }
     $('#overlay').innerHTML = aiShell(`
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px"><div class="cmd-logo">${ic('doc')}</div><div><h2 style="margin:0;font-size:18px">AI 도우미</h2><div class="muted">내 업무 요약을 보고 답합니다. 상신·결재 같은 실행은 하지 않고 제안만 합니다.</div></div></div>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px"><div class="cmd-logo">${ic('doc')}</div><div><h2 style="margin:0;font-size:18px">AI 도우미</h2><div class="muted">내 업무 요약을 보고 답합니다(실행 없이 제안만). 일정·예약·근태·예산 조회와 신청 준비는 홈의 ‘GW 비서에게 묻기’에서 바로 할 수 있습니다.</div></div></div>
       <div class="acts" style="margin-top:0">
         <button class="btn" data-act="aiAsk" data-q="오늘 무엇부터 처리해야 하는지 우선순위를 정하고 이유를 한 줄씩 설명해 주세요.">오늘 우선순위 정리</button>
         <button class="btn" data-act="aiAsk" data-q="마감이 가까운 일과 놓치기 쉬운 일을 짚어 주세요.">마감·놓친 일 점검</button>
@@ -42,7 +48,7 @@
       </div>
       <div style="display:flex;gap:8px;margin-top:12px"><input id="aiQ" class="inp" style="flex:1;height:40px" placeholder="무엇이든 물어보세요 (Enter로 보내기 · 앞 대화를 이어서 답합니다)" aria-label="AI에게 질문"><button class="btn primary" data-act="aiAsk">물어보기</button></div>
       <div id="aiOut" class="box" style="margin-top:14px;min-height:80px;line-height:1.8"><span class="muted">질문을 고르거나 입력하세요.</span></div>
-      <details style="margin-top:10px"><summary class="muted" style="cursor:pointer">AI에게 보내는 내용 보기</summary><pre style="white-space:pre-wrap;font:inherit;font-size:12.5px;margin:6px 0 0">${esc(aiContext())}</pre><div class="muted" style="font-size:12px">이 창은 업무 제목·상태·마감과 직원 휴가 구분만 보냅니다. 메일 본문은 대화에서 메일 정리·AI 답장 초안을 고를 때 그 한 통만 보내며, 아래에서 끌 수 있습니다. 계좌번호·비밀번호는 보내지 않습니다.</div></details>
+      ${ctxHtml}
       ${cuBodyModeHtml()}
       <div class="acts"><button class="btn sm ghost" data-act="aiSetup">키 바꾸기</button><button class="btn sm ghost danger" data-act="aiForget">키 지우기</button></div>`);
   }

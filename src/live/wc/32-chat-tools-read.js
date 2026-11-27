@@ -315,34 +315,39 @@
   chatRegisterTool({
     name: 'get_resource_status', label: '자원 예약 현황', kind: 'read',
     description: '공용차량(자원)의 해당 날짜 예약 현황과 09~18시 빈 시간.',
-    params: {type: 'object', properties: {date: {type: 'string'}, kind: {type: 'string', enum: ['car', 'room', 'led']}}},
-    run: async a => {
+    params: {type: 'object', properties: {date: {type: 'string'}, kind: {type: 'string', enum: ['car', 'room', 'led']}, resource: {type: 'string'}}},
+    run: async (a, ctx) => {
       if (typeof allowed === 'function' && !allowed('resource')) return {ok: false, text: '자원 예약 기능이 관리자 설정으로 꺼져 있습니다.'};
       // v1.28 축소: 차량이 아닌 자원의 예약 말(reserve_ask)은 그 종류 현황만 보이고, 대화에서 예약을 준비하지 않았다고 사실대로 덧붙인다.
-      const r0 = await chatResStatus(a);
+      const r0 = await chatResStatus(a, ctx);
       if (!a.reserve_ask) return r0;
       const nav = {type: 'nav', label: '자원 예약 화면 열기', view: 'resource'}, cards = r0.cards || [];
       return {...r0, text: `회의실 등 차량이 아닌 자원은 여기서 예약을 준비하지 않습니다. 자원 예약 화면에서 예약해 주세요. ${r0.text || ''}`.trim(), cards: cards.some(c => c && c.type === 'nav') ? cards : [...cards, nav]};
     },
   });
-  async function chatResStatus(a) {
+  async function chatResStatus(a, ctx) {
       const iso = chatDateArg(a.date);
       if (!iso) return {ok: false, text: '날짜를 알아보지 못했습니다. 예) 내일, 11/20'};
       const d8 = iso.replace(/-/g, '');
       try {
         const list = ((resState().list) || await GW.resourceList()).filter(r => r.useYn !== 'N');
-        // 차량이 없을 때 회의실 등 첫 번째 자원을 차량으로 오인하지 않는다.
-        // v0.93.0: 회의실·LED처럼 다른 종류를 물으면 그 자원을 찾고, 그룹웨어에 없으면 없다고 답한다(차량으로 대신 답하지 않음)
-        // v1.28: 종류 판정은 예약 준비(reserve_vehicle)와 같은 R.resPick(이름, 이름으로 모르면 자원 분류)을 쓴다.
-        const pk = R.resPick(list, a.kind === 'room' || a.kind === 'led' ? a.kind : 'car');
-        if (pk.kind !== 'car' && !pk.of.length) return {ok: true, text: `그룹웨어 자원 예약에는 ${pk.label}이 등록되어 있지 않아 비어 있는지 확인할 수 없습니다. 등록된 자원: ${list.map(r => r.name).join(', ') || '없음'}.`, data: {count: 0, resources: list.map(r => r.name)}, cards: [{type: 'nav', label: '자원 예약 화면 열기', view: 'resource'}]};
-        const car = pk.of[0];
-        if (!car) return {ok: false, text: '자원 목록에서 차량을 찾지 못했습니다. 자원 예약 화면에서 직접 확인해 주세요.', cards: [{type: 'nav', label: '자원 예약 화면 열기', view: 'resource'}]};
-        const all = await GW.resourceBookings({from: d8, to: d8, resSeqs: [car.resSeq]});
-        const day = all.filter(b => R.bookingSpanOnDay(b, d8)).sort((x, y) => x.start.localeCompare(y.start));
-        const free = R.freeSlots(day, d8);
-        const nm = car.name; // v1.28: 이름 전체(1층 LED패널(1)·(2)를 구분)
-        const text = `${nm} ${chatMd(iso)}: 예약 ${day.length}건${day.length ? '(' + day.map(b => `${b.start.slice(8, 10)}:${b.start.slice(10)}~${b.end.slice(8, 10)}:${b.end.slice(10)}`).join(', ') + ')' : ''}. 비어 있는 시간은 ${free.length ? free.map(f => `${f.start}~${f.end}`).join(', ') : '없습니다'}${free.length ? '입니다' : ''}.`;
+        const kindArg = a.kind === 'room' || a.kind === 'led' ? a.kind : 'car', pk0 = R.resPick(list, kindArg);
+        if (pk0.kind !== 'car' && !pk0.of.length) return {ok: true, text: `그룹웨어 자원 예약에는 ${pk0.label}이 등록되어 있지 않아 비어 있는지 확인할 수 없습니다. 등록된 자원: ${list.map(r => r.name).join(', ') || '없음'}.`, data: {count: 0, resources: list.map(r => r.name)}, cards: [{type: 'nav', label: '자원 예약 화면 열기', view: 'resource'}]};
+        if (!pk0.of[0]) return {ok: false, text: '자원 목록에서 차량을 찾지 못했습니다. 자원 예약 화면에서 직접 확인해 주세요.', cards: [{type: 'nav', label: '자원 예약 화면 열기', view: 'resource'}]};
+        const ut = String((ctx && ctx.userText) || ''), fl = s => String(s || '').replace(/\s+/g, '').toLowerCase();
+        const exact = ut ? pk0.of.filter(r => fl(ut).includes(fl(r.name))) : [];
+        const rx = !a.resource && exact.length !== 1 && ut && R.chatResourceAsk ? R.chatResourceAsk(ut) : null;
+        const hint = a.resource || (exact.length === 1 ? exact[0].name : rx && !rx.neg && (!rx.kind || rx.kind === kindArg) ? rx.resource : '');
+        const pk = hint || ut ? R.resPick(list, kindArg, hint, rx ? rx.keep : ut, rx && rx.drop) : pk0;
+        const one = pk.pool.length === 1 && pk.pool.length < pk0.of.length, car = one ? pk.pool[0] : pk0.of[0], targets = one ? [car] : pk0.of.slice(0, 6);
+        let all = await GW.resourceBookings({from: d8, to: d8, resSeqs: targets.map(r => r.resSeq)}), noSeq = false;
+        if (targets.length > 1 && all.some(b => !b.resSeq && R.bookingSpanOnDay(b, d8))) { all = await GW.resourceBookings({from: d8, to: d8, resSeqs: [car.resSeq]}); noSeq = true; }
+        const shown = noSeq ? [car] : targets;
+        const ofRes = r => all.filter(b => (!b.resSeq ? shown.length === 1 : String(b.resSeq) === String(r.resSeq)) && R.bookingSpanOnDay(b, d8)).sort((x, y) => x.start.localeCompare(y.start));
+        const fmt = (r, d, head) => { const f = R.freeSlots(d, d8); return `${head ? `${r.name} ${chatMd(iso)}` : `• ${r.name}`}: 예약 ${d.length}건${d.length ? '(' + d.map(b => `${b.start.slice(8, 10)}:${b.start.slice(10)}~${b.end.slice(8, 10)}:${b.end.slice(10)}`).join(', ') + ')' : ''}. 비어 있는 시간은 ${f.length ? f.map(x => `${x.start}~${x.end}`).join(', ') + '입니다' : '없습니다'}.`; };
+        const day = ofRes(car), free = R.freeSlots(day, d8), nm = car.name, rest = !one ? pk0.of.length - shown.length : 0;
+        const tail = noSeq ? [`나머지 ${rest}개 ${pk0.label}(${pk0.of.slice(1, 6).map(r => r.name).join(', ')})은 예약 구분 정보가 없어 자원 예약 화면에서 확인해 주세요.`] : rest > 0 ? [`외 ${rest}개 ${pk0.label}은 자원 예약 화면에서 확인해 주세요.`] : [];
+        const text = [fmt(car, day, true), ...shown.slice(1).map(r => fmt(r, ofRes(r), false)), ...tail].join('\n');
         return {ok: true, text, data: {resource: nm, date: iso, bookings: day.length, free: free.map(f => `${f.start}~${f.end}`)}, cards: [{type: 'timeline', title: `${nm} ${chatMd(iso)} 예약`, items: day.map(b => ({from: b.start.slice(8, 10) + ':' + b.start.slice(10), to: b.end.slice(8, 10) + ':' + b.end.slice(10), label: (b.title || '예약') + (b.who ? ' · ' + b.who : '')}))}, {type: 'nav', label: '자원 예약 화면 열기', view: 'resource', v: `${car.resSeq},${d8}`}]};
       } catch (e) { return {ok: false, text: '자원 현황을 읽지 못했습니다: ' + String(e.message || e).slice(0, 80)}; }
   }

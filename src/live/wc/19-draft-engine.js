@@ -94,8 +94,7 @@
     const allDocs = Object.values(patLoad().docs);
     const docs = allDocs.filter(d => d.binder && !/^접수문서/.test(d.binder) && /^일반기안문/.test(d.form || ''));
     const plans = docs.filter(d => /계획(\(안\)|\(변경\))?$/.test(String(d.title).trim()) && !/결과/.test(d.title));
-    const reportedNos = new Set();
-    const reportedCores = new Set();
+    const reportedNos = new Set(), reportedCores = new Set();
     const core = t => R.patternTokens(R.planToResultTitle(t).replace(/\s*(운영|참가)?\s*결과보고.*$/, '')).join(' ');
     for (const d of docs) {
       if (!/결과보고/.test(d.title)) continue;
@@ -115,69 +114,29 @@
 
   async function openResultPlanPicker() {
     if (gated('draftResult')) return;
-    closeOverlay();
-    S.paletteOpen = true;
-    $('#overlay').innerHTML = `
-      <div class="modal" data-act="closeOverlay">
-        <div class="dlg" data-stop="1" style="width:min(720px,94vw);padding:22px 24px" role="dialog" aria-label="결과보고 대상 계획서 선택">
-          <button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button>
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
-            <div class="cmd-logo">${ic('doc')}</div>
-            <div>
-              <h2 style="margin:0;font-size:18px">어떤 계획서의 결과보고를 작성할까요?</h2>
-              <div class="muted">조회한 문서 중 결과보고의 참조 문서번호가 일치한 계획서는 제외했습니다. 미연결 보고서가 있을 수 있으니 작성 전에 확인하세요. 선택하면 그 계획서의 기록물철·본문·참조문서를 그대로 이어받습니다.</div>
-            </div>
-          </div>
-          <div id="planProgress" class="plan-progress" role="status" aria-live="polite">
-            <div class="plan-progress-head"><span class="plan-progress-icon">${ic('doc')}</span><div><b id="planProgressTitle">문서 목록을 확인하고 있습니다</b><div id="planProgressDetail">저장된 결과를 먼저 보여 드리고 새 문서를 살펴봅니다.</div></div><span id="planElapsed" class="plan-elapsed">0초 경과</span></div>
-            <div class="plan-progress-track" role="progressbar" aria-label="문서 분석 진행 상태"><div id="planProgressFill" class="plan-progress-fill indeterminate"></div></div>
-            <div class="plan-progress-foot"><span id="planProgressCount">대상 문서 확인 중</span><span>문서별 처리 시간은 달라질 수 있습니다</span></div>
-          </div>
-          <div id="planPickerList" style="max-height:380px;overflow:auto;display:flex;flex-direction:column;gap:8px"></div>
-          <div class="acts" style="margin-top:16px;justify-content:flex-end;border-top:1px solid var(--line);padding-top:12px">
-            <button class="btn sm ghost" data-act="closeHelp">닫기 (Esc)</button>
-          </div>
-        </div>
-      </div>`;
-    const el = $('#planPickerList');
-    const progressEl = $('#planProgress');
-    const started = Date.now();
+    closeOverlay(); S.paletteOpen = true;
+    $('#overlay').innerHTML = `<div class="modal" data-act="closeOverlay"><div class="dlg" data-stop="1" style="width:min(720px,94vw);padding:22px 24px" role="dialog" aria-label="결과보고 대상 계획서 선택"><button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button><div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><div class="cmd-logo">${ic('doc')}</div><div><h2 style="margin:0;font-size:18px">어떤 계획서의 결과보고를 작성할까요?</h2><div class="muted">조회한 문서 중 결과보고의 참조 문서번호가 일치한 계획서는 제외했습니다. 미연결 보고서가 있을 수 있으니 작성 전에 확인하세요. 선택하면 그 계획서의 기록물철·본문·참조문서를 그대로 이어받습니다.</div></div></div><div id="planProgress" class="plan-progress" role="status" aria-live="polite"><div class="plan-progress-head"><span class="plan-progress-icon">${ic('doc')}</span><div><b id="planProgressTitle">문서 목록을 확인하고 있습니다</b><div id="planProgressDetail">저장된 결과를 먼저 보여 드리고 새 문서를 살펴봅니다.</div></div><span id="planElapsed" class="plan-elapsed">0초 경과</span></div><div class="plan-progress-track" role="progressbar" aria-label="문서 분석 진행 상태"><div id="planProgressFill" class="plan-progress-fill indeterminate"></div></div><div class="plan-progress-foot"><span id="planProgressCount">대상 문서 확인 중</span><span>문서별 처리 시간은 달라질 수 있습니다</span></div></div><div id="planPickerList" style="max-height:380px;overflow:auto;display:flex;flex-direction:column;gap:8px"></div><div class="acts" style="margin-top:16px;justify-content:flex-end;border-top:1px solid var(--line);padding-top:12px"><button class="btn sm ghost" data-act="closeHelp">닫기 (Esc)</button></div></div></div>`;
+    const el = $('#planPickerList'), progressEl = $('#planProgress'), started = Date.now();
     const current = () => $('#planPickerList') === el && $('#planProgress') === progressEl;
     function renderPlans(lr = {}, loading = false) {
       if (!current()) return;
       const pending = getPendingPlansList(lr);
-      if (!pending.length) { el.innerHTML = loading ? '<div class="plan-empty">저장된 대상이 없습니다. 새 문서를 확인하고 있습니다.</div>' : `<div class="empty"><div class="ill">${ic('check')}</div><b>현재 확인한 문서에서 대상을 찾지 못했습니다</b>학습한 ${pending.learnedCount || 0}건 기준입니다.${pending.learnErrors ? ` 일부 문서 ${pending.learnErrors}건은 읽지 못했습니다.` : ''}${pending.learnLeft ? ` 아직 분석하지 않은 문서 ${pending.learnLeft}건이 있습니다.` : ''}</div>`; return; }
-      const scrollTop = el.scrollTop;
-      const active = el.getRootNode().activeElement;
+      if (!pending.length) { el.innerHTML = loading ? '<div class="plan-empty">저장된 대상이 없습니다. 새 문서를 확인하고 있습니다.</div>' : lr.errMsg ? `<div class="plan-empty">문서 목록을 확인하지 못해 저장된 ${pending.learnedCount || 0}건만 살펴보았습니다.</div>` : `<div class="empty"><div class="ill">${ic('check')}</div><b>현재 확인한 문서에서 대상을 찾지 못했습니다</b>학습한 ${pending.learnedCount || 0}건 기준입니다.${pending.learnErrors ? ` 일부 문서 ${pending.learnErrors}건은 읽지 못했습니다.` : ''}${pending.learnLeft ? ` 아직 분석하지 않은 문서 ${pending.learnLeft}건이 있습니다.` : ''}</div>`; return; }
+      const scrollTop = el.scrollTop, active = el.getRootNode().activeElement;
       const focusedPlan = el.contains(active) ? active.closest('[data-id]')?.dataset.id : null;
-      el.innerHTML = `<p class="plan-list-note">${loading ? '저장된 결과를 먼저 표시합니다. 추가 분석 중 결과가 바뀔 수 있으니 선택 전 확인하세요.' : `확인한 ${pending.learnedCount}건 기준${pending.learnLeft ? ` · 미분석 ${pending.learnLeft}건` : ''} · 결과보고 유무는 원문에서 확인하세요.`}</p>` + (pending.learnErrors ? `<p role="status">일부 문서를 조회하지 못했습니다. 결과보고 유무를 원문에서 확인하세요.</p>` : '') + pending.map(p => `
-      <div class="cmd-preset" role="button" tabindex="0" data-act="selectPlanForResult" data-id="${esc(p.id)}" style="display:flex;align-items:flex-start;gap:12px">
-        <div style="flex:1;min-width:0">
-          <div style="font-weight:700;font-size:14.5px;color:var(--fg)">${esc(p.title)}${p.similarReport ? ' · 유사한 결과보고 있음 (연결 확인 필요)' : ''}</div>
-          <div class="muted" style="font-size:12px;margin-top:4px">${esc(p.docNo || '-')} · 시행 ${esc((p.runday || '').replace(/^.*\((.*)\)$/, '$1') || String(p.date || '').slice(0, 10))} · 기록물철 ${esc(p.binder || '-')}</div>
-        </div>
-        <button class="btn sm primary" style="flex:0 0 auto">결과보고 작성</button>
-      </div>`).join('');
+      el.innerHTML = `<p class="plan-list-note">${loading ? '저장된 결과를 먼저 표시합니다. 추가 분석 중 결과가 바뀔 수 있으니 선택 전 확인하세요.' : `확인한 ${pending.learnedCount}건 기준${pending.learnLeft ? ` · 미분석 ${pending.learnLeft}건` : ''} · 결과보고 유무는 원문에서 확인하세요.`}</p>` + (pending.learnErrors ? `<p role="status">일부 문서를 조회하지 못했습니다. 결과보고 유무를 원문에서 확인하세요.</p>` : '') + pending.map(p => `<div class="cmd-preset" role="button" tabindex="0" data-act="selectPlanForResult" data-id="${esc(p.id)}" style="display:flex;align-items:flex-start;gap:12px"><div style="flex:1;min-width:0"><div style="font-weight:700;font-size:14.5px;color:var(--fg)">${esc(p.title)}${p.similarReport ? ' · 유사한 결과보고 있음 (연결 확인 필요)' : ''}</div><div class="muted" style="font-size:12px;margin-top:4px">${esc(p.docNo || '-')} · 시행 ${esc((p.runday || '').replace(/^.*\((.*)\)$/, '$1') || String(p.date || '').slice(0, 10))} · 기록물철 ${esc(p.binder || '-')}</div></div><button class="btn sm primary" style="flex:0 0 auto">결과보고 작성</button></div>`).join('');
       el.scrollTop = scrollTop;
       if (focusedPlan) [...el.querySelectorAll('[data-id]')].find(item => item.dataset.id === focusedPlan)?.focus({preventScroll: true});
     }
     function updateProgress(p) {
-      if (!current() || !p) return;
-      const title = progressEl.querySelector('#planProgressTitle');
-      const detail = progressEl.querySelector('#planProgressDetail');
-      const count = progressEl.querySelector('#planProgressCount');
-      const fill = progressEl.querySelector('#planProgressFill');
-      const track = progressEl.querySelector('[role="progressbar"]');
-      if (p.phase === 'listing') return;
-      const completed = p.done + p.errors;
-      title.textContent = '새 문서를 분석하고 있습니다';
-      detail.textContent = p.errors ? `읽지 못한 문서 ${p.errors}건은 제외하고 계속 확인합니다.` : '확인한 문서가 추가되면 아래 목록에 반영됩니다.';
-      const elapsed = (Date.now() - started) / 1000;
-      const remaining = p.total - completed;
+      if (!current() || !p || p.phase === 'listing') return;
+      const completed = p.done + p.errors, elapsed = (Date.now() - started) / 1000, remaining = p.total - completed;
       const estimate = completed >= 3 && remaining > 0 ? ` · 약 ${Math.max(1, Math.ceil(elapsed * remaining / completed))}초 남음 (추정)` : '';
-      count.textContent = `${completed} / ${p.total}건 처리${p.errors ? ` · 실패 ${p.errors}건` : ''}${estimate}`;
-      fill.classList.remove('indeterminate');
-      fill.style.width = `${p.total ? Math.round(completed / p.total * 100) : 100}%`;
+      progressEl.querySelector('#planProgressTitle').textContent = '새 문서를 분석하고 있습니다';
+      progressEl.querySelector('#planProgressDetail').textContent = p.errors ? `읽지 못한 문서 ${p.errors}건은 제외하고 계속 확인합니다.` : '확인한 문서가 추가되면 아래 목록에 반영됩니다.';
+      progressEl.querySelector('#planProgressCount').textContent = `${completed} / ${p.total}건 처리${p.errors ? ` · 실패 ${p.errors}건` : ''}${estimate}`;
+      const fill = progressEl.querySelector('#planProgressFill'), track = progressEl.querySelector('[role="progressbar"]');
+      fill.classList.remove('indeterminate'); fill.style.width = `${p.total ? Math.round(completed / p.total * 100) : 100}%`;
       track.setAttribute('aria-valuemin', '0'); track.setAttribute('aria-valuemax', String(p.total || 1)); track.setAttribute('aria-valuenow', String(completed));
       renderPlans(p, true);
     }
@@ -198,8 +157,8 @@
     progressEl.querySelector('#planProgressTitle').textContent = result.errMsg ? '문서 목록을 확인하지 못했습니다' : result.errors ? '문서 확인을 마쳤습니다 · 일부 실패' : '문서 확인을 마쳤습니다';
     progressEl.querySelector('#planProgressDetail').textContent = result.errMsg ? '문서 목록을 불러오지 못했습니다. 저장된 결과만 표시합니다.' : '확인 범위와 결과보고 연결 여부를 확인한 뒤 선택하세요.';
     progressEl.querySelector('#planProgressCount').textContent = `${result.done || 0}건 확인${result.errors ? ` · 실패 ${result.errors}건` : ''}${result.left ? ` · 미분석 ${result.left}건` : ''}`;
-    const fill = progressEl.querySelector('#planProgressFill'); fill.classList.remove('indeterminate');
-    const track = progressEl.querySelector('[role="progressbar"]');
+    const fill = progressEl.querySelector('#planProgressFill'), track = progressEl.querySelector('[role="progressbar"]');
+    fill.classList.remove('indeterminate');
     if (result.errMsg) { fill.style.width = '0%'; track.removeAttribute('aria-valuenow'); }
     track.setAttribute('aria-label', result.errMsg ? '문서 확인 실패' : '이번 문서 확인 종료');
     renderPlans(result, false);
@@ -525,6 +484,10 @@
     const bodyFilled = !!(bodyStep && bodyStep.ok); // 본문을 실제로 넣고 다시 읽어 일치한 경우만
     const frameOnly = '초안 틀만 입력했습니다. 본문 사실(일시·장소·인원·금액)은 직접 확인하세요.';
     if (!got) notes = []; // 넣은 값이 없으면 본문·틀을 이어받았다는 안내도 보이지 않는다
+    else {
+      if (bodyStep && !bodyStep.ok) notes = notes.filter(n => !/본문|서식을\s*이어받|이어받았|그대로\s*가져왔|붙임\s*파일명|항목명과\s*순서|결과보고\s*순서|예산과목은|틀\s*문서\s*값|1번\s*관련\s*문서번호/.test(n));
+      if (steps.some(s => s.name === '기록물철' && !s.ok)) notes = notes.filter(n => !/기록물철은/.test(n));
+    }
     const head = !got ? (fill.length ? '자동 기입을 확인하지 못했습니다' : '자동 기입하지 못했습니다') : bad ? '자동 기입 결과 (확인이 필요한 항목이 있습니다)' : bodyFilled ? '자동 기입 완료 · 상신 전 확인 단계' : '초안 틀만 입력했습니다';
     const summary = !got ? (fill.length ? '기안에 채운 칸을 확인하지 못했습니다. 화면을 확인하세요.' : '기안을 채우지 못했습니다.') : bad ? `${got}/${fill.length}개 항목 자동 기입, ${bad}개는 직접 확인이 필요합니다.` : bodyFilled ? `${got}개 항목을 지난 결재문서 패턴대로 기입하고 다시 읽어 확인했습니다.` : `${got}개 항목(본문 제외)을 기입했습니다. ${frameOnly}`;
     const rec = logActionRecord({command: title, type: '기안', target: title, summary, steps: steps.map(s => `${s.ok ? '✓' : '✗'} ${s.name}: ${s.detail}`), status: !got ? 'error' : bad ? 'partial' : 'success', verified: !bad, details: notes.join(' / ')});

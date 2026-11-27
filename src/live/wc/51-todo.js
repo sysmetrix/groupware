@@ -65,6 +65,8 @@
   const todoNorm = x => { const t = R.tdFromGw(x); if (!t.mine || t.project) { t.meta = {}; t.readonly = true; } return t; };
   const todoFind = id => (TD.list || []).find(t => t.id === id);
   const todoErr = e => { const m = String((e && e.message) || e || ''); return m.length > 120 ? m.slice(0, 120) + '…' : m; };
+  const todoFail = (e, h) => (e && e.code === 'UNKNOWN' ? '통신 오류 또는 응답 지연으로 반영됐는지 확인하지 못했습니다. 새로 읽은 목록을 먼저 확인해 주세요.' : `${h}: ${todoErr(e)}`);
+  const todoSubErr = async (e, h) => { if (e && e.code === 'UNKNOWN') await todoLoad({force: true}); toast(todoFail(e, h)); };
   const todoYmd = iso => String(iso || '').replace(/-/g, '');
 
   // 날짜 칸은 모든 화면이 함께 쓰는 날짜 고르기(57번 조각)를 쓴다. 값은 ISO, 버튼에는 날짜와 요일.
@@ -80,11 +82,12 @@
     if (!c.ok) return {ok: false, text: `메모와 정보가 너무 깁니다(${c.length}자, 1,500자까지).`};
     try {
       const r = await GW.todoCreate({title, due: todoYmd(due), start: todoYmd(start), contents: c.text, important, importance, dday});
-      let subFail = 0;
-      for (const s of checklist.filter(Boolean).slice(0, 30)) { try { await GW.todoCreate({title: s, parent: r.id}); } catch (e) { subFail++; logError('todo.sub', e.message); } }
+      let subFail = 0, subUnk = 0;
+      for (const s of checklist.filter(Boolean).slice(0, 30)) { try { await GW.todoCreate({title: s, parent: r.id}); } catch (e) { if (e && e.code === 'UNKNOWN') subUnk++; else subFail++; logError('todo.sub', e.message); } }
       await todoLoad({force: true});
-      return {ok: true, id: r.id, subFail, text: subFail ? `만들었지만 체크리스트 ${subFail}줄은 저장하지 못했습니다.` : ''};
-    } catch (e) { logError('todo.create', e.message); if (e && e.code === 'UNKNOWN') { todoLoad({force: true}); return {ok: false, text: '응답이 늦어 저장됐는지 확인하지 못했습니다. 목록을 새로 읽어 확인한 뒤 필요하면 다시 추가하세요.'}; } return {ok: false, text: '할 일을 그룹웨어에 저장하지 못했습니다: ' + todoErr(e)}; }
+      const subMsg = [subFail && `체크리스트 ${subFail}줄은 저장하지 못했습니다`, subUnk && `체크리스트 ${subUnk}줄은 반영 여부를 확인하지 못했습니다(목록에서 먼저 확인)`].filter(Boolean);
+      return {ok: true, id: r.id, subFail, subUnk, text: subMsg.length ? `만들었지만 ${subMsg.join(', ')}.` : ''};
+    } catch (e) { logError('todo.create', e.message); if (e && e.code === 'UNKNOWN') { todoLoad({force: true}); return {ok: false, text: '통신 오류 또는 응답 지연으로 저장됐는지 확인하지 못했습니다. 목록을 새로 읽어 확인한 뒤 필요하면 다시 추가하세요.'}; } return {ok: false, text: '할 일을 그룹웨어에 저장하지 못했습니다: ' + todoErr(e)}; }
   }
   // 고치기. 중요도·진행률은 그룹웨어 화면처럼 전용 호출로 따로 저장한다(첨부가 있는 ToDo·받은 ToDo도 된다).
   async function todoSave(id, {title, due, start, important, importance, rate, dday, memo, meta} = {}) {
@@ -102,7 +105,7 @@
         if (rateChg) await GW.todoSetProgress(id, Number(rate));
         if (impChg || rateChg) await todoLoad({force: true});
         return {ok: true};
-      } catch (e) { logError('todo.save', e.message); await todoLoad({force: true}); return {ok: false, text: '그룹웨어에 저장하지 못했습니다: ' + todoErr(e)}; }
+      } catch (e) { logError('todo.save', e.message); await todoLoad({force: true}); return {ok: false, text: todoFail(e, '그룹웨어에 저장하지 못했습니다')}; }
     }
     if ((memo !== undefined || meta !== undefined) && t.broken) return {ok: false, text: '그룹웨어에서 GW 비서 정보 줄이 바뀌어 메모·반복·예산을 고칠 수 없습니다. 그룹웨어에서 내용 칸을 확인해 주세요.'};
     const patch = {};
@@ -117,7 +120,7 @@
       patch.contents = c.text;
     }
     try { await GW.todoUpdate(id, patch, patch.contents !== undefined ? {base: t.contents} : {}); if (rateChg) await GW.todoSetProgress(id, Number(rate)); await todoLoad({force: true}); return {ok: true}; }
-    catch (e) { logError('todo.save', e.message); await todoLoad({force: true}); return {ok: false, conflict: e && e.code === 'CONFLICT', text: e && e.code === 'CONFLICT' ? '그 사이 다른 PC나 모바일에서 이 할 일이 바뀌었습니다. 새로 읽은 내용을 확인하고 다시 고쳐 주세요.' : '그룹웨어에 저장하지 못했습니다: ' + todoErr(e)}; }
+    catch (e) { logError('todo.save', e.message); await todoLoad({force: true}); return {ok: false, conflict: e && e.code === 'CONFLICT', text: e && e.code === 'CONFLICT' ? '그 사이 다른 PC나 모바일에서 이 할 일이 바뀌었습니다. 새로 읽은 내용을 확인하고 다시 고쳐 주세요.' : todoFail(e, '그룹웨어에 저장하지 못했습니다')}; }
   }
   async function todoToggle(id, done) {
     const t = todoFind(id);
@@ -129,7 +132,7 @@
       await GW.todoSetDone(id, want);
       await todoLoad({force: true});
       return {ok: true, done: want};
-    } catch (e) { logError('todo.toggle', e.message); await todoLoad({force: true}); return {ok: false, text: '완료 표시를 저장하지 못했습니다: ' + todoErr(e)}; }
+    } catch (e) { logError('todo.toggle', e.message); await todoLoad({force: true}); return {ok: false, text: todoFail(e, '완료 표시를 저장하지 못했습니다')}; }
   }
   async function todoRemove(id) {
     const t = todoFind(id);
@@ -139,7 +142,7 @@
       if (TD.sel === id) { TD.sel = ''; TD.dirty = false; }
       await todoLoad({force: true});
       return {ok: true};
-    } catch (e) { logError('todo.delete', e.message); await todoLoad({force: true}); return {ok: false, text: '지우지 못했습니다: ' + todoErr(e)}; }
+    } catch (e) { logError('todo.delete', e.message); await todoLoad({force: true}); return {ok: false, text: todoFail(e, '지우지 못했습니다')}; }
   }
   // 반복: 완료한 회차의 다음 회차를 만든다. 여러 탭·PC가 동시에 만들지 않게 잠그고, 만들기 직전에 목록을 다시 읽는다.
   async function todoSpawnNext(t, holidays) {
@@ -506,7 +509,7 @@ ${!isNew && typeof todoEditorInfoHtml === 'function' ? todoEditorInfoHtml(t) : '
     if (TD.sel === 'new') { TD.draft = {...(TD.draft || {meta: {}}), ...todoDraftFromEditor(), checklist: [...((TD.draft && TD.draft.checklist) || []), v]}; todoRefreshSections(); $('#tdeSub')?.focus(); return; }
     i.disabled = true;
     try { await GW.todoCreate({title: v, parent: TD.sel}); await todoLoad({force: true}); }
-    catch (e) { toast('체크리스트를 저장하지 못했습니다: ' + todoErr(e)); }
+    catch (e) { await todoSubErr(e, '체크리스트를 저장하지 못했습니다'); }
     todoRefreshSections();
     $('#tdeSub')?.focus();
   };
@@ -515,14 +518,14 @@ ${!isNew && typeof todoEditorInfoHtml === 'function' ? todoEditorInfoHtml(t) : '
   HOME_ACTS.tdSubToggle = async el => {
     const id = el.dataset.id; if (!todoIsGwId(id)) return;
     const parent = todoFind(TD.sel), c = parent && (parent.checklist || []).find(x => x.id === id); if (!c) return;
-    try { await GW.todoSetDone(id, !c.done); await todoLoad({force: true}); } catch (e) { toast('체크 표시를 저장하지 못했습니다: ' + todoErr(e)); }
+    try { await GW.todoSetDone(id, !c.done); await todoLoad({force: true}); } catch (e) { await todoSubErr(e, '체크 표시를 저장하지 못했습니다'); }
     todoRefreshSections();
   };
   HOME_ACTS.tdSubDel = async el => {
     const id = el.dataset.id;
     if (TD.sel === 'new') { const i = Number(id.slice(1)); TD.draft = {...(TD.draft || {}), ...todoDraftFromEditor(), checklist: ((TD.draft && TD.draft.checklist) || []).filter((_, k) => k !== i)}; todoRefreshSections(); return; }
     if (!todoIsGwId(id)) return;
-    try { await GW.todoDelete(id); await todoLoad({force: true}); } catch (e) { toast('지우지 못했습니다: ' + todoErr(e)); }
+    try { await GW.todoDelete(id); await todoLoad({force: true}); } catch (e) { await todoSubErr(e, '지우지 못했습니다'); }
     todoRefreshSections();
   };
   HOME_ACTS.tdLinkFind = () => { TD.linkQ = ($('#tdeLinkQ') || {}).value || ''; TD.linkOpen = true; todoRefreshSections(); const q = $('#tdeLinkQ'); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } };
