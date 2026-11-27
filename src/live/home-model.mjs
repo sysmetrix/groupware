@@ -36,7 +36,7 @@ export function homeNextAction(actions = []) {
   const list = (Array.isArray(actions) ? actions : []).filter(a => a && a.key && HMO_ORDER.includes(a.state));
   if (!list.length) return null;
   // 같은 단계 안에서는 기한이 빠른 것이 먼저, 기한 없는 것은 뒤로 보낸다(같으면 앞선 순서 유지).
-  const dl = a => String(a.deadline || '') || '\uffff';
+  const dl = a => String(a.deadline || '') || String.fromCharCode(0xffff); // not a literal: minifiers print the raw U+FFFF, which Chrome rejects as non-UTF-8 in extension files
   const best = list.reduce((b, a) => { const ia = HMO_ORDER.indexOf(a.state), ib = HMO_ORDER.indexOf(b.state); return ia < ib || (ia === ib && dl(a) < dl(b)) ? a : b; });
   return {key: best.key, title: hmoCut(best.title, 70), sub: hmoCut(best.headline || best.area || '', 90), state: best.state, deadline: best.deadline || ''};
 }
