@@ -123,18 +123,21 @@ test('resPick: 알려진 종류·좁은 종류 말·그 밖의 말·이름 단�
   assert.deepEqual(R.resPick(null, 'car').of, []);
 });
 
-test('현황 조회(32)와 예약 준비(33)는 같은 종류에 같은 자원을 고른다', async () => {
+const NOT_CAR = '회의실 등 차량이 아닌 자원은 여기서 예약을 준비하지 않습니다. 자원 예약 화면에서 예약해 주세요.';
+test('현황 조회(32)와 예약 준비(33)는 같은 종류에 같은 자원을 고른다(축소: 33은 차량만, 다른 종류는 화면 안내)', async () => {
   for (const list of [DEMO, REAL_SHAPE, [...DEMO, ...REAL_SHAPE], [...REAL_SHAPE].reverse(), [...GEAR, ...DEMO, ...REAL_SHAPE], GEAR]) {
     const {status, reserve} = tools(list);
     for (const kind of ['car', 'room', 'led']) {
       const s = await status({kind}), r = await reserve({kind});
       const want = R.resPick(list, kind).of[0];
+      if (kind !== 'car') { assert.equal(r.ok, false); assert.equal(r.text, NOT_CAR); assert.ok(!(r.cards || []).some(c => c.type === 'confirm')); }
       if (!want) {
         assert.equal(r.ok, false, kind); assert.ok(!(r.cards || []).some(c => c.type === 'confirm'));
         if (kind !== 'car') assert.match(s.text, /등록되어 있지 않아/, kind); else assert.equal(s.ok, false);
         continue;
       }
       assert.equal(seq32(s), want.resSeq, `32 ${kind}`);
+      if (kind !== 'car') continue;
       assert.equal(r.data.resSeq, want.resSeq, `33 ${kind}`);
       assert.equal(r.data.resource, want.name, '33은 이름 전체');
       assert.equal(r.data.kind, R.resPick(list, kind).label);
@@ -147,8 +150,20 @@ test('자원 하나하나: 두 도구가 그 자원의 종류로 물었을 때 �
     const kind = R.resKindOf(one), {status, reserve} = tools([one]);
     const s = await status({kind}), r = await reserve({kind});
     assert.equal(seq32(s), one.resSeq, one.name);
-    assert.equal(r.data.resSeq, one.resSeq, one.name);
+    if (kind === 'car') assert.equal(r.data.resSeq, one.resSeq, one.name); else assert.equal(r.text, NOT_CAR, one.name);
   }
+});
+
+test('축소: 차량이 아닌 자원의 예약 말(reserve_ask)은 그 종류 현황에 "여기서 준비하지 않음"과 화면 열기를 붙인다', async () => {
+  for (const [kind, list, want] of [['room', DEMO, '2층 회의실'], ['led', REAL_SHAPE, '1층 LED패널(1)'], ['led', DEMO, '']]) {
+    const s = await tools(list).status({kind, reserve_ask: true});
+    assert.equal(s.text.indexOf(NOT_CAR), 0, kind);
+    if (want) assert.match(s.text, new RegExp(want.replace(/[()]/g, '\\$&')), kind); else assert.match(s.text, /등록되어 있지 않아/);
+    assert.ok((s.cards || []).some(c => c.type === 'nav' && c.view === 'resource'), kind);
+    assert.ok(!(s.cards || []).some(c => c.type === 'confirm'));
+  }
+  // 그냥 현황을 물은 말에는 붙이지 않는다
+  assert.doesNotMatch((await tools(DEMO).status({kind: 'room'})).text, /준비하지 않습니다/);
 });
 
 test('C: 장비만 있으면 32도 33도 회의실·차량으로 답하지 않는다', async () => {

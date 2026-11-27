@@ -367,6 +367,13 @@
         const target = R.chatParseDate(text, new Date());
         it = {...it, args: {...it.args, limit: 1, ...(target ? {requested_date: target.date} : {})}};
       }
+      // v1.28: 예약 되묻기 뒤 "하지 마"·"아니 예약하지 마"(날짜가 없어도)는 슬롯을 지우고 그만뒀다고만 답한다. 다음 말에 취소한 예약이 이어지지 않게.
+      if ((!it.tool || it.confidence < 0.9) && st.ctx && st.ctx.pendingSlot && /^reserve_/.test(st.ctx.pendingSlot.tool) && typeof R.chatResourceAsk === 'function' && (R.chatResourceAsk(text) || {}).stop) {
+        st.ctx.pendingSlot = null;
+        ai.text = '알겠습니다. 준비하던 예약은 그만뒀습니다. 아무것도 예약하지 않았습니다.'; ai.state = 'done';
+        if (st.seq === runSeq) { st.busy = false; st.abort = null; st.activeReply = null; }
+        chatSave(); chatRefresh(true); return;
+      }
       if ((!it.tool || it.confidence < 0.9) && st.ctx && st.ctx.pendingSlot) {
         const dt = R.chatParseDate(text, new Date()), rg = R.chatParseRange(text);
         if (dt || rg.start) {

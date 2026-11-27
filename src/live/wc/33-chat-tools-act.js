@@ -138,38 +138,55 @@
 
   chatRegisterTool({
     name: 'reserve_vehicle', label: '자원 예약 준비', kind: 'act',
-    description: '차량·회의실 등 자원 예약 준비(확인 카드만). kind: car(기본)|room|led|종류 이름, resource: 자원 이름(꼭 맞는 자원만, 아니면 묻는다). 그 종류·자원이 없거나 차 있으면 대신하지 않는다. date, start, end(HH:MM), title.',
+    description: '공용 차량 예약 준비(확인 카드만). 회의실·LED 등 차량이 아닌 자원은 준비하지 않고 자원 예약 화면으로 안내한다. resource: 차량 이름(목록과 꼭 맞고 하나일 때만, 아니면 묻는다). 차 있으면 대신하지 않는다. date, start, end(HH:MM), title.',
     params: {type: 'object', properties: {date: {type: 'string'}, start: {type: 'string'}, end: {type: 'string'}, title: {type: 'string'}, kind: {type: 'string'}, resource: {type: 'string'}}, required: ['date', 'start', 'end']},
     run: async (a, ctx) => {
       const off = '자원 예약 기능이 관리자 설정으로 꺼져 있습니다.';
       if (!allowed('resource')) return {ok: false, text: off};
-      // 사용자 문장(chat.mjs chatResourceAsk)에서 종류·이름 단서와 빼거나 부정하는 말을 읽는다(AI가 인자를 덜 넘겨도 아무 자원이나 고르지 않게).
-      const rx = typeof R.chatResourceAsk === 'function' ? R.chatResourceAsk(String((ctx && ctx.userText) || '')) : null, rk = rx && rx.found ? rx : null;
       const nav = {type: 'nav', label: '자원 예약 화면 열기', view: 'resource'};
-      // v1.28 보수 규칙: 말고·빼고·제외·아닌·대신·다른 같은 말이 자원 말과 함께 있으면 자원을 추리지 않고 묻는다(카드 없음).
-      // 묻는 말에는 날짜·시간 낱말을 넣지 않는다(31이 이어 말 슬롯을 지우게).
-      if (rx && rx.neg) {
-        let more = '';
-        try { const ls = ((typeof resState === 'function' && resState().list) || await GW.resourceList()).filter(r => r.useYn !== 'N'), pk = R.resPick(ls, String(a.kind || '').trim() || rx.kind || ''); if (pk.of.length) more = ` 있는 ${pk.label}: ${pk.of.slice(0, 8).map(r => r.name).join(', ')}`; } catch (e) { more = ''; }
-        return {ok: false, text: `빼거나 다른 것으로 하라는 말이 있어 자원을 고르지 않았습니다. 예약할 자원 이름을 하나만 넣어 다시 말씀해 주세요.${more}`, cards: [nav]};
+      // v1.28 축소(운영자 결정): 대화에서는 차량만 예약을 준비한다. 회의실·LED·다목적홀 등은 카드 없이 화면으로 안내한다(AI·이어 말로 와도 같다).
+      // 묻는 말·안내에는 날짜·시간 낱말을 넣지 않는다(31이 이어 말 슬롯을 지우게).
+      const notCar = {ok: false, text: '회의실 등 차량이 아닌 자원은 여기서 예약을 준비하지 않습니다. 자원 예약 화면에서 예약해 주세요.', cards: [nav]};
+      const kw = String(a.kind || '').trim(), fl = x => String(x || '').replace(/\s+/g, '').toLowerCase();
+      if (kw && R.resKindOfText(kw) !== 'car') return notCar;
+      let list = null;
+      const getList = async () => list || (list = ((typeof resState === 'function' && resState().list) || await GW.resourceList()).filter(r => r.useYn !== 'N'));
+      const carNames = async () => { try { const pk = R.resPick(await getList(), 'car'); return pk.of.length ? ` 있는 차량: ${pk.of.slice(0, 8).map(r => r.name).join(', ')}` : ''; } catch (e) { return ''; } };
+      // 목록의 자원 이름을 그대로(괄호 포함, 공백 무시) 말하면 그 자원이다. 그 이름은 '차'로 바꿔 아래 규칙(빼기 말·차 이름 뒤의 말)을 나머지 말에만 쓴다.
+      const ut0 = String((ctx && ctx.userText) || '');
+      let ut = ut0, named = '';
+      if (ut0) {
+        try {
+          const ft = fl(ut0), hits = (await getList()).filter(r => fl(r.name).length >= 2 && ft.includes(fl(r.name))), top = hits.filter(r => !hits.some(o => o !== r && fl(o.name).includes(fl(r.name))));
+          if (top.length === 1) { named = top[0].name; ut = ut0.replace(new RegExp([...fl(named)].map(c => c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s*'), 'i'), ' 차 '); }
+        } catch (e) { named = ''; ut = ut0; }
       }
+      // 사용자 문장(chat.mjs chatResourceAsk)에서 종류·이름 단서와 빼거나 부정하는 말을 읽는다(AI가 인자를 덜 넘겨도 아무 자원이나 고르지 않게).
+      const rx = typeof R.chatResourceAsk === 'function' ? R.chatResourceAsk(ut) : null, rk = rx && rx.found ? rx : null;
+      // v1.28 보수 규칙: 말고·빼·뺀·제외·외·아님·안 돼·없이·대신·다른 같은 말이 자원 말과 함께 있으면 자원을 추리지 않고 묻는다(카드 없음).
+      if (rx && rx.neg) return {ok: false, text: `빼거나 다른 것으로 하라는 말이 있어 자원을 고르지 않았습니다. 예약할 자원 이름을 하나만 넣어 다시 말씀해 주세요.${await carNames()}`, cards: [nav]};
+      if (!named && rk && rk.kind && rk.kind !== 'car') return notCar;
+      // 차 이름 바로 뒤에 날짜·시각·예약 말이 아닌 말이 붙으면(니로EV·승합차 고장이라) 이름을 추리지 않고 묻는다
+      if (rx && rx.odd) return {ok: false, text: `말씀하신 차량을 하나로 정하지 못해 고르지 않았습니다. 예약할 차량 이름을 하나만 넣어 다시 말씀해 주세요.${await carNames()}`, cards: [nav]};
       if (!a.date || !a.start || !a.end) return {ok: false, text: '날짜와 시간을 알려 주세요. 예) 내일 14시부터 16시까지 차량 예약해줘'};
       const iso = chatDateArg(a.date);
       if (!iso) return {ok: false, text: '날짜를 알아보지 못했습니다. 예) 내일, 11/20'};
-      // 종류가 없으면 자원 이름으로 전체에서 찾아 그 종류를 따르고(2층 회의실 → 회의실, 다목적홀 → 회의실), 이름도 없으면 차량
-      const hint = String(a.resource || '').trim() || (rk && rk.resource && (!rk.kind || !a.kind || R.resKindOfText(a.kind) === rk.kind) ? rk.resource : '');
-      const kindIn = String(a.kind || '').trim() || (rk && rk.kind) || (hint ? '' : 'car'), d8 = iso.replace(/-/g, '');
+      // 이름 단서: 목록 이름 그대로 > 인자 > 문장의 차 이름. 종류도 단서도 없으면 차량.
+      const ar = String(a.resource || '').trim();
+      const hint = named && (!ar || fl(named).includes(fl(ar))) ? named : ar || (rk && rk.resource && (!rk.kind || !kw || R.resKindOfText(kw) === rk.kind) ? rk.resource : '');
+      const kindIn = kw || (hint ? '' : 'car'), d8 = iso.replace(/-/g, '');
       let v = R.validateBooking({title: '업무', date: d8, start: a.start, end: a.end});
       if (!v.ok) return {ok: false, text: '예약할 수 없는 조건입니다: ' + v.errors.join(' ')};
       try {
-        const list = ((typeof resState === 'function' && resState().list) || await GW.resourceList()).filter(r => r.useYn !== 'N');
-        const p = R.resPick(list, kindIn, hint, rx ? rx.keep : (ctx && ctx.userText), rx ? rx.drop : []), label = p.label, names = xs => xs.map(r => r.name).join(', ');
-        const title = String(a.title || '').trim().slice(0, 40) || (p.kind === 'car' ? '업무 이동' : '업무');
+        await getList();
+        const p = R.resPick(list, kindIn, hint, rx ? rx.keep : ut, rx ? rx.drop : []), label = p.label, names = xs => xs.map(r => r.name).join(', ');
+        if (p.kind !== 'car') return notCar;
+        const title = String(a.title || '').trim().slice(0, 40) || '업무 이동';
         if (!p.of.length && p.excluded && p.excluded.length) return {ok: false, text: `빼라고 하신 ${names(p.excluded)} 말고는 예약할 ${label}${chatJo(label, '이가')} 없어 다른 자원으로 대신 예약하지 않습니다.`, cards: [nav]};
         if (!p.of.length) return {ok: false, text: `그룹웨어 자원에 ${label}${chatJo(label, '이가')} 없어 다른 자원으로 대신 예약하지 않습니다.${list.length ? ` 있는 자원: ${names(list.slice(0, 6))}` : ''}`, cards: [nav]};
         if (p.ambiguous) return {ok: false, text: `말씀하신 ${label}이 여럿이라 하나로 정하지 못했습니다. 예약할 자원 이름을 하나만 알려 주세요. 있는 ${label}: ${names(p.of)}`, cards: [nav]};
-        // v1.28 보수 규칙: 이름 단서가 자원 이름에 꼭 맞지 않으면(일부만 겹침·번호·수량) 추리지 않고 그 종류의 목록을 보여 주며 묻는다.
-        if (p.unsure || !p.pool.length) return {ok: false, text: `${p.clue ? `“${p.clue}”에 꼭 맞는` : '말씀하신 이름에 꼭 맞는'} ${label}${chatJo(label, '을를')} 찾지 못해 고르지 않았습니다. 예약할 ${label} 이름을 하나만 넣어 다시 말씀해 주세요. 있는 ${label}: ${names((p.of.length ? p.of : list).slice(0, 8))}`, cards: [nav]};
+        // v1.28 보수 규칙: 이름 단서가 자원 이름에 꼭 맞지 않거나(일부만 겹침·번호·수량) 맞는 자원이 둘 이상이면 추리지 않고 그 종류의 목록을 보여 주며 묻는다.
+        if (p.unsure || !p.pool.length) return {ok: false, text: `${p.clue ? `“${p.clue}”에 꼭 맞는` : '말씀하신 이름에 꼭 맞는'} ${label}${chatJo(label, '을를')} 하나로 정하지 못해 고르지 않았습니다. 예약할 ${label} 이름을 하나만 넣어 다시 말씀해 주세요. 있는 ${label}: ${names((p.of.length ? p.of : list).slice(0, 8))}`, cards: [nav]};
         // 같은 후보가 여럿이면 그 시간에 비어 있는 자원을 먼저 고른다. 콕 집은 자원(pool)이 모두 차 있으면 다른 자원으로 대신하지 않는다.
         const tried = [], narrowed = p.pool.length < p.of.length;
         let pick = null;

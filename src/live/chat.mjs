@@ -213,12 +213,15 @@ const CH_RES_LED = /LED|전광판|패널(?!\s*(?:토론|토의|발표|위원|참
 // 자원 이름 앞에 띄어 쓴 낱말 가운데 수식어가 아닌 것(날짜·시각·흔한 말·조사로 끝나는 말)
 const CH_RES_NOTMOD = /^(?:내일|오늘|모레|글피|이번|다음|지난|주|오전|오후|아침|저녁|점심|종일|하루|하나|한|두|세|네|.*시간|좀|꼭|빨리|그|이|저|제일|가장|빈|아무|다른|새|우리|팀|부서|저희|제|내|[월화수목금토일](?:요일)?|.*\d\s*(?:시|분|월|일|:)|\d+\s*[/.-]\s*\d+|.*(?:부터|까지|에|에서|로|으로|을|를|이|가|은|는|도|만|랑|하고|좀|때문에|위해|위해서))$/;
 // v1.28 보수 규칙: 자원 말과 함께 빼거나 부정하는 말이 있으면 자원을 추리지 않고 묻는다(33). 낱말이 있으면 묻는 한 규칙이다.
-const CH_RES_NEG = /말[고구곤]|빼|제외|아닌|아니[고라면]|대신|싫|다른/;
+const CH_RES_NEG = /말[고구곤]|빼|뺀|뺄|제외|이외|(?<![가-힣])외(?:에|의|는|엔|로)?(?![가-힣])|아닌|아니[고라면]|아님|대신|싫|다른|안\s*[돼되]|없이|제끼|제치|못\s*(?:타|써|쓰|가)|고장/;
+// v1.28 축소: 차 이름(승합차·니로 등) 바로 뒤에는 조사와 날짜·시각·예약 말·문장 끝만 온다. 그 밖의 말(뺀·외·EV·안 돼…)이 붙으면 odd(도구가 묻는다).
+const CH_RES_CAR_NEXT = /^(?:으?로|을|를|이|가|은|는|도|랑|하고)?(?:\s*(?:$|[,.!?~]|내일|오늘|모레|글피|다음|이번|담주|\d|오전|오후|아침|점심|저녁|종일|하루|[월화수목금토일]요일|예약|잡아|잡을|빌려|빌릴|쓸|쓰고|쓰려|좀|하나|한\s*대|부탁|한번))/;
 const CH_RES_KINDWORD = /^(?:회의실|회의공간|차|차량|관용차|자동차|led|led패널|패널|전광판|자원|\d+(?:번|호)?)$/i;
 export function chatResourceAsk(text) {
   const raw = String(text ?? '').replace(/\s+/g, ' ').trim(), drop = [];
   if (!raw) return null;
   const neg = CH_RES_NEG.test(raw) && (CH_RES_ROOM.test(raw) || raw.search(CH_RES_CAR_NAME) >= 0 || CH_RES_CAR.test(raw) || CH_RES_LED.test(raw));
+  const odd = [...raw.matchAll(new RegExp(CH_RES_CAR_NAME.source, 'g'))].some(m => !CH_RES_CAR_NEXT.test(raw.slice(m.index + m[0].length)));
   // 하지 말라는 말은 자원 말이 없어도 읽는다(이어 말 "내일은 하지 마"에서 슬롯을 지우게)
   const stop = /하지\s*마|하지\s*말|말아\s*줘|안\s*해도|필요\s*없/.test(raw);
   const notNew = stop || /했어|했다|했음|했는데|해\s*뒀|해\s*두었|해\s*놨|해\s*놓았|변경|바꿔|바꾸|옮겨|미뤄|연장|취소/.test(raw);
@@ -230,7 +233,7 @@ export function chatResourceAsk(text) {
   });
   keep = keep.replace(/\S+\s*(?:때문에|위해서?|관련해서?)(?=\s|$)|\S*(?:하려고|하러)(?=\s|$)/g, ' ').replace(/\s+/g, ' ').trim();
   const room = keep.match(CH_RES_ROOM), cars = [...new Set(keep.match(CH_RES_CAR_NAME) || [])], led = CH_RES_LED.test(keep), car = cars.length > 0 || CH_RES_CAR.test(keep);
-  if (!room && !car && !led) return {kind: '', resource: '', keep, drop, found: false, stop, notNew, neg};
+  if (!room && !car && !led) return {kind: '', resource: '', keep, drop, found: false, stop, notNew, neg, odd};
   let kind = '', resource = '';
   if (room) {
     // 수식어: 붙여 쓴 말(영상·A·대·제1·2층), 바로 앞에 띄어 쓴 말(본관·2층·2번), 뒤의 번호(회의실 2, 회의실 A)
@@ -249,7 +252,7 @@ export function chatResourceAsk(text) {
     if (CH_RES_ROOM.test(rest)) resource = '';
   } else if (led) kind = 'led';
   else { kind = 'car'; resource = cars.length === 1 ? cars[0] : ''; }
-  return {kind, resource, keep, drop, found: true, car: kind === 'car', place: !kind, stop, notNew, neg};
+  return {kind, resource, keep, drop, found: true, car: kind === 'car', place: !kind, stop, notNew, neg, odd};
 }
 export function chatIntent(text, now = new Date(), _nested = false) {
   const said = chatNormalize(text), t = said.replace(CH_MOOD_RE, '');
@@ -447,7 +450,11 @@ export function chatIntent(text, now = new Date(), _nested = false) {
     if (ra && ra.found && ra.stop) return none;
     if (ra && ra.found && !ra.stop) {
       const ask = /예약|잡아|잡을|빌려|빌릴/.test(t) || ra.car && /쓰고|쓸/.test(t), sched = ra.place && /일정|스케줄|약속|미팅|회의(?!실|\s*공간)/.test(t) && !/예약/.test(t);
-      if (ask && !ra.notNew && !sched && !/가능|비어|빈|언제|있어|있나|현황|확인|승인|났|됐|상태|보여|알려|목록|내역|누가|누구|뭐|몇\s*[개건]|조회|방법|어떻게|잡혀|잡힌|예약(?:한|된|돼)|할\s*일|투두|메모/.test(t)) return make('reserve_vehicle', {date: dt ? dt.date : '', start: rg.start, end: rg.end, title: '', ...(ra.kind ? {kind: ra.kind} : {}), ...(ra.resource ? {resource: ra.resource} : {})});
+      if (ask && !ra.notNew && !sched && !/가능|비어|빈|언제|있어|있나|현황|확인|승인|났|됐|상태|보여|알려|목록|내역|누가|누구|뭐|몇\s*[개건]|조회|방법|어떻게|잡혀|잡힌|예약(?:한|된|돼)|할\s*일|투두|메모/.test(t)) {
+        // v1.28 축소(운영자 결정): 대화에서는 차량만 예약을 준비한다. 회의실·LED·다목적홀 등은 날짜가 있으면 그 종류 현황과 화면 열기로 답한다.
+        if (ra.kind !== 'car') return dt ? make('get_resource_status', {date: dt.date, kind: ra.kind === 'led' ? 'led' : 'room', reserve_ask: true}) : none;
+        return make('reserve_vehicle', {date: dt ? dt.date : '', start: rg.start, end: rg.end, title: '', kind: 'car', ...(ra.resource ? {resource: ra.resource} : {})});
+      }
     }
     if (!(ra && ra.stop) && (/(차량|관용차|니로|자동차|회의실|자원|세미나실|강당|LED|전광판|(?<![가-힣\d])차\s)/i.test(t) || /패널(?!\s*(?:토론|토의|발표|위원|참석))/.test(t)) && /(가능|비어|빈|언제|있어|있나|현황|확인|예약|잡아|빌려|승인|쓸\s*수)/.test(t) && !/할 ?일|투두/.test(t)) return make('get_resource_status', {date: dt ? dt.date : 'today', ...(/(회의실|회의\s*공간|세미나실|강당|교육장)/.test(t) ? {kind: 'room'} : /(LED|패널|전광판)/i.test(t) ? {kind: 'led'} : {})});
   }

@@ -1525,12 +1525,14 @@ export function resPick(list = [], kind = '', hint = '', text = '', drop = []) {
   else { label = '자원'; of = arr; }
   if (!clues.length) {
     const {out: tc, unsure} = resTextClues(of, text), pool = unsure ? [] : tc.length ? of.filter(r => tc.every(h => h.includes(r))) : of;
-    return {kind: k, label, of, pool, clue: '', ambiguous: !unsure && tc.length > 0 && !pool.length, unsure, excluded};
+    // 문장의 낱말로 좁혔는데 둘 이상 남으면 첫 자원을 고르지 않는다(unsure, 도구가 묻는다). 좁히지 않았으면(단서 없음) 빈 자원 고르기 그대로.
+    return {kind: k, label, of, pool, clue: '', ambiguous: !unsure && tc.length > 0 && !pool.length, unsure: unsure || (tc.length > 0 && pool.length > 1), excluded};
   }
   // 단서가 있으면 꼭 맞는 자원만(resNameExact). 맞는 것이 없으면 pool이 비고 도구가 그 종류의 목록을 보여 주며 묻는다.
   const pool = (k || kw ? of : arr).filter(r => clues.every(c => resNameExact(r, c)));
   if (!k && !kw && pool.length) { const pk = resKindOf(pool[0]); if (pk && pool.every(r => resKindOf(r) === pk)) { k = pk; label = RES_KIND[pk][1]; of = ofKind(pk); } }
-  return {kind: k, label, of, pool, clue: clues[clues.length - 1].slice(0, 30), ambiguous: false, unsure: !pool.length, excluded};
+  // 단서에 맞는 자원이 꼭 하나일 때만 고른다. 없거나 둘 이상이면 unsure(도구가 그 종류의 목록을 보여 주며 묻는다).
+  return {kind: k, label, of, pool, clue: clues[clues.length - 1].slice(0, 30), ambiguous: false, unsure: pool.length !== 1, excluded};
 }
 /** 겹치는 예약 하나(없으면 null). start·end는 'HH:MM', date는 YYYYMMDD. */
 export function resConflict(bookings = [], date, start, end) {
