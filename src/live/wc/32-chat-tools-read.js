@@ -340,11 +340,14 @@
         const hint = a.resource || (exact.length === 1 ? exact[0].name : rx && !rx.neg && (!rx.kind || rx.kind === kindArg) ? rx.resource : '');
         const pk = hint || ut ? R.resPick(list, kindArg, hint, rx ? rx.keep : ut, rx && rx.drop) : pk0;
         const one = pk.pool.length === 1 && pk.pool.length < pk0.of.length, car = one ? pk.pool[0] : pk0.of[0], targets = one ? [car] : pk0.of.slice(0, 6);
-        const all = await GW.resourceBookings({from: d8, to: d8, resSeqs: targets.map(r => r.resSeq)});
-        const ofRes = r => all.filter(b => (!b.resSeq ? targets.length === 1 : String(b.resSeq) === String(r.resSeq)) && R.bookingSpanOnDay(b, d8)).sort((x, y) => x.start.localeCompare(y.start));
+        let all = await GW.resourceBookings({from: d8, to: d8, resSeqs: targets.map(r => r.resSeq)}), noSeq = false;
+        if (targets.length > 1 && all.some(b => !b.resSeq && R.bookingSpanOnDay(b, d8))) { all = await GW.resourceBookings({from: d8, to: d8, resSeqs: [car.resSeq]}); noSeq = true; }
+        const shown = noSeq ? [car] : targets;
+        const ofRes = r => all.filter(b => (!b.resSeq ? shown.length === 1 : String(b.resSeq) === String(r.resSeq)) && R.bookingSpanOnDay(b, d8)).sort((x, y) => x.start.localeCompare(y.start));
         const fmt = (r, d, head) => { const f = R.freeSlots(d, d8); return `${head ? `${r.name} ${chatMd(iso)}` : `• ${r.name}`}: 예약 ${d.length}건${d.length ? '(' + d.map(b => `${b.start.slice(8, 10)}:${b.start.slice(10)}~${b.end.slice(8, 10)}:${b.end.slice(10)}`).join(', ') + ')' : ''}. 비어 있는 시간은 ${f.length ? f.map(x => `${x.start}~${x.end}`).join(', ') + '입니다' : '없습니다'}.`; };
-        const day = ofRes(car), free = R.freeSlots(day, d8), nm = car.name;
-        const text = [fmt(car, day, true), ...targets.slice(1).map(r => fmt(r, ofRes(r), false))].join('\n');
+        const day = ofRes(car), free = R.freeSlots(day, d8), nm = car.name, rest = !one ? pk0.of.length - shown.length : 0;
+        const tail = noSeq ? [`나머지 ${rest}개 ${pk0.label}(${pk0.of.slice(1, 6).map(r => r.name).join(', ')})은 예약 구분 정보가 없어 자원 예약 화면에서 확인해 주세요.`] : rest > 0 ? [`외 ${rest}개 ${pk0.label}은 자원 예약 화면에서 확인해 주세요.`] : [];
+        const text = [fmt(car, day, true), ...shown.slice(1).map(r => fmt(r, ofRes(r), false)), ...tail].join('\n');
         return {ok: true, text, data: {resource: nm, date: iso, bookings: day.length, free: free.map(f => `${f.start}~${f.end}`)}, cards: [{type: 'timeline', title: `${nm} ${chatMd(iso)} 예약`, items: day.map(b => ({from: b.start.slice(8, 10) + ':' + b.start.slice(10), to: b.end.slice(8, 10) + ':' + b.end.slice(10), label: (b.title || '예약') + (b.who ? ' · ' + b.who : '')}))}, {type: 'nav', label: '자원 예약 화면 열기', view: 'resource', v: `${car.resSeq},${d8}`}]};
       } catch (e) { return {ok: false, text: '자원 현황을 읽지 못했습니다: ' + String(e.message || e).slice(0, 80)}; }
   }

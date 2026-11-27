@@ -439,3 +439,52 @@ test('19b-payment-goods.js: payForm 근거 계획서 option에 하드코딩 색�
   payForm('b1');
   assert.match(overlay.innerHTML, /<option value="p1" selected>2026년 포럼 운영계획 \(전략-1\)<\/option>/);
 });
+
+// ---------- 6. R3 검토 반영: todoBulkSave·체크리스트·todoSetRate UNKNOWN 중복 방지 ----------
+test('R3: todoBulkSave·todoCreate 체크리스트·todoSetRate는 UNKNOWN을 확정 실패로 단정하거나 입력칸에 남겨 재전송을 유도하지 않는다', async () => {
+  const s51 = read('wc/51-todo.js'), s55 = read('wc/55-todo-views.js');
+  // 1) 체크리스트 줄 UNKNOWN 분리
+  {
+    let n = 0;
+    const ctx = {
+      TD: {list: []}, R: {...B, tdMetaCompose: () => ({ok: true, text: ''})}, today: () => '2026-11-27', todoGwOk: () => true, todoLoad: async () => {}, logError() {},
+      GW: {todoCreate: async a => { if (!a.parent) return {ok: true, id: 'td10'}; n++; if (n === 1) throw Object.assign(new Error('net'), {code: 'UNKNOWN'}); throw new Error('권한 없음'); }},
+    };
+    const create = vm.runInNewContext(s51.slice(s51.indexOf('  const todoErr'), s51.indexOf('  // 고치기.')) + '\n;todoCreate', ctx);
+    const r = await create({title: '상위', checklist: ['첫줄', '둘째줄']});
+    assert.equal(r.ok, true);
+    assert.equal(r.subFail, 1);
+    assert.equal(r.subUnk, 1);
+    assert.match(r.text, /체크리스트 1줄은 저장하지 못했습니다/);
+    assert.match(r.text, /체크리스트 1줄은 반영 여부를 확인하지 못했습니다/);
+  }
+  // 2) todoBulkSave UNKNOWN: 입력칸(#tdeBulk)에 남기지 않고 미확인 안내
+  {
+    const toasts = [], ta = {value: '가\n나\n다'};
+    let closed = false;
+    const ctx = {
+      TD: {}, R: {tdParseBulk: () => ({rows: [{title: '가', imp: '0'}, {title: '나', imp: '0'}, {title: '다', imp: '0'}]})},
+      today: () => '2026-11-27', todoGwOk: () => true, todoYmd: x => x, todoLoad: async () => {}, todoBulkPreview() {}, logError() {},
+      toast: m => toasts.push(m), closeOverlay: () => { closed = true; }, $: q => (q === '#tdeBulk' ? ta : null),
+      GW: {todoCreate: async a => { if (a.title === '나') throw Object.assign(new Error('net'), {code: 'UNKNOWN'}); if (a.title === '다') throw new Error('저장 거부'); return {ok: true, id: 'td1'}; }},
+    };
+    const bulk = vm.runInNewContext(s55.slice(s55.indexOf('  async function todoBulkSave'), s55.indexOf('  // ---------- 처리기 ----------')) + '\n;todoBulkSave', ctx);
+    await bulk(null);
+    assert.equal(ta.value, '다', 'UNKNOWN 항목(나)은 중복 생성 방지를 위해 입력칸에 남기지 않고 확정 실패(다)만 남긴다');
+    assert.equal(closed, false);
+    assert.match(toasts[0], /반영 여부 미확인 1건\(목록에서 먼저 확인\): 나/);
+  }
+  // 3) todoSetRate UNKNOWN: 앞뒤 모순 없는 미확인 안내
+  {
+    const item = {id: 'td1', canProgress: true, rate: 0, done: false, doneDate: ''};
+    const ctx = {
+      TD: {list: [item]}, R: B, todoFind: () => item, todoMirror() {}, todoRerender() {}, todoLoad: async () => {}, logError() {},
+      GW: {todoSetProgress: async () => { throw Object.assign(new Error('통신 오류'), {code: 'UNKNOWN'}); }},
+    };
+    const setRate = vm.runInNewContext(s51.slice(s51.indexOf('  const todoErr'), s51.indexOf('  const todoYmd')) + '\n' + s55.slice(s55.indexOf('  async function todoSetRate'), s55.indexOf('  // ---------- 칸반')) + '\n;todoSetRate', ctx);
+    const r = await setRate('td1', 50);
+    assert.equal(r.ok, false);
+    assert.doesNotMatch(r.text, /진행률을 저장하지 못했습니다:/);
+    assert.match(r.text, /반영됐는지 확인하지 못했습니다/);
+  }
+});

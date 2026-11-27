@@ -82,11 +82,12 @@
     if (!c.ok) return {ok: false, text: `메모와 정보가 너무 깁니다(${c.length}자, 1,500자까지).`};
     try {
       const r = await GW.todoCreate({title, due: todoYmd(due), start: todoYmd(start), contents: c.text, important, importance, dday});
-      let subFail = 0;
-      for (const s of checklist.filter(Boolean).slice(0, 30)) { try { await GW.todoCreate({title: s, parent: r.id}); } catch (e) { subFail++; logError('todo.sub', e.message); } }
+      let subFail = 0, subUnk = 0;
+      for (const s of checklist.filter(Boolean).slice(0, 30)) { try { await GW.todoCreate({title: s, parent: r.id}); } catch (e) { if (e && e.code === 'UNKNOWN') subUnk++; else subFail++; logError('todo.sub', e.message); } }
       await todoLoad({force: true});
-      return {ok: true, id: r.id, subFail, text: subFail ? `만들었지만 체크리스트 ${subFail}줄은 저장하지 못했습니다.` : ''};
-    } catch (e) { logError('todo.create', e.message); if (e && e.code === 'UNKNOWN') { todoLoad({force: true}); return {ok: false, text: '응답이 늦어 저장됐는지 확인하지 못했습니다. 목록을 새로 읽어 확인한 뒤 필요하면 다시 추가하세요.'}; } return {ok: false, text: '할 일을 그룹웨어에 저장하지 못했습니다: ' + todoErr(e)}; }
+      const subMsg = [subFail && `체크리스트 ${subFail}줄은 저장하지 못했습니다`, subUnk && `체크리스트 ${subUnk}줄은 반영 여부를 확인하지 못했습니다(목록에서 먼저 확인)`].filter(Boolean);
+      return {ok: true, id: r.id, subFail, subUnk, text: subMsg.length ? `만들었지만 ${subMsg.join(', ')}.` : ''};
+    } catch (e) { logError('todo.create', e.message); if (e && e.code === 'UNKNOWN') { todoLoad({force: true}); return {ok: false, text: '통신 오류 또는 응답 지연으로 저장됐는지 확인하지 못했습니다. 목록을 새로 읽어 확인한 뒤 필요하면 다시 추가하세요.'}; } return {ok: false, text: '할 일을 그룹웨어에 저장하지 못했습니다: ' + todoErr(e)}; }
   }
   // 고치기. 중요도·진행률은 그룹웨어 화면처럼 전용 호출로 따로 저장한다(첨부가 있는 ToDo·받은 ToDo도 된다).
   async function todoSave(id, {title, due, start, important, importance, rate, dday, memo, meta} = {}) {

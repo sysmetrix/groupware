@@ -436,6 +436,7 @@
     }
 
     if (typeof chatSend === 'function' && ((typeof R === 'object' && R && typeof R.chatIntent === 'function' && !!R.chatIntent(q).tool) || (typeof aiReady === 'function' && aiReady() && /(알려|보여|해\s*줘|해줘|할까|얼마|며칠|언제|누구|어디|뭐|무엇|브리핑|요약|정리|예약|일정|할\s*일|[?？])/.test(q)))) {
+      if (typeof chatState === 'function' && chatState().busy) { toast('비서가 답변을 만드는 중입니다. 끝난 뒤 다시 지시해 주세요.'); return; }
       closeOverlay();
       if (go('home') === false) return;
       chatSend(q);

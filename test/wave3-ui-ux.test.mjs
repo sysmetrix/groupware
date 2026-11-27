@@ -220,6 +220,8 @@ test('홈 먼저 할 일: 개인 ToDo 카드에만 밝은 표면 클래스(hm-ne
   assert.match(gwHtml, /<section class="hm-card hm-next" aria-label="먼저 할 일">/);
   assert.doesNotMatch(gwHtml, /hm-next-p/);
   assert.match(gwHtml, /먼저 할 일 · 그룹웨어/);
+  const css = read('../wc.css');
+  assert.match(css, /\.wc \.desk \.hm-next\.hm-next-p\{background:var\(--card\);color:var\(--fg\)/);
 });
 
 test('상단 닫기 버튼 툴팁이 실제 최소화 런처 위치(화면 오른쪽 아래)와 일치한다', () => {

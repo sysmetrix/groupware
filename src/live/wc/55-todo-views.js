@@ -40,7 +40,7 @@
     if (n >= 100) return todoToggle(id, true); // 반복 할 일의 다음 회차 만들기와 같은 길로
     t.rate = n; t.done = false; t.doneDate = ''; todoMirror(); todoRerender(); // 먼저 화면에 반영하고 그룹웨어 결과로 다시 맞춘다
     try { await GW.todoSetProgress(id, n); await todoLoad({force: true}); return {ok: true, rate: n}; }
-    catch (e) { logError('todo.rate', e.message); await todoLoad({force: true}); return {ok: false, text: '진행률을 저장하지 못했습니다: ' + todoErr(e)}; }
+    catch (e) { logError('todo.rate', e.message); await todoLoad({force: true}); return {ok: false, text: typeof todoFail === 'function' ? todoFail(e, '진행률을 저장하지 못했습니다') : '진행률을 저장하지 못했습니다: ' + todoErr(e)}; }
   }
 
   // ---------- 칸반(예정·진행·완료) ----------
@@ -155,20 +155,24 @@ ${t.canProgress ? `<div class="td-sec"><label class="td-f">진행률 <b id="tdeR
     if (!todoGwOk()) { toast('그룹웨어 ToDo에 연결하지 못했습니다. 그룹웨어를 새로고침한 뒤 다시 시도하세요.'); return; }
     TD.bulkBusy = true; if (el) { el.disabled = true; el.innerHTML = '<span class="spin"></span> 저장 중…'; }
     const mark = typeof overlayMark === 'function' ? overlayMark() : 0;
-    const failed = [];
+    const failed = [], uncertain = [];
     let ok = 0;
     try {
       for (const r of rows) {
         try { await GW.todoCreate({title: r.title, due: todoYmd(r.due), start: todoYmd(r.start), importance: r.imp}); ok++; }
-        catch (e) { failed.push(r.title); logError('todo.bulk', e.message); if (e && e.code === 'RATE') break; }
+        catch (e) { if (e && e.code === 'UNKNOWN') uncertain.push(r.title); else failed.push(r.title); logError('todo.bulk', e.message); if (e && e.code === 'RATE') break; }
       }
     } finally { TD.bulkBusy = false; }
     await todoLoad({force: true});
     const live = typeof overlayLive !== 'function' || overlayLive(mark);
-    if (failed.length && !live) { toast(`${ok}건 추가, 저장 못 한 ${failed.length}건: ${failed.join(', ').slice(0, 120)}`); return; }
-    if (failed.length) { const ta = $('#tdeBulk'); if (ta) { ta.value = failed.join('\n'); todoBulkPreview(); } if (el) el.disabled = false; toast(`${ok}건을 추가했습니다. ${failed.length}건은 저장하지 못해 입력칸에 남겼습니다.`); return; }
+    const unkNote = uncertain.length ? `반영 여부 미확인 ${uncertain.length}건(목록에서 먼저 확인): ${uncertain.join(', ').slice(0, 90)}` : '';
+    if ((failed.length || uncertain.length) && !live) {
+      toast([`${ok}건 추가`, failed.length && `저장 못 한 ${failed.length}건: ${failed.join(', ').slice(0, 90)}`, unkNote].filter(Boolean).join(', '));
+      return;
+    }
+    if (failed.length) { const ta = $('#tdeBulk'); if (ta) { ta.value = failed.join('\n'); todoBulkPreview(); } if (el) el.disabled = false; toast(`${ok}건을 추가했습니다. ${failed.length}건은 저장하지 못해 입력칸에 남겼습니다.${unkNote ? ' ' + unkNote : ''}`); return; }
     if (live) closeOverlay();
-    toast(`그룹웨어 ToDo에 ${ok}건을 추가했습니다.`);
+    toast(unkNote ? `${ok}건 추가 완료 · ${unkNote}` : `그룹웨어 ToDo에 ${ok}건을 추가했습니다.`);
   }
 
   // ---------- 처리기 ----------

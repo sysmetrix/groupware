@@ -93,10 +93,14 @@ test('2. 날짜 없는 비차량 자원 예약 요청: tool은 빈 문자열을 
     assert.doesNotMatch(chat.lastAi().text, /이해하지 못했습니다/, q);
     assert.equal(chat.confirms().length, 0, q);
   }
-  // 취소·중단·변경·할일 추가·일정 잡기·현황 조회와 충돌하지 않는다
+  // 취소·중단·변경·할일 추가·일정 잡기·현황 조회·메일/기안/출장 문장과 충돌하지 않는다
   assert.match(CH.chatNotDoing('회의실 예약 취소 좀 해 줘'), /취소는 GW 비서가 대신 하지 않습니다/);
   assert.equal(CH.chatNotDoing('회의실 예약하지 마'), '');
   assert.equal(CH.chatNotDoing('회의실 예약 변경해줘'), '');
+  assert.equal(CH.chatNotDoing('회의실 예약 요청 메일 써줘'), '');
+  assert.equal(CH.chatIntent('회의실 예약 요청 메일 써줘', NOW).tool, 'compose_mail');
+  assert.equal(CH.chatNotDoing('교육장 잡아서 교육 출장 신청 준비해줘'), '');
+  assert.equal(CH.chatNotDoing('강당 빌려서 행사 계획 기안 작성해줘'), '');
   assert.equal(CH.chatIntent('할 일에 회의실 예약하기 추가해줘', NOW).tool, 'add_todo');
   assert.equal(CH.chatIntent('다목적홀에서 팀 회의 일정 잡아줘', NOW).tool, 'prepare_schedule');
   assert.equal(CH.chatIntent('회의실 예약 현황 알려줘', NOW).tool, 'get_resource_status');
@@ -215,4 +219,24 @@ test('4. get_resource_status: 다중 차량·LED·회의실 전체 현황을 한
     assert.equal(r3.data.resource, '다목적홀');
     assert.equal(r3.cards.find(c => c.type === 'nav').v, `12,${D8}`);
   }
+
+  // resSeq가 빠진 예약 행이 오면 다중 자원에서 0건으로 거짓 표시하지 않고 첫 자원만 재조회해 안내
+  {
+    const noSeqBookings = [{start: D8 + '1000', end: D8 + '1100', title: '미구분 예약'}];
+    const chat = makeChat({bookings: noSeqBookings});
+    // resSeqs 필터 없이 그대로 돌려주는 수집기 변형 흉내
+    const r = await (async () => {
+      const t = makeChat();
+      const ctx2 = {
+        R, GW: {resourceList: async () => RESOURCES, resourceBookings: async () => noSeqBookings},
+        S: {}, chatRegisterTool: d => { if (d.name === 'get_resource_status') ctx2.def = d; }, allowed: () => true, resState: () => ({}), today: () => '2099-03-09',
+      };
+      vm.runInNewContext(read32, ctx2);
+      return ctx2.def.run({date: DATE, kind: 'car'}, {});
+    })();
+    assert.match(r.text, /예약 1건\(10:00~11:00\)/);
+    assert.match(r.text, /예약 구분 정보가 없어 자원 예약 화면에서 확인해 주세요/);
+    assert.doesNotMatch(r.text, /승용차.*예약 0건/);
+  }
+  assert.equal(CH.chatResourceAsk('내일 모닝콜 잡아줘').found, false);
 });

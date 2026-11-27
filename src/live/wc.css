@@ -1505,6 +1505,13 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .linkbtn:focus-visible{outline:2px solid currentColor;outline-offset:2px}
 
 /* 홈: 개인 ToDo 카드는 밝게. 진한 면은 그룹웨어에서 먼저 볼 업무 한 곳에만 쓴다(강조가 두 곳으로 갈라지지 않게). */
+.wc .desk .hm-next.hm-next-p{background:var(--card);color:var(--fg);border-color:var(--line)}
+.wc .desk .hm-next.hm-next-p .hm-card-k,.wc .desk .hm-next.hm-next-p .hm-next-t{color:var(--fg)}
+.wc .desk .hm-next.hm-next-p .hm-next-s,.wc .desk .hm-next.hm-next-p .desk-index{color:var(--muted)}
+.wc .desk .hm-next.hm-next-p .ch-btn-primary{background:var(--pri);color:var(--pri-fg);border-color:var(--pri)}
+.wc .desk .hm-next.hm-next-p .ch-btn-ghost{color:var(--fg);border-color:var(--line2)}
+.wc select option{background:var(--card);color:var(--fg)}
+@media (max-width:900px){.wc header .hb.back,.wc header .demo-pill{font-size:0}.wc header .hb.back{padding:0;margin-left:0;overflow:hidden}}
 
 
 /* ---------- v1.23 홈: 먼저 할 일 → 오늘 현황(핵심 4 줄) | 오른쪽 오늘 일정·참고, 맨 아래 비서 대화 ----------
