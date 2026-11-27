@@ -385,6 +385,9 @@ export async function build({outDir = DEFAULT_OUT_DIR, copyTo = null, root = ROO
   const bundle = `/*! BWYF groupware live bundle v${version} compatibility: window.BWYFGW = */\n${await minifySafely(assembledBundle)}`;
   const shippedBytes = Buffer.byteLength(bundle, 'utf8');
   if (shippedBytes > MAX_SHIPPED_BUNDLE_BYTES) throw new Error(`배포 번들 ${shippedBytes} bytes > 예산 ${MAX_SHIPPED_BUNDLE_BYTES} bytes (${MAX_SHIPPED_BUNDLE_BYTES / 1024}KB)`);
+  // Chrome refuses extension scripts that contain Unicode noncharacters (U+FFFE/U+FFFF, U+FDD0-FDEF) as "not UTF-8"; terser prints them raw.
+  const nonchar = bundle.match(/[\uFDD0-\uFDEF\uFFFE\uFFFF]/);
+  if (nonchar) throw new Error(`번들에 크롬이 거부하는 문자 U+${nonchar[0].charCodeAt(0).toString(16).toUpperCase()}가 있습니다. 소스에서 String.fromCharCode로 바꾸세요.`);
   const minifiedSyntax = syntaxError(bundle, 'gw-live.js');
   if (minifiedSyntax) throw new Error(`최소화 번들 문법 오류: ${minifiedSyntax.message}`);
   const extDir = path.join(outDir, 'extension');
