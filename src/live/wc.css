@@ -1511,7 +1511,7 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .desk .hm-next.hm-next-p .ch-btn-primary{background:var(--pri);color:var(--pri-fg);border-color:var(--pri)}
 .wc .desk .hm-next.hm-next-p .ch-btn-ghost{color:var(--fg);border-color:var(--line2)}
 .wc select option{background:var(--card);color:var(--fg)}
-@media (max-width:900px){.wc header .hb.back,.wc header .demo-pill{font-size:0}.wc header .hb.back{padding:0;margin-left:0;overflow:hidden}}
+@media (max-width:900px){.wc header .hb.back,.wc header .demo-pill{font-size:0}.wc header .hb.back{width:36px;flex:0 0 36px;padding:0;margin-left:0;justify-content:center;overflow:hidden}}
 
 
 /* ---------- v1.23 홈: 먼저 할 일 → 오늘 현황(핵심 4 줄) | 오른쪽 오늘 일정·참고, 맨 아래 비서 대화 ----------
