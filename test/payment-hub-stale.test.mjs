@@ -145,14 +145,17 @@ test('learnPatterns: 읽은 것·못 읽은 것·남은 것을 따로 돌려준�
   const b = src.indexOf(end, a) + end.length;
   assert.ok(a >= 0 && b > a);
   const docs = Array.from({length: 20}, (_, i) => ({docId: 'd' + i, tiKeyCode: '1', title: 't' + i}));
-  const saved = [];
+  const saved = [], progress = [];
   const ctx = {
-    learning: null, HR_FORMS: /^(36)$/, GW: {submittedRange: async () => ({docs})}, patLoad: () => ({docs: {d0: {}}}),
+    learning: null, reportLearning(p) { progress.push({...p}); }, HR_FORMS: /^(36)$/, GW: {submittedRange: async () => ({docs})}, patLoad: () => ({docs: {d0: {}}}),
     readDocPattern: async d => (d.id === 'd3' ? {err: '읽기 실패'} : {id: d.id}), patSaveDoc: d => saved.push(d.id), toast() {}, logError() {}, Date
   };
   const learn = runInNewContext(src.slice(a, b) + ';learnPatterns', ctx);
   const r = await learn({limit: 12, quiet: true});
   assert.deepEqual({...r}, {done: 11, errors: 1, left: 7});
+  assert.equal(progress[0].phase, 'listing');
+  assert.deepEqual(progress.at(-1), {phase: 'reading', done: 11, errors: 1, total: 12});
+  assert.equal(progress.filter(p => p.phase === 'reading').length, 13);
   ctx.GW.submittedRange = async () => { throw new Error('목록 실패'); };
   const f = await learn({limit: 12});
   assert.equal(f.errMsg, '목록 실패');

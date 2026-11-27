@@ -309,68 +309,70 @@ test('showDraftReport: 본문 실패 시 승계 노트를 결과 창과 작업 �
   assert.equal(r3.logged[0].details, '물품 내역·금액은 양식의 표에 직접 입력하세요.');
 });
 
-// ---------- 4. openResultPlanPicker 즉시 렌더·덮개 가드·스크롤·실패 표시 ----------
+// ---------- 4. openResultPlanPicker(v1.28.2 진행률 + 정직성) 즉시 렌더·닫기 보호·목록 실패 표시 ----------
 function pickerSetup({docs = {}, gatedVal = false} = {}) {
   const s = read('wc/19-draft-engine.js');
   const part = s.slice(s.indexOf('  // ---------- 결과보고 대상(미작성 계획서) 선별'), s.indexOf('  // ---------- 새 기안 창 열기 / 채우기'));
-  const overlay = fakeOverlay();
+  let html = '', listEl = null, progEl = null;
+  const nodes = {};
+  const mkNode = () => ({textContent: '', style: {}, classList: {add() {}, remove() {}}, setAttribute() {}, removeAttribute() {}});
+  const makeOverlay = () => ({
+    get innerHTML() { return html; },
+    set innerHTML(v) {
+      html = String(v);
+      if (!html.trim()) { listEl = null; progEl = null; return; }
+      listEl = {innerHTML: '', scrollTop: 0, contains: () => false, querySelectorAll: () => [], getRootNode: () => ({activeElement: null})};
+      for (const k of ['#planProgressTitle', '#planProgressDetail', '#planProgressCount', '#planProgressFill', '#planElapsed', '[role="progressbar"]']) nodes[k] = mkNode();
+      progEl = {classList: {add() {}, remove() {}}, querySelector: q => nodes[q] || mkNode()};
+    },
+    get list() { return listEl; },
+    get nodes() { return nodes; },
+  });
+  const overlay = makeOverlay();
   let pending = [];
   const storeDocs = {...docs};
   const ctx = {
-    S: {paletteOpen: false},
+    S: {paletteOpen: false}, learning: null, learningProgress: null, learningListeners: new Set(),
+    setInterval: () => 1, clearInterval() {}, Date,
     gated: () => gatedVal,
     closeOverlay: () => { ctx.S.paletteOpen = false; overlay.innerHTML = ''; },
-    ic: () => '',
-    esc: v => String(v ?? ''),
-    R: B,
+    ic: () => '', esc: v => String(v ?? ''), R: B,
     patLoad: () => ({docs: storeDocs}),
     learnPatterns: () => new Promise((r, j) => pending.push({r, j})),
-    $: q => {
-      if (q === '#overlay') return overlay;
-      if (q === '#overlay .dlg') return overlay.firstElementChild?.dlg || null;
-      if (q === '#planPickerList') return overlay.firstElementChild?.list || null;
-      return null;
-    },
+    $: q => (q === '#overlay' ? overlay : q === '#planPickerList' ? listEl : q === '#planProgress' ? progEl : null),
   };
-  const open = vm.runInNewContext(GUARD + '\n' + part + '\n;openResultPlanPicker', ctx);
+  const open = vm.runInNewContext(part + '\n;openResultPlanPicker', ctx);
   return {
-    overlay, ctx, storeDocs, open,
+    overlay, ctx, open,
     resolveAll: (res = {done: 0, errors: 0, left: 0}) => { pending.forEach(x => x.r(res)); pending = []; },
     resolveFirst: (res = {done: 0, errors: 0, left: 0}) => pending.shift().r(res),
     rejectAll: msg => { pending.forEach(x => x.j(new Error(msg))); pending = []; },
   };
 }
 
-test('openResultPlanPicker: 학습 문서가 있으면 즉시 후보를 그리고 새 문서 확인 중을 표시하며 스크롤을 지킨다', async () => {
+test('openResultPlanPicker: 학습 문서가 있으면 즉시 후보를 그리고 스크롤을 지킨다', async () => {
   const docs = {
     p1: {id: 'p1', title: '2026년 청소년 포럼 운영계획', docNo: '전략-10', binder: '포럼철', form: '일반기안문', date: '2026-10-01'},
   };
   const h = pickerSetup({docs});
   const p = h.open();
-  assert.doesNotMatch(h.overlay.innerHTML, /분석하고 있습니다/);
-  assert.match(h.overlay.innerHTML, /2026년 청소년 포럼 운영계획/);
-  assert.match(h.overlay.innerHTML, /새 문서 확인 중/);
-  h.overlay.firstElementChild.list.scrollTop = 180;
-  h.overlay.firstElementChild.dlg.scrollTop = 60;
+  assert.match(h.overlay.list.innerHTML, /2026년 청소년 포럼 운영계획/);
+  assert.match(h.overlay.list.innerHTML, /저장된 결과를 먼저 표시합니다/);
+  h.overlay.list.scrollTop = 180;
   h.resolveAll({done: 1, errors: 0, left: 0});
   await p;
-  assert.doesNotMatch(h.overlay.innerHTML, /새 문서 확인 중/);
-  assert.match(h.overlay.innerHTML, /2026년 청소년 포럼 운영계획/);
-  assert.equal(h.overlay.firstElementChild.list.scrollTop, 180);
-  assert.equal(h.overlay.firstElementChild.dlg.scrollTop, 60);
+  assert.match(h.overlay.list.innerHTML, /2026년 청소년 포럼 운영계획/);
+  assert.equal(h.overlay.list.scrollTop, 180);
 });
 
 test('openResultPlanPicker: 분석 중 닫기·다른 창 전환·재열기 시 이전 비동기 작업이 덮어쓰지 않는다', async () => {
-  // 닫기
   const h1 = pickerSetup();
   const p1 = h1.open();
-  assert.match(h1.overlay.innerHTML, /분석하고 있습니다/);
   h1.ctx.closeOverlay();
   h1.resolveAll();
   await p1;
   assert.equal(h1.overlay.innerHTML, '');
 
-  // 다른 창 전환
   const h2 = pickerSetup({docs: {p1: {id: 'p1', title: '2026년 가나 운영계획', docNo: 'A-1', binder: '철', form: '일반기안문'}}});
   const p2 = h2.open();
   h2.overlay.innerHTML = '<div>다른 창</div>';
@@ -378,45 +380,38 @@ test('openResultPlanPicker: 분석 중 닫기·다른 창 전환·재열기 시 
   await p2;
   assert.equal(h2.overlay.innerHTML, '<div>다른 창</div>');
 
-  // 다시 열기: 첫 호출이 먼저 끝나도 새 창을 덮어쓰지 않는다
   const h3 = pickerSetup();
   const first = h3.open();
   const second = h3.open();
-  h3.resolveFirst({done: 0, errors: 0, left: 0});
+  h3.resolveFirst({done: 3, errors: 0, left: 0});
   await first;
-  assert.match(h3.overlay.innerHTML, /분석하고 있습니다/);
+  assert.doesNotMatch(h3.overlay.nodes['#planProgressTitle'].textContent, /마쳤습니다/);
   h3.resolveAll({done: 0, errors: 0, left: 0});
   await second;
-  assert.match(h3.overlay.innerHTML, /미작성 계획서를 찾지 못했습니다/);
+  assert.match(h3.overlay.nodes['#planProgressTitle'].textContent, /문서 확인을 마쳤습니다/);
 });
 
-test('openResultPlanPicker: 확인 중·목록 실패·미확인 문서가 있을 때 단정하지 않고 role="status"로 알린다', async () => {
-  // 캐시는 있으나 후보 계획서가 0건일 때 확인 중에는 단정하지 않는다
+test('openResultPlanPicker: 확인 중·목록 실패·미확인 문서가 있을 때 단정하지 않고 알린다', async () => {
   const h1 = pickerSetup({docs: {r1: {id: 'r1', title: '일반 협조문', binder: '철', form: '일반기안문'}}});
   const p1 = h1.open();
-  assert.doesNotMatch(h1.overlay.innerHTML, /미작성 계획서를 찾지 못했습니다/);
-  assert.match(h1.overlay.innerHTML, /확인 중/);
+  assert.doesNotMatch(h1.overlay.list.innerHTML, /찾지 못했습니다/);
   h1.resolveAll({done: 0, errors: 0, left: 0});
   await p1;
-  assert.match(h1.overlay.innerHTML, /미작성 계획서를 찾지 못했습니다/);
+  assert.match(h1.overlay.list.innerHTML, /현재 확인한 문서에서 대상을 찾지 못했습니다/);
 
-  // 목록 조회 실패(errMsg / reject)
   const h2 = pickerSetup();
   const p2 = h2.open();
   h2.rejectAll('네트워크 단절');
   await p2;
-  assert.match(h2.overlay.innerHTML, /role="status"/);
-  assert.match(h2.overlay.innerHTML, /문서 목록을 읽지 못했습니다\(네트워크 단절\)/);
-  assert.doesNotMatch(h2.overlay.innerHTML, /미작성 계획서를 찾지 못했습니다/);
+  assert.equal(h2.overlay.nodes['#planProgressTitle'].textContent, '문서 목록을 확인하지 못했습니다');
+  assert.doesNotMatch(h2.overlay.list.innerHTML, /현재 확인한 문서에서 대상을 찾지 못했습니다/);
 
-  // 일부 문서 미확인(errors + left > 0)
   const h3 = pickerSetup();
   const p3 = h3.open();
   h3.resolveAll({done: 4, errors: 2, left: 3});
   await p3;
-  assert.match(h3.overlay.innerHTML, /role="status"/);
-  assert.match(h3.overlay.innerHTML, /확인하지 못한 문서 5건/);
-  assert.doesNotMatch(h3.overlay.innerHTML, /미작성 계획서를 찾지 못했습니다/);
+  assert.match(h3.overlay.nodes['#planProgressCount'].textContent, /실패 2건 · 미분석 3건/);
+  assert.match(h3.overlay.list.innerHTML, /일부 문서 2건은 읽지 못했습니다/);
 });
 
 // ---------- 5. 19b-payment-goods.js option 하드코딩 색상 제거 ----------
