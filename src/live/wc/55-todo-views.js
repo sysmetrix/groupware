@@ -119,13 +119,13 @@
   }
   // 다른 사람이 준 ToDo·프로젝트 ToDo: 그룹웨어처럼 담당자는 진행률·완료만 바꾼다
   function todoEditorReadonlyHtml(t) {
-    return `<div class="td-ed-h"><h2>받은 할 일</h2><button class="btn sm ghost" data-act="tdClose" aria-label="닫기">${ic('x')}닫기</button></div>
+    return `<div class="td-ed-h"><h2>받은 할 일</h2><div class="acts">${t.canProgress ? `<button class="btn sm primary" data-act="tdRoSave" data-id="${esc(t.id)}">진행률 저장</button>` : ''}<button class="btn sm ghost" data-act="tdClose" aria-label="닫기">${ic('x')}닫기</button></div></div>
 <h3 class="td-ro-t">${todoImpBadge(t)}${esc(t.title)}</h3>${todoEditorInfoHtml(t)}
 <p class="muted">${t.due ? `기간 ${esc(todoPeriod(t))} · ${esc(todoDdayText(t.due))}` : '기한 없음'}</p>
 ${t.memo ? `<div class="td-ro-memo">${esc(t.memo).replace(/\n/g, '<br>')}</div>` : ''}
 ${(t.checklist || []).length ? `<div class="td-sec"><h3>하위 ToDo <span class="muted">${t.checklist.filter(c => c.done).length}/${t.checklist.length}</span></h3>${t.checklist.map(c => `<div class="td-cl ${c.done ? 'done' : ''}"><span>${c.done ? '✓ ' : ''}${esc(c.title)}</span></div>`).join('')}</div>` : ''}
 ${todoCommentsHtml(t)}
-${t.canProgress ? `<div class="td-sec"><label class="td-f">진행률 <b id="tdeRateV">${Number(t.rate) || 0}%</b><input class="td-range" type="range" id="tdeRate" min="0" max="100" step="10" value="${Number(t.rate) || 0}"></label><div class="acts td-ed-acts"><button class="btn primary" data-act="tdRoSave" data-id="${esc(t.id)}">진행률 저장</button><button class="btn" data-act="tdToggle" data-id="${esc(t.id)}">${t.done ? '끝냄 취소' : '끝냄'}</button></div></div>` : '<p class="muted">내가 담당자가 아니어서 여기서는 바꿀 수 없습니다.</p>'}
+${t.canProgress ? `<div class="td-sec"><label class="td-f">진행률 <b id="tdeRateV">${Number(t.rate) || 0}%</b><input class="td-range" type="range" id="tdeRate" min="0" max="100" step="10" value="${Number(t.rate) || 0}"></label><div class="acts td-ed-acts"><button class="btn" data-act="tdToggle" data-id="${esc(t.id)}">${t.done ? '끝냄 취소' : '끝냄'}</button></div></div>` : '<p class="muted">내가 담당자가 아니어서 여기서는 바꿀 수 없습니다.</p>'}
 <div class="acts td-ed-acts"><button class="btn" data-act="openUrl" data-url="${esc(GW.todoLink ? GW.todoLink(t.id) : '')}" data-title="그룹웨어 ToDo">${ic('ext')}그룹웨어에서 보기</button><button class="btn" data-act="tdCopyLink" data-id="${esc(t.id)}">링크 복사</button></div>
 <p class="muted td-hint">제목·기간·내용은 준 사람이 그룹웨어에서 고칩니다.</p>`;
   }
@@ -158,9 +158,10 @@ ${t.canProgress ? `<div class="td-sec"><label class="td-f">진행률 <b id="tdeR
     const failed = [], uncertain = [];
     let ok = 0;
     try {
-      for (const r of rows) {
-        try { await GW.todoCreate({title: r.title, due: todoYmd(r.due), start: todoYmd(r.start), importance: r.imp}); ok++; }
-        catch (e) { if (e && e.code === 'UNKNOWN') uncertain.push(r.title); else failed.push(r.title); logError('todo.bulk', e.message); if (e && e.code === 'RATE') break; }
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i];
+        try { await GW.todoCreate({title: r.title, due: todoYmd(r.due), start: todoYmd(r.start), importance: r.imp, dday: true}); ok++; }
+        catch (e) { if (e && e.code === 'UNKNOWN') uncertain.push(r.title); else failed.push(r.title); logError('todo.bulk', e.message); if (e && e.code === 'RATE') { failed.push(...rows.slice(i + 1).map(x => x.title)); break; } }
       }
     } finally { TD.bulkBusy = false; }
     await todoLoad({force: true});
@@ -176,7 +177,7 @@ ${t.canProgress ? `<div class="td-sec"><label class="td-f">진행률 <b id="tdeR
   }
 
   // ---------- 처리기 ----------
-  HOME_ACTS.tdView = (el, v) => { if (!TODO_VIEWS.some(x => x[0] === v)) return; TD.view = v; todoPrefsSave(); renderMain(); root.querySelector(`[data-act="tdView"][data-v="${v}"]`)?.focus(); };
+  HOME_ACTS.tdView = (el, v) => { if (typeof todoCanChangeView === 'function' && !todoCanChangeView()) return; if (!TODO_VIEWS.some(x => x[0] === v)) return; TD.view = v; todoPrefsSave(); renderMain(); root.querySelector(`[data-act="tdView"][data-v="${v}"]`)?.focus(); };
   HOME_ACTS.tdTl = (el, v) => { const n = Number(v) || 0; TD.tlFrom = n ? todoAddDays(TD.tlFrom || todoMonday(today()), n) : ''; todoRefreshList(); };
   HOME_ACTS.tdKanMove = async el => { await todoKanbanDrop(el.dataset.id, el.dataset.v); };
   HOME_ACTS.tdRoSave = async el => { const v = Number((($('#tdeRate') || {}).value) || 0); el.disabled = true; const r = await todoSetRate(el.dataset.id, v); toast(r.ok ? `진행률 ${v}%를 그룹웨어에 저장했습니다.` : r.text); if (S.view === 'mytodo') renderMain(); };

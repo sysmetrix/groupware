@@ -6,7 +6,7 @@ import vm from 'node:vm';
 
 const ORIGIN = 'https://gw.bwyf.or.kr';
 const ME = {ucUserInfo: {empSeq: '1', groupSeq: 'g', compSeq: 'c', deptSeq: 'd', loginId: 'u', empName: '홍길동'}};
-async function load({detail = {}, gesture = false, list = [], session = () => JSON.stringify(ME)} = {}) {
+async function load({detail = {}, gesture = false, list = [], override, session = () => JSON.stringify(ME)} = {}) {
   const src = await fs.readFile(new URL('../src/live/collector.browser.js', import.meta.url), 'utf8');
   const calls = [];
   const respond = (p, body) => {
@@ -17,11 +17,11 @@ async function load({detail = {}, gesture = false, list = [], session = () => JS
     if (p.endsWith('prj001A02') || p.endsWith('prj001A03') || p.endsWith('prj001A07')) return {resultCode: 0, resultData: {todoSeq: body.todoSeq, todoStatus: body.processRate === '100' ? '2' : '0'}};
     return {resultCode: 0, resultData: {}};
   };
-  const client = {call() {}, post: (p, body) => { calls.push({p, body}); return Promise.resolve(respond(p, body)); }};
+  const client = {call() {}, post: (p, body, opts) => { calls.push({p, body, opts}); return Promise.resolve(override?.(p, body, calls) ?? respond(p, body)); }};
   const req = () => ({A: client});
   req.m = {42: function signer() { return 'wehago-sign getTransactionId'; }};
   const window = {webpackChunkklago_ui_gw: {push: ([, , cb]) => cb(req)}};
-  const sandbox = {window, location: {origin: ORIGIN}, navigator: {userActivation: {isActive: gesture}}, sessionStorage: {getItem: () => session()}, performance: {now: () => 0}, Intl, Date, JSON, Promise, setTimeout, clearTimeout, Object, Array, String, Number, Set, Map, Math, Function, Error};
+  const sandbox = {window, location: {origin: ORIGIN}, FormData, File, navigator: {userActivation: {isActive: gesture}}, sessionStorage: {getItem: () => session()}, performance: {now: () => 0}, Intl, Date, JSON, Promise, setTimeout, clearTimeout, Object, Array, String, Number, Set, Map, Math, Function, Error};
   vm.createContext(sandbox);
   vm.runInContext(src, sandbox);
   return {api: window.BWYFGW, calls, writes: () => calls.filter(c => /prj001A0[12379]$/.test(c.p))};
@@ -54,7 +54,7 @@ test('ToDo 만들기: 하루짜리 기한은 시작=기한, 담당자는 나, �
   await assert.rejects(api.todoCreate({title: 'x', contents: 'a'.repeat(1501)}), /1,500/);
 });
 
-test('ToDo 고치기: 내 개인 ToDo가 아니거나 첨부가 있으면 쓰지 않는다', async () => {
+test('ToDo 고치기: 내 개인 ToDo가 아니거나 첨부 상세가 누락되면 쓰지 않는다', async () => {
   for (const detail of [{loginUserTodoOwnerYn: 'N'}, {createEmpSeq: '2'}, {prjSeq: 'P1'}]) {
     const {api, writes} = await load({detail});
     await assert.rejects(api.todoUpdate('td9', {title: '바꿈'}), /내가 만든 개인 ToDo/);
@@ -197,4 +197,66 @@ test('댓글 읽기: 그룹웨어 ToDo 댓글 조회(읽기 전용 목록), 지�
   assert.equal(r.comments[1].deleted, true); assert.equal(r.comments[1].text, ''); assert.equal(r.comments[1].reply, true);
   assert.ok(!JSON.stringify(r).includes('10.0.0.1'));
   await assert.rejects(api.todoComments('x'), /번호/);
+});
+
+
+test('투입공수: 원본 값 보존, 소수 입력과 잘못된 값 차단', async () => {
+  const c = await load({detail: {manHour: 2.75}});
+  await c.api.todoUpdate('td9', {title: '변경'});
+  assert.equal(c.writes()[0].body.manHour, 2.75);
+  await c.api.todoUpdate('td9', {manHour: '1.25'});
+  assert.equal(c.writes()[1].body.manHour, '1.25');
+  await c.api.todoUpdate('td9', {manHour: '0'});
+  assert.equal(c.writes()[2].body.manHour, '');
+  for (const manHour of ['-1', '1.234', '1e3']) await assert.rejects(c.api.todoUpdate('td9', {manHour}), /투입공수/);
+  const n = await load();
+  await n.api.todoCreate({title: '할 일', manHour: '3.5'});
+  assert.equal(n.writes()[0].body.manHour, '3.5');
+});
+
+const ecmList = list => ({resultCode: 0, resultData: {list}});
+const attached = {fileCount: 2, fileList: [{fileSn:'s1'}, {fileSn:'s2'}]};
+const dummy = name => new File(['synthetic'], name, {lastModified:42});
+const plain = v => JSON.parse(JSON.stringify(v));
+
+test('첨부 추가: A04 권한 및 fileSn, multipart 업로드, A02 전체 ID 보존',async()=>{
+  const files=[dummy('one'),dummy('two')];
+  const c=await load({detail:attached,override:p=>p.endsWith('ecm001A04')?ecmList([{fileId:'old1'},{fileId:'old2'}]):p.endsWith('ecm001A01')?ecmList([{fileId:'new1'},{fileId:'new2'}]):undefined});
+  await c.api.todoUpdate('td9',{files});
+  const info=c.calls.find(x=>x.p.endsWith('ecm001A04')).body;
+  assert.deepEqual(plain(info.fileSn),['s1','s2']); assert.equal(info.condition,'99');assert.equal(info.moduleGbn,'PROJECT');assert.deepEqual(JSON.parse(info.authKeyMap),{empSeq:'1',prjSeq:'',todoSeq:'td9',issueSeq:'',menuAuthType:'',searchAuthType:''});
+  const up=c.calls.find(x=>x.p.endsWith('ecm001A01'));assert.equal(up.opts.contextType,'multipart/form-data');assert.deepEqual(up.body.getAll('file[]'),files);assert.equal(up.body.get('moduleGbn'),'PROJECT');
+  const body=c.writes()[0].body;assert.equal(body.uid,'old1,old2,new1,new2');assert.deepEqual(plain(body.file),body.uid.split(',').map(fileId=>({fileId})));
+  await assert.rejects(c.api.call('/ecm/ecm001A01',{}), /허용 목록/);
+});
+test('첨부 복원: 개수·일련번호·ID 누락이나 중복, 조회 실패시 업로드와 저장 모두 차단',async()=>{
+  for(const [detail,rows] of [[{fileCount:2},[]],[{...attached,fileCount:0},[]],[{fileList:[{}]},[]],[attached,[{fileSn:'wrong',fileId:'a'},{fileId:'b'}]],[attached,[{fileId:'a'}]],[attached,[{fileId:'a'},{}]],[attached,[{fileId:'a'},{fileId:'a'}]],[attached,null]]){
+    const c=await load({detail,override:p=>p.endsWith('ecm001A04')?rows?ecmList(rows):{resultCode:-1}:undefined});
+    await assert.rejects(c.api.todoUpdate('td9',{files:[dummy('x')]})); assert.equal(c.writes().length,0);assert.ok(!c.calls.some(x=>x.p.endsWith('ecm001A01')));
+  }
+});
+test('신규 업로드 실패·부분응답·중복·빈 ID: 동일 선택 재시도에도 생성/재업로드 금지',async()=>{
+  for(const result of [{resultCode:-1},ecmList([]),ecmList([{fileId:'a'},{fileId:''}]),ecmList([{fileId:'a'},{fileId:'a'}])]){
+    const c=await load({override:p=>p.endsWith('ecm001A01')?result:undefined});const files=[dummy('a'),dummy('b')];
+    for(let i=0;i<2;i++) await assert.rejects(c.api.todoCreate({title:'합성',files}));
+    assert.equal(c.writes().length,0);assert.equal(c.calls.filter(x=>x.p.endsWith('ecm001A01')).length,1);
+  }
+});
+test('새 ToDo 저장 실패 후 같은 파일 재사용: 업로드 1회, KISS uid/file 모두 전달',async()=>{
+  let fail=true;const c=await load({override:p=>p.endsWith('ecm001A01')?ecmList([{fileId:'fresh'}]):fail&&p.endsWith('prj001A01')?{resultCode:-1}:undefined});const files=[dummy('f')];
+  await assert.rejects(c.api.todoCreate({title:'합성',files}));fail=false;await c.api.todoCreate({title:'합성',files});
+  assert.equal(c.calls.filter(x=>x.p.endsWith('ecm001A01')).length,1);assert.deepEqual(plain(c.writes()[1].body.file),[{fileId:'fresh'}]);assert.equal(c.writes()[1].body.uid,'fresh');
+});
+test('동일 파일 중복선택·타인 소유 차단; 저장 직전 파일 변경 경합 차단',async()=>{
+  for(const detail of [{},{prjSeq:'other'}]){
+    const c=await load({detail});await assert.rejects(c.api.todoUpdate('td9',{files:[dummy('dup'),dummy('dup')]}));assert.equal(c.writes().length,0);assert.ok(!c.calls.some(x=>x.p.endsWith('ecm001A01')));
+  }
+  const c=await load({detail:attached,override:(p,b,calls)=>p.endsWith('ecm001A04')?ecmList([{fileId:'a'},{fileId:'b'}]):p.endsWith('prj001A05')&&calls.filter(x=>x.p===p).length===2?{resultCode:0,resultData:{todoSeq:'td9',loginUserTodoOwnerYn:'Y',loginUserTodoCreateYn:'Y',ownerEmpSeq:'1',createEmpSeq:'1',fileCount:0,fileList:[]}}:undefined});
+  await assert.rejects(c.api.todoUpdate('td9',{title:'합성'}),e=>e.code==='CONFLICT');assert.equal(c.writes().length,0);
+});
+
+
+test('첨부가 없던 ToDo도 다른 곳에서 새 첨부가 생기면 저장하지 않는다', async () => {
+  const c=await load({override:(p,b,calls)=>p.endsWith('prj001A05')&&calls.filter(x=>x.p===p).length===2?{resultCode:0,resultData:{todoSeq:'td9',loginUserTodoOwnerYn:'Y',loginUserTodoCreateYn:'Y',ownerEmpSeq:'1',createEmpSeq:'1',fileCount:1,fileList:[{fileSn:'new'}]}}:undefined});
+  await assert.rejects(c.api.todoUpdate('td9',{title:'합성'}),e=>e.code==='CONFLICT'); assert.equal(c.writes().length,0);
 });

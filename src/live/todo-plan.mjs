@@ -71,7 +71,7 @@ export function tdFromGw(r = {}) {
     created: tdIso(r.createDate), modified: tdIso(r.modifyDate), level: Number(r.todoLevel) || 1, parent: String(r.prtSeq || ''),
     project: String(r.prjSeq || ''), projectName: String(r.prjName || '').trim(), owner: String(r.ownerEmpSeq || ''), creator: String(r.createEmpSeq || ''),
     ownerName: String(r.ownerEmpName || '').trim(), creatorName: String(r.createEmpName || '').trim(),
-    files: Number(r.fileCount) || 0, replies: Number(r.replyCount) || 0, dday: r.dDayYn === 'Y', order: Number(r.todoOrd) || 0,
+    files: Number(r.fileCount) || 0, replies: Number(r.replyCount) || 0, dday: r.dDayYn === 'Y', manHour: r.manHour == null ? null : String(r.manHour), order: Number(r.todoOrd) || 0,
     mine: r.loginUserTodoOwnerYn === 'Y' && r.loginUserTodoCreateYn === 'Y',
     // 내가 담당자인 ToDo(다른 사람이 준 것·프로젝트 ToDo 포함)는 그룹웨어 화면처럼 진행률·완료를 바꿀 수 있다
     canProgress: r.loginUserTodoOwnerYn === 'Y' && r.proccessYn !== 'N',

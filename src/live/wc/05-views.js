@@ -50,6 +50,7 @@
   const go = v => {
     if (!viewAvailable(v)) return false;
     const changed = S.view !== v;
+    if (changed && S.view === 'mytodo' && typeof TD === 'object' && TD && (TD.saving || TD.dirty)) { if (TD.saving) { toast('할 일을 저장 중입니다. 잠시 기다려 주세요.'); return false; } if (!confirm('할 일에 저장하지 않은 내용이 있습니다. 버리고 이동할까요?')) return false; TD.dirty = false; TD.sel = ''; TD.edFiles = null; }
     if (changed && !S.focus) { if (!leavePane()) return false; S.sel = null; S.pane.url = ''; }
     const active = root.activeElement;
     const fromNav = active?.closest('#nav a');
