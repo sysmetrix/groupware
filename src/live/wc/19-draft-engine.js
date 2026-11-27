@@ -59,7 +59,8 @@
       try {
         const sub = await GW.submittedRange({days: 365, size: 400});
         const have = patLoad().docs;
-    const todo = sub.docs.filter(d => !HR_FORMS.test(d.tiKeyCode) && !have[d.docId]).slice(0, limit)
+    const fresh = sub.docs.filter(d => !HR_FORMS.test(d.tiKeyCode) && !have[d.docId]);
+    const todo = fresh.slice(0, limit)
       .map(d => ({id: d.docId, ti: d.tiKeyCode, title: d.title, form: d.form, docNo: d.docNo, date: d.date}));
     if (!todo.length) return {done: 0, errors: 0};
     if (!quiet) toast(`내 기안 패턴을 학습하는 중입니다 (${todo.length}건)…`);
@@ -72,7 +73,7 @@
       }
     };
     await Promise.all(Array.from({length: conc}, worker));
-    return {done, errors};
+    return {done, errors, left: fresh.length - done - errors};
   } catch (e) { logError('learnPatterns', e.message); return {done, errors: 1, errMsg: e.message}; }
   })().finally(() => { learning = null; });
   return learning;
@@ -400,14 +401,14 @@
     const d = f.contentDocument, w = f.contentWindow;
     const steps = [];
     const bad0 = preflight(f, spec);
-    if (bad0) return [{name: '사전점검', ok: false, detail: bad0}];
+    if (bad0) return [{name: '사전점검', keep: 1, ok: false, detail: bad0}];
     const owner = currentKey, paneUrl = S.pane.url;
     const m = spec.meta || {};
     const classification = ['open', 'urgent', 'sec', 'docKind', 'binder'].filter(k => typeof m[k] === 'string' && m[k].trim());
     const labels = {open: '공개여부', urgent: '긴급여부', sec: '보안여부', docKind: '문서구분', binder: '기록물철'};
     const confirmed = classification.length > 0 && confirm('다음 값은 과거 문서에서 추정한 값이며 현재 문서의 분류 근거가 아닙니다.\n각 값을 현재 문서에 적용해도 되는지 직접 확인해 주세요. 확인하지 않으면 기존 값을 유지합니다.\n' + classification.map(k => labels[k] + ': ' + m[k]).join('\n') + '\n이 값들을 확인하고 적용할까요?');
     const live = () => f.isConnected && f.contentDocument === d && f.contentWindow === w && owner === currentKey && owner === getUserKey() && paneUrl === S.pane.url;
-    if (!live()) return [{name: '사전점검', ok: false, detail: '기안 화면 또는 계정이 변경되어 중단했습니다'}];
+    if (!live()) return [{name: '사전점검', keep: 1, ok: false, detail: '기안 화면 또는 계정이 변경되어 중단했습니다'}];
     installGuard(w); AUTO.running = true; AUTO.blocked = []; const tok = AUTO.tok = {};
     window.addEventListener('beforeunload', () => { AUTO.running = false; }, {once: true});
     setTimeout(() => { if (AUTO.tok === tok) AUTO.running = false; }, 180000); // 어떤 이유로든 3분 뒤에는 반드시 풀린다(사람이 직접 상신·저장할 수 있어야 함)
@@ -417,7 +418,7 @@
       if (!live()) { halted = true; steps.push({name, ok: false, detail: '기안 화면 또는 계정이 변경되어 중단했습니다'}); return; }
       // Mark before mutation: partial failures must not leave an unprotected draft.
       markPaneDirty(f, paneUrl);
-      try { const r = await fn(live); steps.push({name, ok: !!r.ok, detail: r.detail || ''}); } catch (e) { steps.push({name, ok: false, detail: e.message}); }
+      try { const r = await fn(live); steps.push({name, ok: !!r.ok, detail: r.detail || '', keep: r.keep}); } catch (e) { steps.push({name, ok: false, detail: e.message}); }
       if (!live()) { halted = true; return; }
       if (allDlgs(d).length) { allDlgs(d).forEach(x => btnIn(x, /^(취소|닫기)$/)?.click()); await wait(500); if (allDlgs(d).length) halted = true; }
     };
@@ -435,9 +436,9 @@
     });
     await run('공개·긴급·보안·문서구분', async () => {
       const keys = ['open', 'urgent', 'sec', 'docKind'];
-      if (!confirmed) return {ok: true, detail: '그룹웨어 기본값 유지(이어받기 선택 안 함) · 공개·보안은 상신 전에 확인하세요.'};
+      if (!confirmed) return {ok: true, keep: 1, detail: '그룹웨어 기본값 유지(이어받기 선택 안 함) · 공개·보안은 상신 전에 확인하세요.'};
       const ks = keys.filter(k => classification.includes(k));
-      if (!ks.length) return {ok: true, detail: '그룹웨어 기본값 유지 · 공개·보안은 상신 전에 확인하세요.'};
+      if (!ks.length) return {ok: true, keep: 1, detail: '그룹웨어 기본값 유지 · 공개·보안은 상신 전에 확인하세요.'};
       const r = keys.map(k => classification.includes(k) && setRadioByLabel(d, m[k]));
       return {ok: r.every(Boolean), detail: keys.map(k => m[k] || '확인 불가').join(' · ')};
     });
@@ -448,28 +449,30 @@
     if (spec.ref) await run('참조문서', guard => pickRefDoc(f, spec.ref.title, spec.ref.docNo, guard));
     } finally { if (AUTO.tok === tok) AUTO.running = false; }
     if (live()) w.__wcFilled = Date.now();
-    steps.push({name: '안전장치', ok: AUTO.blocked.length === 0, detail: AUTO.blocked.length ? `자동 실행 중 ${AUTO.blocked.join(', ')} 버튼 클릭을 차단했습니다(상신·저장은 하지 않았습니다)` : '상신·결재·임시저장·삭제는 실행하지 않았습니다(상신 전에서 멈춤)'});
+    steps.push({name: '안전장치', keep: 1, ok: AUTO.blocked.length === 0, detail: AUTO.blocked.length ? `자동 실행 중 ${AUTO.blocked.join(', ')} 버튼 클릭을 차단했습니다(상신·저장은 하지 않았습니다)` : '상신·결재·임시저장·삭제는 실행하지 않았습니다(상신 전에서 멈춤)'});
     return steps;
   }
 
   function showDraftReport(title, steps, notes = []) {
     if (typeof markPaneDirty === 'function') { const pf = $('#frame iframe'); if (pf) markPaneDirty(pf); }
-    const bad = steps.filter(s => !s.ok).length;
+    const bad = steps.filter(s => !s.ok).length, fill = steps.filter(s => !s.keep), got = fill.filter(s => s.ok).length;
     const bodyStep = steps.find(s => s.name === '본문');
     const bodyFilled = !!(bodyStep && bodyStep.ok); // 본문을 실제로 넣고 다시 읽어 일치한 경우만
     const frameOnly = '초안 틀만 입력했습니다. 본문 사실(일시·장소·인원·금액)은 직접 확인하세요.';
-    const head = bad ? '자동 기입 결과 (확인이 필요한 항목이 있습니다)' : bodyFilled ? '자동 기입 완료 · 상신 전 확인 단계' : '초안 틀만 입력했습니다';
-    const summary = bad ? `${steps.length - bad}/${steps.length}개 항목 자동 기입, ${bad}개는 직접 확인이 필요합니다.` : bodyFilled ? `${steps.length}개 항목을 지난 결재문서 패턴대로 기입하고 다시 읽어 확인했습니다.` : `${steps.length}개 항목(본문 제외)을 기입했습니다. ${frameOnly}`;
-    logActionRecord({command: title, type: '기안', target: title, summary, steps: steps.map(s => `${s.ok ? '✓' : '✗'} ${s.name}: ${s.detail}`), status: bad ? 'partial' : 'success', verified: !bad, details: notes.join(' / ')});
+    if (!got) notes = []; // 넣은 값이 없으면 본문·틀을 이어받았다는 안내도 보이지 않는다
+    const head = !got ? (fill.length ? '자동 기입을 확인하지 못했습니다' : '자동 기입하지 못했습니다') : bad ? '자동 기입 결과 (확인이 필요한 항목이 있습니다)' : bodyFilled ? '자동 기입 완료 · 상신 전 확인 단계' : '초안 틀만 입력했습니다';
+    const summary = !got ? (fill.length ? '기안에 채운 칸을 확인하지 못했습니다. 화면을 확인하세요.' : '기안을 채우지 못했습니다.') : bad ? `${got}/${fill.length}개 항목 자동 기입, ${bad}개는 직접 확인이 필요합니다.` : bodyFilled ? `${got}개 항목을 지난 결재문서 패턴대로 기입하고 다시 읽어 확인했습니다.` : `${got}개 항목(본문 제외)을 기입했습니다. ${frameOnly}`;
+    const rec = logActionRecord({command: title, type: '기안', target: title, summary, steps: steps.map(s => `${s.ok ? '✓' : '✗'} ${s.name}: ${s.detail}`), status: !got ? 'error' : bad ? 'partial' : 'success', verified: !bad, details: notes.join(' / ')});
+    if (typeof overlayYield === 'function' && overlayYield(summary + (got && bad && !bodyFilled ? ' 본문은 직접 확인하세요.' : '') + ' 상신하지 않았습니다.', rec)) return;
     S.paletteOpen = true; // Esc·바깥 클릭으로 닫히게
     $('#overlay').innerHTML = `
       <div class="modal peek">
         <div class="dlg" data-stop="1" style="width:min(620px,94vw);padding:20px 24px;position:absolute;right:24px;bottom:24px;top:auto;left:auto;transform:none" role="dialog" aria-label="자동 기입 결과">
           <button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button>
           <h2 style="margin:0 0 4px;font-size:17px">${esc(head)}</h2>
-          <div class="muted" style="margin-bottom:10px">${esc(title)}</div>
+          <div class="muted" style="margin-bottom:10px">${esc(title)}<br>${esc(summary)}</div>
           ${steps.map(s => `<div style="display:flex;gap:8px;padding:5px 0;border-top:1px solid var(--line)"><b style="color:${s.ok ? 'var(--ok)' : 'var(--hi)'};width:18px">${s.ok ? '✓' : '✗'}</b><div><b>${esc(s.name)}</b><div class="muted" style="font-size:12.5px">${esc(s.detail)}</div></div></div>`).join('')}
-          ${!bodyFilled ? `<div class="box warn" style="margin-top:10px"><b>${esc(frameOnly)}</b></div>` : ''}
+          ${got && !bodyFilled ? `<div class="box warn" style="margin-top:10px"><b>${esc(frameOnly)}</b></div>` : ''}
           ${notes.length ? `<div class="box warn" style="margin-top:10px">${notes.map(esc).join('<br>')}</div>` : ''}
           <div class="acts" style="margin-top:12px;justify-content:flex-end"><button class="btn sm primary" data-act="closeHelp">확인하고 계속 작성</button></div>
         </div>

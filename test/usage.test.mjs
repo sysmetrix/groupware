@@ -52,7 +52,7 @@ test('one day cannot grow without bound', () => {
   assert.equal(log.days['2026-11-16'].act.k0, 2, 'existing names still count');
 });
 
-test('usageSummary ranks, adds up the core journeys and lists screens never opened', () => {
+test('usageSummary ranks, adds up the core four and the other jobs, and lists screens never opened', () => {
   let log = null;
   const add = (kind, key, n, at = T0) => { for (let i = 0; i < n; i++) log = usageBump(log, kind, key, at); };
   add('view', 'home', 5); add('view', 'approval', 3); add('view', 'budget', 1, T0 - 86400000);
@@ -66,8 +66,9 @@ test('usageSummary ranks, adds up the core journeys and lists screens never open
   assert.deepEqual(s.chat, {local: 4, ai: 1});
   assert.deepEqual(s.toolErrors, [['get_schedule:err', 1]]);
   const j = Object.fromEntries(s.journeys.map(x => [x.id, x.total]));
-  assert.deepEqual(j, {approval: 5, attendance: 2, draft: 0, budget: 4, chat: 8});
-  assert.equal(USAGE_JOURNEYS.length, 5);
+  assert.deepEqual(j, {todo: 2, calendar: 0, attendance: 2, budget: 4, approval: 3, chat: 8});
+  assert.deepEqual(s.journeys.filter(x => !x.etc).map(x => x.label), ['할 일', '일정·예약', '근태·연차', '예산 집행']);
+  assert.deepEqual(s.journeys.filter(x => x.etc).map(x => x.label), ['결재·메일', '비서에게 묻기']);
 });
 
 test('usageReport is readable text that carries no error message bodies', () => {
@@ -84,6 +85,28 @@ test('usageReport is readable text that carries no error message bodies', () => 
   assert.match(text, /- 자료 읽기: 2/);
   assert.ok(!text.includes('한지우') && !text.includes('본문을'), 'error messages are counted by place, never copied');
   assert.ok(!text.includes('오래된 것'));
+});
+
+test('usageReport groups by the core four, then the other jobs', () => {
+  const text = usageReport(usageBump(null, 'view', 'resource', T0), {now: T0});
+  const section = title => text.split(`## ${title}\n`)[1].split('\n\n')[0].split('\n').map(l => l.replace(/ \(.*/, ''));
+  assert.deepEqual(section('자주 하는 일'), ['- 할 일: 0회', '- 일정·예약: 1회', '- 근태·연차: 0회', '- 예산 집행: 0회']);
+  assert.deepEqual(section('그 밖의 일'), ['- 결재·메일: 0회', '- 비서에게 묻기: 0회']);
+});
+
+test('journey names exist in the code, and screens follow the menu grouping', async () => {
+  const dir = new URL('../src/live/wc/', import.meta.url);
+  const src = (await Promise.all((await fs.readdir(dir)).filter(f => f.endsWith('.js')).map(f => fs.readFile(new URL(f, dir), 'utf8')))).join('\n');
+  const parent = Object.fromEntries([...src.match(/const VIEW_PARENT = \{([^}]*)\}/)[1].matchAll(/(\w+): '(\w+)'/g)].map(m => [m[1], m[2]]));
+  const views = [...src.match(/const VIEWS = \[([\s\S]*?)\n\s*\];/)[1].matchAll(/\{id: '(\w+)'/g)].map(m => m[1]);
+  for (const j of USAGE_JOURNEYS.filter(x => x.id !== 'chat')) {
+    const menu = j.id === 'todo' ? 'today' : j.id;
+    assert.deepEqual([...j.view].sort(), views.filter(v => (parent[v] || v) === menu).sort(), j.id);
+  }
+  const names = USAGE_JOURNEYS.flatMap(j => j.act);
+  assert.equal(new Set(names).size, names.length, 'a button belongs to one job');
+  for (const a of names) assert.ok([`data-act="${a}"`, `case '${a}'`, `HOME_ACTS.${a} `].some(x => src.includes(x)), a);
+  for (const t of USAGE_JOURNEYS.flatMap(j => j.tool).filter(t => t !== '*')) assert.ok(src.includes(`name: '${t}'`), t);
 });
 
 test('the screen code only ever passes names: view ids, data-act names and tool names', async () => {

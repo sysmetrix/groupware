@@ -1426,6 +1426,114 @@ export function resSortList(list = []) {
   const car = r => /차량/.test(`${(r && r.attr) || ''} ${(r && r.name) || ''}`);
   return (Array.isArray(list) ? list : []).map((r, i) => ({r, i})).sort((a, b) => (car(b.r) - car(a.r)) || a.i - b.i).map(x => x.r);
 }
+// v1.28 자원 종류: 비서의 현황 조회(get_resource_status)와 예약 준비(reserve_vehicle)가 함께 쓰는 한 기준.
+// 말과 자원 모두 LED → 회의실 → 차량 순서로 본다. 장비·소모품 이름(빔프로젝터·화상회의 장비·하이패스 카드·블랙박스)은 어느 종류도 아니다.
+const RES_KIND = {led: [/LED|패널|전광판/i, 'LED 패널'], room: [/회의실|회의|세미나|강당|교육장|강의실/, '회의실'], car: [/차량|관용|니로|승용|승합|자동차|카니발|스타리아|스타렉스|아반떼|쏘나타|그랜저|아이오닉|쏘렌토|싼타페|봉고|버스|트럭/, '차량']};
+const RES_KINDS = ['led', 'room', 'car'];
+const RES_GEAR = /(?:회의|차량)용|프로젝터|빔|장비|카드|블랙박스|노트북|카메라|마이크(?!로)|스피커|충전기|하이패스|내비|열쇠/;
+const RES_FULL = /회의실|세미나실|강당|교육장|강의실|차량|승합차|승용차|자동차|버스/;
+// 장비 이름인지. 괄호 안 설명(대회의실(빔프로젝터)·관용차량(니로, 내비))은 보지 않고, 회의실·차량 같은 말이 장비 말보다 앞에 있으면 장비가 아니다(회의용·차량용은 장비).
+function resIsGear(name) {
+  const n = String(name || '').replace(/\([^)]*\)|\[[^\]]*\]/g, ' '), g = n.match(RES_GEAR);
+  if (!g) return false;
+  if (/용$/.test(g[0])) return true;
+  const full = n.match(RES_FULL);
+  return !(full && full.index < g.index);
+}
+// 종류만 뜻하는 말(이름 단서가 아님): 차량·회의실·LED 패널 등. 승합차·강당·세미나실·니로처럼 좁은 말은 이름 단서로 쓴다.
+const RES_GENERIC = /^(?:car|room|led|vehicle|meetingroom|차|차량|관용차|관용차량|공용차|공용차량|자동차|회의|회의실|회의공간|회의장소|세미나|교육|행사|업무|led패널|패널|전광판|자원|예약)$/i;
+const resFlat = s => String(s || '').replace(/\s+/g, '').toLowerCase();
+const resGeneric = s => RES_GENERIC.test(resFlat(s));
+const resOwn = k => Object.prototype.hasOwnProperty.call(RES_KIND, k);
+/** 말(kind 인자·자원 이름 단서) → 'led'|'room'|'car', 모르면 ''. */
+export function resKindOfText(v) {
+  const t = String(v || '').trim();
+  if (resOwn(t)) return t;
+  if (resIsGear(t)) return '';
+  for (const k of RES_KINDS) if (RES_KIND[k][0].test(t)) return k;
+  return /room/i.test(t) ? 'room' : /^(vehicle|차)$|공용차/i.test(t) ? 'car' : '';
+}
+// [종류, 이름으로 판정했는지]. 이름이 장비면 분류가 차량·회의실이어도 종류가 없다.
+function resKindBy(r) {
+  const name = String((r && r.name) || ''), attr = String((r && r.attr) || '');
+  if (resIsGear(name)) return ['', false];
+  for (const k of RES_KINDS) if (RES_KIND[k][0].test(name)) return [k, true];
+  for (const k of RES_KINDS) if (RES_KIND[k][0].test(attr)) return [k, false];
+  return ['', false];
+}
+/** 자원 하나의 종류. 이름이 먼저, 이름으로 모르면 자원 분류(attr). */
+export function resKindOf(r) { return resKindBy(r)[0]; }
+// name에 clue가 들어 있는지. 숫자는 앞뒤가 숫자가 아니어야 한다(1층 ≠ 11층, 상담실 1 ≠ 상담실 10).
+function resHas(name, clue) {
+  const n = resFlat(name), c = resFlat(clue), dg = ch => /\d/.test(ch || '');
+  if (!c) return false;
+  // 번호만 말한 단서(회의실 2의 2)는 층 번호(2층)에 맞지 않는다
+  for (let i = n.indexOf(c); i >= 0; i = n.indexOf(c, i + 1)) if (!(dg(c[0]) && dg(n[i - 1])) && !(dg(c[c.length - 1]) && dg(n[i + c.length])) && !(/^\d+$/.test(c) && n[i + c.length] === '층')) return true;
+  return false;
+}
+/** 이름 단서가 자원 이름에 맞는 정도: 3 이름 전체, 2 이어진 일부, 1 낱말마다(종류 말은 그 종류면 맞음), 0 안 맞음. */
+export function resNameScore(r, clue) {
+  const name = String((r && r.name) || ''), c = resFlat(clue);
+  if (!c) return 0;
+  if (resFlat(name) === c || resFlat(name.replace(/\s*\(.*$/, '')) === c) return 3;
+  if (resHas(name, clue)) return 2;
+  // 낱말마다: 2번·2호·제2는 2로도 본다(2번 회의실 → 회의실 2)
+  const toks = String(clue).trim().split(/\s+/), alt = t => [t, t.replace(/^제(?=\d)/, '').replace(/(\d)\s*(?:번|호)$/, '$1')];
+  return toks.length > 1 && toks.every(t => alt(t).some(w => resHas(name, w)) || (resGeneric(t) && resKindOfText(t) && resKindOfText(t) === resKindOf(r))) ? 1 : 0;
+}
+/**
+ * v1.28 보수 규칙: 이름 단서가 자원 이름에 꼭 맞는지. 이름 전체와 같거나(공백·괄호 설명은 보지 않음),
+ * 숫자가 없는 단서가 이름의 한 낱말과 그대로 같을 때만(승합차 → 업무용 승합차 (12가 3456)). 일부만 겹치면 맞지 않는다.
+ */
+export function resNameExact(r, clue) {
+  const name = String((r && r.name) || ''), c = resFlat(clue), base = name.replace(/\([^)]*\)|\[[^\]]*\]/g, ' ');
+  if (!c) return false;
+  if (resFlat(name) === c || resFlat(base) === c) return true;
+  return !/\d/.test(c) && base.split(/\s+/).some(w => w && resFlat(w) === c);
+}
+// 사용자 문장에서 이 자원들 가운데 일부만 꼭 맞게 가리키는 낱말(승합차 등). 이름 일부만 겹치는 낱말(니로 ↔ 관용차량(니로EV), 2층)이 있으면 unsure.
+function resTextClues(of, text) {
+  const out = [];
+  let unsure = false;
+  for (const raw of String(text || '').split(/[\s,.!?~·]+/)) {
+    // 조사를 뗀 말과 그대로의 말을 함께 본다(니로 → 니로, 승합차로 → 승합차).
+    const ws = [raw, raw.replace(/(?:에서|으로|하고|이랑|로|을|를|이|가|은|는|에|도|만|랑|와|과)$/, '')].filter(w => w.length >= 2 && !resGeneric(w) && !/\d\s*(?:시|분|월|일|:)|^\d+\/\d+$/.test(w));
+    if (!ws.length || resGeneric(raw)) continue;
+    const hit = of.filter(r => ws.some(w => resNameExact(r, w)));
+    if (hit.length && hit.length < of.length) out.push(hit);
+    else if (!hit.length && of.some(r => ws.some(w => resHas(r.name, w)))) unsure = true;
+  }
+  return {out, unsure};
+}
+/**
+ * 요청한 종류의 자원을 고른다. kind: 'car'|'room'|'led'|그 밖의 말, hint: 자원 이름 단서, text: 사용자 문장.
+ * of: 그 종류(이름으로 판정한 자원이 분류로만 판정한 자원보다 앞), pool: 단서에 꼭 맞는 자원(resNameExact, 단서가 없으면 of). 꼭 맞는 것이 없거나 문장의 낱말이 이름 일부만 겹치면 unsure(도구가 묻는다).
+ * 좁은 종류 말(강당·승합차)과 이름 단서는 둘 다 맞아야 한다. 단서가 있으면 pool 밖의 자원으로 대신하지 않는다.
+ * kind가 비고 hint만 있으면 전체 자원에서 이름으로 찾아 그 자원의 종류를 따른다. 문장의 낱말이 서로 다른 자원을 가리키면 ambiguous.
+ * drop: 빼라고 한 자원 말("3층 회의실 말고"의 3층 회의실). 그 말에 맞는 자원은 후보가 아니다(excluded에 담는다).
+ */
+export function resPick(list = [], kind = '', hint = '', text = '', drop = []) {
+  const dropC = (Array.isArray(drop) ? drop : []).map(c => String(c || '').trim()).filter(c => c && !resGeneric(c));
+  const out = r => dropC.some(c => resNameScore(r, c) > 0);
+  const all = Array.isArray(list) ? list.filter(r => r && typeof r === 'object') : [], excluded = all.filter(out), arr = all.filter(r => !out(r));
+  const kw = String(kind || '').trim(), hw = String(hint || '').trim();
+  const ofKind = k => arr.map((r, i) => ({r, i, by: resKindBy(r)})).filter(x => x.by[0] === k).sort((a, b) => (b.by[1] - a.by[1]) || a.i - b.i).map(x => x.r);
+  let k = resKindOfText(kw || hw), label, of;
+  const clues = [kw, hw].filter(c => c && !resGeneric(c) && !(c === kw && !k));
+  if (k) { label = RES_KIND[k][1]; of = ofKind(k); }
+  else if (kw) { const lit = resFlat(kw).slice(0, 20); label = kw.slice(0, 20); of = lit.length >= 2 ? arr.filter(r => resHas(`${r.name}${r.attr || ''}`, lit)) : []; }
+  else { label = '자원'; of = arr; }
+  if (!clues.length) {
+    const {out: tc, unsure} = resTextClues(of, text), pool = unsure ? [] : tc.length ? of.filter(r => tc.every(h => h.includes(r))) : of;
+    // 문장의 낱말로 좁혔는데 둘 이상 남으면 첫 자원을 고르지 않는다(unsure, 도구가 묻는다). 좁히지 않았으면(단서 없음) 빈 자원 고르기 그대로.
+    return {kind: k, label, of, pool, clue: '', ambiguous: !unsure && tc.length > 0 && !pool.length, unsure: unsure || (tc.length > 0 && pool.length > 1), excluded};
+  }
+  // 단서가 있으면 꼭 맞는 자원만(resNameExact). 맞는 것이 없으면 pool이 비고 도구가 그 종류의 목록을 보여 주며 묻는다.
+  const pool = (k || kw ? of : arr).filter(r => clues.every(c => resNameExact(r, c)));
+  if (!k && !kw && pool.length) { const pk = resKindOf(pool[0]); if (pk && pool.every(r => resKindOf(r) === pk)) { k = pk; label = RES_KIND[pk][1]; of = ofKind(pk); } }
+  // 단서에 맞는 자원이 꼭 하나일 때만 고른다. 없거나 둘 이상이면 unsure(도구가 그 종류의 목록을 보여 주며 묻는다).
+  return {kind: k, label, of, pool, clue: clues[clues.length - 1].slice(0, 30), ambiguous: false, unsure: pool.length !== 1, excluded};
+}
 /** 겹치는 예약 하나(없으면 null). start·end는 'HH:MM', date는 YYYYMMDD. */
 export function resConflict(bookings = [], date, start, end) {
   const a = toMin(start), z = toMin(end);

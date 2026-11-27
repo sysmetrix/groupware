@@ -30,13 +30,40 @@
     },
   });
 
+  /** 이번 주(월~오늘) 답: 확정(승인)되고 인정 시간이 있는 날만 더하고, 빠진 날은 이유별 일수를 밝힌다. 월 집계로 대신하지 않는다. */
+  function chatWeekHours(at, nav) {
+    const no = why => ({ok: false, text: '이번 주 합계는 계산할 수 없습니다. ' + why, cards: [nav]});
+    if (!at || !chatModuleOk('attendance')) return no('근태 자료를 읽지 못했습니다.');
+    if (at.daysError || !Array.isArray(at.days)) return no('날짜별 근태 기록을 읽지 못했습니다.');
+    const t = today(), mon = chatAddDays(t, -((new Date(t + 'T00:00:00Z').getUTCDay() + 6) % 7));
+    const mm = s => (/^\d{4}$/.test(s || '') ? +s.slice(0, 2) * 60 + +s.slice(2) : null);
+    let sum = 0, n = 0, pend = 0, none = 0, before = 0, stay = 0, both = 0;
+    const lines = [];
+    for (let iso = mon; iso <= t; iso = chatAddDays(iso, 1)) {
+      const d = at.days.find(x => x && x.date === iso.replace(/-/g, '')), weekend = new Date(iso + 'T00:00:00Z').getUTCDay() % 6 === 0;
+      if (!d) { if (!weekend) { if (iso.slice(0, 7) !== t.slice(0, 7)) before++; else none++; } continue; }
+      const off = d.holiday || /휴일/.test(d.result || ''), has = Number.isFinite(d.recognizedMin);
+      if (String(d.status || '') === '승인' && has) { sum += d.recognizedMin; if (!off || d.recognizedMin > 0) n++; }
+      else if (!off || d.recognizedMin > 0) { if (String(d.status || '') === '승인') none++; else pend++; }
+      const c = mm(d.come), l = mm(d.leave), s = c != null && l != null && l > c ? l - c : 0;
+      if (s) { stay += s; both++; }
+      if (c != null || l != null || d.item) lines.push(`• ${chatMd(iso)} ${chatHm4(d.come) || '–'}~${chatHm4(d.leave) || '–'}${has ? ` · 인정 ${chatMin(d.recognizedMin)}${String(d.status || '') === '승인' ? '' : '(미확정)'}` : ''}${d.item ? ' · ' + d.item : ''}`);
+    }
+    const out = [pend && `미확정 ${pend}일`, none && `인정 시간 없음 ${none}일`, before && `지난달이라 조회되지 않은 ${before}일`].filter(Boolean).join(', ');
+    const span = `이번 주(${chatMd(mon)}~${chatMd(t)})`, now = typeof attTodayText === 'function' ? attTodayText() : '';
+    const head = n ? `${span} 인정 근무시간 합계는 ${chatMin(sum)}입니다(확정된 ${n}일).${out ? ` 합계에서 빠진 날: ${out}.` : ''}` : `이번 주 합계는 계산할 수 없습니다. ${span}에 확정되고 인정 시간이 있는 날이 없습니다${out ? `(${out})` : ''}.`;
+    const more = [both ? `출근·퇴근 기록이 모두 있는 ${both}일의 머문 시간은 ${chatMin(stay)}입니다(점심시간 포함).` : '출근·퇴근 지문이 함께 남은 날이 없어 머문 시간은 계산하지 않았습니다.', now && `오늘: ${now}`].filter(Boolean);
+    return {ok: n > 0, text: [head, ...more, ...lines].join('\n'), data: {week_recognized: n ? chatMin(sum) : '', counted_days: n, pending_days: pend, no_record_days: none + before}, cards: [nav]};
+  }
+
   chatRegisterTool({
     name: 'get_work_hours', label: '근무시간 확인', kind: 'read',
-    description: '오늘 내 출근·퇴근 지문 시각과 이번 달 인정 근무시간(기본·시간외·야간)을 알려준다. 다른 직원의 기록은 다루지 않는다.',
+    description: '오늘 내 출근·퇴근 지문 시각과 이번 달 인정 근무시간(기본·시간외·야간)을 알려준다. week=true면 이번 주(월~오늘) 합계. 다른 직원의 기록은 다루지 않는다.',
     params: {type: 'object', properties: {}},
-    run: async () => {
+    run: async a => {
       if (!S.raw) return chatNotReady();
       const at = S.raw.data && S.raw.data.attendance, nav = {type: 'nav', label: '근태·연차 화면 열기', view: 'attendance'};
+      if (a.week) return chatWeekHours(at, nav);
       if (!chatModuleOk('attendance')) return {ok: false, text: '근태 자료를 읽지 못해 근무시간을 확인할 수 없습니다.', cards: [nav]};
       const td = at.today || {}, mo = at.month || {}, bits = [];
       if (td.error) bits.push('오늘 출퇴근 기록은 읽지 못했습니다.');

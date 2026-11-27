@@ -2,7 +2,7 @@
 
 더존 Amaranth 10 그룹웨어 위에 얹는 한 화면 AI 비서다. 지금 개발하는 제품은 `src/live/`이고, `src/*.mjs`·`public/`·`desktop/`은 2026년 10월의 로컬 서버 도우미로 보관 상태다(테스트는 계속 통과해야 한다).
 
-평가와 앞으로의 방향은 `docs/engineering/direction.md`, 고치고 확인하는 순환은 `docs/engineering/HARNESS.md`, 화면 기준은 `docs/design/principles.md`, AI 비서 기준은 `docs/ai-success-criteria.md`에 있다.
+평가와 앞으로의 방향, 여러 작업자로 묶음을 도는 고도화 순환(5절)은 `docs/engineering/direction.md`, 고치고 확인하는 순환은 `docs/engineering/HARNESS.md`, 화면 기준은 `docs/design/principles.md`, AI 비서 기준은 `docs/ai-success-criteria.md`에 있다.
 
 ## 지금의 방향
 

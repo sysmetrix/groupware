@@ -330,6 +330,7 @@
       case 'navMini':
       case 'openUsage':
       case 'usageExport':
+      case 'usageExportJson':
       case 'usageCopy':
       case 'usageToggle':
       case 'usageClear':

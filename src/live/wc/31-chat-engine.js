@@ -136,8 +136,9 @@
       { const ty = st.ctx.lastItems[0].type; if (ty && st.ctx.lastItems.every(i => i.type === ty)) st.ctx.byType = {...(st.ctx.byType || {}), [ty]: st.ctx.lastItems}; }
       st.ctx.pendingSlot = null;
     } else if (!res.ok && /^prepare_|^reserve_/.test(name) && /날짜|시간/.test(res.text || '')) {
-      st.ctx.pendingSlot = {tool: name, args: runArgs};
-    } else if (res.ok) {
+      st.ctx.pendingSlot = {tool: name, args: runArgs, text: String(ctx.userText || '').slice(0, 300)};
+    } else if (res.ok || (st.ctx.pendingSlot && st.ctx.pendingSlot.tool === name)) {
+      // v1.28: 날짜·시간을 묻지 않은 실패(예: 그 자원이 없음)에서도 이어 말 슬롯을 지운다. 다음 말에 앞의 자원이 남지 않게.
       st.ctx.pendingSlot = null;
     }
     // 한 통만 찾은 메일 목록이면 다음 말("그거 답장 써줘")의 대상으로 기억한다.
@@ -366,12 +367,30 @@
         const target = R.chatParseDate(text, new Date());
         it = {...it, args: {...it.args, limit: 1, ...(target ? {requested_date: target.date} : {})}};
       }
+      // v1.28: 예약 되묻기 뒤 "하지 마"·"아니 예약하지 마"(날짜가 없어도)는 슬롯을 지우고 그만뒀다고만 답한다. 다음 말에 취소한 예약이 이어지지 않게.
+      if ((!it.tool || it.confidence < 0.9) && st.ctx && st.ctx.pendingSlot && /^reserve_/.test(st.ctx.pendingSlot.tool) && typeof R.chatResourceAsk === 'function' && (R.chatResourceAsk(text) || {}).stop) {
+        st.ctx.pendingSlot = null;
+        ai.text = '알겠습니다. 준비하던 예약은 그만뒀습니다. 아무것도 예약하지 않았습니다.'; ai.state = 'done';
+        if (st.seq === runSeq) { st.busy = false; st.abort = null; st.activeReply = null; }
+        chatSave(); chatRefresh(true); return;
+      }
       if ((!it.tool || it.confidence < 0.9) && st.ctx && st.ctx.pendingSlot) {
         const dt = R.chatParseDate(text, new Date()), rg = R.chatParseRange(text);
         if (dt || rg.start) {
           const merged = {...st.ctx.pendingSlot.args, ...(dt ? {date: dt.date, ...(dt.end ? {end_date: dt.end} : {})} : {}), ...(rg.start ? {start: rg.start} : {}), ...(rg.end ? {end: rg.end} : {})};
           if (st.ctx.pendingSlot.tool === 'prepare_schedule' && typeof R.chatScheduleRequest === 'function') { const sr = R.chatScheduleRequest(text, new Date()); Object.assign(merged, sr.date ? {date: sr.date} : {}, sr.start ? {start: sr.start, end: sr.end} : {}); delete merged.end_date; }
-          it = {tool: st.ctx.pendingSlot.tool, args: merged, confidence: 1};
+          // v1.28 자원 예약: 앞 문장과 이어 말을 함께 도구에 넘긴다(앞 문장의 승용차·"말고"가 사라지지 않게).
+          // 이어 말에 자원 이름이 있으면 그 자원으로, 종류 말만 있으면 앞에서 정한 자원은 두고 종류만 따른다(그 종류에 없으면 도구가 묻는다).
+          // 앞에 이름 없이 종류만 있었고 이어 말의 종류가 다르면 이어 말의 종류로. 빼거나 부정하는 말이 있으면 바꾸지 않는다(도구가 묻는다).
+          let slotText = `${st.ctx.pendingSlot.text || ''} ${text}`.trim();
+          const ra = st.ctx.pendingSlot.tool === 'reserve_vehicle' && typeof R.chatResourceAsk === 'function' ? R.chatResourceAsk(text) : null;
+          if (ra && ra.found && !ra.stop && !ra.neg) {
+            const pk = typeof R.resKindOfText === 'function' ? R.resKindOfText(merged.kind || '') : merged.kind || '';
+            if (ra.resource) { delete merged.kind; delete merged.resource; Object.assign(merged, ra.kind ? {kind: ra.kind} : {}, {resource: ra.resource}); slotText = text; }
+            else if (merged.resource) { if (ra.kind) merged.kind = ra.kind; }
+            else if (ra.kind && ra.kind !== pk) { merged.kind = ra.kind; slotText = text; }
+          }
+          it = ra && ra.stop ? (st.ctx.pendingSlot = null, it) : {tool: st.ctx.pendingSlot.tool, args: merged, confidence: 1, userText: slotText};
         }
       }
       // "그거/그 메일"은 앞에서 다룬 메일(대화 초점)로 채운다(v0.86.0).
@@ -388,7 +407,7 @@
       const preferAi = ready && it.tool !== 'get_leave_status' && !auto && !weekday && !proseCaps && !localSure && !(st.ctx && st.ctx.pendingSlot) && R.chatPreferGemini(text);
       const known = !preferAi && it.tool && it.confidence >= (ready ? 0.9 : 0.6) && CHAT_TOOLS.has(it.tool);
       if (known) {
-        const res = await chatExec(it.tool, it.args, ai, {userText: text, viaAi: false, auto: !!auto});
+        const res = await chatExec(it.tool, it.args, ai, {userText: it.userText || text, viaAi: false, auto: !!auto});
         if (S.userKey !== owner || S.chat !== st || st.seq !== runSeq) return;
         st.ctx.lastRead = res.ok && ['get_schedule', 'get_staff_status', 'get_resource_status'].includes(it.tool) ? {tool: it.tool, args: it.args} : null;
         // 순번으로 고른 도구는 고쳐 말하기에 쓰려고 기억한다(메모리에만)

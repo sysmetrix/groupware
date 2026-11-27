@@ -19,17 +19,8 @@
     return {ok: true, text: `“${chatCut(x.title, 50)}” 메일은 아직 읽지 않았습니다. 열면 그룹웨어에서 읽음으로 바뀝니다.`, cards: [{type: 'confirm', title: '메일 열기', risk: 'low', rows: [['메일', x.title], ['바뀌는 것', '읽음으로 표시']], confirmLabel: '열기', cancelLabel: '취소', onConfirm: async () => open()}]};
   }; } }
 
-  // "이번 주 몇 시간 일했어?" → 날마다 출퇴근 기록(체류 시간)과 그룹웨어 확정 인정 시간
-  { const def = CHAT_TOOLS.get('get_work_hours'); if (def) { const run0 = def.run; def.params.properties.week = {type: 'boolean'}; def.run = async (a, ctx) => {
-    if (!a.week || !S.raw) return run0(a, ctx);
-    const at = S.raw.data.attendance || {}, t = today(), mon = chatAddDays(t, -((new Date(t + 'T00:00:00Z').getUTCDay() + 6) % 7));
-    const days = (Array.isArray(at.days) ? at.days : []).filter(d => { const iso = `${d.date.slice(0, 4)}-${d.date.slice(4, 6)}-${d.date.slice(6, 8)}`; return iso >= mon && iso <= t; });
-    const mm = s => /^\d{4}$/.test(s || '') ? +s.slice(0, 2) * 60 + +s.slice(2) : null, hm = m => `${Math.floor(m / 60)}시간${m % 60 ? ' ' + (m % 60) + '분' : ''}`;
-    let stay = 0, rec = 0, recN = 0, both = 0; const lines = [];
-    for (const d of days) { const c = mm(d.come), l = mm(d.leave), s = c != null && l != null && l > c ? l - c : 0; stay += s; if (s) both++; if (d.recognizedMin > 0) { rec += d.recognizedMin; recN++; } if (c != null || l != null || d.item) lines.push(`• ${+d.date.slice(4, 6)}/${+d.date.slice(6, 8)} ${chatHm4(d.come) || '–'}~${chatHm4(d.leave) || '–'}${s ? ` (${hm(s)})` : ''}${d.item ? ' · ' + d.item : ''}`); }
-    if (mon.slice(0, 7) !== t.slice(0, 7) && !days.length) return run0({}, ctx);
-    return {ok: true, text: `이번 주(${chatMd(mon)}~${chatMd(t)}) ${both ? `출근·퇴근 기록이 모두 있는 ${both}일의 머문 시간은 ${hm(stay)}입니다(점심시간 포함).` : '출근·퇴근 지문이 함께 남은 날이 없어(출장·외출 등) 머문 시간을 계산할 수 없습니다.'}${recN ? ` 그룹웨어 근무시간 집계는 확정된 ${recN}일 기준 ${hm(rec)}입니다.` : ' 이번 주 근무시간 집계는 아직 확정되지 않았습니다.'}${mon.slice(0, 7) !== t.slice(0, 7) ? ' (지난달에 걸친 날은 빠졌을 수 있습니다)' : ''}\n${lines.join('\n')}`, data: {count: lines.length}};
-  }; } }
+  // "이번 주 몇 시간 일했어?" → 답은 36번 조각이 낸다. 48번 조각이 params를 새로 쓰므로 week 인자는 여기서 다시 선언한다.
+  { const def = CHAT_TOOLS.get('get_work_hours'); if (def) def.params.properties.week = {type: 'boolean'}; }
 
   // "다음 주 월화 연차 써도 돼?" → 날마다 판단 자료를 모아 한 번에
   { const def = CHAT_TOOLS.get('check_leave_day'); if (def) { const run0 = def.run; def.params.properties.end = {type: 'string'}; def.run = async (a, ctx) => {
