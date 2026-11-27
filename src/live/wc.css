@@ -1015,6 +1015,7 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .dr-b{position:absolute;top:4px;bottom:4px;min-width:6px;border:0;border-radius:4px;padding:0 6px;background:var(--accent);color:#fff;font:inherit;font-size:12px;font-weight:700;line-height:22px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;transform-origin:0 50%;transition:filter var(--t1),top var(--t1),bottom var(--t1)}
 .wc.dark .dr-b{color:#16191f}
 .wc .dr-b.dr-away{background:var(--md)}
+.wc .dr-b.dr-ot{background:var(--md)}
 .wc .dr-b.dr-car{background:var(--ok)}
 .wc .dr-b.dr-done{opacity:.45}
 .wc .dr-b:hover,.wc .dr-b:focus-visible{top:1px;bottom:1px;filter:brightness(1.12);z-index:2;line-height:28px}

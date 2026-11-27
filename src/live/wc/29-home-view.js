@@ -48,6 +48,13 @@
       if (s.slice(0, 8) <= t8 && z.slice(0, 8) >= t8) out.timeline.push({from: e.allDay ? '' : s.slice(8, 10) + ':' + s.slice(10, 12), to: e.allDay || z.length < 12 ? '' : z.slice(8, 10) + ':' + z.slice(10, 12), label: e.title, allDay: !!e.allDay, kind: 'etc'});
     }
     try { if (typeof ensureTeam === 'function') ensureTeam(mk); } catch (e) { logError('home.team', e.message); }
+    const apps = S.appsC && S.appsC.user === currentKey && S.appsC.data;
+    out.otUnknown = !apps || !apps.me || !Array.isArray(apps.apps);
+    out.overtime = !out.otUnknown && typeof R.homeOvertime === 'function' ? R.homeOvertime(apps.apps, {date: t8, me: apps.me}) : [];
+    for (const ot of out.overtime) {
+      const fmt = n => String(Math.floor(n / 60)).padStart(2, '0') + ':' + String(n % 60).padStart(2, '0');
+      out.timeline.push({from: fmt(ot.from), to: fmt(Math.min(ot.end, 1440)), label: ot.label + (ot.end > 1440 ? ' (다음 날 종료)' : ''), allDay: false, kind: 'ot'});
+    }
     const team = (S.team || {})[mk];
     if (team && !team.busy && !team.err && team.cal && team.cal.byDate) {
       const day = team.cal.byDate[t8] || [];
@@ -106,16 +113,23 @@
   function homeRailHtml(d, day) {
     homeRailLast = {d, day};
     if (!d.loaded || d.scheduleUnknown || typeof R.homeDayRail !== 'function') return '';
-    const r = R.homeDayRail(d.timeline, {nowMin: homeNowMin()});
     const off = day && (day.weekend || day.holiday);
+    const overtime = d.overtime || [];
+    const activeOt = overtime.filter(x => x.end > homeNowMin());
+    const otEnd = activeOt.length ? Math.max(...activeOt.map(x => x.end)) : 0;
+    const useOtEnd = activeOt.length > 0 && (off || otEnd >= 18 * 60);
+    const end = useOtEnd ? otEnd : 18 * 60;
+    const endH = Math.min(24, Math.max(19, Math.ceil(end / 60)));
+    const r = R.homeDayRail(d.timeline, {nowMin: homeNowMin(), endH, workEndMin: end});
     const blocks = r.blocks.map((b, i) => `<button class="dr-b dr-${b.kind}${b.done ? ' dr-done' : ''}" style="left:${b.left}%;width:${b.width}%;--i:${i}" data-act="homeTile" data-v="schedule" title="${esc(b.time + ' ' + b.label)}" aria-label="${esc(b.time + ' ' + b.label + (b.done ? ' (지남)' : ''))}">${esc(b.label)}</button>`).join('');
     const notes = [];
     if (r.allDay.length) notes.push(`<span class="dr-allday"><i aria-hidden="true"></i>종일 <b>${esc(r.allDay.slice(0, 2).join(', '))}</b>${r.allDay.length > 2 ? ` 외 ${r.allDay.length - 2}건` : ''}</span>`);
     if (r.next) notes.push(`<span>다음 일정 <b>${esc(r.next.label)}</b> ${homeDur(r.next.inMin)} 뒤</span>`);
     else if (!r.blocks.length && !r.allDay.length) notes.push('<span>오늘 시간이 정해진 일정이 없습니다</span>');
-    if (!off && r.leftMin) notes.push(`<span>퇴근까지 <b>${homeDur(r.leftMin)}</b></span>`);
+    if (!d.otUnknown && (!off || overtime.length) && r.leftMin) notes.push(`<span>${useOtEnd ? '승인 시간외 종료' : '기본 근무 종료'}까지 <b>${homeDur(r.leftMin)}</b>${useOtEnd ? ` (예정 ${esc(String(Math.floor(end / 60) % 24).padStart(2, '0') + ':' + String(end % 60).padStart(2, '0'))}${end >= 1440 ? ' 다음 날' : ''})` : ' (18:00 기준)'}</span>`);
+    if (d.otUnknown) notes.push('<span>시간외 신청 확인 중 또는 조회 불가</span>');
     if (r.outside) notes.push(`<span>이 시간대 밖 일정 ${r.outside}건</span>`);
-    return `<div class="dr" id="dayRail" role="group" aria-label="오늘 하루 시간표 (8시부터 19시)"><div class="dr-track"><i class="dr-past" id="drPast" style="width:${r.now.left}%"></i><i class="dr-lunch" style="left:${r.lunch.left}%;width:${r.lunch.width}%" title="점심"></i>${blocks}</div>${r.now.inRange ? `<div class="dr-now${r.now.edge ? ' dr-edge-' + r.now.edge : ''}" id="drNow" style="left:${r.now.left}%" aria-hidden="true"><b>${esc(r.now.label)}</b></div>` : ''}<div class="dr-ticks" aria-hidden="true">${r.ticks.map(t => `<span class="dr-tick" style="left:${t.left}%">${t.h}</span>`).join('')}</div></div>${notes.length ? `<div class="dr-note">${notes.join('')}</div>` : ''}`;
+    return `<div class="dr" id="dayRail" role="group" aria-label="오늘 하루 시간표 (8시부터 ${endH}시)"><div class="dr-track"><i class="dr-past" id="drPast" style="width:${r.now.left}%"></i><i class="dr-lunch" style="left:${r.lunch.left}%;width:${r.lunch.width}%" title="점심"></i>${blocks}</div>${r.now.inRange ? `<div class="dr-now${r.now.edge ? ' dr-edge-' + r.now.edge : ''}" id="drNow" style="left:${r.now.left}%" aria-hidden="true"><b>${esc(r.now.label)}</b></div>` : ''}<div class="dr-ticks" aria-hidden="true">${r.ticks.map(t => `<span class="dr-tick" style="left:${t.left}%">${t.h}</span>`).join('')}</div></div>${notes.length ? `<div class="dr-note">${notes.join('')}</div>` : ''}`;
   }
 
   // v1.23 인사 바로 아래: 먼저 할 일 한 건(그룹웨어·개인 ToDo 중 더 급한 것)과 '핵심 4' 줄(할 일 · 일정·예약 · 근태·연차 · 예산 집행).

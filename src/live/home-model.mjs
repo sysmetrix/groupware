@@ -49,13 +49,33 @@ export function homeTimelineCompact(items = [], max = 5) {
   return {rows: all.slice(0, m), more: Math.max(0, all.length - m)};
 }
 
-const hmoMin = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || '')); return m && +m[1] < 24 && +m[2] < 60 ? +m[1] * 60 + +m[2] : null; };
+const hmoMin = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || '')); return m && (+m[1] < 24 || (+m[1] === 24 && +m[2] === 0)) && +m[2] < 60 ? +m[1] * 60 + +m[2] : null; };
+/** 본인의 승인된 시간외 신청만 오늘에 반영한다. 자정 이후 종료는 다음 날 분으로 나타낸다. */
+export function homeOvertime(apps = [], {date = '', me = ''} = {}) {
+  const day = String(date).replace(/-/g, '');
+  if (!/^\d{8}$/.test(day) || !me || !Array.isArray(apps)) return [];
+  const parse = x => { const s = String(x || ''); return /^\d{4}$/.test(s) ? hmoMin(s.slice(0, 2) + ':' + s.slice(2)) : null; };
+  const seen = new Set(), out = [];
+  for (const a of apps) {
+    if (!a || String(a.empCd || '') !== String(me) || String(a.approState) !== '1' || a.deleteReqYn === 'Y' || a.docdelYn === 'N' || !/연장근무|휴일근무|조기근무|시간외\s*근무/.test([a.atNm, a.atItemNm].join(' '))) continue;
+    const s = String(a.startDt || a.atDt || ''), e = String(a.endDt || s), from = parse(a.startTm), to = parse(a.endTm);
+    if (!/^\d{8}$/.test(s) || !/^\d{8}$/.test(e) || e < s || s > day || from === null || from >= 1440 || to === null || (from === 0 && to === 0)) continue;
+    const ordinal = x => { const d = Date.UTC(+x.slice(0, 4), +x.slice(4, 6) - 1, +x.slice(6, 8)); return new Date(d).toISOString().slice(0, 10).replace(/-/g, '') === x ? d / 86400000 : NaN; };
+    const sd = ordinal(s), ed = ordinal(e), today = ordinal(day); if (![sd, ed, today].every(Number.isFinite)) continue;
+    const startAbs = sd * 1440 + from, endAbs = ed * 1440 + to + (sd === ed && to < from ? 1440 : 0), base = today * 1440;
+    if (endAbs <= base || startAbs >= base + 1440 || endAbs <= startAbs) continue;
+    const fromToday = Math.max(0, startAbs - base), endToday = endAbs - base;
+    const key = [s, e, from, to, a.appDt, a.appSq].join('|'); if (seen.has(key)) continue; seen.add(key);
+    out.push({from: fromToday, end: endToday, label: String(a.atNm || a.atItemNm || '시간외근무')});
+  }
+  return out.sort((a, b) => a.from - b.from || a.end - b.end);
+}
 const hmoHm = n => String(Math.floor(n / 60)).padStart(2, '0') + ':' + String(n % 60).padStart(2, '0');
 /**
  * 하루 띠: 근무 시간대(기본 08~19시)를 한 줄로 놓았을 때 일정 칸·점심·지금 바늘이 놓일 위치(%)를 계산한다.
  * 시간이 정해진 일정만 칸이 되고, 종일 일정은 이름만 따로 돌려준다. 띠 밖(이른 아침·밤)의 일정은 개수만 센다.
  */
-export function homeDayRail(items = [], {nowMin = 540, startH = 8, endH = 19, workEndH = 18} = {}) {
+export function homeDayRail(items = [], {nowMin = 540, startH = 8, endH = 19, workEndH = 18, workEndMin = null} = {}) {
   const s = hmoN(startH) * 60, e = Math.max(s + 60, hmoN(endH) * 60), span = e - s;
   const pct = m => +(((Math.min(e, Math.max(s, m)) - s) / span) * 100).toFixed(2);
   const now = Number.isFinite(Number(nowMin)) ? Math.trunc(Number(nowMin)) : s;
@@ -66,11 +86,11 @@ export function homeDayRail(items = [], {nowMin = 540, startH = 8, endH = 19, wo
     if (it.allDay || f === null) { allDay.push(hmoCut(it.label, 24)); continue; }
     const t0 = hmoMin(it.to), t = t0 !== null && t0 > f ? t0 : f + 30;
     if (t <= s || f >= e) { outside++; continue; }
-    blocks.push({left: pct(f), width: +(pct(t) - pct(f)).toFixed(2), label: hmoCut(it.label, 40), time: hmoHm(f) + '~' + hmoHm(t), kind: ['away', 'car'].includes(it.kind) ? it.kind : 'etc', done: t <= now, fromMin: f});
+    blocks.push({left: pct(f), width: +(pct(t) - pct(f)).toFixed(2), label: hmoCut(it.label, 40), time: hmoHm(f) + '~' + hmoHm(t), kind: ['away', 'car', 'ot'].includes(it.kind) ? it.kind : 'etc', done: t <= now, fromMin: f});
   }
   blocks.sort((a, b) => a.fromMin - b.fromMin || b.width - a.width);
   const next = blocks.find(b => b.fromMin > now) || null;
-  const workEnd = hmoN(workEndH) * 60;
+  const workEnd = workEndMin === null ? hmoN(workEndH) * 60 : hmoN(workEndMin);
   return {
     blocks: blocks.map(({fromMin, ...b}) => b), allDay, outside,
     ticks: Array.from({length: hmoN(endH) - hmoN(startH) + 1}, (_, i) => ({h: hmoN(startH) + i, left: pct(s + i * 60)})),
