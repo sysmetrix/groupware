@@ -411,7 +411,7 @@ ${!isNew && typeof todoEditorInfoHtml === 'function' ? todoEditorInfoHtml(t) : '
     if (TD.saving) return;
     const f = todoReadEditor();
     if (f.err) { toast(f.err); return; }
-    TD.saving = true; const saveButton = root.querySelector('#tdEd [data-act="tdSave"]'); if (saveButton) { saveButton.disabled = true; saveButton.textContent = '저장 중…'; }
+    TD.saving = true; TD.dirty = true; const saveButton = root.querySelector('#tdEd [data-act="tdSave"]'); if (saveButton) { saveButton.disabled = true; saveButton.textContent = '저장 중…'; }
     let r;
     if (TD.sel === 'new') { r = await todoCreate({...f, checklist: (TD.draft && TD.draft.checklist) || []}); if (r.ok) { TD.sel = r.id; TD.draft = null; } }
     else { const t = todoFind(TD.sel); const d = t ? todoEditorDiff(t, f) : f; r = Object.keys(d).length ? await todoSave(TD.sel, d) : {ok: true, text: '바뀐 내용이 없습니다.'}; }
