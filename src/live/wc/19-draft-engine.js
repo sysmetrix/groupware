@@ -10,6 +10,12 @@
   const patModel = () => R.buildPatternModel(Object.values(patLoad().docs));
   const HR_FORMS = /^(36|40|43|1012|1021)$/;
   let learning = null;
+  const learningListeners = new Set();
+  let learningProgress = null;
+  function reportLearning(progress) {
+    learningProgress = progress;
+    for (const listener of learningListeners) { try { listener(progress); } catch {} }
+  }
 
   // 결재 완료 문서 한 건을 보이지 않는 창에서 열어 기본항목과 본문을 읽는다 (조회만, 저장·상신 없음)
   async function readDocPattern(it) {
@@ -57,12 +63,15 @@
     learning = (async () => {
       let done = 0;
       try {
+        reportLearning({phase: 'listing', done: 0, errors: 0, total: null});
         const sub = await GW.submittedRange({days: 365, size: 400});
         const have = patLoad().docs;
     const fresh = sub.docs.filter(d => !HR_FORMS.test(d.tiKeyCode) && !have[d.docId]);
     const todo = fresh.slice(0, limit)
       .map(d => ({id: d.docId, ti: d.tiKeyCode, title: d.title, form: d.form, docNo: d.docNo, date: d.date}));
-    if (!todo.length) return {done: 0, errors: 0};
+    const total = todo.length;
+    reportLearning({phase: 'reading', done: 0, errors: 0, total});
+    if (!todo.length) return {done: 0, errors: 0, left: 0};
     if (!quiet) toast(`내 기안 패턴을 학습하는 중입니다 (${todo.length}건)…`);
     const t0 = Date.now();
     let errors = 0;
@@ -70,6 +79,7 @@
       while (todo.length && Date.now() - t0 < budgetMs) {
         const r = await readDocPattern(todo.shift());
         if (!r.err) { patSaveDoc(r); done++; } else errors++;
+        reportLearning({phase: 'reading', done, errors, total});
       }
     };
     await Promise.all(Array.from({length: conc}, worker));
@@ -80,8 +90,7 @@
   }
 
   // ---------- 결과보고 대상(미작성 계획서) 선별 ----------
-  async function getPendingPlansList() {
-    const lr = await learnPatterns({limit: 12, budgetMs: 60000, quiet: true}).catch(e => ({done: 0, errors: 1, errMsg: e.message}));
+  function getPendingPlansList(lr = {}) {
     const allDocs = Object.values(patLoad().docs);
     const docs = allDocs.filter(d => d.binder && !/^접수문서/.test(d.binder) && /^일반기안문/.test(d.form || ''));
     const plans = docs.filter(d => /계획(\(안\)|\(변경\))?$/.test(String(d.title).trim()) && !/결과/.test(d.title));
@@ -100,6 +109,7 @@
       .sort((a, b) => String(b.date).localeCompare(String(a.date)));
     pending.learnedCount = allDocs.length;
     pending.learnErrors = (lr && lr.errors) || 0;
+    pending.learnLeft = (lr && lr.left) || 0;
     return pending;
   }
 
@@ -118,19 +128,29 @@
               <div class="muted">조회한 문서 중 결과보고의 참조 문서번호가 일치한 계획서는 제외했습니다. 미연결 보고서가 있을 수 있으니 작성 전에 확인하세요. 선택하면 그 계획서의 기록물철·본문·참조문서를 그대로 이어받습니다.</div>
             </div>
           </div>
-          <div id="planPickerList" style="max-height:380px;overflow:auto;display:flex;flex-direction:column;gap:8px">
-            <div class="mi muted"><span class="spin"></span> 내 결재문서를 분석하고 있습니다…</div>
+          <div id="planProgress" class="plan-progress" role="status" aria-live="polite">
+            <div class="plan-progress-head"><span class="plan-progress-icon">${ic('doc')}</span><div><b id="planProgressTitle">문서 목록을 확인하고 있습니다</b><div id="planProgressDetail">저장된 결과를 먼저 보여 드리고 새 문서를 살펴봅니다.</div></div><span id="planElapsed" class="plan-elapsed">0초 경과</span></div>
+            <div class="plan-progress-track" role="progressbar" aria-label="문서 분석 진행 상태"><div id="planProgressFill" class="plan-progress-fill indeterminate"></div></div>
+            <div class="plan-progress-foot"><span id="planProgressCount">대상 문서 확인 중</span><span>문서별 처리 시간은 달라질 수 있습니다</span></div>
           </div>
+          <div id="planPickerList" style="max-height:380px;overflow:auto;display:flex;flex-direction:column;gap:8px"></div>
           <div class="acts" style="margin-top:16px;justify-content:flex-end;border-top:1px solid var(--line);padding-top:12px">
             <button class="btn sm ghost" data-act="closeHelp">닫기 (Esc)</button>
           </div>
         </div>
       </div>`;
-    const pending = await getPendingPlansList();
     const el = $('#planPickerList');
-    if (!el) return;
-    if (!pending.length) { el.innerHTML = `<div class="empty"><div class="ill">${ic('check')}</div><b>미작성 계획서를 찾지 못했습니다</b>현재 학습한 ${pending.learnedCount || 0}건 기준입니다.${pending.learnErrors ? ` (일부 문서 ${pending.learnErrors}건은 읽지 못했습니다)` : ''}</div>`; return; }
-    el.innerHTML = (pending.learnErrors ? `<p role="status">일부 문서를 조회하지 못했습니다. 결과보고 유무를 원문에서 확인하세요.</p>` : '') + pending.map(p => `
+    const progressEl = $('#planProgress');
+    const started = Date.now();
+    const current = () => $('#planPickerList') === el && $('#planProgress') === progressEl;
+    function renderPlans(lr = {}, loading = false) {
+      if (!current()) return;
+      const pending = getPendingPlansList(lr);
+      if (!pending.length) { el.innerHTML = loading ? '<div class="plan-empty">저장된 대상이 없습니다. 새 문서를 확인하고 있습니다.</div>' : `<div class="empty"><div class="ill">${ic('check')}</div><b>현재 확인한 문서에서 대상을 찾지 못했습니다</b>학습한 ${pending.learnedCount || 0}건 기준입니다.${pending.learnErrors ? ` 일부 문서 ${pending.learnErrors}건은 읽지 못했습니다.` : ''}${pending.learnLeft ? ` 아직 분석하지 않은 문서 ${pending.learnLeft}건이 있습니다.` : ''}</div>`; return; }
+      const scrollTop = el.scrollTop;
+      const active = el.getRootNode().activeElement;
+      const focusedPlan = el.contains(active) ? active.closest('[data-id]')?.dataset.id : null;
+      el.innerHTML = `<p class="plan-list-note">${loading ? '저장된 결과를 먼저 표시합니다. 추가 분석 중 결과가 바뀔 수 있으니 선택 전 확인하세요.' : `확인한 ${pending.learnedCount}건 기준${pending.learnLeft ? ` · 미분석 ${pending.learnLeft}건` : ''} · 결과보고 유무는 원문에서 확인하세요.`}</p>` + (pending.learnErrors ? `<p role="status">일부 문서를 조회하지 못했습니다. 결과보고 유무를 원문에서 확인하세요.</p>` : '') + pending.map(p => `
       <div class="cmd-preset" role="button" tabindex="0" data-act="selectPlanForResult" data-id="${esc(p.id)}" style="display:flex;align-items:flex-start;gap:12px">
         <div style="flex:1;min-width:0">
           <div style="font-weight:700;font-size:14.5px;color:var(--fg)">${esc(p.title)}${p.similarReport ? ' · 유사한 결과보고 있음 (연결 확인 필요)' : ''}</div>
@@ -138,6 +158,51 @@
         </div>
         <button class="btn sm primary" style="flex:0 0 auto">결과보고 작성</button>
       </div>`).join('');
+      el.scrollTop = scrollTop;
+      if (focusedPlan) [...el.querySelectorAll('[data-id]')].find(item => item.dataset.id === focusedPlan)?.focus({preventScroll: true});
+    }
+    function updateProgress(p) {
+      if (!current() || !p) return;
+      const title = progressEl.querySelector('#planProgressTitle');
+      const detail = progressEl.querySelector('#planProgressDetail');
+      const count = progressEl.querySelector('#planProgressCount');
+      const fill = progressEl.querySelector('#planProgressFill');
+      const track = progressEl.querySelector('[role="progressbar"]');
+      if (p.phase === 'listing') return;
+      const completed = p.done + p.errors;
+      title.textContent = '새 문서를 분석하고 있습니다';
+      detail.textContent = p.errors ? `읽지 못한 문서 ${p.errors}건은 제외하고 계속 확인합니다.` : '확인한 문서가 추가되면 아래 목록에 반영됩니다.';
+      const elapsed = (Date.now() - started) / 1000;
+      const remaining = p.total - completed;
+      const estimate = completed >= 3 && remaining > 0 ? ` · 약 ${Math.max(1, Math.ceil(elapsed * remaining / completed))}초 남음 (추정)` : '';
+      count.textContent = `${completed} / ${p.total}건 처리${p.errors ? ` · 실패 ${p.errors}건` : ''}${estimate}`;
+      fill.classList.remove('indeterminate');
+      fill.style.width = `${p.total ? Math.round(completed / p.total * 100) : 100}%`;
+      track.setAttribute('aria-valuemin', '0'); track.setAttribute('aria-valuemax', String(p.total || 1)); track.setAttribute('aria-valuenow', String(completed));
+      renderPlans(p, true);
+    }
+    renderPlans({}, true);
+    learningListeners.add(updateProgress);
+    if (learning && learningProgress) updateProgress(learningProgress);
+    const timer = setInterval(() => {
+      if (!current()) { clearInterval(timer); learningListeners.delete(updateProgress); return; }
+      progressEl.querySelector('#planElapsed').textContent = `${Math.floor((Date.now() - started) / 1000)}초 경과`;
+    }, 1000);
+    let result;
+    try { result = await learnPatterns({limit: 12, budgetMs: 60000, quiet: true}); }
+    catch (e) { result = {errors: 1, errMsg: e.message}; }
+    clearInterval(timer); learningListeners.delete(updateProgress);
+    if (!current()) return;
+    progressEl.classList.add('complete');
+    progressEl.querySelector('#planElapsed').textContent = `${Math.floor((Date.now() - started) / 1000)}초 경과`;
+    progressEl.querySelector('#planProgressTitle').textContent = result.errMsg ? '문서 목록을 확인하지 못했습니다' : result.errors ? '문서 확인을 마쳤습니다 · 일부 실패' : '문서 확인을 마쳤습니다';
+    progressEl.querySelector('#planProgressDetail').textContent = result.errMsg ? '문서 목록을 불러오지 못했습니다. 저장된 결과만 표시합니다.' : '확인 범위와 결과보고 연결 여부를 확인한 뒤 선택하세요.';
+    progressEl.querySelector('#planProgressCount').textContent = `${result.done || 0}건 확인${result.errors ? ` · 실패 ${result.errors}건` : ''}${result.left ? ` · 미분석 ${result.left}건` : ''}`;
+    const fill = progressEl.querySelector('#planProgressFill'); fill.classList.remove('indeterminate');
+    const track = progressEl.querySelector('[role="progressbar"]');
+    if (result.errMsg) { fill.style.width = '0%'; track.removeAttribute('aria-valuenow'); }
+    track.setAttribute('aria-label', result.errMsg ? '문서 확인 실패' : '이번 문서 확인 종료');
+    renderPlans(result, false);
   }
 
   // ---------- 새 기안 창 열기 / 채우기 ----------
