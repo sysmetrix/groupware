@@ -207,6 +207,6 @@
     if (!['ask', 'always', 'off'].includes(v)) return;
     S.settings.aiBody = v; saveLocal();
     toast({ask: '메일 본문은 보낼 때마다 묻습니다.', always: '고른 메일의 본문을 확인 없이 AI로 정리합니다.', off: '메일 본문을 AI로 보내지 않습니다.'}[v]);
-    if (typeof openAi === 'function' && $('#aiOut')) openAi();
+    if (typeof openAi === 'function' && ($('#aiOut') || $('#aiSettingsBox'))) openAi(!!S.aiSettingsOnly);
   };
   const cuBodyModeHtml = () => `<div style="margin-top:12px"><div style="font-size:13px;font-weight:600;margin-bottom:6px">메일 본문 AI 정리·답장 초안</div><div class="acts" style="margin-top:0">${[['ask', '보낼 때마다 묻기'], ['always', '항상 허용'], ['off', '끄기']].map(([v, l]) => `<button class="btn sm${cuMode() === v ? ' primary' : ''}" data-act="aiBodyMode" data-v="${v}" aria-pressed="${cuMode() === v}">${l}</button>`).join('')}</div><div class="muted" style="font-size:12px;margin-top:4px">대화에서 메일 정리나 AI 답장 초안을 고르면 그 메일 한 통의 본문만 가려서 보냅니다. 이메일·전화·계좌·주민번호는 가리지만 이름·기관명은 그대로 갑니다.</div></div>`;
