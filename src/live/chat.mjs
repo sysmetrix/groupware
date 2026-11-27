@@ -206,16 +206,22 @@ export function chatMutter(text) {
 /** 문장 → {tool, args, confidence}. 못 알아보면 {tool:'', args:{}, confidence:0}. */
 // v1.28 자원 예약 말: 종류(car|room|led)와 자원 이름 단서를 읽는다. 규칙(chatIntent)·되묻기 뒤 이어 말(31)·예약 도구(33)가 함께 쓴다.
 // "X 말고/빼고/아니고/대신 Y"의 X는 drop으로 따로 두고 keep(남은 말)에서 읽는다. "상담 때문에"처럼 목적을 말한 낱말은 keep에서 뺀다.
-const CH_RES_ROOM = /([가-힣A-Za-z0-9]*?)(회의실|회의\s*공간|세미나실|강당|교육장|강의실|다목적홀|상담실|접견실)(\s*(?:\d+\s*(?:호|번)?(?![\d:/~-]|\s*(?:시|분|월|일|층|부터|까지|\d))|[A-Z](?![A-Za-z])))?/;
+const CH_RES_ROOM = /([가-힣A-Za-z0-9]*?)(회의실|회의\s*공간|세미나실|강당|교육장|강의실|다목적홀|상담실|접견실)(\s*(?:\d+\s*(?:호|번)?(?=$|[\s,.!?]|(?:으로|로|은|는|이|가|을|를|에서|에|도|만)(?![가-힣]))|[A-Z](?![A-Za-z])))?/;
 const CH_RES_CAR_NAME = /마이크로버스|니로|카니발|스타리아|스타렉스|아반떼|쏘나타|그랜저|아이오닉|쏘렌토|싼타페|봉고|승합차|승용차|버스|트럭/g;
 const CH_RES_CAR = /차량|관용차|자동차|(?<![가-힣\d])차(?=\s|$|[를로는가도])/;
 const CH_RES_LED = /LED|전광판|패널(?!\s*(?:토론|토의|발표|위원|참석))/i;
 // 자원 이름 앞에 띄어 쓴 낱말 가운데 수식어가 아닌 것(날짜·시각·흔한 말·조사로 끝나는 말)
 const CH_RES_NOTMOD = /^(?:내일|오늘|모레|글피|이번|다음|지난|주|오전|오후|아침|저녁|점심|종일|하루|하나|한|두|세|네|.*시간|좀|꼭|빨리|그|이|저|제일|가장|빈|아무|다른|새|우리|팀|부서|저희|제|내|[월화수목금토일](?:요일)?|.*\d\s*(?:시|분|월|일|:)|\d+\s*[/.-]\s*\d+|.*(?:부터|까지|에|에서|로|으로|을|를|이|가|은|는|도|만|랑|하고|좀|때문에|위해|위해서))$/;
+// v1.28 보수 규칙: 자원 말과 함께 빼거나 부정하는 말이 있으면 자원을 추리지 않고 묻는다(33). 낱말이 있으면 묻는 한 규칙이다.
+const CH_RES_NEG = /말[고구곤]|빼|제외|아닌|아니[고라면]|대신|싫|다른/;
 const CH_RES_KINDWORD = /^(?:회의실|회의공간|차|차량|관용차|자동차|led|led패널|패널|전광판|자원|\d+(?:번|호)?)$/i;
 export function chatResourceAsk(text) {
   const raw = String(text ?? '').replace(/\s+/g, ' ').trim(), drop = [];
   if (!raw) return null;
+  const neg = CH_RES_NEG.test(raw) && (CH_RES_ROOM.test(raw) || raw.search(CH_RES_CAR_NAME) >= 0 || CH_RES_CAR.test(raw) || CH_RES_LED.test(raw));
+  // 하지 말라는 말은 자원 말이 없어도 읽는다(이어 말 "내일은 하지 마"에서 슬롯을 지우게)
+  const stop = /하지\s*마|하지\s*말|말아\s*줘|안\s*해도|필요\s*없/.test(raw);
+  const notNew = stop || /했어|했다|했음|했는데|해\s*뒀|해\s*두었|해\s*놨|해\s*놓았|변경|바꿔|바꾸|옮겨|미뤄|연장|취소/.test(raw);
   // 빼라는 자원: 말고 바로 앞 낱말. 그 낱말이 종류 말·번호뿐이면 앞의 수식어까지(3층 회의실 말고, 회의실 2 말고).
   let keep = raw.replace(/(?:(\S+)\s+)?(\S+?)(?:은|는|이|가|을|를)?\s*(?:말고|빼고|아니고|대신에?)(?=[\s,.!?]|$)/g, (m, w0, w1) => {
     const two = w0 && CH_RES_KINDWORD.test(w1.replace(/\s/g, '')) && !CH_RES_NOTMOD.test(w0);
@@ -224,13 +230,13 @@ export function chatResourceAsk(text) {
   });
   keep = keep.replace(/\S+\s*(?:때문에|위해서?|관련해서?)(?=\s|$)|\S*(?:하려고|하러)(?=\s|$)/g, ' ').replace(/\s+/g, ' ').trim();
   const room = keep.match(CH_RES_ROOM), cars = [...new Set(keep.match(CH_RES_CAR_NAME) || [])], led = CH_RES_LED.test(keep), car = cars.length > 0 || CH_RES_CAR.test(keep);
-  if (!room && !car && !led) return {kind: '', resource: '', keep, drop, found: false, stop: false, notNew: false};
+  if (!room && !car && !led) return {kind: '', resource: '', keep, drop, found: false, stop, notNew, neg};
   let kind = '', resource = '';
   if (room) {
     // 수식어: 붙여 쓴 말(영상·A·대·제1·2층), 바로 앞에 띄어 쓴 말(본관·2층·2번), 뒤의 번호(회의실 2, 회의실 A)
     const before = keep.slice(0, room.index).trim().split(' ').filter(Boolean), mods = [];
     // 띄어 쓴 말은 자리·번호를 가리킬 때만 수식어로 본다(본관·별관·2층·2번·B동). "학부모 회의실"의 학부모는 목적이라 버린다.
-    for (let i = before.length - 1; i >= 0 && mods.length < 2; i--) { const w = before[i].replace(/의$/, ''); if (!w || CH_RES_NOTMOD.test(w) || CH_RES_CAR.test(w) || CH_RES_LED.test(w) || !/\d|[A-Za-z]|(?:관|층|동|호|번|센터|건물|사옥|청사|지점|본부|캠퍼스)$/.test(w)) break; mods.unshift(w); }
+    for (let i = before.length - 1; i >= 0 && mods.length < 2; i--) { const w = before[i].replace(/의$/, ''); if (!w || CH_RES_NOTMOD.test(w) || CH_RES_CAR.test(w) || CH_RES_LED.test(w) || !/^(?:제?\d+[A-Za-z]?|[A-Za-z]+\d*)(?:층|호|번|동|관)?$|[가-힣](?:관|센터|건물|사옥|청사|지점|본부|캠퍼스)$/.test(w)) break; mods.unshift(w); }
     const head = room[2].replace(/\s+/g, ' '), phrase = [...mods, `${room[1]}${head}${room[3] || ''}`].join(' ').trim();
     let rest = keep.slice(room.index + room[0].length);
     // "다목적홀 회의실"처럼 이름 뒤에 붙인 종류 말은 같은 자원이다
@@ -243,9 +249,7 @@ export function chatResourceAsk(text) {
     if (CH_RES_ROOM.test(rest)) resource = '';
   } else if (led) kind = 'led';
   else { kind = 'car'; resource = cars.length === 1 ? cars[0] : ''; }
-  const stop = /하지\s*마|하지\s*말|말아\s*줘|안\s*해도|필요\s*없/.test(raw);
-  const notNew = stop || /했어|했다|했음|했는데|해\s*뒀|해\s*두었|해\s*놨|해\s*놓았|변경|바꿔|바꾸|옮겨|미뤄|연장|취소/.test(raw);
-  return {kind, resource, keep, drop, found: true, car: kind === 'car', place: !kind, stop, notNew};
+  return {kind, resource, keep, drop, found: true, car: kind === 'car', place: !kind, stop, notNew, neg};
 }
 export function chatIntent(text, now = new Date(), _nested = false) {
   const said = chatNormalize(text), t = said.replace(CH_MOOD_RE, '');

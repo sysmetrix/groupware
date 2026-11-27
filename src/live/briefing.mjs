@@ -1481,21 +1481,33 @@ export function resNameScore(r, clue) {
   const toks = String(clue).trim().split(/\s+/), alt = t => [t, t.replace(/^제(?=\d)/, '').replace(/(\d)\s*(?:번|호)$/, '$1')];
   return toks.length > 1 && toks.every(t => alt(t).some(w => resHas(name, w)) || (resGeneric(t) && resKindOfText(t) && resKindOfText(t) === resKindOf(r))) ? 1 : 0;
 }
-// 사용자 문장에서 이 자원들 가운데 일부만 가리키는 낱말(니로·승합차·2층 등). 없으면 [].
+/**
+ * v1.28 보수 규칙: 이름 단서가 자원 이름에 꼭 맞는지. 이름 전체와 같거나(공백·괄호 설명은 보지 않음),
+ * 숫자가 없는 단서가 이름의 한 낱말과 그대로 같을 때만(승합차 → 업무용 승합차 (12가 3456)). 일부만 겹치면 맞지 않는다.
+ */
+export function resNameExact(r, clue) {
+  const name = String((r && r.name) || ''), c = resFlat(clue), base = name.replace(/\([^)]*\)|\[[^\]]*\]/g, ' ');
+  if (!c) return false;
+  if (resFlat(name) === c || resFlat(base) === c) return true;
+  return !/\d/.test(c) && base.split(/\s+/).some(w => w && resFlat(w) === c);
+}
+// 사용자 문장에서 이 자원들 가운데 일부만 꼭 맞게 가리키는 낱말(승합차 등). 이름 일부만 겹치는 낱말(니로 ↔ 관용차량(니로EV), 2층)이 있으면 unsure.
 function resTextClues(of, text) {
   const out = [];
+  let unsure = false;
   for (const raw of String(text || '').split(/[\s,.!?~·]+/)) {
     // 조사를 뗀 말과 그대로의 말을 함께 본다(니로 → 니로, 승합차로 → 승합차).
     const ws = [raw, raw.replace(/(?:에서|으로|하고|이랑|로|을|를|이|가|은|는|에|도|만|랑|와|과)$/, '')].filter(w => w.length >= 2 && !resGeneric(w) && !/\d\s*(?:시|분|월|일|:)|^\d+\/\d+$/.test(w));
     if (!ws.length || resGeneric(raw)) continue;
-    const hit = of.filter(r => ws.some(w => resHas(r.name, w)));
+    const hit = of.filter(r => ws.some(w => resNameExact(r, w)));
     if (hit.length && hit.length < of.length) out.push(hit);
+    else if (!hit.length && of.some(r => ws.some(w => resHas(r.name, w)))) unsure = true;
   }
-  return out;
+  return {out, unsure};
 }
 /**
  * 요청한 종류의 자원을 고른다. kind: 'car'|'room'|'led'|그 밖의 말, hint: 자원 이름 단서, text: 사용자 문장.
- * of: 그 종류(이름으로 판정한 자원이 분류로만 판정한 자원보다 앞), pool: 단서에 가장 잘 맞는 자원(단서가 없으면 of).
+ * of: 그 종류(이름으로 판정한 자원이 분류로만 판정한 자원보다 앞), pool: 단서에 꼭 맞는 자원(resNameExact, 단서가 없으면 of). 꼭 맞는 것이 없거나 문장의 낱말이 이름 일부만 겹치면 unsure(도구가 묻는다).
  * 좁은 종류 말(강당·승합차)과 이름 단서는 둘 다 맞아야 한다. 단서가 있으면 pool 밖의 자원으로 대신하지 않는다.
  * kind가 비고 hint만 있으면 전체 자원에서 이름으로 찾아 그 자원의 종류를 따른다. 문장의 낱말이 서로 다른 자원을 가리키면 ambiguous.
  * drop: 빼라고 한 자원 말("3층 회의실 말고"의 3층 회의실). 그 말에 맞는 자원은 후보가 아니다(excluded에 담는다).
@@ -1512,14 +1524,13 @@ export function resPick(list = [], kind = '', hint = '', text = '', drop = []) {
   else if (kw) { const lit = resFlat(kw).slice(0, 20); label = kw.slice(0, 20); of = lit.length >= 2 ? arr.filter(r => resHas(`${r.name}${r.attr || ''}`, lit)) : []; }
   else { label = '자원'; of = arr; }
   if (!clues.length) {
-    const tc = resTextClues(of, text), pool = tc.length ? of.filter(r => tc.every(h => h.includes(r))) : of;
-    return {kind: k, label, of, pool, clue: '', ambiguous: tc.length > 0 && !pool.length, excluded};
+    const {out: tc, unsure} = resTextClues(of, text), pool = unsure ? [] : tc.length ? of.filter(r => tc.every(h => h.includes(r))) : of;
+    return {kind: k, label, of, pool, clue: '', ambiguous: !unsure && tc.length > 0 && !pool.length, unsure, excluded};
   }
-  const sc = r => clues.reduce((s, c) => { const v = resNameScore(r, c); return s < 0 || !v ? -1 : s + v; }, 0);
-  const scored = (k || kw ? of : arr).map(r => [r, sc(r)]).filter(x => x[1] > 0), top = Math.max(0, ...scored.map(x => x[1]));
-  const pool = scored.filter(x => x[1] === top).map(x => x[0]);
+  // 단서가 있으면 꼭 맞는 자원만(resNameExact). 맞는 것이 없으면 pool이 비고 도구가 그 종류의 목록을 보여 주며 묻는다.
+  const pool = (k || kw ? of : arr).filter(r => clues.every(c => resNameExact(r, c)));
   if (!k && !kw && pool.length) { const pk = resKindOf(pool[0]); if (pk && pool.every(r => resKindOf(r) === pk)) { k = pk; label = RES_KIND[pk][1]; of = ofKind(pk); } }
-  return {kind: k, label, of, pool, clue: clues[clues.length - 1].slice(0, 30), ambiguous: false, excluded};
+  return {kind: k, label, of, pool, clue: clues[clues.length - 1].slice(0, 30), ambiguous: false, unsure: !pool.length, excluded};
 }
 /** 겹치는 예약 하나(없으면 null). start·end는 'HH:MM', date는 YYYYMMDD. */
 export function resConflict(bookings = [], date, start, end) {

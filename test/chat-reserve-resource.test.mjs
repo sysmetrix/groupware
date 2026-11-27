@@ -65,9 +65,9 @@ test('종류 고르기: 회의실은 회의실만, 기본은 차량, 자원 이�
     assert.equal(row(card, '자원'), want, resource); assert.equal(row(card, '종류'), want === SEDAN ? '차량' : '회의실', resource);
   }
   s = setup(); res = await s.run({resource: '대강당'});
-  assert.equal(res.ok, false); assert.match(res.text, /“대강당”에 맞는 회의실이 없어 다른 자원으로 대신 예약하지 않습니다/);
+  assert.equal(res.ok, false); assert.match(res.text, /^“대강당”에 꼭 맞는 회의실을 찾지 못해 고르지 않았습니다\. 예약할 회의실 이름을 하나만 넣어 다시 말씀해 주세요\. 있는 회의실: 2층 회의실, 다목적홀$/);
   s = setup(); res = await s.run({resource: '체육관'});
-  assert.equal(res.ok, false); assert.match(res.text, /“체육관”에 맞는 자원이 없어/);
+  assert.equal(res.ok, false); assert.match(res.text, /“체육관”에 꼭 맞는 자원을 찾지 못해 고르지 않았습니다/);
 
   for (const kind of ['회의실', 'meeting room']) { s = setup(); res = await s.run({kind}); assert.equal(row(res.cards[0], '종류'), '회의실', kind); }
   for (const kind of ['차량', '관용차', 'car', 'vehicle']) { s = setup(); res = await s.run({kind}); assert.equal(row(res.cards[0], '종류'), '차량', kind); }
@@ -97,17 +97,20 @@ test('종류 없음: 다른 자원으로 대신하지 않고 없다고 답하며
   assert.equal(res2.ok, false);
 });
 
-test('A: 콕 집은 자원(이름 단서·좁은 종류 말)이 없으면 같은 종류의 다른 자원으로 바꾸지 않는다', async () => {
+test('A: 콕 집은 자원(이름 단서·좁은 종류 말)이 꼭 맞지 않으면 다른 자원으로 바꾸지 않고 그 종류의 목록을 보이며 묻는다', async () => {
   for (const a of [{kind: 'room', resource: '3층 회의실'}, {kind: '강당'}, {kind: 'room', resource: '강당'}, {kind: '소회의실'}, {kind: '카니발'}, {kind: 'car', resource: '카니발'}]) {
     const s = setup(), res = await s.run(a);
     assert.equal(res.ok, false, JSON.stringify(a)); assert.ok(!confirmOf(res), JSON.stringify(a));
-    assert.match(res.text, /”에 맞는 (회의실|차량)이 없어 다른 자원으로 대신 예약하지 않습니다\. 있는 (회의실|차량): /, JSON.stringify(a));
+    assert.match(res.text, /”에 꼭 맞는 (회의실|차량)을 찾지 못해 고르지 않았습니다\. 예약할 (회의실|차량) 이름을 하나만 넣어 다시 말씀해 주세요\. 있는 (회의실|차량): /, JSON.stringify(a));
     assert.deepEqual(s.calls, [['list']]);
   }
   const s = setup(), res = await s.run({kind: 'room', resource: '3층 회의실'});
-  assert.match(res.text, /“3층 회의실”에 맞는 회의실이 없어 다른 자원으로 대신 예약하지 않습니다\. 있는 회의실: 2층 회의실, 다목적홀$/);
-  // 강당이 목록에 있으면 앞의 회의실이 아니라 강당을 고른다
-  const s2 = setup({list: [...LIST, {resSeq: '13', name: '대강당', attr: '회의실', apprYn: 'N', useYn: 'Y'}]}), r2 = await s2.run({kind: '강당'});
+  assert.match(res.text, /“3층 회의실”에 꼭 맞는 회의실을 찾지 못해 고르지 않았습니다\. 예약할 회의실 이름을 하나만 넣어 다시 말씀해 주세요\. 있는 회의실: 2층 회의실, 다목적홀$/);
+  // v1.28 보수 규칙: 이름 일부만 겹치는 자원(강당 ↔ 대강당)은 고르지 않고 묻는다. 이름 전체(괄호 설명은 빼고)가 맞으면 그 자원.
+  const big = [...LIST, {resSeq: '13', name: '대강당', attr: '회의실', apprYn: 'N', useYn: 'Y'}];
+  let s2 = setup({list: big}), r2 = await s2.run({kind: '강당'});
+  assert.ok(!confirmOf(r2)); assert.match(r2.text, /꼭 맞는 회의실을 찾지 못해 고르지 않았습니다.* 있는 회의실: 2층 회의실, 대강당, 다목적홀$/);
+  s2 = setup({list: big}); r2 = await s2.run({kind: 'room', resource: '대강당'});
   assert.equal(row(confirmOf(r2), '자원'), '대강당'); assert.equal(row(confirmOf(r2), '종류'), '회의실');
 });
 
@@ -124,14 +127,14 @@ test('A: 콕 집은 자원이 그 시간에 차 있으면 다른 자원으로 �
   assert.equal(row(confirmOf(res), '자원'), VAN); assert.equal(row(confirmOf(res), '다른 후보'), undefined);
 });
 
-test('A: 사용자 문장의 자원 이름(니로 등)으로 좁히고, 서로 다른 자원을 가리키면 하나로 정하지 않는다', async () => {
+test('A: 사용자 문장의 자원 이름이 꼭 맞을 때만 좁히고, 이름 일부만 겹치면(니로 ↔ 관용차량(니로EV)) 고르지 않고 묻는다', async () => {
   const list = [{resSeq: '5', name: '관용차량(니로EV)', attr: '예시재단|공용차량', apprYn: 'Y', useYn: 'Y'}, ...LIST];
-  let s = setup({list, busy: ['5']}), res = await s.run({kind: 'car'}, '내일 15~16시 니로 예약해줘');
-  assert.ok(!confirmOf(res)); assert.match(res.text, /^관용차량\(니로EV\): 그 시간에는 이미 예약이 있습니다\./);
-  s = setup({list}); res = await s.run({kind: 'car', resource: '니로'});
-  assert.equal(row(confirmOf(res), '자원'), '관용차량(니로EV)');
-  s = setup({list}); res = await s.run({kind: 'car'}, '니로 말고 승합차 예약');
-  assert.equal(res.ok, false); assert.ok(!confirmOf(res)); assert.match(res.text, /하나로 정하지 못했습니다/); assert.deepEqual(s.calls, [['list']]);
+  for (const [a, text] of [[{kind: 'car'}, '내일 15~16시 니로 예약해줘'], [{kind: 'car', resource: '니로'}, ''], [{kind: 'car'}, '니로 말고 승합차 예약']]) {
+    const s = setup({list}), res = await s.run(a, text), tag = JSON.stringify([a, text]);
+    assert.equal(res.ok, false, tag); assert.ok(!confirmOf(res), tag); assert.deepEqual(s.calls, [['list']], tag);
+    assert.match(res.text, /꼭 맞는 차량을 찾지 못해 고르지 않았습니다\. 예약할 차량 이름을 하나만 넣어 다시 말씀해 주세요\. 있는 차량: 관용차량\(니로EV\), /, tag);
+  }
+  let s, res;
   // 종류 말·시간·날짜는 단서로 쓰지 않는다. 모든 후보에 든 낱말도 좁히지 않는다.
   s = setup({list}); res = await s.run({kind: 'car'}, '11/20 내일 15시부터 16시까지 관용차량 예약해줘');
   assert.equal(row(confirmOf(res), '자원'), '관용차량(니로EV)'); assert.equal(row(confirmOf(res), '다른 후보'), `${VAN}, ${SEDAN}`);
@@ -142,9 +145,11 @@ test('A: 사용자 문장의 자원 이름(니로 등)으로 좁히고, 서로 �
   assert.equal(row(confirmOf(res), '자원'), SEDAN); assert.equal(row(confirmOf(res), '다른 후보'), `${VAN}(예약 있음)`);
 });
 
-test('D: 이름 단서는 전체 이름이 먼저이고 숫자 경계를 지킨다(1층 ≠ 11층, 상담실 1 ≠ 상담실 10)', async () => {
+test('D: 번호가 든 단서는 이름 전체가 맞을 때만(1층 → 묻기, 1층 회의실 → 1층 회의실, 상담실 1 ≠ 상담실 10)', async () => {
   const rooms = [{resSeq: '41', name: '11층 회의실', attr: '회의실', apprYn: 'N', useYn: 'Y'}, {resSeq: '42', name: '1층 회의실', attr: '회의실', apprYn: 'N', useYn: 'Y'}];
   let s = setup({list: rooms, busy: ['42']}), res = await s.run({kind: 'room', resource: '1층'});
+  assert.ok(!confirmOf(res)); assert.match(res.text, /^“1층”에 꼭 맞는 회의실을 찾지 못해 고르지 않았습니다/); assert.deepEqual(s.calls, [['list']]);
+  s = setup({list: rooms, busy: ['42']}); res = await s.run({kind: 'room', resource: '1층 회의실'});
   assert.ok(!confirmOf(res)); assert.match(res.text, /^1층 회의실: 그 시간에는 이미 예약이 있습니다/); assert.match(res.text, /다른 회의실: 11층 회의실$/);
   const talks = [{resSeq: '51', name: '상담실 10', attr: '상담실', apprYn: 'N', useYn: 'Y'}, {resSeq: '52', name: '상담실 1', attr: '상담실', apprYn: 'N', useYn: 'Y'}];
   s = setup({list: talks}); res = await s.run({kind: '상담실', resource: '상담실 1'});

@@ -102,13 +102,16 @@ test('resPick: 알려진 종류·좁은 종류 말·그 밖의 말·이름 단�
   assert.equal(R.resPick(list, '승합차').label, '차량');
   assert.deepEqual(R.resPick(list, '카니발').pool, []);
   assert.deepEqual(R.resPick(list, '강당').pool, []);
-  assert.deepEqual(R.resPick(list, 'car', '니로').pool.map(r => r.resSeq), ['5']);
+  // v1.28 보수 규칙: 이름 일부만 겹치는 단서(니로 ↔ 관용차량(니로EV))는 고르지 않는다(도구가 묻는다). 이름의 한 낱말(승용차)은 맞는다.
+  assert.deepEqual(R.resPick(list, 'car', '니로').pool, []); assert.equal(R.resPick(list, 'car', '니로').unsure, true);
+  assert.deepEqual(R.resPick(list, 'car', '승용차').pool.map(r => r.resSeq), ['22']);
   assert.deepEqual(R.resPick(list, 'led', '1층 LED패널(2)').pool.map(r => r.resSeq), ['8']);
   assert.deepEqual(R.resPick(list, 'led', '1층 LED 패널').pool.map(r => r.resSeq), ['7', '8'], '둘 다 맞으면 둘 다 후보');
   // 문장 단서
-  assert.deepEqual(R.resPick(list, 'car', '', '내일 15~16시 니로 예약해줘').pool.map(r => r.resSeq), ['5']);
+  assert.deepEqual(R.resPick(list, 'car', '', '내일 15~16시 니로 예약해줘').pool, []);
+  assert.equal(R.resPick(list, 'car', '', '내일 15~16시 니로 예약해줘').unsure, true);
   assert.deepEqual(R.resPick(list, 'car', '', '승합차로 잡아줘').pool.map(r => r.resSeq), ['21']);
-  assert.equal(R.resPick(list, 'car', '', '니로 말고 승합차').ambiguous, true);
+  assert.deepEqual(R.resPick(list, 'car', '', '니로 말고 승합차').pool, []);
   assert.deepEqual(R.resPick(list, 'room', '', '내일 3시 회의실 예약').pool.length, 3);
   // F: 종류 없이 이름만 오면 전체에서 찾아 그 종류를 따른다
   let p = R.resPick(list, '', '다목적홀');

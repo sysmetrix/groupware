@@ -372,11 +372,17 @@
         if (dt || rg.start) {
           const merged = {...st.ctx.pendingSlot.args, ...(dt ? {date: dt.date, ...(dt.end ? {end_date: dt.end} : {})} : {}), ...(rg.start ? {start: rg.start} : {}), ...(rg.end ? {end: rg.end} : {})};
           if (st.ctx.pendingSlot.tool === 'prepare_schedule' && typeof R.chatScheduleRequest === 'function') { const sr = R.chatScheduleRequest(text, new Date()); Object.assign(merged, sr.date ? {date: sr.date} : {}, sr.start ? {start: sr.start, end: sr.end} : {}); delete merged.end_date; }
-          // v1.28 자원 예약: 이어 말에 다른 종류·자원(LED 패널, 차량으로 할게)이 있으면 앞의 kind·resource를 버리고 이어 말을 따른다.
-          // 없으면 앞 문장과 이어 말을 함께 도구에 넘긴다(앞 문장의 승용차·"말고"가 사라지지 않게).
+          // v1.28 자원 예약: 앞 문장과 이어 말을 함께 도구에 넘긴다(앞 문장의 승용차·"말고"가 사라지지 않게).
+          // 이어 말에 자원 이름이 있으면 그 자원으로, 종류 말만 있으면 앞에서 정한 자원은 두고 종류만 따른다(그 종류에 없으면 도구가 묻는다).
+          // 앞에 이름 없이 종류만 있었고 이어 말의 종류가 다르면 이어 말의 종류로. 빼거나 부정하는 말이 있으면 바꾸지 않는다(도구가 묻는다).
           let slotText = `${st.ctx.pendingSlot.text || ''} ${text}`.trim();
           const ra = st.ctx.pendingSlot.tool === 'reserve_vehicle' && typeof R.chatResourceAsk === 'function' ? R.chatResourceAsk(text) : null;
-          if (ra && ra.found && !ra.stop) { delete merged.kind; delete merged.resource; Object.assign(merged, ra.kind ? {kind: ra.kind} : {}, ra.resource ? {resource: ra.resource} : {}); slotText = text; }
+          if (ra && ra.found && !ra.stop && !ra.neg) {
+            const pk = typeof R.resKindOfText === 'function' ? R.resKindOfText(merged.kind || '') : merged.kind || '';
+            if (ra.resource) { delete merged.kind; delete merged.resource; Object.assign(merged, ra.kind ? {kind: ra.kind} : {}, {resource: ra.resource}); slotText = text; }
+            else if (merged.resource) { if (ra.kind) merged.kind = ra.kind; }
+            else if (ra.kind && ra.kind !== pk) { merged.kind = ra.kind; slotText = text; }
+          }
           it = ra && ra.stop ? (st.ctx.pendingSlot = null, it) : {tool: st.ctx.pendingSlot.tool, args: merged, confidence: 1, userText: slotText};
         }
       }
