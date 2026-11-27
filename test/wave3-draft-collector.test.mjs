@@ -155,6 +155,7 @@ test('수집기 todoCreate·todoUpdate·todoSetProgress·todoSetImportance·todo
 });
 
 // ---------- 2. 51-todo.js UNKNOWN 미확인 안내 ----------
+// 날짜는 실제 시계와 겹치지 않게 먼 미래로 고정한다(오늘 마감 알림이 끼어들지 않도록).
 test('51-todo.js: UNKNOWN 오류 시 저장·삭제 실패로 단정하지 않고 새로 읽은 목록 확인을 안내한다', async () => {
   const src = read('wc/51-todo.js');
   const EXPECTED = '통신 오류 또는 응답 지연으로 반영됐는지 확인하지 못했습니다. 새로 읽은 목록을 먼저 확인해 주세요.';
@@ -163,7 +164,7 @@ test('51-todo.js: UNKNOWN 오류 시 저장·삭제 실패로 단정하지 않�
     const toasts = [];
     let reloadForces = 0;
     const item = {
-      id: 'td1', title: '기존 할 일', due: '2026-11-28', start: '2026-11-28', imp: '0', rate: 0, dday: false,
+      id: 'td1', title: '기존 할 일', due: '2099-12-30', start: '2099-12-30', imp: '0', rate: 0, dday: false,
       memo: '메모', meta: {}, contents: '메모', canProgress: true, readonly: false, files: 0, done: false,
       checklist: [{id: 'td2', title: '세부 항목', done: false}],
     };
@@ -178,7 +179,7 @@ test('51-todo.js: UNKNOWN 오류 시 저장·삭제 실패로 단정하지 않�
       GW: {
         todoList: async () => {
           reloadForces++;
-          return {todos: [{todoSeq: 'td1', todoName: '기존 할 일', startDate: '20261128', endDate: '20261128', todoStatus: '0', processRate: 0, importDegree: '0', contents: '메모', todoLevel: 1, ownerEmpSeq: '1', createEmpSeq: '1', loginUserTodoOwnerYn: 'Y', loginUserTodoCreateYn: 'Y', children: [{todoSeq: 'td2', todoName: '세부 항목', todoStatus: '0', todoLevel: 2}]}], total: 1, complete: true, at: '2026-11-27T00:00:00Z', url: ''};
+          return {todos: [{todoSeq: 'td1', todoName: '기존 할 일', startDate: '20991230', endDate: '20991230', todoStatus: '0', processRate: 0, importDegree: '0', contents: '메모', todoLevel: 1, ownerEmpSeq: '1', createEmpSeq: '1', loginUserTodoOwnerYn: 'Y', loginUserTodoCreateYn: 'Y', children: [{todoSeq: 'td2', todoName: '세부 항목', todoStatus: '0', todoLevel: 2}]}], total: 1, complete: true, at: '2026-11-27T00:00:00Z', url: ''};
         },
         ...gwOverrides,
       },
