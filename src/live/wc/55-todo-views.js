@@ -158,9 +158,10 @@ ${t.canProgress ? `<div class="td-sec"><label class="td-f">진행률 <b id="tdeR
     const failed = [], uncertain = [];
     let ok = 0;
     try {
-      for (const r of rows) {
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i];
         try { await GW.todoCreate({title: r.title, due: todoYmd(r.due), start: todoYmd(r.start), importance: r.imp, dday: true}); ok++; }
-        catch (e) { if (e && e.code === 'UNKNOWN') uncertain.push(r.title); else failed.push(r.title); logError('todo.bulk', e.message); if (e && e.code === 'RATE') break; }
+        catch (e) { if (e && e.code === 'UNKNOWN') uncertain.push(r.title); else failed.push(r.title); logError('todo.bulk', e.message); if (e && e.code === 'RATE') { failed.push(...rows.slice(i + 1).map(x => x.title)); break; } }
       }
     } finally { TD.bulkBusy = false; }
     await todoLoad({force: true});
@@ -176,7 +177,7 @@ ${t.canProgress ? `<div class="td-sec"><label class="td-f">진행률 <b id="tdeR
   }
 
   // ---------- 처리기 ----------
-  HOME_ACTS.tdView = (el, v) => { if (!TODO_VIEWS.some(x => x[0] === v)) return; TD.view = v; todoPrefsSave(); renderMain(); root.querySelector(`[data-act="tdView"][data-v="${v}"]`)?.focus(); };
+  HOME_ACTS.tdView = (el, v) => { if (typeof todoCanChangeView === 'function' && !todoCanChangeView()) return; if (!TODO_VIEWS.some(x => x[0] === v)) return; TD.view = v; todoPrefsSave(); renderMain(); root.querySelector(`[data-act="tdView"][data-v="${v}"]`)?.focus(); };
   HOME_ACTS.tdTl = (el, v) => { const n = Number(v) || 0; TD.tlFrom = n ? todoAddDays(TD.tlFrom || todoMonday(today()), n) : ''; todoRefreshList(); };
   HOME_ACTS.tdKanMove = async el => { await todoKanbanDrop(el.dataset.id, el.dataset.v); };
   HOME_ACTS.tdRoSave = async el => { const v = Number((($('#tdeRate') || {}).value) || 0); el.disabled = true; const r = await todoSetRate(el.dataset.id, v); toast(r.ok ? `진행률 ${v}%를 그룹웨어에 저장했습니다.` : r.text); if (S.view === 'mytodo') renderMain(); };

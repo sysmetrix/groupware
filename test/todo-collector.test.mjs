@@ -198,3 +198,18 @@ test('댓글 읽기: 그룹웨어 ToDo 댓글 조회(읽기 전용 목록), 지�
   assert.ok(!JSON.stringify(r).includes('10.0.0.1'));
   await assert.rejects(api.todoComments('x'), /번호/);
 });
+
+
+test('투입공수: 원본 값 보존, 소수 입력과 잘못된 값 차단', async () => {
+  const c = await load({detail: {manHour: 2.75}});
+  await c.api.todoUpdate('td9', {title: '변경'});
+  assert.equal(c.writes()[0].body.manHour, 2.75);
+  await c.api.todoUpdate('td9', {manHour: '1.25'});
+  assert.equal(c.writes()[1].body.manHour, '1.25');
+  await c.api.todoUpdate('td9', {manHour: '0'});
+  assert.equal(c.writes()[2].body.manHour, '');
+  for (const manHour of ['-1', '1.234', '1e3']) await assert.rejects(c.api.todoUpdate('td9', {manHour}), /투입공수/);
+  const n = await load();
+  await n.api.todoCreate({title: '할 일', manHour: '3.5'});
+  assert.equal(n.writes()[0].body.manHour, '3.5');
+});

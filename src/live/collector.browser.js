@@ -454,11 +454,12 @@
   // 중요도는 그룹웨어 값 그대로: 1 즉시, 3 긴급, 2 중요, 0 일반. 예전 호출의 important(참/거짓)는 '중요'(2)로 받는다.
   const todoImp = (importance, important) => { if (importance !== undefined && importance !== null && importance !== '') { const s = String(importance); if (!/^[0-3]$/.test(s)) throw new GwError('BAD_INPUT', '중요도가 올바르지 않습니다'); return s; } return important ? '2' : '0'; };
   const todoRate = v => { const n = Number(v); if (!Number.isInteger(n) || n < 0 || n > 100) throw new GwError('BAD_INPUT', '진행률은 0~100 사이 정수입니다'); return n; };
+  const todoHours = v => { const s = String(v ?? '').trim(); if (!s) return ''; if (!/^\d{1,10}(?:\.\d{1,2})?$/.test(s)) throw new GwError('BAD_INPUT', '투입공수는 0 이상의 숫자로 소수 둘째 자리까지 입력하세요'); return Number(s) === 0 ? '' : s; };
   function todoRow(r) {
     return {todoSeq: str(r.todoSeq, 20), todoName: str(r.todoName, 200), startDate: str(r.startDate, 8), endDate: str(r.endDate, 8), completeDate: str(r.completeDate, 8), createDate: str(r.createDate, 8), modifyDate: str(r.modifyDate, 8),
       todoStatus: str(r.todoStatus, 2), processRate: num(r.processRate), importDegree: str(r.importDegree, 2), contents: String(r.contents || '').slice(0, 4000), todoLevel: num(r.todoLevel) || 1, prtSeq: str(r.prtSeq, 20), prjSeq: str(r.prjSeq, 30),
       ownerEmpSeq: str(r.ownerEmpSeq, 20), createEmpSeq: str(r.createEmpSeq, 20), loginUserTodoOwnerYn: str(r.loginUserTodoOwnerYn, 1), loginUserTodoCreateYn: str(r.loginUserTodoCreateYn, 1), fileCount: num(r.fileCount),
-      ownerEmpName: str(r.ownerEmpName, 40), createEmpName: str(r.createEmpName, 40), prjName: str(r.prjName, 100), proccessYn: str(r.proccessYn, 1), replyCount: num(r.replyCount), dDayYn: str(r.dDayYn, 1), todoOrd: num(r.todoOrd),
+      ownerEmpName: str(r.ownerEmpName, 40), createEmpName: str(r.createEmpName, 40), prjName: str(r.prjName, 100), proccessYn: str(r.proccessYn, 1), replyCount: num(r.replyCount), dDayYn: str(r.dDayYn, 1), manHour: r.manHour === undefined ? null : String(r.manHour ?? ''), todoOrd: num(r.todoOrd),
       children: (Array.isArray(r.children) ? r.children : []).map(todoRow)};
   }
   async function todoList() {
@@ -499,7 +500,7 @@
     }
   };
   // 만들기. parent가 있으면 하위 ToDo(체크리스트 한 줄). 응답이 늦으면 목록을 다시 읽어 같은 제목의 새 항목이 있는지 본다(중복 생성 방지).
-  async function todoCreate({title, start = '', due = '', contents = '', important = false, importance, dday = false, parent = ''} = {}) {
+  async function todoCreate({title, start = '', due = '', contents = '', important = false, importance, dday = false, manHour = '', parent = ''} = {}) {
     const ctx = context();
     if (!ctx.empSeq || String(ctx.empSeq) !== String(loadedEmpSeq)) throw new GwError('IDENTITY', '로그인 정보가 바뀌었습니다. 새로고침 후 다시 시도하세요');
     const name = todoName(title), end = todoYmd(due), st = todoYmd(start) || end, text = todoText(contents), imp = todoImp(importance, important);
@@ -507,7 +508,7 @@
     if (parent) await todoOwned(parent);
     // 응답이 늦을 때 되찾기용 '만들기 전 목록'(상위 ToDo만). 읽지 못했으면 되찾기를 하지 않는다(엉뚱한 같은 이름 ToDo를 성공으로 보지 않게).
     const before = parent ? null : await todoList().then(r => new Set(r.todos.map(t => t.todoSeq))).catch(() => null);
-    const body = {prjSeq: '', prtSeq: parent ? todoId(parent) : '', todoLevel: parent ? '2' : '1', todoName: name, startDate: st, endDate: end, contents: text, processRate: '0', importDegree: imp, file: [], linkYn: 'N', moduleSeq: 'kiss_prj', relWorkSeq: '', uid: '', paramData: '',
+    const body = {prjSeq: '', prtSeq: parent ? todoId(parent) : '', todoLevel: parent ? '2' : '1', todoName: name, startDate: st, endDate: end, contents: text, processRate: '0', manHour: todoHours(manHour), importDegree: imp, file: [], linkYn: 'N', moduleSeq: 'kiss_prj', relWorkSeq: '', uid: '', paramData: '',
       ownerUserList: [{compSeq: ctx.compSeq, deptSeq: ctx.deptSeq, empSeq: ctx.empSeq, unitType: 'E'}], ownerCompSeq: ctx.compSeq, ownerDeptSeq: ctx.deptSeq, ownerEmpSeq: ctx.empSeq, dDayYn: dday && end ? 'Y' : 'N', portletYn: 'N', modifyYn: 'Y', deleteYn: 'Y', proccessYn: 'Y'};
     let id;
     try { id = await todoWrite(TODO_P + 'prj001A01', body); }
@@ -549,6 +550,7 @@
     const rate = String(d.todoStatus) === '2' ? '100' : String(Number.isFinite(Number(d.processRate)) ? Number(d.processRate) : 0);
     const body = {todoSeq: todoId(id), prjSeq: '', prtSeq: str(d.prtSeq, 20), todoLevel: String(Number(d.todoLevel) || 1), startDate: st, endDate: end, relWorkSeq: str(d.relWorkSeq, 40), todoName: name, contents: text, processRate: rate, uid: '', file: [], paramData: '', dDayYn: has('dday') ? (patch.dday && end ? 'Y' : 'N') : d.dDayYn === 'Y' ? 'Y' : 'N', importDegree: imp,
       ownerCompSeq: ctx.compSeq, ownerDeptSeq: ctx.deptSeq, ownerEmpSeq: ctx.empSeq};
+    if (has('manHour')) body.manHour = todoHours(patch.manHour); else if (d.manHour != null) body.manHour = d.manHour;
     const r = await todoWrite(TODO_P + 'prj001A02', body);
     if (!r || String(r.todoSeq) !== String(id)) throw new GwError('SAVE_FAILED', '그룹웨어가 변경을 저장하지 못했습니다');
     return {ok: true, id, status: str(r.todoStatus, 2)};

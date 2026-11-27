@@ -76,12 +76,12 @@
 
   // ---------- 쓰기(모두 그룹웨어 ToDo로) ----------
   // 만들기: 체크리스트는 하위 ToDo로 이어서 만든다. 결과를 그대로 돌려준다(하지 않은 일을 했다고 하지 않음).
-  async function todoCreate({title, due = '', start = '', important = false, importance, dday = true, memo = '', meta = {}, checklist = []} = {}) {
+  async function todoCreate({title, due = '', start = '', important = false, importance, dday = true, manHour = '', memo = '', meta = {}, checklist = []} = {}) {
     if (!todoGwOk()) return {ok: false, text: '그룹웨어 ToDo에 연결하지 못했습니다. 그룹웨어를 새로고침한 뒤 다시 시도하세요.'};
     const c = R.tdMetaCompose(memo, meta);
     if (!c.ok) return {ok: false, text: `메모와 정보가 너무 깁니다(${c.length}자, 1,500자까지).`};
     try {
-      const r = await GW.todoCreate({title, due: todoYmd(due), start: todoYmd(start), contents: c.text, important, importance, dday});
+      const r = await GW.todoCreate({title, due: todoYmd(due), start: todoYmd(start), contents: c.text, important, importance, dday, manHour});
       let subFail = 0, subUnk = 0;
       for (const s of checklist.filter(Boolean).slice(0, 30)) { try { await GW.todoCreate({title: s, parent: r.id}); } catch (e) { if (e && e.code === 'UNKNOWN') subUnk++; else subFail++; logError('todo.sub', e.message); } }
       await todoLoad({force: true});
@@ -90,13 +90,13 @@
     } catch (e) { logError('todo.create', e.message); if (e && e.code === 'UNKNOWN') { todoLoad({force: true}); return {ok: false, text: '통신 오류 또는 응답 지연으로 저장됐는지 확인하지 못했습니다. 목록을 새로 읽어 확인한 뒤 필요하면 다시 추가하세요.'}; } return {ok: false, text: '할 일을 그룹웨어에 저장하지 못했습니다: ' + todoErr(e)}; }
   }
   // 고치기. 중요도·진행률은 그룹웨어 화면처럼 전용 호출로 따로 저장한다(첨부가 있는 ToDo·받은 ToDo도 된다).
-  async function todoSave(id, {title, due, start, important, importance, rate, dday, memo, meta} = {}) {
+  async function todoSave(id, {title, due, start, important, importance, rate, dday, manHour, memo, meta} = {}) {
     if (TD.cached || !TD.lastLoad) await todoLoad({force: true});
     const t = todoFind(id);
     if (!t) return {ok: false, text: '목록에서 이 할 일을 찾지 못했습니다. 새로 고친 뒤 다시 시도하세요.'};
     const impWant = importance !== undefined ? String(importance) : important !== undefined ? (important ? (t.imp !== '0' ? t.imp : '2') : '0') : undefined;
     const impChg = impWant !== undefined && impWant !== t.imp, rateChg = rate !== undefined && Number(rate) !== Number(t.rate);
-    const bodyChg = [title, due, start, dday, memo, meta].some(v => v !== undefined) && (title !== undefined && title !== t.title || due !== undefined && due !== (t.due || '') || start !== undefined && start !== (t.start || '') || dday !== undefined && !!dday !== !!t.dday || memo !== undefined || meta !== undefined);
+    const bodyChg = manHour !== undefined || [title, due, start, dday, memo, meta].some(v => v !== undefined) && (title !== undefined && title !== t.title || due !== undefined && due !== (t.due || '') || start !== undefined && start !== (t.start || '') || dday !== undefined && !!dday !== !!t.dday || memo !== undefined || meta !== undefined);
     if (t.readonly && (impChg || bodyChg)) return {ok: false, text: '다른 사람이 준 ToDo나 프로젝트 ToDo는 진행률·완료만 바꿀 수 있습니다. 나머지는 그룹웨어에서 고쳐 주세요.'};
     if (bodyChg && t.files) return {ok: false, text: '첨부파일이 있는 ToDo는 제목·기간·메모를 그룹웨어에서 고쳐 주세요(첨부가 지워지지 않게). 중요도·진행률은 여기서 바꿀 수 있습니다.'};
     if (!bodyChg) {
@@ -113,6 +113,7 @@
     if (due !== undefined) patch.due = todoYmd(due);
     if (start !== undefined) patch.start = todoYmd(start);
     if (dday !== undefined) patch.dday = !!dday;
+    if (manHour !== undefined) patch.manHour = manHour;
     if (impChg) patch.importance = impWant;
     if (memo !== undefined || meta !== undefined) {
       const c = R.tdMetaCompose(memo !== undefined ? memo : t.memo, meta !== undefined ? meta : t.meta);
@@ -329,6 +330,7 @@ ${!isNew && typeof todoEditorInfoHtml === 'function' ? todoEditorInfoHtml(t) : '
 <div class="td-rep-w" id="tdeRepW" ${repV === 'w' ? '' : 'hidden'} role="group" aria-label="반복 요일">${[1, 2, 3, 4, 5, 6, 0].map(n => `<label class="chk"><input type="checkbox" id="tdeW${n}" ${rp && rp.f === 'w' && (rp.wd || []).includes(n) ? 'checked' : ''}> ${TODO_WD[n]}</label>`).join('')}</div>
 <label class="td-f" id="tdeRepM" ${repV === 'm' ? '' : 'hidden'}>매월 며칠<input class="inp" type="number" id="tdeMd" min="1" max="31" value="${rp && rp.f === 'm' && rp.md > 0 ? rp.md : ''}"></label>
 <p class="muted td-hint">반복 할 일은 끝냄으로 표시하면 다음 회차가 그룹웨어 ToDo에 생깁니다. 주말·휴일이면 앞 평일로 당깁니다.</p></details>
+<label class="td-f">투입공수 (시간)<input class="inp" id="tdeHours" inputmode="decimal" placeholder="예: 1.5" value="${esc(isNew ? '' : TD.hours?.id === t.id ? TD.hours.value : '')}" ${lock} ${!isNew && TD.hours?.id !== t.id ? 'disabled' : ''}></label>
 <label class="td-f">메모<textarea class="inp td-memo" id="tdeMemo" rows="4" ${lock}>${esc(t.memo || '')}</textarea></label>
 <div class="td-sec"><h3>첨부파일</h3><p class="muted td-hint">${isNew ? '첨부는 할 일을 저장한 후 그룹웨어에서 추가할 수 있습니다.' : t.files ? `첨부 ${Number(t.files) || 0}개가 있습니다. 그룹웨어에서 확인하거나 추가하세요.` : '첨부파일은 그룹웨어에서 추가할 수 있습니다.'}</p>${isNew ? '' : `<button class="btn sm" data-act="openUrl" data-url="${esc(GW.todoLink ? GW.todoLink(t.id) : '')}" data-title="그룹웨어 ToDo">${ic('ext')}그룹웨어에서 첨부하기</button>`}</div>
 <div class="td-sec" id="tdeCl">${todoChecklistHtml(t, isNew)}</div>
@@ -387,6 +389,7 @@ ${!isNew && typeof todoEditorInfoHtml === 'function' ? todoEditorInfoHtml(t) : '
     if (start && start > due) return {err: '시작일이 기한보다 뒤입니다.'};
     if (!start) start = due;
     const out = {title, due, start, importance: v('tdeImp') || '0', dday: !!($('#tdeDday') || {}).checked && !!due, memo: (($('#tdeMemo') || {}).value || '').replace(/\s+$/, ''), meta};
+    if ($('#tdeHours') && !$('#tdeHours').disabled) { const hours = v('tdeHours'); if (hours && !/^\d{1,10}(?:\.\d{1,2})?$/.test(hours)) return {err: '투입공수는 0 이상의 숫자로 소수 둘째 자리까지 입력하세요.'}; out.manHour = hours && Number(hours) ? hours : ''; }
     if ($('#tdeRate')) out.rate = Number(v('tdeRate')) || 0;
     return out;
   }
@@ -399,6 +402,7 @@ ${!isNew && typeof todoEditorInfoHtml === 'function' ? todoEditorInfoHtml(t) : '
     if (!!f.dday !== !!t.dday) out.dday = f.dday;
     if (f.importance !== (t.imp || '0')) out.importance = f.importance;
     if (f.rate !== undefined && f.rate !== Number(t.rate || 0)) out.rate = f.rate;
+    if (f.manHour !== undefined && TD.hours?.id === t.id && Number(f.manHour || 0) !== Number(TD.hours.value || 0)) out.manHour = f.manHour;
     const clean = m => JSON.stringify(Object.fromEntries(Object.entries(m || {}).filter(([, x]) => x !== undefined && x !== null && x !== '' && !(Array.isArray(x) && !x.length)).sort(([a], [b]) => a.localeCompare(b))));
     if (f.memo !== (t.memo || '') || clean(f.meta) !== clean(t.meta)) { out.memo = f.memo; out.meta = f.meta; }
     return out;
@@ -419,7 +423,8 @@ ${!isNew && typeof todoEditorInfoHtml === 'function' ? todoEditorInfoHtml(t) : '
   function todoRerenderEditor() { const ed = $('#tdEd'); if (ed) ed.innerHTML = todoEditorHtml(); }
   function todoOpen(id) {
     if (TD.dirty && TD.sel && TD.sel !== id && !confirm('고치던 내용이 저장되지 않았습니다. 버리고 다른 할 일을 열까요?')) return;
-    TD.sel = id; TD.dirty = false; TD.linkOpen = false; TD.linkQ = ''; TD.edMeta = null;
+    TD.sel = id; TD.dirty = false; TD.linkOpen = false; TD.linkQ = ''; TD.edMeta = null; TD.hours = null;
+    if (id !== 'new' && todoGwOk()) GW.todoDetail(id).then(d => { if (TD.sel !== id) return; TD.hours = {id, value: String(d.manHour ?? '')}; const el = $('#tdeHours'); if (el && !el.dataset.changed) { el.value = TD.hours.value; el.disabled = !!todoFind(id)?.files; } }).catch(() => { if (TD.sel === id) toast('투입공수를 불러오지 못했습니다. 다른 내용은 그대로 확인할 수 있습니다.'); });
     if (typeof bpEnsurePinnedRows === 'function') bpEnsurePinnedRows().then(() => { if (S.view === 'mytodo' && TD.sel && !TD.dirty) todoRerenderEditor(); });
     if (S.view !== 'mytodo') go('mytodo'); else renderMain();
     setTimeout(() => { const i = $('#tdeTitle'); if (i && id === 'new') i.focus(); }, 30);
@@ -474,9 +479,15 @@ ${!isNew && typeof todoEditorInfoHtml === 'function' ? todoEditorInfoHtml(t) : '
   // 주간 실적 초안에 넣을 '처리한 할 일' 줄(마지막으로 읽은 목록 기준)
   function todoWeeklyFor(from, to) { try { return TD.list ? R.tdWeeklyLines(TD.list, from, to) : []; } catch { return []; } }
 
+  // 편집 중 전체 화면을 다시 그리는 조작은 입력값을 지울 수 있으므로 먼저 저장하거나 닫게 한다.
+  function todoCanChangeView() {
+    if (!TD.dirty) return true;
+    toast('편집 중인 할 일을 저장하거나 닫은 뒤 보기를 바꿔 주세요.');
+    return false;
+  }
   // ---------- 처리기 ----------
   HOME_ACTS.tdReload = () => todoLoad({force: true});
-  HOME_ACTS.tdFilter = (el, v) => { if (TODO_FILTERS.some(f => f[0] === v) || R.TD_STATES.some(f => f[0] === v)) { TD.filter = v; renderMain(); root.querySelector(`[data-act="tdFilter"][data-v="${v}"]`)?.focus(); } };
+  HOME_ACTS.tdFilter = (el, v) => { if (!todoCanChangeView()) return; if (TODO_FILTERS.some(f => f[0] === v) || R.TD_STATES.some(f => f[0] === v)) { TD.filter = v; renderMain(); root.querySelector(`[data-act="tdFilter"][data-v="${v}"]`)?.focus(); } };
   HOME_ACTS.tdAdd = () => todoQuickAdd();
   HOME_ACTS.tdNew = () => { const q = ($('#tdQuick') || {}).value || ''; const sp = todoSplitQuick(q); const sel = ($('#tdQuickImp') || {}).value || '0'; const picked = ($('#tdQuickDue') || {}).value || ''; const due = ($('#tdQuickDue') || {}).dataset?.userSet ? picked : sp.due || today(); TD.draft = {title: sp.title, due, start: sp.due === due && sp.start ? sp.start : due, imp: sel !== '0' ? sel : sp.imp || '0', memo: '', meta: {}, checklist: []}; todoOpen('new'); };
   HOME_ACTS.tdSel = (el) => todoOpen(el.dataset.id);
@@ -559,15 +570,16 @@ ${!isNew && typeof todoEditorInfoHtml === 'function' ? todoEditorInfoHtml(t) : '
     if (t.id === 'tdeRep') { const v = t.value; const w = $('#tdeRepW'), m = $('#tdeRepM'); if (w) w.hidden = v !== 'w'; if (m) m.hidden = v !== 'm'; TD.dirty = true; return; }
     if (t.id === 'tdeBud') { const d = $('#tdeBudDate'); if (d && !d.value) { d.value = (($('#tdeDue') || {}).value || ''); if (typeof dateFieldSync === 'function') dateFieldSync('tdeBudDate'); } TD.dirty = true; return; }
     if (t.id === 'tdQ') { TD.q = t.value; todoRefreshList(); return; }
-    if (t.id === 'tdSort' && R.TD_SORTS.some(s => s[0] === t.value)) { TD.sort = t.value; todoPrefsSave(); renderMain(); root.querySelector('#tdSort')?.focus(); return; }
-    if (t.id === 'tdImpF' && (t.value === 'all' || R.TD_IMPS.some(s => s[0] === t.value))) { TD.imp = t.value; todoPrefsSave(); renderMain(); root.querySelector('#tdImpF')?.focus(); return; }
-    if (t.id === 'tdDoneSpan' && ['week', 'month', 'all'].includes(t.value)) { TD.doneSpan = t.value; todoPrefsSave(); renderMain(); root.querySelector('#tdDoneSpan')?.focus(); return; }
+    if (t.id === 'tdSort' && R.TD_SORTS.some(s => s[0] === t.value)) { if (!todoCanChangeView()) { t.value = TD.sort; return; } TD.sort = t.value; todoPrefsSave(); renderMain(); root.querySelector('#tdSort')?.focus(); return; }
+    if (t.id === 'tdImpF' && (t.value === 'all' || R.TD_IMPS.some(s => s[0] === t.value))) { if (!todoCanChangeView()) { t.value = TD.imp; return; } TD.imp = t.value; todoPrefsSave(); renderMain(); root.querySelector('#tdImpF')?.focus(); return; }
+    if (t.id === 'tdDoneSpan' && ['week', 'month', 'all'].includes(t.value)) { if (!todoCanChangeView()) { t.value = TD.doneSpan; return; } TD.doneSpan = t.value; todoPrefsSave(); renderMain(); root.querySelector('#tdDoneSpan')?.focus(); return; }
     if (todoDirtyField(t.id)) TD.dirty = true;
   }
   function todoInput(t, composing = false) {
     if (t.id === 'tdQ') { if (!composing) { TD.q = t.value; todoRefreshList(); } return; }
     if (t.id === 'tdeBulk') { if (typeof todoBulkPreview === 'function') todoBulkPreview(); return; }
     if (t.id === 'tdeRate') { const o = $('#tdeRateV'); if (o) o.textContent = t.value + '%'; }
+    if (t.id === 'tdeHours') t.dataset.changed = '1';
     if (todoDirtyField(t.id)) TD.dirty = true;
   }
   function todoEnter(t) {
