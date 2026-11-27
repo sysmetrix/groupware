@@ -117,10 +117,8 @@ test('수집기 todoCreate·todoUpdate·todoSetProgress·todoSetImportance·todo
       if (p.endsWith('prj001A01')) return Promise.reject(new TypeError('Failed to fetch'));
     },
   });
-  const ok = await rec.api.todoCreate({title: '복구 할 일'});
-  assert.equal(ok.ok, true);
-  assert.equal(ok.id, 'td901');
-  assert.equal(ok.recovered, true);
+  // 동일 제목은 다른 기기의 생성일 수 있어 저장 성공으로 추정하지 않는다.
+  await assert.rejects(rec.api.todoCreate({title: '복구 할 일'}), {code: 'UNKNOWN'});
 
   // todoCreate: 복구되지 않거나 before 목록이 없는(하위 ToDo / 사전 조회 실패) 경우에도 API_ERROR 대신 UNKNOWN
   for (const args of [{title: '미확인 상위'}, {title: '미확인 하위', parent: 'td5'}]) {

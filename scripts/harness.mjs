@@ -152,12 +152,13 @@ await stage('안전 규칙', async () => {
   for (const e of eps) if (/save|insert|update|delete|remove|submit|approve|send|regist|create|modify|apply/i.test(e)) fails.push(`읽기 전용 목록에 쓰기로 보이는 주소: ${e}`);
   // call('/주소', '/다른주소' ...) 처럼 인자가 오염된 호출 검출 (문자열 치환 사고 방지)
   for (const m of col.matchAll(/call\('(\/[\w/]+)',\s*'\//g)) fails.push('수집기 call 인자 오염: ' + m[1]);
-  // 쓰기 허용 목록은 자원 예약 한 개, 개인 ToDo 다섯 개(v1.17 네 개 + v1.20 중요도), 알림 읽음 표시 하나(v1.19.1)뿐이어야 한다
-  const WRITE_EXPECT = ['/schres/rs121A06', '/kiss/APIHandler/prj001A01', '/kiss/APIHandler/prj001A02', '/kiss/APIHandler/prj001A03', '/kiss/APIHandler/prj001A07', '/kiss/APIHandler/prj001A09', '/event/event02A03'];
+  // ECM 파일 업로드는 개인 ToDo 첨부 전용이다. 일반 읽기 경로로는 호출할 수 없다.
+  const WRITE_EXPECT = ['/ecm/ecm001A01', '/schres/rs121A06', '/kiss/APIHandler/prj001A01', '/kiss/APIHandler/prj001A02', '/kiss/APIHandler/prj001A03', '/kiss/APIHandler/prj001A07', '/kiss/APIHandler/prj001A09', '/event/event02A03'];
   const wm = col.match(/const WRITE_ALLOWED = new Set\(\[([^\]]*)\]/);
   const wl = wm ? [...wm[1].matchAll(/'([^']+)'/g)].map(x => x[1]) : [];
-  if (wl.length !== WRITE_EXPECT.length || WRITE_EXPECT.some(e => !wl.includes(e))) fails.push('쓰기 허용 목록이 자원 예약·개인 ToDo 다섯 개·알림 읽음 표시가 아님: ' + wl.join(','));
+  if (wl.length !== WRITE_EXPECT.length || WRITE_EXPECT.some(e => !wl.includes(e))) fails.push('쓰기 허용 목록이 승인된 자원·ToDo·첨부·알림 경로와 다름: ' + wl.join(','));
   for (const e of eps) if (WRITE_EXPECT.includes(e)) fails.push('쓰기 주소가 읽기 전용 목록에 있음: ' + e);
+  if (!/todoWrite\('\/ecm\/ecm001A01', form\)/.test(col) || /call\('\/ecm\/ecm001A01'/.test(col)) fails.push('첨부 업로드 전용 쓰기 경계 오류');
   // ToDo 고치기·중요도·지우기는 반드시 내 ToDo 확인(todoOwned)을 거친다. 지우기는 사용자 동작이 있어야 한다.
   // 진행률·완료는 그룹웨어처럼 내가 담당자인 ToDo(받은 ToDo 포함)에서만: todoAssigned 확인(v1.20).
   const fnBody = fn => (col.match(new RegExp(`async function ${fn}\\([\\s\\S]*?\\n  }\\n`)) || [''])[0];

@@ -239,10 +239,15 @@ export function assemble({collector, css, parts, template, briefing: briefingSrc
     // 규칙 사이 줄바꿈·마지막 세미콜론·쉼표/선택자 사이 공백은 뜻이 없다(문자열 안에 해당 문자가 없는지 하네스가 아니라 이 주석의 전제로 둔다: wc.css의 content 값에는 쉼표·콜론을 쓰지 않는다).
     .replace(/\}\n/g, '}').replace(/;\}/g, '}').replace(/,\s+/g, ',').replace(/\s*>\s*/g, '>').replace(/\s*\{/g, '{').replace(/:\s+/g, ':');
   const wcCssSlim = dropShadowedCss(wcCss);
-  // The CSS marker is replaced once, in source order (template head, parts, template tail). JSON keeps it on one line.
+  // CSS 사전 치환은 런타임에 원문을 정확히 복원한다. 토큰 충돌은 배포 전에 차단한다.
+  if (wcCssSlim.includes('~A') || wcCssSlim.includes('~B')) throw new Error('CSS packing token collision');
+  const packedCss = wcCssSlim.split('.wc ').join('~A').split('var(--').join('~B');
+  if (packedCss.split('~A').join('.wc ').split('~B').join('var(--') !== wcCssSlim) throw new Error('CSS packing mismatch');
+  const cssExpr = JSON.stringify(packedCss) + '.split("~A").join(".wc ").split("~B").join("var(--")';
+  // The CSS marker is replaced once, in source order (template head, parts, template tail).
   const wcSegs = [{label: 'workcenter.browser.js', text: halves[0]}, ...parts.map((p, i) => ({label: `wc/${p.file}`, text: p.src + (i < parts.length - 1 ? '\n' : '')})), {label: 'workcenter.browser.js', text: halves[1]}];
   const cssAt = wcSegs.findIndex(s => s.text.includes(CSS_MARK));
-  if (cssAt >= 0) wcSegs[cssAt] = {...wcSegs[cssAt], text: wcSegs[cssAt].text.replace(CSS_MARK, () => JSON.stringify(wcCssSlim))};
+  if (cssAt >= 0) wcSegs[cssAt] = {...wcSegs[cssAt], text: wcSegs[cssAt].text.replace(CSS_MARK, () => cssExpr)};
   const workcenter = wcSegs.map(s => s.text).join('');
   if (workcenter.includes('/*@WC_PARTS@*/')) throw new Error('work center parts were not assembled');
   if (!workcenter.includes(':host{all:initial}')) throw new Error('wc.css was not inlined');
