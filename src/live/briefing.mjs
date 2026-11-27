@@ -1428,7 +1428,7 @@ export function resSortList(list = []) {
 }
 // v1.28 자원 종류: 비서의 현황 조회(get_resource_status)와 예약 준비(reserve_vehicle)가 함께 쓰는 한 기준.
 // 말과 자원 모두 LED → 회의실 → 차량 순서로 본다. 장비·소모품 이름(빔프로젝터·화상회의 장비·하이패스 카드·블랙박스)은 어느 종류도 아니다.
-const RES_KIND = {led: [/LED|패널|전광판/i, 'LED 패널'], room: [/회의실|회의|세미나|강당|교육장|강의실/, '회의실'], car: [/차량|관용|니로|승용|승합|자동차|카니발|스타리아|스타렉스|아반떼|쏘나타|그랜저|아이오닉|쏘렌토|싼타페|봉고|버스|트럭/, '차량']};
+const RES_KIND = {led: [/LED|패널|전광판/i, 'LED 패널'], room: [/회의실|회의|세미나|강당|교육장|강의실/, '회의실'], car: [/차량|관용|니로|승용|승합|자동차|마이크로버스|카니발|스타리아|스타렉스|아반떼|쏘나타|그랜저|아이오닉|쏘렌토|싼타페|봉고|전기차|화물차|버스|트럭/, '차량']};
 const RES_KINDS = ['led', 'room', 'car'];
 const RES_GEAR = /(?:회의|차량)용|프로젝터|빔|장비|카드|블랙박스|노트북|카메라|마이크(?!로)|스피커|충전기|하이패스|내비|열쇠/;
 const RES_FULL = /회의실|세미나실|강당|교육장|강의실|차량|승합차|승용차|자동차|버스/;
@@ -1451,7 +1451,7 @@ export function resKindOfText(v) {
   if (resOwn(t)) return t;
   if (resIsGear(t)) return '';
   for (const k of RES_KINDS) if (RES_KIND[k][0].test(t)) return k;
-  return /room/i.test(t) ? 'room' : /^(vehicle|차)$|공용차/i.test(t) ? 'car' : '';
+  return /room/i.test(t) ? 'room' : /^(?:vehicle|차|\d+\s*인승)$/i.test(t) || /공용차/.test(t) ? 'car' : '';
 }
 // [종류, 이름으로 판정했는지]. 이름이 장비면 분류가 차량·회의실이어도 종류가 없다.
 function resKindBy(r) {
