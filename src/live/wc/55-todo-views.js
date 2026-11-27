@@ -154,6 +154,7 @@ ${t.canProgress ? `<div class="td-sec"><label class="td-f">진행률 <b id="tdeR
     if (!rows.length) return;
     if (!todoGwOk()) { toast('그룹웨어 ToDo에 연결하지 못했습니다. 그룹웨어를 새로고침한 뒤 다시 시도하세요.'); return; }
     TD.bulkBusy = true; if (el) { el.disabled = true; el.innerHTML = '<span class="spin"></span> 저장 중…'; }
+    const mark = typeof overlayMark === 'function' ? overlayMark() : 0;
     const failed = [];
     let ok = 0;
     try {
@@ -163,8 +164,10 @@ ${t.canProgress ? `<div class="td-sec"><label class="td-f">진행률 <b id="tdeR
       }
     } finally { TD.bulkBusy = false; }
     await todoLoad({force: true});
+    const live = typeof overlayLive !== 'function' || overlayLive(mark);
+    if (failed.length && !live) { toast(`${ok}건 추가, 저장 못 한 ${failed.length}건: ${failed.join(', ').slice(0, 120)}`); return; }
     if (failed.length) { const ta = $('#tdeBulk'); if (ta) { ta.value = failed.join('\n'); todoBulkPreview(); } if (el) el.disabled = false; toast(`${ok}건을 추가했습니다. ${failed.length}건은 저장하지 못해 입력칸에 남겼습니다.`); return; }
-    closeOverlay();
+    if (live) closeOverlay();
     toast(`그룹웨어 ToDo에 ${ok}건을 추가했습니다.`);
   }
 
@@ -186,7 +189,7 @@ ${t.canProgress ? `<div class="td-sec"><label class="td-f">진행률 <b id="tdeR
     return `<div class="modal" data-act="closeOverlay"><div class="dlg" data-stop="1" role="dialog" aria-label="퇴근 전 마무리" style="width:min(640px,94vw)"><button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button><h2 style="margin-top:0">퇴근 전 마무리</h2>
 ${list.length ? `<p class="muted">${personalTodoIncomplete() ? '확인된 ' : ''}오늘까지인데 끝내지 않은 할 일 ${list.length}건입니다. 다음 평일은 ${esc(nx.slice(5).replace('-', '/'))}입니다.</p><div class="td-list" role="list">${list.map(t => `<div class="td-row" role="listitem"><span class="td-main"><span class="td-t">${t.important ? `<span class="td-star">${ic('star')}</span>` : ''}${esc(t.title)}</span><span class="td-sub"><span class="${R.dday(t.due) < 0 ? 'td-late' : ''}">${esc(t.due.slice(5).replace('-', '/'))} · ${esc(todoDdayText(t.due))}</span></span></span><span class="acts"><button class="btn sm" data-act="tdWrapDone" data-id="${esc(t.id)}">끝냄</button><button class="btn sm" data-act="tdWrapNext" data-id="${esc(t.id)}">${esc(nx.slice(5).replace('-', '/'))}로</button><button class="btn sm ghost" data-act="tdWrapPick" data-id="${esc(t.id)}">날짜</button></span></div>`).join('')}</div><div class="acts" style="justify-content:flex-end;margin-top:14px"><button class="btn" data-act="closeOverlay">닫기</button><button class="btn primary" data-act="tdWrapAll">확인한 ${list.length}건을 ${esc(nx.slice(5).replace('-', '/'))}로</button></div>` : `<p>${!TD.list || personalTodoIncomplete() ? '오늘까지 남은 개인 ToDo를 모두 확인할 수 없습니다.' : '오늘까지 남은 할 일이 없습니다. 수고하셨습니다.'}</p><div class="acts" style="justify-content:flex-end"><button class="btn primary" data-act="closeOverlay">닫기</button></div>`}</div></div>`;
   }
-  function todoWrapOpen() { if (!TD.list && !TD.err && todoGwOk()) { todoLoad({force: true}).then(() => { if (TD.list || TD.err) todoWrapOpen(); }); return; } closeOverlay(); S.paletteOpen = true; $('#overlay').innerHTML = todoWrapHtml(); setTimeout(() => $('#overlay button.primary')?.focus(), 30); }
+  function todoWrapOpen() { if (!TD.list && !TD.err && todoGwOk()) { const mark = typeof overlayMark === 'function' ? overlayMark() : 0; todoLoad({force: true}).then(() => { if ((TD.list || TD.err) && (typeof overlayLive !== 'function' || overlayLive(mark))) todoWrapOpen(); }); return; } closeOverlay(); S.paletteOpen = true; $('#overlay').innerHTML = todoWrapHtml(); setTimeout(() => $('#overlay button.primary')?.focus(), 30); }
   const todoWrapRefresh = () => { if ($('#overlay .dlg[aria-label="퇴근 전 마무리"]')) $('#overlay').innerHTML = todoWrapHtml(); };
 
   HOME_ACTS.tdWrap = () => todoWrapOpen();
@@ -198,8 +201,9 @@ ${list.length ? `<p class="muted">${personalTodoIncomplete() ? '확인된 ' : ''
     if (!v) { todoWrapOpen(); return; }
     const due = R.tdParseDue(v[0]);
     if (!due) { toast('날짜를 알아보지 못했습니다.'); todoWrapOpen(); return; }
+    const mark = typeof overlayMark === 'function' ? overlayMark() : 0;
     const r = await todoSave(id, {due}); if (!r.ok) toast(r.text);
-    todoWrapOpen();
+    if (typeof overlayLive !== 'function' || overlayLive(mark)) todoWrapOpen();
   };
   HOME_ACTS.tdWrapAll = async () => {
     const list = TD.list ? R.tdWrapUp(TD.list) : [], nx = todoNextWorkday();
