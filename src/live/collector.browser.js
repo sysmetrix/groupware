@@ -22,7 +22,7 @@
   const READ_ONLY = new Set([
   // 자원(회의실·차량) 조회: 목록, 예약 현황, 자원 상세, 중복·한도 확인(POST지만 읽기 전용), 속성/옵션, 나의예약현황(rs121A08, v1.26 승인 여부 확인)
   '/schres/rs121A01', '/schres/rs121A04', '/schres/rs121A05', '/schres/rs121A42', '/schres/rs121A49', '/schres/rs121A24', '/schres/rs121A10', '/schres/rs121A08',
-    '/mail/mail000A01', '/mail/mail000A03', '/mail/mail003A01', '/mail/mail002A01', '/mail/mail002A37', '/mail/mail002A30', '/ecm/ecm001A07',
+    '/mail/mail000A01', '/mail/mail000A03', '/mail/mail003A01', '/mail/mail002A01', '/mail/mail002A37', '/mail/mail002A30', '/ecm/ecm001A07', '/ecm/ecm001A04',
     '/ea/api/getMenuCountInfo', '/ea/ea036A02', '/ea/ea025A04', '/ea/ea023A02', '/ea/ea027A02',
     '/ea/ea038A09', '/ea/ea038A15',
     '/board/APIHandler/ViewBoardArtList', '/board/APIHandler/getBoardReadCnt',
@@ -155,7 +155,7 @@
 
   // 쓰기는 이 목록의 주소만, 전용 함수(reserveResource)에서만 허용한다. 상신·결재·삭제·발송 계열은 여기에 절대 넣지 않는다.
   // v1.17: 개인 ToDo 만들기(A01)·고치기(A02)·지우기(A03)·완료(A07). todo* 전용 함수에서만, 내가 만든 내 개인 ToDo에만 쓴다.
-  const WRITE_ALLOWED = new Set(['/schres/rs121A06', '/kiss/APIHandler/prj001A01', '/kiss/APIHandler/prj001A02', '/kiss/APIHandler/prj001A03', '/kiss/APIHandler/prj001A07', '/kiss/APIHandler/prj001A09', '/event/event02A03']);
+  const WRITE_ALLOWED = new Set(['/ecm/ecm001A01', '/schres/rs121A06', '/kiss/APIHandler/prj001A01', '/kiss/APIHandler/prj001A02', '/kiss/APIHandler/prj001A03', '/kiss/APIHandler/prj001A07', '/kiss/APIHandler/prj001A09', '/event/event02A03']);
   const INTERNAL_CALL = Symbol('internalCall');
   async function call(path, body = {}, opts = {}) {
     if (!READ_ONLY.has(path)) throw new GwError('NOT_ALLOWED', `읽기 전용 허용 목록에 없는 API입니다: ${path}`);
@@ -169,7 +169,7 @@
       const ac = typeof AbortController !== 'undefined' ? new AbortController() : null;
       try {
         const res = await Promise.race([
-          client.post(path, body, {contextType: 'application/json', ...(encrypt ? {encrypt: true} : {}), ...(ac ? {signal: ac.signal} : {})}),
+          client.post(path, body, {contextType: path === '/ecm/ecm001A01' ? 'multipart/form-data' : 'application/json', ...(encrypt ? {encrypt: true} : {}), ...(ac ? {signal: ac.signal} : {})}),
           new Promise((_, reject) => { timer = setTimeout(() => { try { ac && ac.abort(); } catch {} reject(new GwError('TIMEOUT', `${path} 응답 시간 초과`)); }, timeoutMs); }),
         ]);
         let r;
@@ -499,8 +499,55 @@
       throw e;
     }
   };
+  // KISS fileList[].fileSn → ECM A04 → 저장용 fileId. 일부만 복원한 채 저장하면 기존 첨부가 사라진다.
+  const attachError = () => new GwError('ATTACHMENT', '첨부 목록을 모두 확인하지 못해 ToDo를 저장하지 않았습니다. 그룹웨어에서 확인해 주세요');
+  const validAttachId = id => (typeof id === 'string' && id.trim() === id && id !== '' && !id.includes(',')) || (Number.isSafeInteger(id) && id > 0);
+  function todoFileSns(d) {
+    const list = d.fileList;
+    if (list != null && !Array.isArray(list) || list == null && ![0, '0'].includes(d.fileCount)) throw attachError();
+    const sns = (list || []).map(x => x && x.fileSn);
+    if (d.fileCount != null && (!/^\d+$/.test(String(d.fileCount)) || Number(d.fileCount) !== sns.length) || sns.some(x => !validAttachId(x)) || new Set(sns.map(String)).size !== sns.length) throw attachError();
+    return sns;
+  }
+  function checkedFileIds(data, n) {
+    const ids = Array.isArray(data?.list) ? data.list.map(row => row?.fileId) : [];
+    if (ids.length !== n || ids.some(x => !validAttachId(x)) || new Set(ids.map(String)).size !== n) throw attachError();
+    return ids.map(String);
+  }
+  async function todoExistingIds(d, ctx, sns) {
+    if (!sns.length) return [];
+    const authKeyMap = JSON.stringify({empSeq: ctx.empSeq, prjSeq: d.prjSeq || '', todoSeq: d.todoSeq, issueSeq: d.issueSeq || '', menuAuthType: d.menuAuthType || '', searchAuthType: d.searchAuthType || ''});
+    const data = await call('/ecm/ecm001A04', {moduleGbn: 'PROJECT', authKeyMap, fileSn: sns, condition: '99'});
+    const ids = checkedFileIds(data, sns.length);
+    // 원본 업로더는 반환 순서에 fileSn을 매긴다. 서버가 일련번호도 보냈다면 반드시 대조한다.
+    if (data.list.some((row, i) => row.fileSn != null && String(row.fileSn) !== String(sns[i]))) throw attachError();
+    return ids;
+  }
+  // 같은 편집기의 같은 파일 선택은 업로드 결과(불확실한 실패 포함)를 메모리에만 보관한다.
+  // 할 일 쓰기 실패 후 저장을 눌러도 파일이 다시 업로드되지 않는다. 파일 내용·ID는 로컬 저장하지 않는다.
+  const todoUploads = new WeakMap();
+  async function todoNewIds(files, scope) {
+    if (!files || Array.isArray(files) && !files.length) return [];
+    if (!Array.isArray(files) || files.some(f => !(f instanceof File))) throw attachError();
+    if (String(context().empSeq || '') !== String(loadedEmpSeq) || !loadedEmpSeq) throw new GwError('IDENTITY', '로그인 정보가 바뀌었습니다');
+    const old = todoUploads.get(files);
+    if (old) { if (old.scope !== scope) throw attachError(); return old.result; }
+    const seen = new Set(), form = new FormData();
+    for (const f of files) {
+      const key = JSON.stringify([f.name, f.size, f.lastModified, f.type]);
+      if (seen.has(key)) throw new GwError('BAD_INPUT', '중복 파일이 있습니다. 한 번씩만 선택해 주세요');
+      seen.add(key); form.append('file[]', f);
+    }
+    form.append('moduleGbn', 'PROJECT');
+    const result = todoWrite('/ecm/ecm001A01', form).then(data => checkedFileIds(data, files.length));
+    todoUploads.set(files, {scope, result});
+    return result;
+  }
+  function bindTodoFiles(body, ids) {
+    const all = [...new Set(ids)]; body.uid = all.join(','); body.file = all.map(fileId => ({fileId}));
+  }
   // 만들기. parent가 있으면 하위 ToDo(체크리스트 한 줄). 응답이 늦으면 목록을 다시 읽어 같은 제목의 새 항목이 있는지 본다(중복 생성 방지).
-  async function todoCreate({title, start = '', due = '', contents = '', important = false, importance, dday = false, manHour = '', parent = ''} = {}) {
+  async function todoCreate({title, start = '', due = '', contents = '', important = false, importance, dday = false, manHour = '', parent = '', files} = {}) {
     const ctx = context();
     if (!ctx.empSeq || String(ctx.empSeq) !== String(loadedEmpSeq)) throw new GwError('IDENTITY', '로그인 정보가 바뀌었습니다. 새로고침 후 다시 시도하세요');
     const name = todoName(title), end = todoYmd(due), st = todoYmd(start) || end, text = todoText(contents), imp = todoImp(importance, important);
@@ -510,6 +557,9 @@
     const before = parent ? null : await todoList().then(r => new Set(r.todos.map(t => t.todoSeq))).catch(() => null);
     const body = {prjSeq: '', prtSeq: parent ? todoId(parent) : '', todoLevel: parent ? '2' : '1', todoName: name, startDate: st, endDate: end, contents: text, processRate: '0', manHour: todoHours(manHour), importDegree: imp, file: [], linkYn: 'N', moduleSeq: 'kiss_prj', relWorkSeq: '', uid: '', paramData: '',
       ownerUserList: [{compSeq: ctx.compSeq, deptSeq: ctx.deptSeq, empSeq: ctx.empSeq, unitType: 'E'}], ownerCompSeq: ctx.compSeq, ownerDeptSeq: ctx.deptSeq, ownerEmpSeq: ctx.empSeq, dDayYn: dday && end ? 'Y' : 'N', portletYn: 'N', modifyYn: 'Y', deleteYn: 'Y', proccessYn: 'Y'};
+    const ids = await todoNewIds(files, 'new:' + (parent || ''));
+    if (String(context().empSeq) !== String(ctx.empSeq)) throw new GwError('IDENTITY', '로그인 정보가 바뀌었습니다');
+    bindTodoFiles(body, ids);
     let id;
     try { id = await todoWrite(TODO_P + 'prj001A01', body); }
     catch (e) {
@@ -526,12 +576,12 @@
     if (typeof id !== 'string' || !/^td\d+$/.test(id)) throw new GwError('SAVE_FAILED', '그룹웨어가 ToDo를 저장하지 못했습니다');
     return {ok: true, id};
   }
-  // 고치기: 지금 값을 읽어 바뀐 칸만 덮어 전체를 보낸다. 첨부가 있는 ToDo는 첨부를 지울 수 있어 고치지 않는다.
+  // 고치기: 지금 값을 읽어 바뀐 칸만 덮어 전체를 보낸다. 기존 첨부는 일련번호로 모두 복원한 뒤 함께 보낸다.
   // base: 화면이 알고 있던 내용 칸. 그 사이 다른 PC·모바일에서 바뀌었으면 덮어쓰지 않고 CONFLICT로 멈춘다.
   async function todoUpdate(id, patch = {}, {base} = {}) {
     const {ctx, d} = await todoOwned(id);
     if (base !== undefined && String(d.contents || '').replace(/\r\n/g, '\n') !== String(base || '').replace(/\r\n/g, '\n')) throw new GwError('CONFLICT', '그 사이 다른 곳에서 이 ToDo의 내용이 바뀌었습니다. 새로 읽은 뒤 다시 고쳐 주세요');
-    if (Number(d.fileCount) > 0) throw new GwError('HAS_FILE', '첨부파일이 있는 ToDo는 그룹웨어에서 고쳐 주세요');
+    const sns = todoFileSns(d);
     const has = k => Object.prototype.hasOwnProperty.call(patch, k);
     const name = has('title') ? todoName(patch.title) : String(d.todoName || ''); // 고치지 않은 칸은 그대로 돌려보낸다(그룹웨어에서 만든 긴 제목도 막지 않게)
     const end = has('due') ? todoYmd(patch.due) : todoYmd(d.endDate);
@@ -551,6 +601,14 @@
     const body = {todoSeq: todoId(id), prjSeq: '', prtSeq: str(d.prtSeq, 20), todoLevel: String(Number(d.todoLevel) || 1), startDate: st, endDate: end, relWorkSeq: str(d.relWorkSeq, 40), todoName: name, contents: text, processRate: rate, uid: '', file: [], paramData: '', dDayYn: has('dday') ? (patch.dday && end ? 'Y' : 'N') : d.dDayYn === 'Y' ? 'Y' : 'N', importDegree: imp,
       ownerCompSeq: ctx.compSeq, ownerDeptSeq: ctx.deptSeq, ownerEmpSeq: ctx.empSeq};
     if (has('manHour')) body.manHour = todoHours(patch.manHour); else if (d.manHour != null) body.manHour = d.manHour;
+    const existing = await todoExistingIds(d, ctx, sns);
+    const added = await todoNewIds(patch.files, 'update:' + id);
+    // ECM 왕복 중 다른 기기에서 파일·본문을 고치면 오래된 전체 본문을 보내지 않는다.
+    if (sns.length || added.length) {
+      const {d: now} = await todoOwned(id);
+      if (JSON.stringify(todoFileSns(now)) !== JSON.stringify(sns) || ['contents','todoName','startDate','endDate','manHour','todoStatus','processRate','dDayYn','modifyDate','modifyDt','importDegree'].some(k => now[k] !== d[k])) throw new GwError('CONFLICT', '다른 곳에서 ToDo가 바뀌어 저장하지 않았습니다');
+    }
+    bindTodoFiles(body, [...existing, ...added]);
     const r = await todoWrite(TODO_P + 'prj001A02', body);
     if (!r || String(r.todoSeq) !== String(id)) throw new GwError('SAVE_FAILED', '그룹웨어가 변경을 저장하지 못했습니다');
     return {ok: true, id, status: str(r.todoStatus, 2)};
