@@ -80,13 +80,11 @@
   }
 
   // ---------- 결과보고 대상(미작성 계획서) 선별 ----------
-  async function getPendingPlansList() {
-    const lr = await learnPatterns({limit: 12, budgetMs: 60000, quiet: true}).catch(e => ({done: 0, errors: 1, errMsg: e.message}));
+  function pendingPlans() {
     const allDocs = Object.values(patLoad().docs);
     const docs = allDocs.filter(d => d.binder && !/^접수문서/.test(d.binder) && /^일반기안문/.test(d.form || ''));
     const plans = docs.filter(d => /계획(\(안\)|\(변경\))?$/.test(String(d.title).trim()) && !/결과/.test(d.title));
-    const reportedNos = new Set();
-    const reportedCores = new Set();
+    const reportedNos = new Set(), reportedCores = new Set();
     const core = t => R.patternTokens(R.planToResultTitle(t).replace(/\s*(운영|참가)?\s*결과보고.*$/, '')).join(' ');
     for (const d of docs) {
       if (!/결과보고/.test(d.title)) continue;
@@ -99,45 +97,31 @@
       .map(p => ({...p, similarReport: !!core(p.title) && reportedCores.has(core(p.title))}))
       .sort((a, b) => String(b.date).localeCompare(String(a.date)));
     pending.learnedCount = allDocs.length;
-    pending.learnErrors = (lr && lr.errors) || 0;
     return pending;
+  }
+
+  function planPickerBody(res) {
+    const pending = pendingPlans(), n = pending.learnedCount, un = res ? (res.errors || 0) + (res.left || 0) : 0, err = res && res.errMsg;
+    const note = !res ? '<div class="muted" role="status"><span class="spin"></span> 새 문서 확인 중…</div>'
+      : err ? `<div class="box warn" role="status">문서 목록을 읽지 못했습니다(${esc(err)}). 전에 읽어 둔 ${n}건만 보입니다.</div>`
+      : un ? `<div class="box warn" role="status">확인하지 못한 문서 ${un}건이 있어 빠진 계획서나 결과보고 유무를 원문에서 확인하세요.</div>` : '';
+    if (!pending.length) return !res ? `${note}<div class="muted">읽어 둔 ${n}건에는 없습니다(확인 중).</div>`
+      : err || un ? `${note}<div class="muted">${err ? '전에 읽어 둔' : '확인한'} ${n}건에서는 찾지 못했습니다.</div>`
+      : `<div class="empty"><div class="ill">${ic('check')}</div><b>미작성 계획서를 찾지 못했습니다</b>현재 학습한 ${n}건 기준입니다.</div>`;
+    return note + pending.map(p => `<div class="cmd-preset" role="button" tabindex="0" data-act="selectPlanForResult" data-id="${esc(p.id)}" style="display:flex;align-items:flex-start;gap:12px"><div style="flex:1;min-width:0"><div style="font-weight:700;font-size:14.5px;color:var(--fg)">${esc(p.title)}${p.similarReport ? ' · 유사한 결과보고 있음 (연결 확인 필요)' : ''}</div><div class="muted" style="font-size:12px;margin-top:4px">${esc(p.docNo || '-')} · 시행 ${esc((p.runday || '').replace(/^.*\((.*)\)$/, '$1') || String(p.date || '').slice(0, 10))} · 기록물철 ${esc(p.binder || '-')}</div></div><button class="btn sm primary" style="flex:0 0 auto">결과보고 작성</button></div>`).join('');
   }
 
   async function openResultPlanPicker() {
     if (gated('draftResult')) return;
-    closeOverlay();
-    S.paletteOpen = true;
-    $('#overlay').innerHTML = `
-      <div class="modal" data-act="closeOverlay">
-        <div class="dlg" data-stop="1" style="width:min(720px,94vw);padding:22px 24px" role="dialog" aria-label="결과보고 대상 계획서 선택">
-          <button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button>
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
-            <div class="cmd-logo">${ic('doc')}</div>
-            <div>
-              <h2 style="margin:0;font-size:18px">어떤 계획서의 결과보고를 작성할까요?</h2>
-              <div class="muted">조회한 문서 중 결과보고의 참조 문서번호가 일치한 계획서는 제외했습니다. 미연결 보고서가 있을 수 있으니 작성 전에 확인하세요. 선택하면 그 계획서의 기록물철·본문·참조문서를 그대로 이어받습니다.</div>
-            </div>
-          </div>
-          <div id="planPickerList" style="max-height:380px;overflow:auto;display:flex;flex-direction:column;gap:8px">
-            <div class="mi muted"><span class="spin"></span> 내 결재문서를 분석하고 있습니다…</div>
-          </div>
-          <div class="acts" style="margin-top:16px;justify-content:flex-end;border-top:1px solid var(--line);padding-top:12px">
-            <button class="btn sm ghost" data-act="closeHelp">닫기 (Esc)</button>
-          </div>
-        </div>
-      </div>`;
-    const pending = await getPendingPlansList();
-    const el = $('#planPickerList');
-    if (!el) return;
-    if (!pending.length) { el.innerHTML = `<div class="empty"><div class="ill">${ic('check')}</div><b>미작성 계획서를 찾지 못했습니다</b>현재 학습한 ${pending.learnedCount || 0}건 기준입니다.${pending.learnErrors ? ` (일부 문서 ${pending.learnErrors}건은 읽지 못했습니다)` : ''}</div>`; return; }
-    el.innerHTML = (pending.learnErrors ? `<p role="status">일부 문서를 조회하지 못했습니다. 결과보고 유무를 원문에서 확인하세요.</p>` : '') + pending.map(p => `
-      <div class="cmd-preset" role="button" tabindex="0" data-act="selectPlanForResult" data-id="${esc(p.id)}" style="display:flex;align-items:flex-start;gap:12px">
-        <div style="flex:1;min-width:0">
-          <div style="font-weight:700;font-size:14.5px;color:var(--fg)">${esc(p.title)}${p.similarReport ? ' · 유사한 결과보고 있음 (연결 확인 필요)' : ''}</div>
-          <div class="muted" style="font-size:12px;margin-top:4px">${esc(p.docNo || '-')} · 시행 ${esc((p.runday || '').replace(/^.*\((.*)\)$/, '$1') || String(p.date || '').slice(0, 10))} · 기록물철 ${esc(p.binder || '-')}</div>
-        </div>
-        <button class="btn sm primary" style="flex:0 0 auto">결과보고 작성</button>
-      </div>`).join('');
+    closeOverlay(); S.paletteOpen = true;
+    const shell = b => `<div class="modal" data-act="closeOverlay"><div class="dlg" data-stop="1" style="width:min(720px,94vw);padding:22px 24px" role="dialog" aria-label="결과보고 대상 계획서 선택"><button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button><div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><div class="cmd-logo">${ic('doc')}</div><div><h2 style="margin:0;font-size:18px">어떤 계획서의 결과보고를 작성할까요?</h2><div class="muted">조회한 문서 중 결과보고의 참조 문서번호가 일치한 계획서는 제외했습니다. 미연결 보고서가 있을 수 있으니 작성 전에 확인하세요. 선택하면 그 계획서의 기록물철·본문·참조문서를 그대로 이어받습니다.</div></div></div><div id="planPickerList" style="max-height:380px;overflow:auto;display:flex;flex-direction:column;gap:8px">${b}</div><div class="acts" style="margin-top:16px;justify-content:flex-end;border-top:1px solid var(--line);padding-top:12px"><button class="btn sm ghost" data-act="closeHelp">닫기 (Esc)</button></div></div></div>`;
+    $('#overlay').innerHTML = shell(Object.keys(patLoad().docs).length ? planPickerBody(null) : '<div class="mi muted"><span class="spin"></span> 내 결재문서를 분석하고 있습니다…</div>');
+    const mark = overlayMark();
+    const res = await learnPatterns({limit: 12, budgetMs: 60000, quiet: true}).catch(e => ({done: 0, errors: 1, errMsg: (e && e.message) || '오류'}));
+    if (!overlayLive(mark)) return;
+    const lt = $('#planPickerList')?.scrollTop || 0, dt = $('#overlay .dlg')?.scrollTop || 0;
+    if (!overlayRedraw(mark, shell(planPickerBody(res || {errors: 1, errMsg: '오류'})))) return;
+    const le = $('#planPickerList'), de = $('#overlay .dlg'); if (le) le.scrollTop = lt; if (de) de.scrollTop = dt;
   }
 
   // ---------- 새 기안 창 열기 / 채우기 ----------
@@ -460,6 +444,10 @@
     const bodyFilled = !!(bodyStep && bodyStep.ok); // 본문을 실제로 넣고 다시 읽어 일치한 경우만
     const frameOnly = '초안 틀만 입력했습니다. 본문 사실(일시·장소·인원·금액)은 직접 확인하세요.';
     if (!got) notes = []; // 넣은 값이 없으면 본문·틀을 이어받았다는 안내도 보이지 않는다
+    else {
+      if (bodyStep && !bodyStep.ok) notes = notes.filter(n => !/본문|서식을\s*이어받|이어받았|그대로\s*가져왔|붙임\s*파일명|항목명과\s*순서|결과보고\s*순서|예산과목은|틀\s*문서\s*값|1번\s*관련\s*문서번호/.test(n));
+      if (steps.some(s => s.name === '기록물철' && !s.ok)) notes = notes.filter(n => !/기록물철은/.test(n));
+    }
     const head = !got ? (fill.length ? '자동 기입을 확인하지 못했습니다' : '자동 기입하지 못했습니다') : bad ? '자동 기입 결과 (확인이 필요한 항목이 있습니다)' : bodyFilled ? '자동 기입 완료 · 상신 전 확인 단계' : '초안 틀만 입력했습니다';
     const summary = !got ? (fill.length ? '기안에 채운 칸을 확인하지 못했습니다. 화면을 확인하세요.' : '기안을 채우지 못했습니다.') : bad ? `${got}/${fill.length}개 항목 자동 기입, ${bad}개는 직접 확인이 필요합니다.` : bodyFilled ? `${got}개 항목을 지난 결재문서 패턴대로 기입하고 다시 읽어 확인했습니다.` : `${got}개 항목(본문 제외)을 기입했습니다. ${frameOnly}`;
     const rec = logActionRecord({command: title, type: '기안', target: title, summary, steps: steps.map(s => `${s.ok ? '✓' : '✗'} ${s.name}: ${s.detail}`), status: !got ? 'error' : bad ? 'partial' : 'success', verified: !bad, details: notes.join(' / ')});
