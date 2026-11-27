@@ -1117,7 +1117,7 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .ch-send{background:var(--pri);color:var(--pri-fg);border-radius:8px}
 .wc .ch-send:hover{background:var(--pri-h)}
 /* ---------- 겹쳐 뜨는 것: 창·명령·알림 ---------- */
-.wc .modal{background:rgba(15,18,24,.36);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);box-shadow:none;border-radius:0}
+.wc .modal{background:rgba(15,18,24,.42);backdrop-filter:none;-webkit-backdrop-filter:none;box-shadow:none;border-radius:0}
 .wc .dlg,.wc:not(.dark) .dlg,.wc.dark .dlg{background:var(--card);border:0;border-radius:16px;box-shadow:var(--sh2)}
 .wc .menu,.wc:not(.dark) .menu,.wc.dark .menu{background:var(--card);border:0;border-radius:12px;box-shadow:var(--sh2);padding:6px;backdrop-filter:none}
 .wc .menu .mi{border-radius:8px;padding:8px 10px;font-size:14px}
@@ -1558,3 +1558,17 @@ input[type=date],select.inp{color-scheme:light;font-family:inherit}
 .wc .res-status.res-bad{color:var(--hi)}
 .wc .res-status.res-muted{color:var(--muted)}
 @container (max-width:560px){.wc .res-f{grid-template-columns:minmax(0,1fr);gap:4px}}
+/* 결과보고 문서 확인: 실제 처리 건수만 진행률로 표시 */
+.wc .plan-progress{margin:16px 0 14px;padding:16px 18px;border:1px solid var(--line);border-radius:12px;background:var(--bg-subtle)}
+.wc .plan-progress-head{display:flex;align-items:center;gap:12px;min-width:0}
+.wc .plan-progress-icon{display:grid;place-items:center;flex:0 0 38px;height:38px;border-radius:11px;background:var(--accent-soft);color:var(--accent-text);font-size:18px}
+.wc .plan-progress-head>div{flex:1;min-width:0}.wc .plan-progress-head b{display:block;color:var(--fg);font-size:14px}.wc .plan-progress-head div div{color:var(--muted);font-size:12px}
+.wc .plan-elapsed{align-self:flex-start;white-space:nowrap;color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.wc .plan-progress-track{height:5px;margin-top:15px;overflow:hidden;border-radius:9px;background:var(--line)}
+.wc .plan-progress-fill{height:100%;width:0;border-radius:inherit;background:var(--accent);transition:width .3s ease}
+.wc .plan-progress-fill.indeterminate{width:35%;animation:plan-progress-sweep 1.5s ease-in-out infinite}
+.wc .plan-progress-foot{display:flex;justify-content:space-between;gap:10px;margin-top:7px;color:var(--muted);font-size:12px}.wc .plan-progress-foot span:first-child{color:var(--fg);font-weight:600}
+.wc .plan-list-note,.wc .plan-empty{margin:2px 0 6px;color:var(--muted);font-size:12px}.wc .plan-empty{padding:18px;text-align:center}
+@keyframes plan-progress-sweep{from{transform:translateX(-110%)}to{transform:translateX(300%)}}
+@media (prefers-reduced-motion:reduce){.wc .plan-progress-fill.indeterminate{animation:none}.wc .plan-progress-fill{transition:none}}
+@media (max-width:520px){.wc .plan-progress-foot{flex-direction:column;gap:0}.wc .plan-progress-head{align-items:flex-start}.wc .plan-progress{padding:14px}}
