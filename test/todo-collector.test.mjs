@@ -260,3 +260,9 @@ test('첨부가 없던 ToDo도 다른 곳에서 새 첨부가 생기면 저장�
   const c=await load({override:(p,b,calls)=>p.endsWith('prj001A05')&&calls.filter(x=>x.p===p).length===2?{resultCode:0,resultData:{todoSeq:'td9',loginUserTodoOwnerYn:'Y',loginUserTodoCreateYn:'Y',ownerEmpSeq:'1',createEmpSeq:'1',fileCount:1,fileList:[{fileSn:'new'}]}}:undefined});
   await assert.rejects(c.api.todoUpdate('td9',{title:'합성'}),e=>e.code==='CONFLICT'); assert.equal(c.writes().length,0);
 });
+
+
+test('신규 저장 응답이 불명확하면 같은 제목의 다른 항목을 성공으로 보지 않는다', async () => {
+  const c = await load({list:[{todoSeq:'td123',todoName:'합성',createDate:'20261127'}], override:p=>p.endsWith('prj001A01')?{resultCode:0,resultData:{}}:undefined});
+  await assert.rejects(c.api.todoCreate({title:'합성'}), e => e.code === 'UNKNOWN');
+});

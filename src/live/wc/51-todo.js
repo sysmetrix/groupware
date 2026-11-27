@@ -34,7 +34,7 @@
   function todoRerender() {
     try {
       if (typeof renderNav === 'function') renderNav();
-      if (S.view === 'mytodo') { if (TD.sel && TD.dirty) todoRefreshList(); else renderMain(); }
+      if (S.view === 'mytodo') { if (TD.sel) todoRefreshList(); else renderMain(); }
       else if (['board', 'calendar'].includes(S.view)) renderMain();
       else if (S.view === 'today' && S.todoSrc !== 'gw' && typeof refreshQueue === 'function') refreshQueue();
       else if (S.view === 'home' && typeof homePartialRefresh === 'function') homePartialRefresh();
@@ -87,7 +87,7 @@
       await todoLoad({force: true});
       const subMsg = [subFail && `체크리스트 ${subFail}줄은 저장하지 못했습니다`, subUnk && `체크리스트 ${subUnk}줄은 반영 여부를 확인하지 못했습니다(목록에서 먼저 확인)`].filter(Boolean);
       return {ok: true, id: r.id, subFail, subUnk, text: subMsg.length ? `만들었지만 ${subMsg.join(', ')}.` : ''};
-    } catch (e) { logError('todo.create', e.message); if (e && e.code === 'UNKNOWN') { todoLoad({force: true}); return {ok: false, text: '통신 오류 또는 응답 지연으로 저장됐는지 확인하지 못했습니다. 목록을 새로 읽어 확인한 뒤 필요하면 다시 추가하세요.'}; } return {ok: false, text: '할 일을 그룹웨어에 저장하지 못했습니다: ' + todoErr(e)}; }
+    } catch (e) { logError('todo.create', e.message); if (e && e.code === 'UNKNOWN') { todoLoad({force: true}); return {ok: false, uncertain: true, text: '저장 여부를 확인하지 못했습니다. 목록에서 확인한 뒤 편집기를 닫고 다시 시도하세요.'}; } return {ok: false, text: '할 일을 그룹웨어에 저장하지 못했습니다: ' + todoErr(e)}; }
   }
   // 고치기. 중요도·진행률은 그룹웨어 화면처럼 전용 호출로 따로 저장한다(첨부가 있는 ToDo·받은 ToDo도 된다).
   async function todoSave(id, {title, due, start, important, importance, rate, dday, manHour, memo, meta, files} = {}) {
@@ -415,6 +415,7 @@ ${!isNew && typeof todoEditorInfoHtml === 'function' ? todoEditorInfoHtml(t) : '
   }
   async function todoSaveEditor() {
     if (TD.saving) return;
+    if (TD.uncertain) { toast('저장 여부를 목록에서 먼저 확인한 뒤 편집기를 닫아 주세요.'); return; }
     const f = todoReadEditor();
     if (f.err) { toast(f.err); return; }
     TD.saving = true; TD.dirty = true; const saveButton = root.querySelector('#tdEd [data-act="tdSave"]'); if (saveButton) { saveButton.disabled = true; saveButton.textContent = '저장 중…'; }
@@ -422,18 +423,18 @@ ${!isNew && typeof todoEditorInfoHtml === 'function' ? todoEditorInfoHtml(t) : '
     const editor = $('#tdEd'); if (editor) editor.inert = true;
     let r;
     if (TD.sel === 'new') { r = await todoCreate({...f, checklist: (TD.draft && TD.draft.checklist) || []}); if (r.ok) { TD.sel = r.id; TD.draft = null; } }
-    else { const t = todoFind(TD.sel); const d = t ? todoEditorDiff(t, f) : f; r = Object.keys(d).length ? await todoSave(TD.sel, d) : {ok: true, text: '바뀐 내용이 없습니다.'}; }
+    else { const t = todoFind(TD.sel), base = TD.editBase; const changed = !t || !base || ['title','due','start','contents','imp','rate','dday','files'].some(k => (t[k] ?? '') !== (base[k] ?? '')); if (changed) r = {ok: false, text: '다른 곳에서 할 일이 바뀌었습니다. 입력 내용을 확인한 뒤 닫고 다시 열어 주세요.'}; else { const d = todoEditorDiff(base, f); r = Object.keys(d).length ? await todoSave(TD.sel, d) : {ok: true, text: '바뀐 내용이 없습니다.'}; } }
     if (editor) editor.inert = false;
-    TD.saving = false; TD.dirty = !r.ok; if (r.ok) { TD.edMeta = null; TD.edFiles = null; }
+    TD.saving = false; TD.dirty = !r.ok; TD.uncertain = !!r.uncertain; if (r.ok) { TD.edMeta = null; TD.edFiles = null; }
     if (r.ok) { toast(r.text || '그룹웨어 ToDo에 저장했습니다.'); }
     else { if (picker) picker.disabled = false; toast(r.text); }
     if (S.view === 'mytodo') { if (r.ok) renderMain(); else if (saveButton) { saveButton.disabled = false; saveButton.textContent = '저장'; } }
   }
   function todoRerenderEditor() { const ed = $('#tdEd'); if (ed) ed.innerHTML = todoEditorHtml(); }
   function todoOpen(id) {
-    if (TD.saving) return;
+    if (TD.saving || (TD.sel === id && TD.dirty)) return;
     if (TD.dirty && TD.sel && TD.sel !== id && !confirm('고치던 내용이 저장되지 않았습니다. 버리고 다른 할 일을 열까요?')) return;
-    TD.sel = id; TD.edFiles = null; TD.dirty = false; TD.linkOpen = false; TD.linkQ = ''; TD.edMeta = null; TD.hours = null;
+    TD.sel = id; TD.uncertain = false; TD.editBase = id === 'new' ? null : {...todoFind(id)}; TD.edFiles = null; TD.dirty = false; TD.linkOpen = false; TD.linkQ = ''; TD.edMeta = null; TD.hours = null;
     if (id !== 'new' && todoGwOk()) GW.todoDetail(id).then(d => { if (TD.sel !== id) return; TD.hours = {id, value: String(d.manHour ?? '')}; const el = $('#tdeHours'); if (el && !el.dataset.changed) { el.value = TD.hours.value; el.disabled = false; } }).catch(() => { if (TD.sel === id) toast('투입공수를 불러오지 못했습니다. 다른 내용은 그대로 확인할 수 있습니다.'); });
     if (typeof bpEnsurePinnedRows === 'function') bpEnsurePinnedRows().then(() => { if (S.view === 'mytodo' && TD.sel && !TD.dirty) todoRerenderEditor(); });
     if (S.view !== 'mytodo') go('mytodo'); else renderMain();

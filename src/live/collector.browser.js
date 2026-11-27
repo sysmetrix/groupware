@@ -15,7 +15,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '1.29.0';
+  const VERSION = '1.30.0';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
@@ -539,7 +539,7 @@
       seen.add(key); form.append('file[]', f);
     }
     form.append('moduleGbn', 'PROJECT');
-    const result = todoWrite('/ecm/ecm001A01', form).then(data => checkedFileIds(data, files.length));
+    const result = todoWrite('/ecm/ecm001A01', form).then(data => checkedFileIds(data, files.length)).catch(e => { if (e && e.code === 'RATE') todoUploads.delete(files); throw e; });
     todoUploads.set(files, {scope, result});
     return result;
   }
@@ -553,8 +553,6 @@
     const name = todoName(title), end = todoYmd(due), st = todoYmd(start) || end, text = todoText(contents), imp = todoImp(importance, important);
     if (st && end && st > end) throw new GwError('BAD_INPUT', '시작일이 기한보다 뒤입니다');
     if (parent) await todoOwned(parent);
-    // 응답이 늦을 때 되찾기용 '만들기 전 목록'(상위 ToDo만). 읽지 못했으면 되찾기를 하지 않는다(엉뚱한 같은 이름 ToDo를 성공으로 보지 않게).
-    const before = parent ? null : await todoList().then(r => new Set(r.todos.map(t => t.todoSeq))).catch(() => null);
     const body = {prjSeq: '', prtSeq: parent ? todoId(parent) : '', todoLevel: parent ? '2' : '1', todoName: name, startDate: st, endDate: end, contents: text, processRate: '0', manHour: todoHours(manHour), importDegree: imp, file: [], linkYn: 'N', moduleSeq: 'kiss_prj', relWorkSeq: '', uid: '', paramData: '',
       ownerUserList: [{compSeq: ctx.compSeq, deptSeq: ctx.deptSeq, empSeq: ctx.empSeq, unitType: 'E'}], ownerCompSeq: ctx.compSeq, ownerDeptSeq: ctx.deptSeq, ownerEmpSeq: ctx.empSeq, dDayYn: dday && end ? 'Y' : 'N', portletYn: 'N', modifyYn: 'Y', deleteYn: 'Y', proccessYn: 'Y'};
     const ids = await todoNewIds(files, 'new:' + (parent || ''));
@@ -563,17 +561,10 @@
     let id;
     try { id = await todoWrite(TODO_P + 'prj001A01', body); }
     catch (e) {
-      if (isUnk(e)) {
-        if (before) {
-          const after = await todoList().catch(() => null);
-          const hit = (after ? after.todos : []).find(t => !before.has(t.todoSeq) && t.todoName === name && t.createDate === ymd());
-          if (hit) return {ok: true, id: hit.todoSeq, recovered: true};
-        }
-        throw new GwError('UNKNOWN', UNK_HEAD + '저장 여부를 확인하지 못했습니다. 목록을 새로 고친 뒤 확인하세요');
-      }
+      if (isUnk(e)) throw new GwError('UNKNOWN', UNK_HEAD + '저장 여부를 확인하지 못했습니다. 목록을 새로 고친 뒤 확인하세요');
       throw e;
     }
-    if (typeof id !== 'string' || !/^td\d+$/.test(id)) throw new GwError('SAVE_FAILED', '그룹웨어가 ToDo를 저장하지 못했습니다');
+    if (typeof id !== 'string' || !/^td\d+$/.test(id)) throw new GwError('UNKNOWN', '저장 응답을 확인할 수 없습니다. 목록에서 먼저 확인하세요');
     return {ok: true, id};
   }
   // 고치기: 지금 값을 읽어 바뀐 칸만 덮어 전체를 보낸다. 기존 첨부는 일련번호로 모두 복원한 뒤 함께 보낸다.
