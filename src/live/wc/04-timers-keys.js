@@ -43,7 +43,9 @@
     if (e.key === 'Tab') {
       const dialog = $('#overlay .modal .dlg, #overlay .menu');
       if (dialog) {
-        const els = [...dialog.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')].filter(x => x.getClientRects().length);
+        const candidates = [...dialog.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')].filter(x => x.getClientRects().length);
+        // 라디오 그룹은 브라우저에서 선택된 항목 하나만 Tab 순서에 들어간다.
+        const els = candidates.filter(x => x.type !== 'radio' || !x.name || x === (candidates.find(y => y.type === 'radio' && y.name === x.name && y.form === x.form && y.checked) || candidates.find(y => y.type === 'radio' && y.name === x.name && y.form === x.form)));
         if (els.length) { const i = els.indexOf(root.activeElement); if (i < 0 || (e.shiftKey && i === 0) || (!e.shiftKey && i === els.length - 1)) { e.preventDefault(); els[e.shiftKey ? els.length - 1 : 0].focus(); } }
       }
     }
