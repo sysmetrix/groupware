@@ -76,7 +76,7 @@
 
   // ---------- 쓰기(모두 그룹웨어 ToDo로) ----------
   // 만들기: 체크리스트는 하위 ToDo로 이어서 만든다. 결과를 그대로 돌려준다(하지 않은 일을 했다고 하지 않음).
-  async function todoCreate({title, due = '', start = '', important = false, importance, dday = false, memo = '', meta = {}, checklist = []} = {}) {
+  async function todoCreate({title, due = '', start = '', important = false, importance, dday = true, memo = '', meta = {}, checklist = []} = {}) {
     if (!todoGwOk()) return {ok: false, text: '그룹웨어 ToDo에 연결하지 못했습니다. 그룹웨어를 새로고침한 뒤 다시 시도하세요.'};
     const c = R.tdMetaCompose(memo, meta);
     if (!c.ok) return {ok: false, text: `메모와 정보가 너무 깁니다(${c.length}자, 1,500자까지).`};
@@ -319,21 +319,22 @@ ${legacy.length ? `<div class="box warn td-legacy">이 PC에만 저장된 예전
     const opts = todoBudgetOptions(b);
     const lock = !isNew && t.files ? 'disabled' : ''; // 첨부가 있으면 전체 고치기(prj001A02)가 첨부를 지울 수 있어 잠근다
     const bv = b && b.c ? (opts.find(o => o.v === `${b.p || ''}|${b.h || ''}|${b.c}`) || {}).v || '' : '';
-    return `<div class="td-ed-h"><h2>${isNew ? '새 할 일' : '할 일 자세히'}</h2><button class="btn sm ghost" data-act="tdClose" aria-label="닫기">${ic('x')}닫기</button></div>
+    return `<div class="td-ed-h"><h2>${isNew ? '새 할 일' : '할 일 자세히'}</h2><div class="acts"><button class="btn sm primary" data-act="tdSave" ${TD.saving ? 'disabled' : ''}>${TD.saving ? '저장 중…' : '저장'}</button><button class="btn sm ghost" data-act="tdClose" aria-label="닫기">${ic('x')}닫기</button></div></div>
 <label class="td-f">제목<input class="inp" id="tdeTitle" value="${esc(t.title)}" maxlength="100" autocomplete="off" ${lock}></label>
 ${!isNew && typeof todoEditorInfoHtml === 'function' ? todoEditorInfoHtml(t) : ''}
 <div class="td-f2"><div class="td-f">시작일${todoDateField('tdeStart', t.start || t.due || '', '시작일', lock)}</div><div class="td-f">기한(종료일)${todoDateField('tdeDue', t.due || '', '기한(종료일)', lock)}</div></div>
 <div class="td-f2"><label class="td-f">중요도<select class="inp" id="tdeImp">${R.TD_IMPS.slice().reverse().map(([v, n]) => `<option value="${v}" ${(t.imp || (t.important ? '2' : '0')) === v ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label>${isNew ? '' : `<label class="td-f">진행률 <b id="tdeRateV">${Number(t.rate) || 0}%</b><input class="td-range" type="range" id="tdeRate" min="0" max="100" step="10" value="${Number(t.rate) || 0}"></label>`}</div>
-<label class="chk td-dd"><input type="checkbox" id="tdeDday" ${t.dday ? 'checked' : ''} ${lock}> 그룹웨어 첫 화면 D-day에 보이기</label>${!isNew && t.files ? `<p class="muted td-hint">첨부파일이 있어 제목·기간·메모는 그룹웨어에서 고칩니다(첨부 보호). 중요도·진행률은 여기서 저장됩니다.</p>` : ''}
-<label class="td-f">반복<select class="inp" id="tdeRep" ${lock}><option value="">반복 안 함</option><option value="wd" ${repV === 'wd' ? 'selected' : ''}>평일 매일</option><option value="w" ${repV === 'w' ? 'selected' : ''}>매주 요일</option><option value="m" ${repV === 'm' ? 'selected' : ''}>매월 날짜</option><option value="me" ${repV === 'me' ? 'selected' : ''}>매월 말일</option></select></label>
+<label class="chk td-dd"><input type="checkbox" id="tdeDday" ${(isNew ? t.dday !== false : t.dday) ? 'checked' : ''} ${lock}> 그룹웨어 첫 화면 D-day에 보이기</label>${!isNew && t.files ? `<p class="muted td-hint">첨부파일이 있어 제목·기간·메모는 그룹웨어에서 고칩니다(첨부 보호). 중요도·진행률은 여기서 저장됩니다.</p>` : ''}
+<details class="td-more" ${rp ? 'open' : ''}><summary>반복 설정</summary><label class="td-f">반복<select class="inp" id="tdeRep" ${lock}><option value="">반복 안 함</option><option value="wd" ${repV === 'wd' ? 'selected' : ''}>평일 매일</option><option value="w" ${repV === 'w' ? 'selected' : ''}>매주 요일</option><option value="m" ${repV === 'm' ? 'selected' : ''}>매월 날짜</option><option value="me" ${repV === 'me' ? 'selected' : ''}>매월 말일</option></select></label>
 <div class="td-rep-w" id="tdeRepW" ${repV === 'w' ? '' : 'hidden'} role="group" aria-label="반복 요일">${[1, 2, 3, 4, 5, 6, 0].map(n => `<label class="chk"><input type="checkbox" id="tdeW${n}" ${rp && rp.f === 'w' && (rp.wd || []).includes(n) ? 'checked' : ''}> ${TODO_WD[n]}</label>`).join('')}</div>
 <label class="td-f" id="tdeRepM" ${repV === 'm' ? '' : 'hidden'}>매월 며칠<input class="inp" type="number" id="tdeMd" min="1" max="31" value="${rp && rp.f === 'm' && rp.md > 0 ? rp.md : ''}"></label>
-<p class="muted td-hint">반복 할 일은 끝냄으로 표시하면 다음 회차가 그룹웨어 ToDo에 생깁니다. 주말·휴일이면 앞 평일로 당깁니다.</p>
+<p class="muted td-hint">반복 할 일은 끝냄으로 표시하면 다음 회차가 그룹웨어 ToDo에 생깁니다. 주말·휴일이면 앞 평일로 당깁니다.</p></details>
 <label class="td-f">메모<textarea class="inp td-memo" id="tdeMemo" rows="4" ${lock}>${esc(t.memo || '')}</textarea></label>
+<div class="td-sec"><h3>첨부파일</h3><p class="muted td-hint">${isNew ? '첨부는 할 일을 저장한 후 그룹웨어에서 추가할 수 있습니다.' : t.files ? `첨부 ${Number(t.files) || 0}개가 있습니다. 그룹웨어에서 확인하거나 추가하세요.` : '첨부파일은 그룹웨어에서 추가할 수 있습니다.'}</p>${isNew ? '' : `<button class="btn sm" data-act="openUrl" data-url="${esc(GW.todoLink ? GW.todoLink(t.id) : '')}" data-title="그룹웨어 ToDo">${ic('ext')}그룹웨어에서 첨부하기</button>`}</div>
 <div class="td-sec" id="tdeCl">${todoChecklistHtml(t, isNew)}</div>
-<div class="td-sec"><h3>예산 연결</h3>${opts.length ? `<label class="td-f">사업·세목<select class="inp" id="tdeBud"><option value="">연결 안 함</option>${opts.map(o => `<option value="${esc(o.v)}" ${o.v === bv ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select></label><div class="td-f2"><label class="td-f">집행 예정 금액(원)<input class="inp" id="tdeAmt" inputmode="numeric" value="${b && b.a ? won(b.a) : ''}" placeholder="예: 300,000"></label><div class="td-f">집행 예정일${todoDateField('tdeBudDate', (b && b.d) || '', '집행 예정일')}</div></div>${b && b.pd ? `<p class="muted">근거 계획서 ${esc(b.pd)}${b.pt ? ' · ' + esc(String(b.pt).slice(0, 40)) : ''}</p>` : ''}${b && Array.isArray(b.m) && b.m.length ? `<p class="muted">짝지은 결의 ${b.m.length}건 · ${won(b.m.reduce((s, x) => s + (Number(x.a) || 0), 0))}원${b.st === 'done' ? ' · 집행됨' : ''}</p>` : ''}<p class="muted td-hint">금액을 넣으면 예산 집행 화면의 '집행 계획' 예상 집행률에 더해집니다.</p>` : `<p class="muted">예산 집행 화면에서 내 관심 사업을 저장하면 여기서 세목을 고를 수 있습니다. ${(S.settings.budget || []).length ? '<span class="spin"></span> 세목을 불러오는 중…' : ''}</p>`}</div>
-<div class="td-sec" id="tdeLn">${todoLinksHtml(t)}</div>${!isNew && typeof todoCommentsHtml === 'function' ? todoCommentsHtml(t) : ''}
-<div class="acts td-ed-acts"><button class="btn primary" data-act="tdSave" ${TD.saving ? 'disabled' : ''}>${TD.saving ? '<span class="spin"></span> 저장 중…' : isNew ? '그룹웨어 ToDo에 저장' : '저장'}</button>${isNew ? '' : `<button class="btn" data-act="tdToggle" data-id="${esc(t.id)}">${t.done ? '끝냄 취소' : '끝냄'}</button><button class="btn" data-act="openUrl" data-url="${esc(GW.todoLink ? GW.todoLink(t.id) : '')}" data-title="그룹웨어 ToDo">${ic('ext')}그룹웨어에서 보기</button><button class="btn" data-act="tdCopyLink" data-id="${esc(t.id)}">링크 복사</button><button class="btn danger" data-act="tdDel" data-id="${esc(t.id)}">지우기</button>`}</div>
+<details class="td-sec td-more" ${b && b.c ? 'open' : ''}><summary>예산 연결</summary>${opts.length ? `<label class="td-f">사업·세목<select class="inp" id="tdeBud"><option value="">연결 안 함</option>${opts.map(o => `<option value="${esc(o.v)}" ${o.v === bv ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select></label><div class="td-f2"><label class="td-f">집행 예정 금액(원)<input class="inp" id="tdeAmt" inputmode="numeric" value="${b && b.a ? won(b.a) : ''}" placeholder="예: 300,000"></label><div class="td-f">집행 예정일${todoDateField('tdeBudDate', (b && b.d) || '', '집행 예정일')}</div></div>${b && b.pd ? `<p class="muted">근거 계획서 ${esc(b.pd)}${b.pt ? ' · ' + esc(String(b.pt).slice(0, 40)) : ''}</p>` : ''}${b && Array.isArray(b.m) && b.m.length ? `<p class="muted">짝지은 결의 ${b.m.length}건 · ${won(b.m.reduce((s, x) => s + (Number(x.a) || 0), 0))}원${b.st === 'done' ? ' · 집행됨' : ''}</p>` : ''}<p class="muted td-hint">금액을 넣으면 예산 집행 화면의 '집행 계획' 예상 집행률에 더해집니다.</p>` : `<p class="muted">예산 집행 화면에서 내 관심 사업을 저장하면 여기서 세목을 고를 수 있습니다. ${(S.settings.budget || []).length ? '<span class="spin"></span> 세목을 불러오는 중…' : ''}</p>`}</details>
+<details class="td-sec td-more" ${ln.length ? 'open' : ''}><summary>문서·메일 연결</summary><div id="tdeLn">${todoLinksHtml(t)}</div></details>${!isNew && typeof todoCommentsHtml === 'function' ? todoCommentsHtml(t) : ''}
+<div class="acts td-ed-acts">${isNew ? '' : `<button class="btn" data-act="tdToggle" data-id="${esc(t.id)}">${t.done ? '끝냄 취소' : '끝냄'}</button><button class="btn" data-act="openUrl" data-url="${esc(GW.todoLink ? GW.todoLink(t.id) : '')}" data-title="그룹웨어 ToDo">${ic('ext')}그룹웨어에서 보기</button><button class="btn" data-act="tdCopyLink" data-id="${esc(t.id)}">링크 복사</button><button class="btn danger" data-act="tdDel" data-id="${esc(t.id)}">지우기</button>`}</div>
 <p class="muted td-hint">그룹웨어 개인 ToDo에 저장됩니다(나만 보임). 기한을 넣으면 그룹웨어 일정 화면에도 '종일'로 보입니다.</p>`;
   }
   function todoChecklistHtml(t, isNew) {
@@ -406,14 +407,14 @@ ${!isNew && typeof todoEditorInfoHtml === 'function' ? todoEditorInfoHtml(t) : '
     if (TD.saving) return;
     const f = todoReadEditor();
     if (f.err) { toast(f.err); return; }
-    TD.saving = true; todoRerenderEditor();
+    TD.saving = true; const saveButton = root.querySelector('#tdEd [data-act="tdSave"]'); if (saveButton) { saveButton.disabled = true; saveButton.textContent = '저장 중…'; }
     let r;
     if (TD.sel === 'new') { r = await todoCreate({...f, checklist: (TD.draft && TD.draft.checklist) || []}); if (r.ok) { TD.sel = r.id; TD.draft = null; } }
     else { const t = todoFind(TD.sel); const d = t ? todoEditorDiff(t, f) : f; r = Object.keys(d).length ? await todoSave(TD.sel, d) : {ok: true, text: '바뀐 내용이 없습니다.'}; }
     TD.saving = false; TD.dirty = !r.ok; if (r.ok) TD.edMeta = null;
     if (r.ok) { toast(r.text || '그룹웨어 ToDo에 저장했습니다.'); }
     else toast(r.text);
-    if (S.view === 'mytodo') renderMain();
+    if (S.view === 'mytodo') { if (r.ok) renderMain(); else if (saveButton) { saveButton.disabled = false; saveButton.textContent = '저장'; } }
   }
   function todoRerenderEditor() { const ed = $('#tdEd'); if (ed) ed.innerHTML = todoEditorHtml(); }
   function todoOpen(id) {
