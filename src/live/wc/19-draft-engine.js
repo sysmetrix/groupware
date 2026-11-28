@@ -183,22 +183,29 @@
   const allDlgs = d => [...d.querySelectorAll('.obtdialog.open, ._isDialog')];
   const waitFor = async (pred, ms = 8000, step = 150) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { let r; try { r = pred(); } catch {} if (r) return r; await wait(step); } return null; };
   // 자동 기입 중에는 상신·결재·임시저장·보내기·삭제 같은 비가역 버튼을 코드 레벨에서 막는다
-  const DENY_BTN = /^(결재\s*상신|결재상신|상신하기|상신|결재|결재요청|승인요청|일괄결재|임시저장|저장|보관|보내기|발송|전송|회수|삭제|삭제하기|기안|승인|반려|전결|대결|접수|배부|제출|확정|신청완료|추가신청|신청취소|신청|등록)(\(\w\))?$/;
+  const DENY_BTN = /^(?:(?:결재\s*상신|결재상신|상신하기|상신|결재|결재요청|승인요청|일괄결재|임시저장|저장|보관|보내기|발송|전송|회수|삭제|삭제하기|폐기|기안|승인|반려|전결|대결|접수|배부|제출|확정|신청완료|추가신청|신청취소|신청|등록)(?:\(\w+\))?|(?:.*(?:결재\s*상신|결재상신|상신하기|임시저장|일괄결재|승인요청|결재요청|신청완료|신청취소|삭제하기|문서발송|전체삭제|최종승인|최종결재|폐기하기|회수하기|반려하기|발송하기|전송하기|제출하기|저장하기).*)|(?:상신|발송|삭제|폐기|회수|반려|제출|승인)\(\d+건?\))$/;
   const AUTO = {running: false, allow: false, blocked: []};
+  const denyTextOf = el => {
+    const b = el && el.closest ? (el.closest('button,a,[role=button],.topBtn,.OBTButton,input[type=button],input[type=submit]') || el) : el;
+    if (!b) return '';
+    return [b.innerText, b.value, b.getAttribute && b.getAttribute('aria-label'), b.title].map(x => String(x || '').replace(/\s+/g, '')).find(x => x && DENY_BTN.test(x)) || '';
+  };
   function installGuard(win) {
-    if (win.__wcGuard) return;
-    win.__wcGuard = true;
-    const block = e => {
-      if (e.isTrusted || !AUTO.running || AUTO.allow) return; // 사람이 직접 누른 클릭은 막지 않는다(자동 동작만 차단)
-      const b = e.target && e.target.closest && e.target.closest('button,a,[role=button],.topBtn,.OBTButton,input[type=button],input[type=submit]');
-      const t = [b && b.innerText, b && b.value, b && b.getAttribute && b.getAttribute('aria-label'), b && b.title].map(x => String(x || '').replace(/\s+/g, '')).find(x => x && DENY_BTN.test(x)) || '';
-      if (b && t) { e.stopImmediatePropagation(); e.preventDefault(); AUTO.blocked.push(t); }
-    };
-    ['click', 'mousedown', 'mouseup', 'pointerdown', 'pointerup', 'dblclick'].forEach(n => win.addEventListener(n, block, true));
-    win.addEventListener('keydown', e => { if (!e.isTrusted && AUTO.running && !AUTO.allow && e.key === 'Enter') block(e); }, true);
-    win.addEventListener('submit', e => { if (!e.isTrusted && AUTO.running && !AUTO.allow) { e.stopImmediatePropagation(); e.preventDefault(); AUTO.blocked.push('submit'); } }, true);
-    const oc = win.HTMLElement.prototype.click;
-    win.HTMLElement.prototype.click = function () { if (AUTO.running && !AUTO.allow && DENY_BTN.test((this.innerText || '').replace(/\s+/g, ''))) { AUTO.blocked.push((this.innerText || '').trim()); return; } return oc.call(this); };
+    if (!win) return;
+    if (!win.__wcGuard) {
+      win.__wcGuard = true;
+      const block = e => {
+        if (e.isTrusted || !AUTO.running || AUTO.allow) return; // 사람이 직접 누른 클릭은 막지 않는다(자동 동작만 차단)
+        const t = denyTextOf(e.target);
+        if (t) { e.stopImmediatePropagation(); e.preventDefault(); AUTO.blocked.push(t); }
+      };
+      ['click', 'mousedown', 'mouseup', 'pointerdown', 'pointerup', 'dblclick'].forEach(n => win.addEventListener(n, block, true));
+      win.addEventListener('keydown', e => { if (!e.isTrusted && AUTO.running && !AUTO.allow && (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar')) block(e); }, true);
+      win.addEventListener('submit', e => { if (!e.isTrusted && AUTO.running && !AUTO.allow) { e.stopImmediatePropagation(); e.preventDefault(); AUTO.blocked.push('submit'); } }, true);
+      const oc = win.HTMLElement.prototype.click;
+      win.HTMLElement.prototype.click = function () { const t = AUTO.running && !AUTO.allow ? denyTextOf(this) : ''; if (t) { AUTO.blocked.push(t); return; } return oc.call(this); };
+    }
+    try { [...win.document.querySelectorAll('iframe')].forEach(ifr => { try { if (ifr.contentWindow) installGuard(ifr.contentWindow); } catch {} }); } catch {}
   }
   const btnIn = (root, re) => [...root.querySelectorAll('button, [role=button]')].find(b => re.test((b.innerText || '').trim()));
 

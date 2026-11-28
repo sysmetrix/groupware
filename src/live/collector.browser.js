@@ -15,7 +15,7 @@
  */
 (() => {
   'use strict';
-  const VERSION = '1.30.1';
+  const VERSION = '1.31.0';
   const ORIGIN = 'https://gw.bwyf.or.kr';
 
   // Endpoints verified on 2026-11-08 as list/read/search calls issued by the app itself.
@@ -495,7 +495,7 @@
     todoBudget();
     try { return await transport(path, body, {timeoutMs: 20000, retries: 0}); }
     catch (e) {
-      if (isUnk(e) && !path.endsWith('A01')) throw new GwError('UNKNOWN', UNK_HEAD + '반영 여부를 확인하지 못했습니다. 목록을 새로 고쳐 확인하세요');
+      if (isUnk(e) && path !== TODO_P + 'prj001A01') throw new GwError('UNKNOWN', UNK_HEAD + '반영 여부를 확인하지 못했습니다. 목록을 새로 고쳐 확인하세요');
       throw e;
     }
   };
@@ -632,6 +632,7 @@
     if (!/^[\w-]{6,60}$/.test(alertId)) throw new GwError('BAD_ID', '알림 ID가 올바르지 않습니다');
     if (!WRITE_ALLOWED.has('/event/event02A03')) throw new GwError('NOT_ALLOWED', '쓰기 허용 목록 오류');
     const ctx = context();
+    if (!ctx.empSeq || String(ctx.empSeq) !== String(loadedEmpSeq)) throw new GwError('IDENTITY', '로그인 정보가 바뀌었습니다. 새로고침 후 다시 시도하세요');
     let r;
     try { r = await transport('/event/event02A03', {header: {groupSeq: ctx.groupSeq, empSeq: ctx.empSeq, pid: '', tid: ''}, body: {companyInfo: {compSeq: ctx.compSeq, bizSeq: ctx.bizSeq, deptSeq: ctx.deptSeq, emailAddr: ctx.emailAddr, emailDomain: ctx.emailDomain}, alertIds: [alertId]}}, {timeoutMs: 10000, retries: 0}); }
     catch (e) { if (isUnk(e)) throw new GwError('UNKNOWN', UNK_HEAD + '반영 여부를 확인하지 못했습니다'); throw e; }
@@ -1318,7 +1319,7 @@
     const months = Array.from({length: 12}, (_, i) => String(i + 1).padStart(2, '0'));
     const res = [];
     for (let i = 0; i < months.length; i += 4) {
-      const part = await Promise.all(months.slice(i, i + 4).map(m => call('/nonprofit/NCC0610/0BN00002', {bgtFrYm: `${y}${m}`, bgtToYm: `${y}${m}`, bgtBeforeFrYm: '', bgtBeforeToYm: '', bgtStartFrYm: `${y}0101`, summaryYn: 'N', abgtFg: '1', divCds: `${ctx.erpCompSeq}|`, mgtCds: `${project}|`, bottomCds: '', mgtBottomList: [], bgtCnt: '1', abdocuFg: '1', acctdefFg: 'N001', abdocuDtFg: '1', grFg: '0', zeroFg: '2', divFg: '8', sumRtFg: '2', ctrCd05: '3', ctrCd10: '1', optionBN03: '1', optionBN10: '1', optionBN11: '0', optionBN14: '0', pOptionBn15: '0', coCd: ctx.erpCompSeq, gisu: g, empCd: ctx.erpEmpSeq, gisuFrDt: `${y}0101`, gisuToDt: `${y}1231`}, {timeoutMs: 30000})
+      const part = await Promise.all(months.slice(i, i + 4).map(m => call('/nonprofit/NCC0610/0BN00002', {bgtFrYm: `${y}${m}`, bgtToYm: `${y}${m}`, bgtBeforeFrYm: '', bgtBeforeToYm: '', bgtStartFrYm: `${y}0101`, summaryYn: 'N', abgtFg: '2', divCds: `${ctx.erpCompSeq}|`, mgtCds: `${project}|`, bottomCds: '', mgtBottomList: [], bgtCnt: '1', abdocuFg: '1', acctdefFg: 'N001', abdocuDtFg: '1', grFg: '0', zeroFg: '2', divFg: '8', sumRtFg: '2', ctrCd05: '3', ctrCd10: '1', optionBN03: '1', optionBN10: '1', optionBN11: '0', optionBN14: '0', pOptionBn15: '0', coCd: ctx.erpCompSeq, gisu: g, empCd: ctx.erpEmpSeq, gisuFrDt: `${y}0101`, gisuToDt: `${y}1231`}, {timeoutMs: 30000})
         .then(d => { const rows = arr(d && d.printList).map(budgetRow); const sel = code ? rows.filter(r => r.path.split('|').includes(code)) : rows; return {month: m, rows: sel}; })
         .catch(e => ({month: m, error: e.code}))));
       res.push(...part);

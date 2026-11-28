@@ -88,11 +88,15 @@ export function usageSummary(log, {now = Date.now(), days = 28, views = []} = {}
   const okTools = Object.fromEntries(Object.entries(tools).filter(([k]) => !k.endsWith(':err')));
   const pick = (o, names) => names.includes('*') ? total(o) : names.reduce((a, n) => a + (o[n] || 0), 0);
   const journeys = USAGE_JOURNEYS.map(j => ({id: j.id, label: j.label, etc: j.etc, views: pick(sum.view, j.view), acts: pick(sum.act, j.act), tools: pick(okTools, j.tool)})).map(j => ({...j, total: j.views + j.acts + j.tools}));
+  const confirmOk = sum.act.chatConfirm || 0, confirmCancel = sum.act.chatCancel || 0;
+  const confirmTotal = confirmOk + confirmCancel;
+  const toolErrTotal = Object.entries(tools).filter(([k]) => k.endsWith(':err')).reduce((a, [, v]) => a + v, 0);
   return {
     from, to, days, activeDays,
     views: rank(sum.view), acts: rank(sum.act), tools: rank(tools),
     toolErrors: rank(Object.fromEntries(Object.entries(tools).filter(([k]) => k.endsWith(':err')))),
     chat: {local: total(sum.tool), ai: total(sum.toolAi)},
+    roi: {confirmOk, confirmCancel, confirmRate: confirmTotal ? Math.round((confirmOk / confirmTotal) * 100) : null, toolErrTotal},
     journeys,
     unusedViews: views.filter(v => !sum.view[v]),
   };
@@ -128,6 +132,10 @@ export function usageReport(log, {now = Date.now(), days = 28, views = [], versi
     '',
     `## 비서 도구 (규칙으로 답함 ${s.chat.local}회, AI가 고름 ${s.chat.ai}회)`,
     table(s.tools, 25),
+    '',
+    '## 비서 효율 지표',
+    `- 확인 카드 확정: ${s.roi.confirmOk}회 · 취소: ${s.roi.confirmCancel}회${s.roi.confirmRate != null ? ` (확정률 ${s.roi.confirmRate}%)` : ''}`,
+    `- 도구 실행 실패: ${s.roi.toolErrTotal}회`,
     '',
     '## 오류가 난 곳',
     table(Object.entries(byWhere).sort((a, b) => b[1] - a[1])),

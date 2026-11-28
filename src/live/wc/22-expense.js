@@ -26,10 +26,55 @@
     }
   }
   const expField = (kind, i, k, label, val, ph = '', w = '') => `<label style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted);${w}">${label}<input class="inp" data-f="${kind}.${i}.${k}" value="${esc(val)}" placeholder="${esc(ph)}" inputmode="${k === 'amount' || k === 'date' || k === 'account' ? 'numeric' : 'text'}" style="height:34px"></label>`;
+  const expOpenCards = () => (typeof CDU === 'object' && CDU && CDU.data && Array.isArray(CDU.data.rows)) ? R.cduView(CDU.data.rows, {state: 'open'}).rows.slice(0, 12) : [];
+  const expOpenEtax = () => (typeof ETX === 'object' && ETX && ETX.data && Array.isArray(ETX.data.rows)) ? R.etxView(ETX.data.rows, {state: 'open'}).rows.slice(0, 12) : [];
+  function expImportCard(idx) {
+    expSync();
+    const e = S.exp, r = expOpenCards()[+idx];
+    if (!e || !r) return;
+    const row = {date: String(r.date || '').replace(/\D/g, ''), merchant: r.place || '', amount: String(r.amount || ''), approval: r.approvalNo || ''};
+    const emptyIdx = e.cards.findIndex(c => !c.date && !c.merchant && !c.amount && !c.approval);
+    if (emptyIdx >= 0) e.cards[emptyIdx] = row; else e.cards.push(row);
+    e.res = null; expRender();
+    toast(`카드 내역(${r.place})을 불러왔습니다.`);
+  }
+  function expImportEtax(idx) {
+    expSync();
+    const e = S.exp, r = expOpenEtax()[+idx];
+    if (!e || !r) return;
+    const row = {payee: r.supplier || '', bank: '', account: '', amount: String(r.sum || ''), date: String(r.date || '').replace(/\D/g, ''), memo: r.item || ''};
+    const emptyIdx = e.transfers.findIndex(t => !t.payee && !t.amount && !t.account);
+    if (emptyIdx >= 0) e.transfers[emptyIdx] = row; else e.transfers.push(row);
+    e.res = null; expRender();
+    toast(`세금계산서(${r.supplier})를 불러왔습니다. 은행·계좌번호를 입력하세요.`);
+  }
+  async function expLoadEvidence(kind) {
+    expSync();
+    const p = R.cduPeriod('month', new Date()), owner = typeof currentKey !== 'undefined' ? currentKey : '';
+    try {
+      if (kind === 'card' && typeof GW === 'object' && GW && typeof GW.cardUsage === 'function') {
+        const d = await GW.cardUsage({from: p.from, to: p.to, state: 'all'});
+        if (typeof currentKey !== 'undefined' && currentKey !== owner) return;
+        if (typeof CDU === 'object' && CDU) CDU.data = d;
+      } else if (kind === 'etax' && typeof GW === 'object' && GW && typeof GW.etaxInvoices === 'function') {
+        const d = await GW.etaxInvoices({from: p.from, to: p.to, state: 'all'});
+        if (typeof currentKey !== 'undefined' && currentKey !== owner) return;
+        if (typeof ETX === 'object' && ETX) ETX.data = d;
+      }
+      if (S.exp) expRender();
+    } catch (err) { toast('증빙 내역을 읽지 못했습니다: ' + String((err && err.message) || err).slice(0, 80)); }
+  }
   function expRender() {
     const e = S.exp;
     if (!e) return;
     const p = e.p;
+    const oc = expOpenCards(), oe = expOpenEtax();
+    const cardPick = oc.length
+      ? `<details style="margin:6px 0"><summary class="muted" style="cursor:pointer;font-size:12.5px">결의 전 법인카드에서 불러오기 (${oc.length}건)</summary><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${oc.map((r, i) => `<button class="chip" data-act="expImportCard" data-i="${i}">${esc(R.cduDayLabel(r.date))} ${esc(r.place)} · ${expWon(r.amount)}</button>`).join('')}</div></details>`
+      : `<button class="btn sm ghost" data-act="expLoadEvidence" data-kind="card">결의 전 카드 불러오기</button>`;
+    const etaxPick = oe.length
+      ? `<details style="margin:6px 0"><summary class="muted" style="cursor:pointer;font-size:12.5px">결의 전 세금계산서에서 불러오기 (${oe.length}건)</summary><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${oe.map((r, i) => `<button class="chip" data-act="expImportEtax" data-i="${i}">${esc(R.cduDayLabel(r.date))} ${esc(r.supplier)} · ${expWon(r.sum)}</button>`).join('')}</div></details>`
+      : `<button class="btn sm ghost" data-act="expLoadEvidence" data-kind="etax">결의 전 세금계산서 불러오기</button>`;
     const cards = e.cards.map((r, i) => `<div class="box" style="margin:8px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">${expField('cards', i, 'date', '사용일', r.date, '20261105', 'width:110px')}${expField('cards', i, 'merchant', '가맹점(사용처)', r.merchant, '', 'flex:1;min-width:140px')}${expField('cards', i, 'amount', '금액(원)', r.amount, '120000', 'width:120px')}${expField('cards', i, 'approval', '승인번호', r.approval, '선택', 'width:110px')}<button class="btn sm danger ghost" data-act="expDel" data-kind="cards" data-i="${i}" aria-label="카드 내역 삭제">${ic('x')}</button></div>`).join('');
     const trans = e.transfers.map((r, i) => `<div class="box" style="margin:8px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">${expField('transfers', i, 'payee', '받는 사람·업체', r.payee, '', 'flex:1;min-width:130px')}${expField('transfers', i, 'bank', '은행', r.bank, '', 'width:90px')}${expField('transfers', i, 'account', '계좌번호', r.account, '', 'width:170px')}${expField('transfers', i, 'amount', '금액(원)', r.amount, '', 'width:120px')}${expField('transfers', i, 'date', '이체일', r.date, '20261106', 'width:110px')}${expField('transfers', i, 'memo', '적요', r.memo, '선택', 'flex:1;min-width:110px')}<button class="btn sm danger ghost" data-act="expDel" data-kind="transfers" data-i="${i}" aria-label="이체 내역 삭제">${ic('x')}</button></div>`).join('');
     let result = '';
@@ -43,8 +88,8 @@
       <div class="muted" style="margin-bottom:10px">${esc(p.kind)}: <b style="color:var(--fg)">${esc(p.title)}</b> (${esc(p.docNo)})<br>실제로 얼마를 어떻게 썼는지 먼저 입력하세요. 건의·품의 금액과 대조한 뒤에만 다음 단계로 갑니다.</div>
       <div id="expForm">
       <label style="display:flex;gap:8px;align-items:center;margin-bottom:6px">건의·품의 금액(원) <input class="inp" data-f="planned.0.v" value="${e.planned || ''}" style="height:34px;width:150px" inputmode="numeric" placeholder="${p.amount ? '' : '문서에서 읽지 못함: 직접 입력'}">${e.planned ? `<span class="muted">${esc(R.moneyKo(e.planned))}</span>` : ''}</label>
-      <h3 style="margin:14px 0 4px">법인카드 사용 내역</h3>${cards || '<div class="muted">없음</div>'}<button class="btn sm" data-act="expAdd" data-kind="cards">${ic('plus')}카드 내역 추가</button>
-      <h3 style="margin:16px 0 4px">계좌이체 내역</h3>${trans || '<div class="muted">없음</div>'}<button class="btn sm" data-act="expAdd" data-kind="transfers">${ic('plus')}계좌이체 추가</button>
+      <h3 style="margin:14px 0 4px">법인카드 사용 내역</h3>${cardPick}${cards || '<div class="muted">없음</div>'}<button class="btn sm" data-act="expAdd" data-kind="cards">${ic('plus')}카드 내역 추가</button>
+      <h3 style="margin:16px 0 4px">계좌이체 내역</h3>${etaxPick}${trans || '<div class="muted">없음</div>'}<button class="btn sm" data-act="expAdd" data-kind="transfers">${ic('plus')}계좌이체 추가</button>
       </div>
       <div class="acts" style="margin-top:16px"><button class="btn primary" data-act="expCheck">내용 확인하기</button><button class="btn ghost" data-act="expClose">취소</button></div>${result}`);
   }
