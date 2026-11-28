@@ -164,6 +164,7 @@
     if (view === 'search' && param) { if (go('search')) { S.search.kw = param; runSearch(); } return; }
     if (view === 'approval' && ['pending', 'deptWaiting', 'distWaiting', 'sendWaiting', 'submitted', 'viewing'].includes(param)) { if (go('approval') !== false) { S.apTab = param; S.apTabPinned = true; renderMain(); } return; }
     if (view === 'resource' && /^[\w-]+,\d{8}$/.test(param || '') && typeof resState === 'function') { const [seq, d8] = param.split(','), rs = resState(); if (rs.sel !== seq || rs.date !== d8) { rs.sel = seq; rs.date = d8; rs.bookings = null; } go('resource'); return; }
+    if (view === 'resource' && /^,\d{8}(?:,\d{2}:\d{2}-\d{2}:\d{2})?$/.test(param || '') && typeof resState === 'function') { const [, d8, tm] = param.split(','), rs = resState(); if (d8 && rs.date !== d8) { rs.date = d8; rs.bookings = null; } if (tm && rs.form) { const [s, e] = tm.split('-'); if (s && e) { rs.form.start = s; rs.form.end = e; rs.form.auto = false; } } go('resource'); return; }
     if (view === 'mytodo' && param === 'wrap' && typeof todoWrapOpen === 'function') { if (go('mytodo') !== false) todoWrapOpen(); return; }
     // v1.24: 결의 전 증빙 카드는 예산 집행 > 카드·세금계산서로, 먼저 할 일의 개인 ToDo는 그 할 일 자세히로 연다.
     if (view === 'budget' && ['card', 'etax'].includes(param)) { if (go('budget') !== false) { S.budget.mode = param; renderMain(); } return; }
