@@ -5,16 +5,22 @@
   const planDocs = () => ownDocs().filter(d => /계획(\(안\)|\(변경\))?$/.test(String(d.title).trim()) && !/결과/.test(d.title) && /^일반기안문/.test(d.form || '일반기안문')).sort((a, b) => String(b.date).localeCompare(String(a.date)));
   const won0 = n => (n ? n.toLocaleString('en-US') + '원' : '-');
 
-  async function openPaymentHub() {
+  let payHubSyncAt = 0, payHubSyncUser = '';
+  async function openPaymentHub(force = false) {
     if (gated('draftPay')) return;
     closeOverlay();
     S.paletteOpen = true;
     const shell = body => `<div class="modal" data-act="closeOverlay"><div class="dlg" data-stop="1" style="width:min(760px,95vw);padding:22px 24px;max-height:88vh;overflow:auto" role="dialog" aria-label="지급 문서"><button class="btn icon ghost x" data-act="closeHelp" aria-label="닫기">${ic('x')}</button>${body}</div></div>`;
-    // 읽어 둔 문서가 있으면 바로 그린다
-    const known = Object.keys(patLoad().docs).length;
+    // 읽어 둔 문서가 있으면 바로 그린다. 최근 5분 내 동일 계정의 정상 동기화가 있으면 40초 재분석을 생략하고 즉시 표시한다.
+    const known = Object.keys(patLoad().docs).length, curUser = typeof currentKey !== 'undefined' ? currentKey : '';
+    if (!force && known > 0 && payHubSyncUser === curUser && Date.now() - payHubSyncAt < 300000) {
+      $('#overlay').innerHTML = shell(payHubBody({done: 0, errors: 0, left: 0, cached: true}));
+      return;
+    }
     $('#overlay').innerHTML = known ? shell(payHubBody(null)) : shell('<h2 style="margin:0 0 8px;font-size:18px">지급 문서</h2><div class="mi muted"><span class="spin"></span> 내 지급 문서를 분석하고 있습니다…</div>');
     const mark = typeof overlayMark === 'function' ? overlayMark() : 0;
     const res = await learnPatterns({limit: 12, budgetMs: 40000, quiet: true}).catch(() => 0);
+    if (res && !res.errMsg && !res.errors && !res.left && (typeof currentKey === 'undefined' || currentKey === curUser)) { payHubSyncAt = Date.now(); payHubSyncUser = curUser; }
     // 분석하는 동안 사용자가 창을 닫았거나 다른 창·다른 지급 문서 창으로 바뀌었으면 다시 그리지 않는다.
     if (typeof overlayLive === 'function' && !overlayLive(mark)) return;
     const top = $('#overlay .dlg')?.scrollTop || 0;
@@ -28,7 +34,8 @@
     const pend = R.pendingPayments(all);
     const miss = !!res && !!(res.errMsg || res.errors || res.left);
     const note = !res ? '<div class="muted" role="status"><span class="spin"></span> 새 문서 확인 중…</div>'
-      : miss ? `<div class="box warn" role="status">${res.errMsg ? `문서 목록을 읽지 못했습니다(${esc(res.errMsg)}). 전에 읽어 둔 ${all.length}건만 보입니다.` : `확인하지 못한 문서 ${(res.errors || 0) + (res.left || 0)}건이 있어 빠진 것이 있을 수 있습니다.`}</div>` : '';
+      : miss ? `<div class="box warn" role="status">${res.errMsg ? `문서 목록을 읽지 못했습니다(${esc(res.errMsg)}). 전에 읽어 둔 ${all.length}건만 보입니다.` : `확인하지 못한 문서 ${(res.errors || 0) + (res.left || 0)}건이 있어 빠진 것이 있을 수 있습니다.`}</div>`
+      : res.cached ? `<div class="muted" style="font-size:12.5px;margin-bottom:6px">방금 확인한 문서 ${all.length}건을 바로 보여 드립니다. <button class="btn sm ghost" data-act="payHubRefresh">새 문서 다시 확인</button></div>` : '';
     const none = !res ? '읽어 둔 문서에는 없습니다(확인 중).' : '확인한 문서에서 찾지 못했습니다.';
     return `
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px"><div class="cmd-logo">${ic('doc')}</div><div><h2 style="margin:0;font-size:18px">지급 문서</h2><div class="muted">내가 해 온 순서: 계획서 → 지급 건의(또는 물품매입 품의) → 지출결의서. 앞 문서의 기록물철·기본항목을 이어받습니다.</div></div></div>${note}

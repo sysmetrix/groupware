@@ -470,7 +470,7 @@
       if (!confirmed) return {ok: true, keep: 1, detail: '그룹웨어 기본값 유지(이어받기 선택 안 함) · 공개·보안은 상신 전에 확인하세요.'};
       const ks = keys.filter(k => classification.includes(k));
       if (!ks.length) return {ok: true, keep: 1, detail: '그룹웨어 기본값 유지 · 공개·보안은 상신 전에 확인하세요.'};
-      const r = ks.map(k => setRadioByLabel(d, m[k]));
+      const r = keys.map(k => classification.includes(k) && setRadioByLabel(d, m[k]));
       return {ok: r.every(Boolean), detail: keys.map(k => m[k] || '확인 불가').join(' · ')};
     });
     if (m.binder && !confirmed) steps.push({name: '기록물철', ok: false, detail: '추정 기록물철을 적용하지 않았습니다. 직접 확인하세요.'});

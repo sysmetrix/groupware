@@ -83,10 +83,14 @@
     case 'expOpen': expOpen(el.dataset.id); break;
     case 'expAdd': expAdd(el.dataset.kind); break;
     case 'expDel': expDel(el.dataset.kind, +el.dataset.i); break;
+    case 'expImportCard': expImportCard(+el.dataset.i); break;
+    case 'expImportEtax': expImportEtax(+el.dataset.i); break;
+    case 'expLoadEvidence': expLoadEvidence(el.dataset.kind); break;
     case 'expCheck': expCheck(); break;
     case 'expGo': expGo(); break;
     case 'expClose': expClose(); break;
     case 'expBarClear': S.expBar = null; renderPane(); toast('지출 값 복사 막대를 지웠습니다.'); break;
+    case 'payHubRefresh': openPaymentHub(true); break;
     case 'openData': openDataCenter(); break;
       case 'setExport': settingsExport(); break;
       case 'setImport': { const fi = $('#setImportFile'); if (fi) fi.click(); break; }

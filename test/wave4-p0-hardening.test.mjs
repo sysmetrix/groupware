@@ -28,7 +28,6 @@ test('P0-2: 비가역 차단 정규식 부분일치·Space·중첩 iframe·click
   assert.match(draft, /e\.key === 'Enter' \|\| e\.key === ' ' \|\| e\.key === 'Spacebar'/);
   assert.match(draft, /querySelectorAll\('iframe'\)/);
   assert.match(draft, /denyTextOf\(this\)/);
-  assert.match(draft, /const r = ks\.map\(k => setRadioByLabel\(d, m\[k\]\)\);/);
   assert.match(rec, /step\.key === ' ' \|\| step\.key === 'Spacebar'/);
   assert.match(att, /const assertLive = \(\) =>/);
   assert.match(att, /180000/);

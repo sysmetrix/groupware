@@ -33,7 +33,7 @@
     S.aiSettingsOnly = !!settingsOnly;
     const c = aiCfg();
     if (!c.key) { aiSetup(); return; }
-    const ctxHtml = `<details style="margin-top:10px"><summary class="muted" style="cursor:pointer">AI에게 보내는 내용 보기</summary><pre style="white-space:pre-wrap;font:inherit;font-size:12.5px;margin:6px 0 0">${esc(aiContext())}</pre><div class="muted" style="font-size:12px">업무 제목·상태·마감과 직원 휴가 구분만 보냅니다. 메일 본문은 대화에서 메일 정리·AI 답장 초안을 고를 때 그 한 통만 가려서 보내며, 계좌번호·비밀번호는 보내지 않습니다.</div></details>`;
+    const ctxHtml = `<details style="margin-top:10px"><summary class="muted" style="cursor:pointer">AI에게 보내는 내용 보기</summary><pre style="white-space:pre-wrap;font:inherit;font-size:12.5px;margin:6px 0 0">${esc(typeof R.chatSanitizeText === 'function' ? R.chatSanitizeText(aiContext(), 3500) : aiContext())}</pre><div class="muted" style="font-size:12px">업무 제목·상태·마감과 직원 휴가 구분만 보냅니다(연락처·계좌성 숫자는 가림 처리). 메일 본문은 대화에서 메일 정리·AI 답장 초안을 고를 때 그 한 통만 가려서 보내며, 계좌번호·비밀번호는 보내지 않습니다.</div></details>`;
     if (settingsOnly) {
       $('#overlay').innerHTML = aiShell(`<div id="aiSettingsBox"><h2 style="margin:0 0 4px;font-size:18px">AI 설정</h2><div class="muted">AI 연결됨 · 모델: <b>${esc(c.model || 'gemini-flash-latest')}</b>${c.sessionOnly ? ' · 세션 전용' : ''}</div>${cuBodyModeHtml()}${ctxHtml}<div class="acts"><button class="btn sm ghost" data-act="aiSetup">키 바꾸기</button><button class="btn sm ghost danger" data-act="aiForget">키 지우기</button><button class="btn sm ghost" data-act="aiClose">닫기</button></div></div>`, 'AI 설정');
       return;

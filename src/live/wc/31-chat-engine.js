@@ -9,7 +9,7 @@
   const CHAT_TOOLS = new Map();
   function chatRegisterTool(def) { if (def && def.name && typeof def.run === 'function') CHAT_TOOLS.set(def.name, def); }
   // 외부 AI에 보낼 수 있다고 검토된 도구별 요약만 허용한다. 원본 data, 제목, 식별자, URL은 보내지 않는다.
-  const CHAT_LLM_SUMMARY = new Set(['list_mail', 'list_approvals', 'list_notices', 'list_deadlines', 'get_capabilities', 'plan_priorities', 'read_mail', 'read_doc', 'digest_mail', 'read_attachment', 'check_risks', 'write_text']);
+  const CHAT_LLM_SUMMARY = new Set(['list_mail', 'list_approvals', 'list_notices', 'list_deadlines', 'get_capabilities', 'plan_priorities', 'read_mail', 'read_doc', 'digest_mail', 'read_attachment', 'check_risks', 'write_text', 'get_budget', 'get_work_hours', 'get_resource_status', 'get_unresolved_evidence']);
   // 로컬 규칙이 확실히 알아들은 이 도구들은 '정리·요약' 같은 말투 때문에 AI로 돌리지 않는다(v0.86.0: AI 경로가 같은 도구를 여러 번 부르고 답을 이어 붙이던 문제).
   const CHAT_LOCAL_FIRST = new Set(['get_overview', 'list_automations', 'refresh_data', 'mark_task', 'small_talk', 'multi_read', 'write_text', 'plan_priorities', 'read_mail', 'read_doc', 'digest_mail', 'read_attachment', 'check_risks', 'list_my_requests', 'get_budget', 'list_deadlines', 'list_tasks', 'list_mail', 'list_approvals', 'get_weekly_summary', 'draft_mail_reply', 'get_leave_status', 'get_staff_status']);
   const CHAT_COMPOSE = new Set(); // 검토되지 않은 원문·구조화 데이터는 정리에 보내지 않는다
@@ -285,7 +285,7 @@
     const org = '';
     const contents = [];
     const rephrase = /(?:방금|직전|앞서|위에|그것|그거)/.test(text) && /(?:다시|문장|요약|정리|간결|설명|표현)/.test(text);
-    for (const m of (rephrase ? st.msgs.slice(-4, -2) : st.msgs.slice(-9, -2))) if (m.text && m.state === 'done' && chatHistoryCurrent(m.at) && m.role === 'ai' && m.historySafe === true) contents.push({role: 'model', parts: [{text: R.chatSanitizeText(m.text, 400)}]});
+    for (let m of (rephrase ? st.msgs.slice(-4, -2) : st.msgs.slice(-9, -2))) if (m.text && m.state === 'done' && chatHistoryCurrent(m.at) && m.role === 'ai' && m.historySafe === true) { if (m.historyText) m = {text: m.historyText}; contents.push({role: 'model', parts: [{text: R.chatSanitizeText(m.text, 400)}]}); }
     if (rephrase && !contents.length) { ai.text = '직전 답변을 안전하게 이어받을 수 없습니다. 바꾸고 싶은 문장을 직접 알려 주세요.'; return; }
     contents.push({role: 'user', parts: [{text: R.chatSanitizeText(text, 600)}]});
     const tools = rephrase ? [] : R.chatToGeminiTools([...CHAT_TOOLS.values()]);
@@ -417,7 +417,7 @@
         else {
           if (proseCaps && res.ok) { ai.cards = []; ai.text = res.text || res.llm || ''; }
           else ai.text = res.text || '';
-          if (it.tool === 'get_capabilities' && res.ok) ai.historySafe = true;
+          if (res.ok && (it.tool === 'get_capabilities' || (CHAT_LLM_SUMMARY.has(it.tool) && typeof res.llm === 'string'))) { ai.historySafe = true; ai.historyText = typeof res.llm === 'string' ? res.llm : ai.text; }
           ai.state = 'done'; chatRefresh();   // ① 로컬 답을 먼저 보여 준다
           const def = CHAT_TOOLS.get(it.tool);
           if (ready && res.ok && def.kind !== 'act' && CHAT_COMPOSE.has(it.tool) && !st.stopped && (res.cards || []).length + (res.text || '').length > 30 && chatAvailable(await chatModelList()).length && st.seq === runSeq) await chatCompose(text, res, ai, runSeq);

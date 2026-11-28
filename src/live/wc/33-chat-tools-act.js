@@ -41,7 +41,7 @@
       }
       const reason = String(a.reason || '').slice(0, 100);
       return {ok: true, text: `${chatSpan(iso, end)} ${kind} 신청을 준비했습니다. 아직 아무것도 제출하지 않았습니다. 확인 카드의 [신청서 열고 채우기]를 누르면 신청서가 열리고, [신청완료]는 직접 눌러야 합니다.`, cards: [{type: 'confirm', title: '휴가 신청서 준비', risk: 'low', rows: [['종류', kind], ['기간', chatSpan(iso, end)], ['사유', reason || '신청서에서 입력']], warn: warn.join(' '), confirmLabel: '신청서 열고 채우기', cancelLabel: '취소',
-        onConfirm: async () => { const outcome = await quickAttendanceApplication('leave', {date: iso, to: end, kind, reason}); return chatAttResult('휴가 신청서', outcome); }}]};
+        onConfirm: async () => { const outcome = await quickAttendanceApplication('leave', {date: iso, to: end, kind, reason, skipModal: true}); return chatAttResult('휴가 신청서', outcome); }}]};
     },
   });
 
@@ -59,7 +59,7 @@
       if (ts && te && ts >= te) return {ok: false, text: '시작 시각이 종료 시각보다 늦습니다. 시간을 다시 알려 주세요.'};
       const tripTime = ts && te && !end ? `${ts}~${te}` : '';
       return {ok: true, text: `${chatSpan(iso, end)} ${scope}출장 신청을 준비했습니다.${place && reason ? '' : ' 출장지와 목적은 신청서에서 입력하세요.'} 아직 제출하지 않았습니다. 확인 카드의 [신청서 열고 채우기]를 눌러 진행하세요.`, cards: [{type: 'confirm', title: '출장 신청서 준비', risk: 'low', rows: [['구분', scope + '출장'], ['기간', chatSpan(iso, end)], ['시간', tripTime || '09:00~18:00 (신청서에서 바꿀 수 있음)'], ['출장지', place || '신청서에서 입력'], ['목적', reason || '신청서에서 입력']], warn: chatDateWarn(iso, end).join(' '), confirmLabel: '신청서 열고 채우기', cancelLabel: '취소',
-        onConfirm: async () => { const outcome = await quickAttendanceApplication('trip', {kind: scope, date: iso, to: end, visit: place, purpose: reason, content: reason, time: tripTime}); return chatAttResult('출장 신청서', outcome); }}]};
+        onConfirm: async () => { const outcome = await quickAttendanceApplication('trip', {kind: scope, date: iso, to: end, visit: place, purpose: reason, content: reason, skipModal: !!(place && reason), time: tripTime}); return chatAttResult('출장 신청서', outcome); }}]};
     },
   });
 
@@ -75,7 +75,7 @@
       if (s && e && s >= e) return {ok: false, text: '시작 시각이 종료 시각보다 늦습니다. 시간을 다시 알려 주세요.'};
       const kind = chatDow(iso) === 0 || chatDow(iso) === 6 ? '휴일근무' : '연장근무', reason = String(a.reason || '').slice(0, 100);
       return {ok: true, text: `${iso} ${kind} 신청을 준비했습니다. 아직 제출하지 않았습니다. 확인 카드의 [신청서 열고 채우기]를 눌러 진행하세요.`, cards: [{type: 'confirm', title: '시간외·휴일근무 신청서 준비', risk: 'low', rows: [['근무 구분', kind], ['근무일', iso], ['시간', s && e ? `${s}~${e}` : '신청서에서 입력'], ['사유', reason || '신청서에서 입력']], warn: chatDateWarn(iso, '').filter(w => !/주말/.test(w)).join(' '), confirmLabel: '신청서 열고 채우기', cancelLabel: '취소',
-        onConfirm: async () => { const outcome = await quickAttendanceApplication('overtime', {kind, date: iso, reason, time: s && e ? `${s}~${e}` : ''}); return chatAttResult('시간외 신청서', outcome); }}]};
+        onConfirm: async () => { const outcome = await quickAttendanceApplication('overtime', {kind, date: iso, reason, time: s && e ? `${s}~${e}` : '', skipModal: !!(s && e)}); return chatAttResult('시간외 신청서', outcome); }}]};
     },
   });
 

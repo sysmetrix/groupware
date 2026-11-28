@@ -140,7 +140,20 @@
     const tr = ATT_TRANSPORTS.find(t => String(preset.transport || '').includes(t.slice(0, 2))) || '';
     const st = {type, kind, pay: /보상/.test(String(preset.pay || '') + pk) ? '보상' : '수당', s: d0 + 'T09:00', e: d1 + 'T18:00', visit: preset.visit || '', purpose: preset.purpose || '', content: preset.content || '', reason: preset.reason || '', transport: tr, title: '', basis: '', titleTouched: false, timeTouched: !!tp};
     if (tp) { st.s = d0 + 'T' + hh(tp[1], tp[2]); st.e = d0 + 'T' + hh(tp[3], tp[4]); }
-    const spec = await askAttendance(st, model);
+    let spec = null;
+    if (preset.skipModal && d0 && (!d1 || d1 >= d0)) {
+      const kindOf = type === 'overtime' && st.pay === '보상' ? kind + '(보상)' : kind;
+      const pred = R.predictAttendanceTitle(model, {type, kind: kindOf, from: d0, to: type === 'overtime' ? d0 : d1});
+      const time = tp ? {s: [Number(tp[1]), Number(tp[2])], e: [Number(tp[3]), Number(tp[4])]} : null;
+      const validTime = !time || (time.e[0] * 60 + time.e[1] > time.s[0] * 60 + time.s[1]);
+      if (validTime && (type === 'leave' || (type === 'trip' && st.visit && st.purpose) || (type === 'overtime' && time))) {
+        const common = {type, kind, from: d0, to: type === 'overtime' ? d0 : d1, time: attTimesOf(type, kind)[2] ? null : time, title: (pred && pred.title) || ''};
+        spec = type === 'trip' ? {...common, visit: st.visit, purpose: st.purpose, content: st.content || st.purpose, transport: st.transport}
+          : type === 'leave' ? {...common, reason: st.reason}
+          : {...common, pay: st.pay === '보상' ? '보상근무 신청' : '수당근무 신청', reason: st.reason};
+      }
+    }
+    if (!spec) spec = await askAttendance(st, model);
     if (!spec) return;
     return fillAttendanceForm(spec);
   }
@@ -266,7 +279,7 @@
         else step('제목(예상)', true, spec.title + ' — 근태신청서에는 제목 칸이 없어, 신청완료 때 그룹웨어가 정하는 제목입니다(내 지난 신청 형식 기준)', 1);
       }
     } catch (e) { step('중단', false, e.message, 1); }
-    finally { if (AUTO.tok === tok) AUTO.running = false; if (live()) { try { const done = [...d.querySelectorAll('button')].find(x => /신청완료/.test(x.textContent || '')); if (done) done.scrollIntoView({block: 'center', inline: 'nearest'}); } catch {} if (typeof markPaneDirty === 'function') markPaneDirty(f, url); } }
+    finally { AUTO.running = false; if (live()) { try { const done = [...d.querySelectorAll('button')].find(x => /신청완료/.test(x.textContent || '')); if (done) done.scrollIntoView({block: 'center', inline: 'nearest'}); } catch {} if (typeof markPaneDirty === 'function') markPaneDirty(f, url); } }
     step('안전장치', AUTO.blocked.length === 0, AUTO.blocked.length ? `자동 실행 중 ${AUTO.blocked.join(', ')} 클릭을 막았습니다` : '[신청완료]는 누르지 않았습니다. 화면에서 확인한 뒤 직접 누르세요', 1);
     const bad = steps.filter(s => !s.ok).length, fill = steps.filter(s => !s.keep), got = fill.filter(s => s.ok).length;
     const stop = steps.some(s => s.name === '중단'); // 도중에 멈추면 시도하지 않은 칸은 단계에 없어 분모를 쓰지 않는다
