@@ -321,7 +321,8 @@
       // v1.28 축소: 차량이 아닌 자원의 예약 말(reserve_ask)은 그 종류 현황만 보이고, 대화에서 예약을 준비하지 않았다고 사실대로 덧붙인다.
       const r0 = await chatResStatus(a, ctx);
       if (!a.reserve_ask) return r0;
-      const nav = {type: 'nav', label: '자원 예약 화면 열기', view: 'resource'}, cards = r0.cards || [];
+      const dIso = a.date && typeof chatDateArg === 'function' ? chatDateArg(a.date) : '';
+      const nav = {type: 'nav', label: '자원 예약 화면 열기', view: 'resource', ...(dIso ? {v: `,${dIso.replace(/-/g, '')}`} : {})}, cards = r0.cards || [];
       return {...r0, text: `회의실 등 차량이 아닌 자원은 여기서 예약을 준비하지 않습니다. 자원 예약 화면에서 예약해 주세요. ${r0.text || ''}`.trim(), cards: cards.some(c => c && c.type === 'nav') ? cards : [...cards, nav]};
     },
   });

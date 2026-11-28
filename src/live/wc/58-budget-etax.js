@@ -14,6 +14,8 @@
       const d = await GW.etaxInvoices({from: p.from, to: p.to, state: 'all'});
       if (seq !== ETX.seq) return;
       ETX.data = d;
+      const ck = typeof R.contractCheckOnDemand === 'function' ? R.contractCheckOnDemand('etaxInvoices', d) : {ok: true};
+      ETX.warn = ck.ok ? '' : (typeof R.contractMessage === 'function' ? R.contractMessage(ck) : '');
     } catch (e) {
       if (seq !== ETX.seq) return;
       ETX.err = String((e && e.message) || e).slice(0, 160); ETX.data = null;
@@ -48,7 +50,7 @@
     if (!d) return `${head}${tools}<p class="muted"><span class="spin"></span> 세금계산서를 읽는 중입니다…</p><div class="list">${'<div class="sk row"></div>'.repeat(4)}</div>`;
     const age = v.oldestOpen ? R.cduAgeDays(v.oldestOpen) : null;
     const sum = `<section class="bm-sum cu-sum" aria-label="결의 전 세금계산서"><div class="bm-big">결의 전 <b>${v.counts.open}건</b> · ${won(v.openAmount)}원</div><p>${v.counts.open ? `가장 오래된 건 ${esc(R.cduDayLabel(v.oldestOpen))}${age != null && age > 0 ? ` · ${age}일 지남` : ''}. 결의서에서 [전자(세금)계산서발행내역]을 누르면 이 건들이 나옵니다.` : '이 기간의 세금계산서는 모두 결의에 반영되었습니다.'}</p></section>`;
-    return `${head}${tools}${sum}<div id="etxList">${etxListHtml(v)}</div>
+    return `${head}${tools}${ETX.warn ? `<div class="box warn" role="status">${esc(ETX.warn)}</div>` : ''}${sum}<div id="etxList">${etxListHtml(v)}</div>
 <p class="muted td-hint">그룹웨어 지출결의서 채주정보의 [전자(세금)계산서발행내역]과 같은 조건(증빙 과세·면세, 발행일 기준)으로 읽기만 합니다. 결의에 넣는 일은 그룹웨어 결의서에서 합니다.</p>`;
   }
   function etxInput(t, composing) {

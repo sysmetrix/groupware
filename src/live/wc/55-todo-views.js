@@ -230,5 +230,5 @@ ${list.length ? `<p class="muted">${personalTodoIncomplete() ? '확인된 ' : ''
     toast(`예전 할 일 ${ok}건을 그룹웨어 ToDo로 옮겼습니다${ok < legacy.length ? ` (${legacy.length - ok}건 실패, 다시 눌러 주세요)` : ''}.`);
     renderMain();
   };
-  HOME_ACTS.tdMigrateSkip = () => { if (!confirm('이 PC에만 있던 예전 할 일을 옮기지 않고 지울까요?')) return; store.set('todosLegacy', []); renderMain(); };
+  HOME_ACTS.tdMigrateSkip = async () => { const msg = '이 PC에만 있던 예전 할 일을 옮기지 않고 지울까요?'; const ok = typeof askConfirm === 'function' ? await askConfirm('예전 할 일 지우기', msg, '지우기', true) : confirm(msg); if (!ok) return; store.set('todosLegacy', []); renderMain(); };
 

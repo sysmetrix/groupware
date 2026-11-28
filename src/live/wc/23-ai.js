@@ -134,5 +134,5 @@
       if ($('#aiOut')) $('#aiOut').innerHTML = `<span style="color:var(--hi)">${esc(msg)}</span>`;
     }
   }
-  function aiForget() { if (confirm('저장된 API 키를 지울까요?')) { store.del('ai'); try { sessionStorage.removeItem(aiSessKey()); } catch {} toast('키를 지웠습니다.'); aiSetup(); } }
+  async function aiForget() { const ok = typeof askConfirm === 'function' ? await askConfirm('API 키 지우기', '저장된 API 키를 지울까요?', '지우기', true) : confirm('저장된 API 키를 지울까요?'); if (ok) { store.del('ai'); try { sessionStorage.removeItem(aiSessKey()); } catch {} toast('키를 지웠습니다.'); aiSetup(); } }
   function aiClose() { closeOverlay(); }
