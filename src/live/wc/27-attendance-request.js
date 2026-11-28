@@ -157,7 +157,13 @@
     if (!d) { if (S.pane.url === url) toast('근태신청서 화면을 열지 못했습니다. 화면에서 직접 고르세요.'); return {status: 'failed'}; }
     // 이미 열린 신청서(입력 중일 수 있음)에 덮어쓰지 않는다. 방금 새로 연 화면이면 이 창은 뜨지 않는다.
     if (leaf(d, '신청정보') && !confirm('근태신청 화면에 이미 열려 있는 신청서가 있습니다. 자동 기입으로 덮어쓸까요?')) { toast('열려 있는 신청서를 그대로 두었습니다.'); return {status: 'cancelled'}; }
-    installGuard(w); AUTO.running = true; AUTO.blocked = []; AUTO.tok = {};
+    const owner = currentKey;
+    const live = () => f && f.isConnected && f.contentDocument === d && f.contentWindow === w && owner === currentKey && owner === getUserKey() && S.pane.url === url;
+    const assertLive = () => { if (!live()) throw new Error('근태신청 화면 또는 계정이 변경되어 중단했습니다'); };
+    if (!live()) return {status: 'failed'};
+    installGuard(w); AUTO.running = true; AUTO.blocked = []; const tok = AUTO.tok = {};
+    window.addEventListener('beforeunload', () => { AUTO.running = false; }, {once: true});
+    setTimeout(() => { if (AUTO.tok === tok) AUTO.running = false; }, 180000);
     const steps = [];
     const step = (name, ok, detail = '', keep) => steps.push({name, ok: !!ok, detail, keep});
     const press = el => { for (const ev of ['mousedown', 'mouseup', 'click']) el.dispatchEvent(new w.MouseEvent(ev, {bubbles: true, cancelable: true, view: w})); };
@@ -203,7 +209,9 @@
       }
       step('양식 열기', opened, ATT_FORM[spec.type], 1);
       if (!opened) throw new Error('신청서 입력 화면이 열리지 않았습니다(이미 작성 중인 신청서가 있으면 닫고 다시 시도하세요)');
+      assertLive();
       if (await waitFor(() => infoDlgs().length, 3000)) await dismissInfo(); // 오늘 날짜로 열릴 때 뜨는 중복 안내는 닫는다
+      assertLive();
       if (spec.type === 'trip') {
         const kb = btn(spec.kind); if (kb) { kb.click(); await wait(500); } step('출장구분', !!kb, spec.kind);
         step('출장기간', await setDates('출장기간', spec.from, spec.to), spec.from === spec.to ? spec.from : `${spec.from} ~ ${spec.to}`);
@@ -258,7 +266,7 @@
         else step('제목(예상)', true, spec.title + ' — 근태신청서에는 제목 칸이 없어, 신청완료 때 그룹웨어가 정하는 제목입니다(내 지난 신청 형식 기준)', 1);
       }
     } catch (e) { step('중단', false, e.message, 1); }
-    finally { AUTO.running = false; try { const pf = $('#frame iframe'), pd = pf && pf.contentDocument, done = pd && [...pd.querySelectorAll('button')].find(x => /신청완료/.test(x.textContent || '')); if (done) done.scrollIntoView({block: 'center', inline: 'nearest'}); } catch {} if (typeof markPaneDirty === 'function') { const pf = $('#frame iframe'); if (pf) markPaneDirty(pf); } }
+    finally { if (AUTO.tok === tok) AUTO.running = false; if (live()) { try { const done = [...d.querySelectorAll('button')].find(x => /신청완료/.test(x.textContent || '')); if (done) done.scrollIntoView({block: 'center', inline: 'nearest'}); } catch {} if (typeof markPaneDirty === 'function') markPaneDirty(f, url); } }
     step('안전장치', AUTO.blocked.length === 0, AUTO.blocked.length ? `자동 실행 중 ${AUTO.blocked.join(', ')} 클릭을 막았습니다` : '[신청완료]는 누르지 않았습니다. 화면에서 확인한 뒤 직접 누르세요', 1);
     const bad = steps.filter(s => !s.ok).length, fill = steps.filter(s => !s.keep), got = fill.filter(s => s.ok).length;
     const stop = steps.some(s => s.name === '중단'); // 도중에 멈추면 시도하지 않은 칸은 단계에 없어 분모를 쓰지 않는다

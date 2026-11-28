@@ -231,7 +231,12 @@ export function dropShadowedCss(css) {
 export function assemble({collector, css, parts, template, briefing: briefingSrc}) {
   if (parts.length < 10) throw new Error('work center parts missing');
   collector = trimIndentLines(stripCommentLines(collector));
-  briefingSrc = trimIndentLines(stripCommentLines(trimChangelog(briefingSrc, CHANGELOG_DETAIL, CHANGELOG_SHIP)));
+  const trimmedBriefing = trimChangelog(briefingSrc, CHANGELOG_DETAIL, CHANGELOG_SHIP);
+  {
+    const mk = 'export const CHANGELOG = [\n', a = trimmedBriefing.indexOf(mk), b = a < 0 ? -1 : trimmedBriefing.indexOf('\n];', a);
+    if (a >= 0 && b > a && trimmedBriefing.slice(a + mk.length, b).split('\n').length > CHANGELOG_SHIP) throw new Error(`CHANGELOG 축소 실패: ${CHANGELOG_SHIP}건 이하로 줄이지 못했습니다(항목 형식을 확인하세요)`);
+  }
+  briefingSrc = trimIndentLines(stripCommentLines(trimmedBriefing));
   parts = parts.map(p => ({...p, src: trimIndentLines(stripCommentLines(p.src))}));
   const halves = template.split(PARTS_MARK);
   if (halves.length !== 2) throw new Error('work center parts were not assembled (workcenter.browser.js needs exactly one /*@WC_PARTS@*/ marker)');
@@ -240,10 +245,12 @@ export function assemble({collector, css, parts, template, briefing: briefingSrc
     .replace(/\}\n/g, '}').replace(/;\}/g, '}').replace(/,\s+/g, ',').replace(/\s*>\s*/g, '>').replace(/\s*\{/g, '{').replace(/:\s+/g, ':');
   const wcCssSlim = dropShadowedCss(wcCss);
   // CSS 사전 치환은 런타임에 원문을 정확히 복원한다. 토큰 충돌은 배포 전에 차단한다.
-  if (wcCssSlim.includes('~A') || wcCssSlim.includes('~B')) throw new Error('CSS packing token collision');
-  const packedCss = wcCssSlim.split('.wc ').join('~A').split('var(--').join('~B');
-  if (packedCss.split('~A').join('.wc ').split('~B').join('var(--') !== wcCssSlim) throw new Error('CSS packing mismatch');
-  const cssExpr = JSON.stringify(packedCss) + '.split("~A").join(".wc ").split("~B").join("var(--")';
+  const cssDict = [['~A', '.wc '], ['~B', 'var(--'], ['~C', 'background:'], ['~D', 'border:1px solid '], ['~E', 'border-radius:'], ['~F', 'font-size:'], ['~G', 'display:flex;'], ['~H', 'align-items:center'], ['~I', 'padding:'], ['~J', 'margin:'], ['~K', 'color:'], ['~L', 'grid-template-columns:'], ['~M', 'font-weight:'], ['~N', 'white-space:nowrap']];
+  if (cssDict.some(([k]) => wcCssSlim.includes(k))) throw new Error('CSS packing token collision');
+  const packedCss = cssDict.reduce((acc, [k, v]) => acc.split(v).join(k), wcCssSlim);
+  const unpackMap = Object.fromEntries(cssDict);
+  if (packedCss.replace(/~[A-N]/g, m => unpackMap[m]) !== wcCssSlim) throw new Error('CSS packing mismatch');
+  const cssExpr = `${JSON.stringify(packedCss)}.replace(/~[A-N]/g,m=>(${JSON.stringify(unpackMap)})[m])`;
   // The CSS marker is replaced once, in source order (template head, parts, template tail).
   const wcSegs = [{label: 'workcenter.browser.js', text: halves[0]}, ...parts.map((p, i) => ({label: `wc/${p.file}`, text: p.src + (i < parts.length - 1 ? '\n' : '')})), {label: 'workcenter.browser.js', text: halves[1]}];
   const cssAt = wcSegs.findIndex(s => s.text.includes(CSS_MARK));

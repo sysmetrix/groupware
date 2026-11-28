@@ -4,7 +4,7 @@
 // Fragment of boot() in workcenter.browser.js; assembled by scripts/live-build.mjs.
 
   // ---------- 기록/재생 엔진 (의존성 없음) ----------
-  const REC_DANGER = /^(결재\s*상신|결재상신|상신하기|상신|결재|결재요청|승인요청|일괄결재|임시저장|저장|보관|보내기|발송|회수|삭제|삭제하기|승인|반려|전결|대결|전송|폐기|기안|접수|배부|제출|확정|신청완료|추가신청|신청취소|신청|등록)(\(\w\))?$/;
+  const REC_DANGER = /^(?:(?:결재\s*상신|결재상신|상신하기|상신|결재|결재요청|승인요청|일괄결재|임시저장|저장|보관|보내기|발송|회수|삭제|삭제하기|승인|반려|전결|대결|전송|폐기|기안|접수|배부|제출|확정|신청완료|추가신청|신청취소|신청|등록)(?:\(\w+\))?|(?:.*(?:결재\s*상신|결재상신|상신하기|임시저장|일괄결재|승인요청|결재요청|신청완료|신청취소|삭제하기|문서발송|전체삭제|최종승인|최종결재|폐기하기|회수하기|반려하기|발송하기|전송하기|제출하기|저장하기).*)|(?:상신|발송|삭제|폐기|회수|반려|제출|승인)\(\d+건?\))$/;
   const REC_TYPES = new Set(['click', 'dblclick', 'type', 'select', 'check', 'key', 'canvasClick', 'confirm', 'assert', 'waitFor']);
   // 클릭 대상(버튼) 이름을 글자, 값, aria-label, title 어디서든 찾아 위험 여부를 판단한다.
   const recDanger = el => { const b = (el.closest && el.closest('button,a,[role=button],.topBtn,.OBTButton,input[type=button],input[type=submit]')) || el; return [b.innerText, b.value, b.getAttribute && b.getAttribute('aria-label'), b.title].map(x => rNorm(x).replace(/\s+/g, '')).find(x => x && REC_DANGER.test(x)) || ''; };
@@ -178,8 +178,8 @@
       if (aborted) throw new Error('재생 중단됨');
       const {el, used} = await waitTarget(step.frame, step.selectors, step.timeoutMs || 8000);
       const dl = step.type === 'assert' || step.type === 'waitFor' ? '' : recDanger(el);
-      if (step.type === 'key' && (step.key === 'Enter' || step.ctrlKey) && !confirmed) {
-        if (!window.confirm('Enter 또는 Ctrl 조합 키를 누릅니다. 입력 확정·저장이 될 수 있습니다. 진행할까요?')) throw new Error('키 입력 거부로 중단');
+      if (step.type === 'key' && (step.key === 'Enter' || step.key === ' ' || step.key === 'Spacebar' || step.ctrlKey) && !confirmed) {
+        if (!window.confirm('Enter, Space 또는 Ctrl 조합 키를 누릅니다. 입력 확정·저장이 될 수 있습니다. 진행할까요?')) throw new Error('키 입력 거부로 중단');
       }
       if (dl && !confirmed) {
         if (!window.confirm(`비가역 버튼(“${dl}”)을 누릅니다. 진행할까요?`)) throw new Error(`“${dl}” 실행 거부로 중단`);

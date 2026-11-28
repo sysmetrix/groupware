@@ -126,7 +126,10 @@
       logActionRecord({command: 'AI 질문: ' + q.slice(0, 60), type: 'AI', target: '', summary: 'AI 도우미 답변을 받았습니다(실행 없음).', steps: [], verified: true});
     } catch (e) {
       logError('aiAsk', e.message);
-      if (/no longer available|not found/i.test(e.message)) { store.set('ai', {key: c.key, model: ''}); }
+      if (/no longer available|not found/i.test(e.message)) {
+        if (c.sessionOnly) { try { sessionStorage.setItem(aiSessKey(), JSON.stringify({key: c.key, model: '', sessionOnly: true})); } catch {} }
+        else store.set('ai', {key: c.key, model: ''});
+      }
       const msg = e.status === 429 ? '무료 사용량을 잠시 다 썼습니다. 1분 뒤 다시 시도하세요.' : e.status === 400 || e.status === 403 ? '키가 거절되었습니다. "키 바꾸기"로 다시 연결하세요.' : e.name === 'AbortError' ? '응답이 늦습니다. 잠시 뒤 다시 시도하세요.' : '답을 받지 못했습니다: ' + e.message.slice(0, 120);
       if ($('#aiOut')) $('#aiOut').innerHTML = `<span style="color:var(--hi)">${esc(msg)}</span>`;
     }
