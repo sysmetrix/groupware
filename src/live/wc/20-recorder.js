@@ -181,6 +181,9 @@
       if (step.type === 'key' && (step.key === 'Enter' || step.key === ' ' || step.key === 'Spacebar' || step.ctrlKey) && !confirmed) {
         if (!window.confirm('Enter, Space 또는 Ctrl 조합 키를 누릅니다. 입력 확정·저장이 될 수 있습니다. 진행할까요?')) throw new Error('키 입력 거부로 중단');
       }
+      if (step.type === 'canvasClick' && !confirmed) {
+        if (!window.confirm('그리드(캔버스) 좌표를 클릭합니다. 화면 배율이나 목록 순서가 바뀌었으면 다른 항목이 눌릴 수 있습니다. 진행할까요?')) throw new Error('캔버스 클릭 거부로 중단');
+      }
       if (dl && !confirmed) {
         if (!window.confirm(`비가역 버튼(“${dl}”)을 누릅니다. 진행할까요?`)) throw new Error(`“${dl}” 실행 거부로 중단`);
       }
