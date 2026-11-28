@@ -5,12 +5,73 @@
 
   const AI_HOST = (typeof POLICY !== 'undefined' && POLICY.aiEndpoint) || 'https://generativelanguage.googleapis.com/v1beta';
   const aiSessKey = () => getPrefix() + 'aiSession';
-  const aiCfg = () => {
+  // 확장 프로그램 브리지가 있고 기본 Gemini 엔드포인트를 쓰면 API 키와 호출을 Service Worker로 격리한다(MAIN world 노출 차단).
+  const aiUseSw = () => !(typeof POLICY !== 'undefined' && POLICY.aiEndpoint) && typeof document !== 'undefined' && document.documentElement && document.documentElement.getAttribute('data-bwyfgw-ai') === '1';
+  let aiSwState = {synced: false, hasKey: false, model: '', sessionOnly: false};
+  function aiSwCall(payload, opts = {}) {
+    return new Promise((resolve, reject) => {
+      const id = 'ai' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+      let settled = false;
+      const done = (ok, val) => {
+        if (settled) return; settled = true;
+        clearTimeout(tm);
+        window.removeEventListener('message', onMsg);
+        if (opts.signal) opts.signal.removeEventListener('abort', onAbort);
+        ok ? resolve(val) : reject(val);
+      };
+      const onAbort = () => {
+        try { window.postMessage({bwyfgw: 'ai-proxy', id, op: 'abort'}, location.origin); } catch {}
+        done(false, Object.assign(new Error('abort'), {name: 'AbortError', aborted: true}));
+      };
+      const onMsg = ev => {
+        if (ev.source !== window || ev.origin !== location.origin) return;
+        const m = ev.data;
+        if (!m || m.bwyfgw !== 'ai-reply' || m.id !== id) return;
+        if (m.type === 'chunk') { if (typeof opts.onChunk === 'function') opts.onChunk(m.text || ''); return; }
+        if (m.type === 'result') done(true, m);
+      };
+      const tm = setTimeout(() => { onAbort(); }, opts.timeoutMs || 32000);
+      window.addEventListener('message', onMsg);
+      if (opts.signal) { if (opts.signal.aborted) { onAbort(); return; } opts.signal.addEventListener('abort', onAbort, {once: true}); }
+      try { window.postMessage(Object.assign({bwyfgw: 'ai-proxy', id}, payload), location.origin); } catch (e) { done(false, e); }
+    });
+  }
+  const aiLocalCfg = () => {
     try { const s = sessionStorage.getItem(aiSessKey()); if (s) { const j = JSON.parse(s); if (j && j.key) return j; } } catch {}
     return store.get('ai', {key: '', model: ''});
   };
+  let aiSwInitStarted = false;
+  async function aiSwSync() {
+    if (!aiUseSw()) return;
+    try {
+      const st = await aiSwCall({op: 'status'}, {timeoutMs: 5000});
+      if (st && st.ok) {
+        aiSwState = {synced: true, hasKey: !!st.hasKey, model: st.model || '', sessionOnly: !!st.sessionOnly};
+        // 기존 MAIN world 평문 키가 남아 있으면 Service Worker로 자동 이관하고 즉시 삭제한다.
+        const leg = aiLocalCfg();
+        if (leg && leg.key && R.isGeminiKey(leg.key)) {
+          if (!aiSwState.hasKey) {
+            const sv = await aiSwCall({op: 'save', key: leg.key, model: leg.model || '', sessionOnly: !!leg.sessionOnly}, {timeoutMs: 5000});
+            if (sv && sv.ok) aiSwState = {synced: true, hasKey: true, model: sv.model || '', sessionOnly: !!sv.sessionOnly};
+          }
+          if (aiSwState.hasKey) { store.del('ai'); try { sessionStorage.removeItem(aiSessKey()); } catch {} }
+        }
+        if (typeof chatRefresh === 'function') chatRefresh();
+      } else { aiSwInitStarted = false; }
+    } catch { aiSwInitStarted = false; }
+  }
+  const aiEnsureSync = () => { if (!aiSwInitStarted && aiUseSw()) { aiSwInitStarted = true; aiSwSync(); } };
+  const aiCfg = () => {
+    aiEnsureSync();
+    if (aiUseSw()) return {key: aiSwState.hasKey ? '__SW__' : '', model: aiSwState.model || '', sessionOnly: !!aiSwState.sessionOnly, viaSw: true};
+    return aiLocalCfg();
+  };
   // 채팅 엔진이 쓰는 연결 상태: 키가 형식에 맞고 관리자 정책이 허용할 때만 AI 모드
-  const aiReady = () => { const k = aiCfg().key; return !!k && R.isGeminiKey(k) && allowed('aiAssistant'); };
+  const aiReady = () => {
+    aiEnsureSync();
+    if (aiUseSw()) return !!aiSwState.hasKey && allowed('aiAssistant');
+    const k = aiLocalCfg().key; return !!k && R.isGeminiKey(k) && allowed('aiAssistant');
+  };
   const aiModelName = () => aiCfg().model || 'gemini-flash-latest';
   const aiShell = (body, label = 'AI 도우미') => `<div class="modal"><div class="dlg" data-stop="1" style="width:min(780px,96vw);padding:24px 26px;max-height:90vh;overflow:auto" role="dialog" aria-label="${esc(label)}"><button class="btn icon ghost x" data-act="aiClose" aria-label="닫기">${ic('x')}</button>${body}</div></div>`;
   const aiRich = s => esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/^[ \t]*[*-] /gm, '• ').replace(/\n/g, '<br>');
@@ -35,7 +96,7 @@
     if (!c.key) { aiSetup(); return; }
     const ctxHtml = `<details style="margin-top:10px"><summary class="muted" style="cursor:pointer">AI에게 보내는 내용 보기</summary><pre style="white-space:pre-wrap;font:inherit;font-size:12.5px;margin:6px 0 0">${esc(typeof R.chatSanitizeText === 'function' ? R.chatSanitizeText(aiContext(), 3500) : aiContext())}</pre><div class="muted" style="font-size:12px">업무 제목·상태·마감과 직원 휴가 구분만 보냅니다(연락처·계좌성 숫자는 가림 처리). 메일 본문은 대화에서 메일 정리·AI 답장 초안을 고를 때 그 한 통만 가려서 보내며, 계좌번호·비밀번호는 보내지 않습니다.</div></details>`;
     if (settingsOnly) {
-      $('#overlay').innerHTML = aiShell(`<div id="aiSettingsBox"><h2 style="margin:0 0 4px;font-size:18px">AI 설정</h2><div class="muted">AI 연결됨 · 모델: <b>${esc(c.model || 'gemini-flash-latest')}</b>${c.sessionOnly ? ' · 세션 전용' : ''}</div>${cuBodyModeHtml()}${ctxHtml}<div class="acts"><button class="btn sm ghost" data-act="aiSetup">키 바꾸기</button><button class="btn sm ghost danger" data-act="aiForget">키 지우기</button><button class="btn sm ghost" data-act="aiClose">닫기</button></div></div>`, 'AI 설정');
+      $('#overlay').innerHTML = aiShell(`<div id="aiSettingsBox"><h2 style="margin:0 0 4px;font-size:18px">AI 설정</h2><div class="muted">AI 연결됨 · 모델: <b>${esc(c.model || 'gemini-flash-latest')}</b>${c.sessionOnly ? ' · 세션 전용' : ''}${c.viaSw ? ' · 확장 보안 저장소 격리' : ''}</div>${cuBodyModeHtml()}${ctxHtml}<div class="acts"><button class="btn sm ghost" data-act="aiSetup">키 바꾸기</button><button class="btn sm ghost danger" data-act="aiForget">키 지우기</button><button class="btn sm ghost" data-act="aiClose">닫기</button></div></div>`, 'AI 설정');
       return;
     }
     $('#overlay').innerHTML = aiShell(`
@@ -71,6 +132,11 @@
   }
 
   async function aiRequest(path, body, key) {
+    if (typeof aiUseSw === 'function' && aiUseSw()) {
+      const res = await aiSwCall({op: 'request', path, body: body || undefined, key: key && key !== '__SW__' ? key : undefined});
+      if (!res || !res.ok) { const err = new Error((res && res.error) || 'AI 요청 실패'); err.status = (res && res.status) || 0; err.details = res && res.details; throw err; }
+      return res.data || {};
+    }
     const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), 30000);
     try {
       const r = await fetch(`${AI_HOST}/${path}`, {method: body ? 'POST' : 'GET', headers: {'x-goog-api-key': key, ...(body ? {'Content-Type': 'application/json'} : {})}, body: body ? JSON.stringify(body) : undefined, signal: ctl.signal});
@@ -98,7 +164,12 @@
         catch (e) { lastErr = e; if (e.status === 400 && /API key|key not valid/i.test(e.message) || e.status === 403) throw e; }
       }
       if (!pick) throw lastErr || new Error('모델 연결에 실패했습니다');
-      if (sessionOnly) { store.del('ai'); try { sessionStorage.setItem(aiSessKey(), JSON.stringify({key, model: pick, sessionOnly: true})); } catch {} }
+      if (typeof aiUseSw === 'function' && aiUseSw()) {
+        const sv = await aiSwCall({op: 'save', key, model: pick, sessionOnly});
+        if (!sv || !sv.ok) throw new Error((sv && sv.error) || '확장 저장소에 키를 저장하지 못했습니다');
+        aiSwState = {synced: true, hasKey: true, model: pick, sessionOnly};
+        store.del('ai'); try { sessionStorage.removeItem(aiSessKey()); } catch {}
+      } else if (sessionOnly) { store.del('ai'); try { sessionStorage.setItem(aiSessKey(), JSON.stringify({key, model: pick, sessionOnly: true})); } catch {} }
       else { try { sessionStorage.removeItem(aiSessKey()); } catch {} store.set('ai', {key, model: pick}); }
       toast(`AI 도우미가 연결되었습니다 (${pick}${sessionOnly ? ' · 세션 전용' : ''})`);
       if (live()) closeOverlay();
@@ -127,12 +198,13 @@
     } catch (e) {
       logError('aiAsk', e.message);
       if (/no longer available|not found/i.test(e.message)) {
-        if (c.sessionOnly) { try { sessionStorage.setItem(aiSessKey(), JSON.stringify({key: c.key, model: '', sessionOnly: true})); } catch {} }
+        if (typeof aiUseSw === 'function' && aiUseSw()) { aiSwState.model = ''; aiSwCall({op: 'setModel', model: ''}).catch(() => {}); }
+        else if (c.sessionOnly) { try { sessionStorage.setItem(aiSessKey(), JSON.stringify({key: c.key, model: '', sessionOnly: true})); } catch {} }
         else store.set('ai', {key: c.key, model: ''});
       }
       const msg = e.status === 429 ? '무료 사용량을 잠시 다 썼습니다. 1분 뒤 다시 시도하세요.' : e.status === 400 || e.status === 403 ? '키가 거절되었습니다. "키 바꾸기"로 다시 연결하세요.' : e.name === 'AbortError' ? '응답이 늦습니다. 잠시 뒤 다시 시도하세요.' : '답을 받지 못했습니다: ' + e.message.slice(0, 120);
       if ($('#aiOut')) $('#aiOut').innerHTML = `<span style="color:var(--hi)">${esc(msg)}</span>`;
     }
   }
-  async function aiForget() { const ok = typeof askConfirm === 'function' ? await askConfirm('API 키 지우기', '저장된 API 키를 지울까요?', '지우기', true) : confirm('저장된 API 키를 지울까요?'); if (ok) { store.del('ai'); try { sessionStorage.removeItem(aiSessKey()); } catch {} toast('키를 지웠습니다.'); aiSetup(); } }
+  async function aiForget() { const ok = typeof askConfirm === 'function' ? await askConfirm('API 키 지우기', '저장된 API 키를 지울까요?', '지우기', true) : confirm('저장된 API 키를 지울까요?'); if (ok) { if (typeof aiUseSw === 'function' && aiUseSw()) { await aiSwCall({op: 'clear'}).catch(() => {}); aiSwState = {synced: true, hasKey: false, model: '', sessionOnly: false}; } store.del('ai'); try { sessionStorage.removeItem(aiSessKey()); } catch {} toast('키를 지웠습니다.'); aiSetup(); } }
   function aiClose() { closeOverlay(); }

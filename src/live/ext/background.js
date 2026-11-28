@@ -6,6 +6,11 @@
 
 const GW_ORIGIN = 'https://gw.bwyf.or.kr';
 const CAL_HOST = 'calendar.google.com';
+const AI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
+const AI_PATH_RE = /^(?:models\?pageSize=\d{1,3}|models\/[A-Za-z0-9._-]{1,80}:(?:generateContent|streamGenerateContent\?alt=sse))$/;
+const AI_KEY_RE = /^(AIza|AQ\.)[A-Za-z0-9_.-]{16,300}$/;
+const AI_KEY_STORE = 'aiKeyCfg';
+const scrubKey = s => String(s || '').replace(/\b(?:AIza|AQ\.)[A-Za-z0-9_.-]{10,}/g, '[REDACTED]');
 const MAX_DATES = 60;
 const WORKERS = 4;
 const SESSION_TABS_KEY = 'gcalWorkerTabs';
@@ -14,6 +19,32 @@ let busy = false;
 let tabTrackQ = Promise.resolve();
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const sessStore = () => (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.session) || null;
+const localStore = () => (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) || null;
+
+async function aiLoadCfg() {
+  const ss = sessStore(), ls = localStore();
+  try { const s = ss && (await ss.get(AI_KEY_STORE))[AI_KEY_STORE]; if (s && s.key) return {key: s.key, model: s.model || '', sessionOnly: true}; } catch (e) { /* ignore */ }
+  try { const l = ls && (await ls.get(AI_KEY_STORE))[AI_KEY_STORE]; if (l && l.key) return {key: l.key, model: l.model || '', sessionOnly: false}; } catch (e) { /* ignore */ }
+  return {key: '', model: '', sessionOnly: false};
+}
+async function aiSaveCfg(cfg) {
+  const ss = sessStore(), ls = localStore();
+  const clean = {key: cfg.key, model: String(cfg.model || '').slice(0, 80), sessionOnly: !!cfg.sessionOnly};
+  if (clean.sessionOnly) {
+    if (!ss) throw new Error('no-session-storage');
+    await ss.set({[AI_KEY_STORE]: clean});
+    if (ls) { try { await ls.remove(AI_KEY_STORE); } catch (e) { /* ignore */ } }
+  } else {
+    if (!ls) throw new Error('no-local-storage');
+    await ls.set({[AI_KEY_STORE]: clean});
+    if (ss) { try { await ss.remove(AI_KEY_STORE); } catch (e) { /* ignore */ } }
+  }
+}
+async function aiClearCfg() {
+  const ss = sessStore(), ls = localStore();
+  if (ss) { try { await ss.remove(AI_KEY_STORE); } catch (e) { /* ignore */ } }
+  if (ls) { try { await ls.remove(AI_KEY_STORE); } catch (e) { /* ignore */ } }
+}
 function trackTab(id, add) {
   const st = sessStore();
   if (!st || typeof id !== 'number') return Promise.resolve();
@@ -107,8 +138,107 @@ async function readDays(dates, careful, onProgress, aborted) {
   return {days, why, loginError};
 }
 
+async function handleAiPort(port) {
+  let gone = false;
+  let activeCtl = null;
+  port.onDisconnect.addListener(() => { gone = true; if (activeCtl) { try { activeCtl.abort(); } catch (e) { /* ignore */ } activeCtl = null; } });
+  const send = m => { if (!gone) { try { port.postMessage(m); } catch (e) { /* ignore */ } } };
+  port.onMessage.addListener(async msg => {
+    const op = msg && typeof msg.op === 'string' ? msg.op : '';
+    try {
+      if (op === 'status') {
+        const c = await aiLoadCfg();
+        send({type: 'result', ok: true, hasKey: !!c.key, model: c.model, sessionOnly: c.sessionOnly});
+        return;
+      }
+      if (op === 'save') {
+        const key = typeof msg.key === 'string' ? msg.key.trim() : '';
+        if (!AI_KEY_RE.test(key)) { send({type: 'result', ok: false, error: 'bad-key'}); return; }
+        const model = typeof msg.model === 'string' ? msg.model.slice(0, 80) : '';
+        const sessionOnly = msg.sessionOnly === true;
+        await aiSaveCfg({key, model, sessionOnly});
+        send({type: 'result', ok: true, hasKey: true, model, sessionOnly});
+        return;
+      }
+      if (op === 'setModel') {
+        const c = await aiLoadCfg();
+        if (!c.key) { send({type: 'result', ok: false, error: 'no-key'}); return; }
+        const model = typeof msg.model === 'string' ? msg.model.slice(0, 80) : '';
+        await aiSaveCfg({key: c.key, model, sessionOnly: c.sessionOnly});
+        send({type: 'result', ok: true, hasKey: true, model, sessionOnly: c.sessionOnly});
+        return;
+      }
+      if (op === 'clear') {
+        await aiClearCfg();
+        send({type: 'result', ok: true, hasKey: false, model: '', sessionOnly: false});
+        return;
+      }
+      if (op === 'request') {
+        const path = typeof msg.path === 'string' ? msg.path : '';
+        if (!AI_PATH_RE.test(path)) { send({type: 'result', ok: false, status: 400, error: 'bad-path'}); return; }
+        let key = typeof msg.key === 'string' && msg.key.trim() ? msg.key.trim() : '';
+        if (key && !AI_KEY_RE.test(key)) { send({type: 'result', ok: false, status: 400, error: 'bad-key'}); return; }
+        if (!key) { const c = await aiLoadCfg(); key = c.key; }
+        if (!key) { send({type: 'result', ok: false, status: 401, error: 'no-key'}); return; }
+        const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+        activeCtl = ctl;
+        const tm = setTimeout(() => { if (ctl) ctl.abort(); }, msg.stream ? 25000 : 30000);
+        try {
+          const hasBody = msg.body !== undefined && msg.body !== null;
+          const r = await fetch(`${AI_BASE}/${path}`, {
+            method: hasBody ? 'POST' : 'GET',
+            headers: Object.assign({'x-goog-api-key': key}, hasBody ? {'Content-Type': 'application/json'} : {}),
+            body: hasBody ? JSON.stringify(msg.body) : undefined,
+            redirect: 'error',
+            signal: ctl ? ctl.signal : undefined,
+          });
+          if (msg.stream && r.ok && r.body && typeof r.body.getReader === 'function') {
+            const reader = r.body.getReader(), dec = new TextDecoder();
+            let buf = '';
+            while (!gone) {
+              const {done, value} = await reader.read();
+              if (done || gone) break;
+              buf += dec.decode(value, {stream: true});
+              const lines = buf.split('\n'); buf = lines.pop() || '';
+              for (const ln of lines) {
+                if (!ln.startsWith('data:')) continue;
+                try {
+                  const j = JSON.parse(ln.slice(5));
+                  const chunk = (j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts || []).map(p => p.text || '').join('');
+                  if (chunk) send({type: 'chunk', text: chunk});
+                } catch (e) { /* ignore */ }
+              }
+            }
+            send({type: 'result', ok: true, status: r.status, streamed: true});
+            return;
+          }
+          const j = await r.json().catch(() => ({}));
+          if (!r.ok) {
+            const errMsg = scrubKey((j.error && j.error.message) || ('HTTP ' + r.status));
+            send({type: 'result', ok: false, status: r.status, error: errMsg, details: (j.error && j.error.details) || null});
+            return;
+          }
+          send({type: 'result', ok: true, status: r.status, data: j});
+        } catch (e) {
+          const aborted = e && e.name === 'AbortError';
+          send({type: 'result', ok: false, status: 0, error: aborted ? 'abort' : scrubKey((e && e.message) || e).slice(0, 120), aborted});
+        } finally {
+          clearTimeout(tm);
+          if (activeCtl === ctl) activeCtl = null;
+        }
+        return;
+      }
+      send({type: 'result', ok: false, error: 'bad-op'});
+    } catch (e) {
+      send({type: 'result', ok: false, error: scrubKey((e && e.message) || e).slice(0, 120)});
+    }
+  });
+}
+
 chrome.runtime.onConnect.addListener(port => {
-  if (port.name !== 'gcal-read' || !port.sender || port.sender.origin !== GW_ORIGIN) { try { port.disconnect(); } catch (e) { /* ignore */ } return; }
+  if (!port.sender || port.sender.origin !== GW_ORIGIN) { try { port.disconnect(); } catch (e) { /* ignore */ } return; }
+  if (port.name === 'ai-proxy') { handleAiPort(port); return; }
+  if (port.name !== 'gcal-read') { try { port.disconnect(); } catch (e) { /* ignore */ } return; }
   let gone = false;
   port.onDisconnect.addListener(() => { gone = true; });
   const send = m => { if (!gone) { try { port.postMessage(m); } catch (e) { /* ignore */ } } };

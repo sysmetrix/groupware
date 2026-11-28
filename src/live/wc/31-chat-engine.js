@@ -202,15 +202,23 @@
       let timedOut = false;
       const tm = setTimeout(() => { timedOut = true; mc.abort(); }, 25000);
       try {
-        const r = await fetch(`${AI_HOST}/models/${model}:generateContent`, {method: 'POST', headers: {'x-goog-api-key': c.key, 'Content-Type': 'application/json'}, body: JSON.stringify(body), signal: mc.signal});
-        const j = await r.json().catch(() => ({}));
-        if (ctl.signal.aborted || S.chat !== st || S.userKey !== owner) throw Object.assign(new Error('abort'), {name: 'AbortError'});
-        if (r.ok) { st.model = model; return j; }
-        const msg = (j.error && j.error.message) || 'HTTP ' + r.status;
-        const ri = ((j.error && j.error.details) || []).find(d => /RetryInfo/.test(d['@type'] || ''));
-        chatSetCool(model, R.chatCooldownFor(r.status, msg, ri && ri.retryDelay));
-        last = Object.assign(new Error(msg), {status: r.status, kind: r.status === 429 ? 'quota' : r.status === 404 ? 'model' : r.status >= 500 ? 'server' : /API key|key not valid/i.test(msg) || r.status === 401 || r.status === 403 ? 'key' : ''});
-        if (r.status === 429 || r.status === 404 || r.status >= 500) continue; // 다음 모델로
+        let ok = false, status = 0, j = {}, errMsg = '', errDetails = null;
+        if (typeof aiUseSw === 'function' && aiUseSw()) {
+          const sw = await aiSwCall({op: 'request', path: `models/${model}:generateContent`, body}, {signal: mc.signal, timeoutMs: 26000});
+          if (ctl.signal.aborted || S.chat !== st || S.userKey !== owner) throw Object.assign(new Error('abort'), {name: 'AbortError'});
+          ok = !!(sw && sw.ok); status = (sw && sw.status) || 0; j = (sw && sw.data) || {}; errMsg = (sw && sw.error) || ('HTTP ' + status); errDetails = sw && sw.details;
+          if (!ok && sw && sw.aborted) throw Object.assign(new Error('abort'), {name: 'AbortError'});
+        } else {
+          const r = await fetch(`${AI_HOST}/models/${model}:generateContent`, {method: 'POST', headers: {'x-goog-api-key': c.key, 'Content-Type': 'application/json'}, body: JSON.stringify(body), signal: mc.signal});
+          j = await r.json().catch(() => ({}));
+          if (ctl.signal.aborted || S.chat !== st || S.userKey !== owner) throw Object.assign(new Error('abort'), {name: 'AbortError'});
+          ok = r.ok; status = r.status; errMsg = (j.error && j.error.message) || 'HTTP ' + r.status; errDetails = j.error && j.error.details;
+        }
+        if (ok) { st.model = model; return j; }
+        const ri = (errDetails || []).find(d => /RetryInfo/.test(d['@type'] || ''));
+        chatSetCool(model, R.chatCooldownFor(status, errMsg, ri && ri.retryDelay));
+        last = Object.assign(new Error(errMsg), {status, kind: status === 429 ? 'quota' : status === 404 ? 'model' : status >= 500 ? 'server' : /API key|key not valid/i.test(errMsg) || status === 401 || status === 403 ? 'key' : ''});
+        if (status === 429 || status === 404 || status >= 500) continue; // 다음 모델로
         throw last;
       } catch (e) {
         if (e === last) throw e;
@@ -244,25 +252,33 @@
         if (ctl.signal.aborted) mc.abort(); else ctl.signal.addEventListener('abort', onStop, {once: true});
         const tm = setTimeout(() => mc.abort(), 20000);
         try {
-          const resp = await fetch(`${AI_HOST}/models/${model}:streamGenerateContent?alt=sse`, {method: 'POST', headers: {'x-goog-api-key': c.key, 'Content-Type': 'application/json'}, body: JSON.stringify(body), signal: mc.signal});
-          if (resp.ok && resp.body && typeof resp.body.getReader === 'function') {
-            const reader = resp.body.getReader(), dec = new TextDecoder();
-            let buf = '';
-            while (true) {
-              const {done, value} = await reader.read();
-              if (done || S.chat !== st || st.stopped || st.seq !== runSeq) break;
-              buf += dec.decode(value, {stream: true});
-              const lines = buf.split('\n'); buf = lines.pop() || '';
-              for (const ln of lines) {
-                if (!ln.startsWith('data:')) continue;
-                try {
-                  const j = JSON.parse(ln.slice(5));
-                  const chunk = (j.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
-                  if (chunk) { streamed += chunk; ai.text = streamed; ai.composed = true; chatRefresh(); }
-                } catch {}
-              }
-            }
+          if (typeof aiUseSw === 'function' && aiUseSw()) {
+            await aiSwCall({op: 'request', path: `models/${model}:streamGenerateContent?alt=sse`, body, stream: true}, {
+              signal: mc.signal, timeoutMs: 21000,
+              onChunk: chunk => { if (S.chat === st && !st.stopped && st.seq === runSeq && chunk) { streamed += chunk; ai.text = streamed; ai.composed = true; chatRefresh(); } },
+            });
             if (streamed.trim() && !st.stopped && st.seq === runSeq) { st.model = model; chip.state = 'ok'; return; }
+          } else {
+            const resp = await fetch(`${AI_HOST}/models/${model}:streamGenerateContent?alt=sse`, {method: 'POST', headers: {'x-goog-api-key': c.key, 'Content-Type': 'application/json'}, body: JSON.stringify(body), signal: mc.signal});
+            if (resp.ok && resp.body && typeof resp.body.getReader === 'function') {
+              const reader = resp.body.getReader(), dec = new TextDecoder();
+              let buf = '';
+              while (true) {
+                const {done, value} = await reader.read();
+                if (done || S.chat !== st || st.stopped || st.seq !== runSeq) break;
+                buf += dec.decode(value, {stream: true});
+                const lines = buf.split('\n'); buf = lines.pop() || '';
+                for (const ln of lines) {
+                  if (!ln.startsWith('data:')) continue;
+                  try {
+                    const j = JSON.parse(ln.slice(5));
+                    const chunk = (j.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
+                    if (chunk) { streamed += chunk; ai.text = streamed; ai.composed = true; chatRefresh(); }
+                  } catch {}
+                }
+              }
+              if (streamed.trim() && !st.stopped && st.seq === runSeq) { st.model = model; chip.state = 'ok'; return; }
+            }
           }
         } catch {} finally { clearTimeout(tm); ctl.signal.removeEventListener('abort', onStop); }
       }
