@@ -2,6 +2,7 @@ import {readFile, writeFile, mkdir, readdir} from 'node:fs/promises';
 import {zipSync} from './lib/zip.mjs';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
+import {signBundle} from './sign-bundle.mjs';
 const out = path.resolve(process.argv[2] || 'build/pages');
 const live = path.resolve(process.argv[3] || 'build/live');
 const bundle = await readFile(path.join(live, 'gw-live.js'), 'utf8');
@@ -50,6 +51,9 @@ small{display:block;color:#626d7a;overflow-wrap:anywhere;margin-top:18px;font-si
 <li>GW 비서는 이 페이지(GitHub Pages)에 게시된 코드를 그룹웨어 화면 안에서 실행합니다. 저장소와 배포 권한을 가진 계정을 보호해야 합니다. 해시 검사는 전송 중 바뀐 파일을 걸러 낼 뿐, 배포 계정이 침해된 경우를 막지는 못합니다. 업무자료나 비밀번호를 이 페이지로 보내지 않습니다.</li></ul>
 <small>현재 코드 v${version} · SHA-256 ${hash}<br>인터넷 연결과 최신 Chrome 또는 Edge가 필요합니다. 브라우저·기관 네트워크 정책에 따라 제한될 수 있습니다.</small></section>
 </body></html>`;
+const privKey = (process.env.GW_SIGN_PRIVATE_KEY || '').trim();
+const sig = privKey ? signBundle(bundle, privKey) : '';
+const currentMeta = {sha256: hash, file: `gw-live-${hash}.js`, version, ...(sig ? {sig, sigAlg: 'ECDSA-P256-SHA256'} : {})};
 await mkdir(out,{recursive:true});
-await Promise.all([writeFile(path.join(out,'index.html'),html),writeFile(path.join(out,`gw-live-${hash}.js`),bundle),writeFile(path.join(out,'gw-bisu-extension.zip'),extZip),writeFile(path.join(out,'current.json'),JSON.stringify({sha256:hash,file:`gw-live-${hash}.js`,version}))]);
-console.log(JSON.stringify({page:path.join(out,'index.html'),hash,bookmarkBytes:bookmark.length}));
+await Promise.all([writeFile(path.join(out,'index.html'),html),writeFile(path.join(out,`gw-live-${hash}.js`),bundle),writeFile(path.join(out,'gw-bisu-extension.zip'),extZip),writeFile(path.join(out,'current.json'),JSON.stringify(currentMeta))]);
+console.log(JSON.stringify({page:path.join(out,'index.html'),hash,signed:!!sig,bookmarkBytes:bookmark.length}));
