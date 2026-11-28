@@ -53,7 +53,8 @@
         const r = await GW.todoList();
         if (owner !== currentKey || seq !== TD.seq) return;
         TD.list = r.todos.filter(x => Number(x.todoLevel) <= 1).map(todoNorm);
-        TD.at = r.at; TD.err = ''; TD.complete = r.complete !== false; TD.lastLoad = Date.now(); TD.cached = false; TD.notice = '';
+        const ck = typeof R.contractCheckOnDemand === 'function' ? R.contractCheckOnDemand('todoList', r) : {ok: true};
+        TD.at = r.at; TD.err = ''; TD.complete = r.complete !== false; TD.lastLoad = Date.now(); TD.cached = false; TD.notice = ck.ok ? '' : (typeof R.contractMessage === 'function' ? R.contractMessage(ck) : '');
         todoMirror(); todoCacheSave(); saveLocal();
         if (sweep && TD.complete) await todoRepeatSweep();
         todoAlertSweep();

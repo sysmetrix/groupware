@@ -180,6 +180,20 @@
     const top = below ? r.bottom - hr.top + 12 : Math.max(12, r.top - hr.top - 190);
     $('#overlay').innerHTML = `<div class="coach-hole" style="left:${r.left - hr.left - 6}px;top:${r.top - hr.top - 6}px;width:${r.width + 12}px;height:${r.height + 12}px"></div><div class="coach" role="dialog" aria-label="${esc(step.title)}" style="left:${left}px;top:${top}px"><div class="st">${S.coach.i + 1} / ${COACH.length}</div><b>${esc(step.title)}</b><div>${esc(step.text)}</div><div class="acts"><button class="btn primary" data-act="coachNext">${S.coach.i === COACH.length - 1 ? '시작하기' : '다음'}</button><button class="btn ghost" style="color:#fff" data-act="coachEnd">건너뛰기</button></div></div>`;
   }
+  function askConfirm(title, message, okLabel = '확인', danger = false) {
+    return new Promise(res => {
+      S.paletteOpen = true; S.menuOpen = ''; S.helpOpen = false;
+      const ov = $('#overlay');
+      ov.innerHTML = `<div class="modal" data-act="closeOverlay"><div class="dlg" data-stop="1" style="width:min(440px,92vw);padding:22px 24px" role="dialog" aria-label="${esc(title)}"><h2 style="margin:0 0 8px;font-size:17px">${esc(title)}</h2><p style="margin:0 0 16px;font-size:14px;line-height:1.6">${esc(message)}</p><div class="acts" style="justify-content:flex-end"><button class="btn" id="cfNo">취소</button><button class="btn ${danger ? 'danger' : 'primary'}" id="cfOk">${esc(okLabel)}</button></div></div></div>`;
+      let settled = false;
+      const obs = new MutationObserver(() => { if (!ov.querySelector('#cfOk') && !settled) { settled = true; obs.disconnect(); res(false); } });
+      const done = v => { if (settled) return; settled = true; obs.disconnect(); closeOverlay(); res(v); };
+      $('#cfNo')?.addEventListener('click', () => done(false));
+      $('#cfOk')?.addEventListener('click', () => done(true));
+      obs.observe(ov, {childList: true});
+      setTimeout(() => $('#cfNo')?.focus(), 20);
+    });
+  }
   function closeOverlay() {
     S.paletteOpen = false; S.helpOpen = false; S.menuOpen = ''; S.coach = null; $('#overlay').innerHTML = ''; $('#bell')?.setAttribute('aria-expanded', 'false');
     if (lastOverlayFocus && lastOverlayFocus.isConnected && typeof lastOverlayFocus.focus === 'function') { try { lastOverlayFocus.focus(); } catch {} }

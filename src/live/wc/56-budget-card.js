@@ -14,6 +14,8 @@
       const d = await GW.cardUsage({from: p.from, to: p.to, state: 'all'});
       if (seq !== CDU.seq) return;
       CDU.data = d;
+      const ck = typeof R.contractCheckOnDemand === 'function' ? R.contractCheckOnDemand('cardUsage', d) : {ok: true};
+      CDU.warn = ck.ok ? '' : (typeof R.contractMessage === 'function' ? R.contractMessage(ck) : '');
       if (CDU.card && !d.rows.some(r => r.card === CDU.card)) CDU.card = '';
     } catch (e) {
       if (seq !== CDU.seq) return;
@@ -51,7 +53,7 @@
     if (!d) return `${head}${tools}<p class="muted"><span class="spin"></span> 카드 사용내역을 읽는 중입니다…</p><div class="list">${'<div class="sk row"></div>'.repeat(4)}</div>`;
     const age = v.oldestOpen ? R.cduAgeDays(v.oldestOpen) : null;
     const sum = `<section class="bm-sum cu-sum" aria-label="결의 전 카드 사용"><div class="bm-big">결의 전 <b>${v.counts.open}건</b> · ${won(v.openAmount)}원</div><p>${v.counts.open ? `가장 오래된 건 ${esc(R.cduDayLabel(v.oldestOpen))}${age != null && age > 0 ? ` · ${age}일 지남` : ''}. 결의서에서 [카드승인내역]을 누르면 이 건들이 나옵니다.` : '이 기간의 카드 사용은 모두 결의에 반영되었습니다.'}${v.counts.other ? ` 지출결의·계산서로 따로 처리된 건 ${v.counts.other}건은 [전체]에서 봅니다.` : ''}</p></section>`;
-    return `${head}${tools}${sum}<div id="cduList">${cduListHtml(v)}</div>
+    return `${head}${tools}${CDU.warn ? `<div class="box warn" role="status">${esc(CDU.warn)}</div>` : ''}${sum}<div id="cduList">${cduListHtml(v)}</div>
 <p class="muted td-hint">그룹웨어 지출결의서 채주정보의 [카드승인내역]과 같은 조건(내가 쓸 수 있는 카드, 승인일 기준)으로 읽기만 합니다. 결의에 넣는 일은 그룹웨어 결의서에서 합니다. 카드번호는 읽지 않습니다.</p>`;
   }
   // 찾기: 표만 다시 그려 입력 칸의 글자와 커서를 지킨다
