@@ -8,7 +8,7 @@ import os from 'node:os';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {graphReport} from './graph.mjs';
-import {checkLiveSyntax, MAX_SHIPPED_BUNDLE_BYTES} from './live-build.mjs';
+import {checkLiveSyntax, MAX_SHIPPED_BUNDLE_BYTES, EXTRA_MODULES} from './live-build.mjs';
 import {testEnv, verdict} from './lib/test-results.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -30,7 +30,7 @@ async function stage(name, fn) {
 // Standalone files. The src/live/wc fragments are bodies of boot(), so checkLiveSyntax parses them in that shape
 // and also parses the assembled bundle.
 const liveFiles = async () => {
-  return [path.join(root, 'src', 'live', 'collector.browser.js'), path.join(root, 'src', 'live', 'workcenter.browser.js'), path.join(root, 'src', 'live', 'briefing.mjs'), path.join(root, 'src', 'live', 'home-model.mjs'), path.join(root, 'src', 'live', 'chat.mjs'), path.join(root, 'src', 'live', 'chat-understand.mjs'), path.join(root, 'src', 'live', 'gcal-sync.mjs'), path.join(root, 'src', 'live', 'settings-transfer.mjs'), path.join(root, 'src', 'live', 'doc-find.mjs'), path.join(root, 'src', 'live', 'usage.mjs'), path.join(root, 'src', 'live', 'contract.mjs'), path.join(root, 'src', 'live', 'todo-plan.mjs'), path.join(root, 'src', 'live', 'card-usage.mjs'), path.join(root, 'src', 'live', 'changelog.mjs'),
+  return [path.join(root, 'src', 'live', 'collector.browser.js'), path.join(root, 'src', 'live', 'workcenter.browser.js'), path.join(root, 'src', 'live', 'briefing.mjs'), ...EXTRA_MODULES.map(f => path.join(root, 'src', 'live', f)),
     path.join(root, 'scripts', 'live-build.mjs'), path.join(root, 'scripts', 'harness.mjs'), path.join(root, 'scripts', 'graph.mjs'),
     path.join(root, 'scripts', 'check.mjs'), path.join(root, 'scripts', 'lib', 'test-results.mjs')];
 };
@@ -174,7 +174,7 @@ await stage('안전 규칙', async () => {
   const rec = await read('src/live/wc/20-recorder.js');
   const rd = (rec.match(/const REC_DANGER = .*/) || [''])[0];
   for (const w of ['상신', '결재', '삭제', '발송']) if (!rd.includes(w)) fails.push(`기록기 위험 버튼 목록에 '${w}' 없음`);
-  if (!/recorderPlayConfirm/.test(await read('src/live/briefing.mjs'))) fails.push('기록기 재생 확인 정책 누락');
+  if (!/recorderPlayConfirm/.test(await read('src/live/briefing.mjs') + await read('src/live/governance-model.mjs'))) fails.push('기록기 재생 확인 정책 누락');
   // 라이브 코드의 모든 외부 호스트: 허용 목록만
   const hosts = new Set();
   for (const f of ['src/live/collector.browser.js', 'src/live/workcenter.browser.js', ...(await fs.readdir(path.join(root, 'src/live/wc'))).map(n => 'src/live/wc/' + n)]) {

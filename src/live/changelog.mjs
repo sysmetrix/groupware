@@ -3,6 +3,7 @@
 // 업데이트 내역: 새 버전을 낼 때 맨 위에 한 줄을 추가한다(하네스가 현재 버전과 맞는지 검사).
 // 4.2~4.6 사이 세부 항목은 릴리스 제목만 근거로 적어 간단하다.
 export const CHANGELOG = [
+  {v: "1.37.0", date: "2026-11-29", old: "", title: "순수 도메인 모듈 분리 및 코드 구조 정리", items: ["briefing.mjs의 거버넌스(감사로그·정책)와 자원 예약·타임라인 로직을 governance-model.mjs·resource-model.mjs로 분리했습니다.", "51-todo.js의 링크 핸들러를 55-todo-views.js로 정리해 모듈 크기 경고를 해소했습니다."]},
   {v: "1.36.0", date: "2026-11-29", old: "", title: "API 키·AI 호출 서비스 워커 격리", items: ["크롬 확장 환경에서 Gemini API 키를 그룹웨어 MAIN world(localStorage)에서 제거하고 확장 서비스 워커 저장소(chrome.storage)로 자동 이관·격리했습니다.", "모든 Gemini API 호출과 SSE 스트리밍을 서비스 워커 프록시(ai-proxy)가 대리 수행하며 허용된 경로만 통과시킵니다."]},
   {v: "1.35.0", date: "2026-11-29", old: "", title: "자동 업데이트 ECDSA P-256 디지털 서명 검증 도입", items: ["번들 서명·검증 유틸리티(scripts/sign-bundle.mjs)를 추가하고 GitHub Pages 배포 시 GW_SIGN_PRIVATE_KEY로 current.json에 ECDSA P-256 서명을 포함할 수 있게 했습니다.", "확장 프로그램 MOUNT_JS와 21-governance.js에 WebCrypto ECDSA P-256 서명 검증을 연동해 policy.js에 updatePublicKey가 설정된 경우 서명이 없거나 위조된 업데이트 실행을 차단합니다."]},
   {v: "1.34.0", date: "2026-11-29", old: "", title: "확장 storage 권한 연결, 온디맨드 계약 경고 표시 및 커스텀 확인 모달 도입", items: ["확장 프로그램 manifest.json에 storage 권한을 추가해 chrome.storage.session 고아 탭 추적·정리가 실제 브라우저에서 동작하도록 연결하고, 비차량 예약 안내의 날짜 프리필 딥링크를 연결했습니다.", "온디맨드 계약 검증(contractCheckOnDemand)을 카드 사용내역·세금계산서·개인 ToDo 화면에 실제 연결해 API 모양 변경 시 경고를 표시합니다.", "공용 커스텀 확인 모달(askConfirm)을 도입해 AI 키 삭제·자동화 삭제·예전 할 일 삭제에서 브라우저 기본 confirm 대신 포커스 트랩이 적용된 모달을 사용합니다."]},

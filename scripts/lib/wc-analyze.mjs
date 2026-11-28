@@ -2,6 +2,7 @@
 // 파서 없이 동작하도록 문자열/주석을 지운 뒤 식별자를 읽는 가벼운 방식이다(정밀 파서가 아니므로 결과는 "의심 목록"이다).
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import {EXTRA_MODULES} from '../live-build.mjs';
 
 const KEYWORDS = new Set('if for while switch catch function return typeof new await async yield delete void in of instanceof super import export class else do try finally throw case default with'.split(' '));
 const BROWSER = new Set(('window document location history navigator localStorage sessionStorage console fetch setTimeout clearTimeout setInterval clearInterval requestAnimationFrame cancelAnimationFrame alert confirm prompt open close Blob URL File FileReader FormData Headers Request Response AbortController AbortSignal Event CustomEvent MouseEvent KeyboardEvent InputEvent MutationObserver ResizeObserver IntersectionObserver DOMParser XMLSerializer CSS getComputedStyle matchMedia atob btoa encodeURIComponent decodeURIComponent encodeURI decodeURI escape unescape structuredClone queueMicrotask Notification Intl TextEncoder TextDecoder crypto performance Image Option HTMLElement Element Node NodeList Range Selection DataTransfer ClipboardItem BroadcastChannel Worker WebSocket XMLHttpRequest Promise Symbol Proxy Reflect JSON Math Date Object Array String Number Boolean RegExp Error TypeError RangeError SyntaxError Map Set WeakMap WeakSet WeakRef BigInt parseInt parseFloat isNaN isFinite NaN Infinity undefined null eval globalThis Uint8Array Uint16Array Uint32Array Int8Array Int16Array Int32Array Float32Array Float64Array ArrayBuffer DataView require module exports process Buffer').split(' '));
@@ -73,7 +74,7 @@ export async function loadWc(root) {
   const parts = [];
   for (const f of files) { const raw = await fs.readFile(path.join(dir, f), 'utf8'); parts.push({file: f, raw, code: stripNonCode(raw)}); }
   const read = async p => fs.readFile(path.join(root, 'src', 'live', p), 'utf8');
-  return {parts, workcenter: await read('workcenter.browser.js'), collector: await read('collector.browser.js'), briefing: [await read('briefing.mjs'), ...(await Promise.all(['home-model.mjs', 'chat.mjs', 'chat-understand.mjs', 'gcal-sync.mjs', 'settings-transfer.mjs', 'doc-find.mjs', 'usage.mjs', 'contract.mjs', 'todo-plan.mjs', 'card-usage.mjs', 'changelog.mjs'].map(f => read(f).catch(() => ''))))].join('\n')};
+  return {parts, workcenter: await read('workcenter.browser.js'), collector: await read('collector.browser.js'), briefing: [await read('briefing.mjs'), ...(await Promise.all(EXTRA_MODULES.map(f => read(f).catch(() => ''))))].join('\n')};
 }
 
 // 선언된 이름 모으기 (함수, 변수, 매개변수, 구조분해)

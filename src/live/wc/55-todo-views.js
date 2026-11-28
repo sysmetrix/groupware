@@ -231,4 +231,27 @@ ${list.length ? `<p class="muted">${personalTodoIncomplete() ? '확인된 ' : ''
     renderMain();
   };
   HOME_ACTS.tdMigrateSkip = async () => { const msg = '이 PC에만 있던 예전 할 일을 옮기지 않고 지울까요?'; const ok = typeof askConfirm === 'function' ? await askConfirm('예전 할 일 지우기', msg, '지우기', true) : confirm(msg); if (!ok) return; store.set('todosLegacy', []); renderMain(); };
+  HOME_ACTS.tdLinkFind = () => { TD.linkQ = ($('#tdeLinkQ') || {}).value || ''; TD.linkOpen = true; todoRefreshSections(); const q = $('#tdeLinkQ'); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } };
+  HOME_ACTS.tdLinkAdd = el => {
+    const c = todoLinkCandidates(TD.linkQ)[Number(el.dataset.i)]; if (!c) return;
+    const link = {t: c.t === 'mail' ? 'mail' : 'doc', k: c.k, ti: c.ti, u: c.u || undefined, no: c.no || undefined, mb: c.mb || undefined, uid: c.uid || undefined};
+    if (TD.sel === 'new') { const d = {...(TD.draft || {meta: {}}), ...todoDraftFromEditor()}; d.meta = {...(d.meta || {}), ln: [...((d.meta && d.meta.ln) || []), link].slice(0, 5)}; TD.draft = d; }
+    else { const t = todoFind(TD.sel); if (!t) return; const m = TD.edMeta || t.meta || {}; TD.edMeta = {...m, ln: [...(m.ln || []).filter(x => x.k !== link.k), link].slice(0, 5)}; }
+    TD.linkOpen = false; TD.dirty = true; todoRefreshSections(); toast('연결했습니다. [저장]을 누르면 그룹웨어에 남습니다.');
+  };
+  HOME_ACTS.tdLinkDel = el => {
+    const i = Number(el.dataset.i);
+    if (TD.sel === 'new') { const d = {...(TD.draft || {meta: {}}), ...todoDraftFromEditor()}; d.meta = {...(d.meta || {}), ln: ((d.meta && d.meta.ln) || []).filter((_, k) => k !== i)}; TD.draft = d; }
+    else { const t = todoFind(TD.sel); if (!t) return; const m = TD.edMeta || t.meta || {}; TD.edMeta = {...m, ln: (m.ln || []).filter((_, k) => k !== i)}; }
+    TD.dirty = true; todoRefreshSections();
+  };
+  HOME_ACTS.tdLinkOpen = el => {
+    const t = TD.sel === 'new' ? TD.draft : todoFind(TD.sel);
+    const lm = (TD.sel !== 'new' && TD.edMeta) || (t && t.meta) || {}; const l = (lm.ln || [])[Number(el.dataset.i)]; if (!l) return;
+    const act = S.a && S.a.actions.find(x => x.key === l.k);
+    if (act) { if (TD.dirty && !confirm('고치던 내용이 저장되지 않았습니다. 문서를 열면 이 화면을 떠납니다. 계속할까요?')) return; TD.dirty = false; if (go('today')) selectAction(act.key); return; }
+    if (l.t === 'mail' && l.uid && typeof openItem === 'function') { openItem({type: 'mail', ref: {box: l.mb || 'INBOX', uid: l.uid}, title: l.ti, url: S.a && S.a.mail && S.a.mail.url}); return; }
+    if (l.u) openUrl(l.u, {title: l.ti || '연결 문서'});
+    else toast('이 항목은 지금 목록에 없어 열 수 없습니다. 그룹웨어에서 찾아 주세요.');
+  };
 
