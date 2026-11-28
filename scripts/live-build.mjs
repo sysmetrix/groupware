@@ -104,14 +104,30 @@ export const MOUNT_JS = `// GW 비서 확장 프로그램의 시작 스크립트
     } catch (e) { return null; }
   }
   function forget() { try { localStorage.removeItem('bwyfgw:wc:auto'); } catch (e) {} }
+  function verifySig(s, sig) {
+    var pk = window.BWYFGW_POLICY && window.BWYFGW_POLICY.updatePublicKey;
+    if (!pk || typeof pk !== 'object' || !pk.x || !pk.y) return Promise.resolve(true);
+    if (typeof sig !== 'string' || !/^[A-Za-z0-9+/=]{80,120}$/.test(sig)) return Promise.resolve(false);
+    try {
+      var bin = atob(sig), bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      if (bytes.length !== 64) return Promise.resolve(false);
+      return crypto.subtle.importKey('jwk', {kty: 'EC', crv: 'P-256', x: pk.x, y: pk.y}, {name: 'ECDSA', namedCurve: 'P-256'}, false, ['verify'])
+        .then(function (k) { return crypto.subtle.verify({name: 'ECDSA', hash: 'SHA-256'}, k, bytes, new TextEncoder().encode(s)); })
+        .catch(function () { return false; });
+    } catch (e) { return Promise.resolve(false); }
+  }
   function useStored(m) {
     return caches.open('bwyfgw-wc').then(function (c) { return c.match('/bwyfgw-wc/' + m.sha256); }).then(function (r) { return r ? r.text() : ''; }).then(function (s) {
       if (!s) { forget(); return; }
       return crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)).then(function (d) {
         var h = Array.from(new Uint8Array(d), function (x) { return x.toString(16).padStart(2, '0'); }).join('');
         if (h !== m.sha256) { forget(); return; }
-        var old = window.BWYFGW_WC;
-        try { (0, eval)(s); usedStored = true; } catch (e) { forget(); if (!window.BWYFGW_WC) window.BWYFGW_WC = old; }
+        return verifySig(s, m.sig).then(function (ok) {
+          if (!ok) { forget(); return; }
+          var old = window.BWYFGW_WC;
+          try { (0, eval)(s); usedStored = true; } catch (e) { forget(); if (!window.BWYFGW_WC) window.BWYFGW_WC = old; }
+        });
       });
     });
   }

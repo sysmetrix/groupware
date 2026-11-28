@@ -32,7 +32,7 @@
   // ---------- 업데이트 확인 ----------
   const UPDATE_BASE = 'https://sysmetrix.github.io/groupware/';
   const UPDATE_CACHE = 'bwyfgw-wc', UPDATE_META = 'bwyfgw:wc:auto';
-  /** 배포 사이트에서 최신 묶음을 받아 SHA-256이 맞을 때만 돌려준다: {src, sha256, version}. 북마크 "GW 비서 열기"와 같은 절차다. */
+  /** 배포 사이트에서 최신 묶음을 받아 SHA-256(및 공개키 설정 시 ECDSA P-256 서명)이 맞을 때만 돌려준다: {src, sha256, version, sig}. */
   async function updateFetch() {
     const opt = {cache: 'no-store', credentials: 'omit', redirect: 'error'};
     const r = await fetch(UPDATE_BASE + 'current.json', opt);
@@ -44,9 +44,25 @@
     const src = await b.text();
     const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(src));
     if (Array.from(new Uint8Array(d), x => x.toString(16).padStart(2, '0')).join('') !== m.sha256) throw new Error('실행 파일 무결성 확인 실패');
+    const sig = typeof m.sig === 'string' ? m.sig : '';
+    const pk = typeof POLICY !== 'undefined' && POLICY && POLICY.updatePublicKey;
+    if (pk && typeof pk === 'object' && pk.x && pk.y) {
+      let ok = false;
+      if (/^[A-Za-z0-9+/=]{80,120}$/.test(sig)) {
+        try {
+          const bin = atob(sig), bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          if (bytes.length === 64) {
+            const key = await crypto.subtle.importKey('jwk', {kty: 'EC', crv: 'P-256', x: pk.x, y: pk.y}, {name: 'ECDSA', namedCurve: 'P-256'}, false, ['verify']);
+            ok = await crypto.subtle.verify({name: 'ECDSA', hash: 'SHA-256'}, key, bytes, new TextEncoder().encode(src));
+          }
+        } catch { ok = false; }
+      }
+      if (!ok) throw new Error('실행 파일 디지털 서명 검증 실패');
+    }
     const version = (src.slice(0, 200).match(/live bundle v(\d+\.\d+\.\d+)/) || [])[1] || '';
     if (!version) throw new Error('실행 파일의 버전을 알 수 없습니다');
-    return {src, sha256: m.sha256, version};
+    return {src, sha256: m.sha256, version, sig};
   }
   /** 확장 프로그램용 보관: 받아 둔 묶음을 이 브라우저에 두어, 다음에 그룹웨어를 열 때 내려받지 않고 바로 새 버전으로 시작한다(확장의 mount.js가 읽는다). */
   async function updateStore(u) {
@@ -55,7 +71,7 @@
       const c = await window.caches.open(UPDATE_CACHE);
       for (const k of await c.keys()) await c.delete(k);
       await c.put('/bwyfgw-wc/' + u.sha256, new Response(u.src, {headers: {'content-type': 'text/javascript; charset=utf-8'}}));
-      localStorage.setItem(UPDATE_META, JSON.stringify({sha256: u.sha256, version: u.version, at: Date.now()}));
+      localStorage.setItem(UPDATE_META, JSON.stringify({sha256: u.sha256, version: u.version, ...(u.sig ? {sig: u.sig} : {}), at: Date.now()}));
       return true;
     } catch (e) { logError('updateStore', String((e && e.message) || e)); return false; }
   }

@@ -1189,6 +1189,7 @@ export function normalizePolicy(p) {
   if (p.recorderPlayConfirm === false) o.recorderPlayConfirm = true; // 재생 확인은 끌 수 없음
   if (typeof p.license === 'string') o.license = p.license.slice(0, 120);
   if (typeof p.aiEndpoint === 'string' && /^(?:https:\/\/[^\s]+|http:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?(?:\/[^\s]*)?)$/i.test(p.aiEndpoint.trim())) o.aiEndpoint = p.aiEndpoint.trim().replace(/\/+$/, '').slice(0, 200);
+  if (p.updatePublicKey && typeof p.updatePublicKey === 'object' && typeof p.updatePublicKey.x === 'string' && typeof p.updatePublicKey.y === 'string' && /^[A-Za-z0-9_-]{40,50}$/.test(p.updatePublicKey.x) && /^[A-Za-z0-9_-]{40,50}$/.test(p.updatePublicKey.y)) o.updatePublicKey = {kty: 'EC', crv: 'P-256', x: p.updatePublicKey.x, y: p.updatePublicKey.y};
   return o;
 }
 export function featureAllowed(policy, f) { const p = normalizePolicy(policy); return p.enabled && p.features[f] !== false; }

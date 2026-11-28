@@ -20,7 +20,9 @@ jobs:
           node-version: '24'
       - run: npm ci
       - run: npm run live:build
-      - run: node scripts/quick-install-page.mjs
+      - env:
+          GW_SIGN_PRIVATE_KEY: ${{ secrets.GW_SIGN_PRIVATE_KEY }}
+        run: node scripts/quick-install-page.mjs
       - uses: actions/upload-pages-artifact@v3
         with:
           path: build/pages
