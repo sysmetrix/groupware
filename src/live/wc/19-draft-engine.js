@@ -5,7 +5,14 @@
   // ---------- 학습 데이터 저장소 ----------
   const PAT_KEY = 'patterns';
   const wait = ms => new Promise(r => setTimeout(r, ms));
-  const patLoad = () => { const p = store.get(PAT_KEY, null); return p && p.docs ? p : {v: 1, docs: {}}; };
+  const patTtlMs = () => ((typeof POLICY !== 'undefined' && POLICY && Number(POLICY.retentionDays)) || 90) * 86400000;
+  const patLoad = () => {
+    const p = store.get(PAT_KEY, null);
+    if (!p || !p.docs) return {v: 1, docs: {}};
+    const cut = Date.now() - patTtlMs(), docs = {};
+    for (const [k, d] of Object.entries(p.docs)) if (d && (!d.learnedAt || d.learnedAt >= cut)) docs[k] = d;
+    return {...p, docs};
+  };
   const patSaveDoc = doc => { try { const p = patLoad(); const d = {...doc, body: doc.body ? String(doc.body).slice(0, 4000) : '', learnedAt: Date.now()}; p.docs[d.id] = d; p.at = Date.now(); if (!store.set(PAT_KEY, p)) S.storageError = true; } catch (e) { logError('patSaveDoc', e.message); } };
   const patModel = () => R.buildPatternModel(Object.values(patLoad().docs));
   const HR_FORMS = /^(36|40|43|1012|1021)$/;

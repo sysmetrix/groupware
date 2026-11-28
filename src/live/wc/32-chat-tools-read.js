@@ -302,13 +302,13 @@
         const top = hit.rows[0], nm = (S.settings.budget.find(b => b.project === hit.project) || {}).label || hit.label || hit.project;
         const subs = hit.rows.filter(r => r.level === '세').slice(0, 5);
         const subTxt = subs.length ? '\n' + subs.map(r => `• ${r.name}: 집행 ${won(r.executed)}원 (${pct(r.rate)}) / 잔액 ${won(r.balance)}원`).join('\n') : '';
-        return {ok: true, text: `${nm}(${hit.project}) 예산 ${won(top.budget)}원 · 집행 ${won(top.executed)}원(${pct(top.rate)}) · 잔액 ${won(top.balance)}원입니다.${el !== undefined && el !== null ? ` (올해 경과율 ${el}%)` : ''}${subTxt}`, data: {project: hit.project, name: nm, budget: top.budget, executed: top.executed, balance: top.balance, rate: top.rate, elapsed_pct: el, details: subs.map(r => ({code: r.code, name: r.name, executed: r.executed, balance: r.balance, rate: r.rate}))}, cards: [{type: 'nav', label: '예산 집행 화면 열기', view: 'budget'}]};
+        return {ok: true, text: `${nm}(${hit.project}) 예산 ${won(top.budget)}원 · 집행 ${won(top.executed)}원(${pct(top.rate)}) · 잔액 ${won(top.balance)}원입니다.${el !== undefined && el !== null ? ` (올해 경과율 ${el}%)` : ''}${subTxt}`, llm: `예산 ${won(top.budget)}원 · 집행 ${won(top.executed)}원(${pct(top.rate)}) · 잔액 ${won(top.balance)}원${el !== undefined && el !== null ? ` (경과율 ${el}%)` : ''}.`, data: {project: hit.project, name: nm, budget: top.budget, executed: top.executed, balance: top.balance, rate: top.rate, elapsed_pct: el, details: subs.map(r => ({code: r.code, name: r.name, executed: r.executed, balance: r.balance, rate: r.rate}))}, cards: [{type: 'nav', label: '예산 집행 화면 열기', view: 'budget'}]};
       }
       // 관심 사업에서 못 찾은 이름은 재단 전체 사업의 예산 과목에서 찾는다.
       const qq = String(a.project || '').replace(/(예산|집행률?|잔액|현황|얼마나?|남았어?|남은|어때|알려\s*줘|보여\s*줘|확인|해\s*줘|좀|[?？])/g, ' ').replace(/\s+/g, ' ').trim();
       if (qq.length >= 2 && CHAT_TOOLS.has('search_budget')) return CHAT_TOOLS.get('search_budget').run({query: qq});
       const pinned = (S.settings.budget || []).map(b => b.label || b.project).filter(Boolean);
-      return {ok: true, text: `${el !== undefined && el !== null ? `올해 경과율은 ${el}%입니다. ` : ''}${pinned.length ? `관심 사업: ${pinned.slice(0, 5).join(', ')}. ` : ''}사업별 집행액은 예산 집행 화면에서 확인하세요.`, data: {elapsed_pct: el, pinned}, cards: [{type: 'nav', label: '예산 집행 화면 열기', view: 'budget'}]};
+      return {ok: true, text: `${el !== undefined && el !== null ? `올해 경과율은 ${el}%입니다. ` : ''}${pinned.length ? `관심 사업: ${pinned.slice(0, 5).join(', ')}. ` : ''}사업별 집행액은 예산 집행 화면에서 확인하세요.`, llm: `올해 경과율 ${el !== undefined && el !== null ? `${el}%` : '확인 불가'}, 관심 사업 ${pinned.length}개.`, data: {elapsed_pct: el, pinned}, cards: [{type: 'nav', label: '예산 집행 화면 열기', view: 'budget'}]};
     },
   });
 
@@ -348,7 +348,8 @@
         const day = ofRes(car), free = R.freeSlots(day, d8), nm = car.name, rest = !one ? pk0.of.length - shown.length : 0;
         const tail = noSeq ? [`나머지 ${rest}개 ${pk0.label}(${pk0.of.slice(1, 6).map(r => r.name).join(', ')})은 예약 구분 정보가 없어 자원 예약 화면에서 확인해 주세요.`] : rest > 0 ? [`외 ${rest}개 ${pk0.label}은 자원 예약 화면에서 확인해 주세요.`] : [];
         const text = [fmt(car, day, true), ...shown.slice(1).map(r => fmt(r, ofRes(r), false)), ...tail].join('\n');
-        return {ok: true, text, data: {resource: nm, date: iso, bookings: day.length, free: free.map(f => `${f.start}~${f.end}`)}, cards: [{type: 'timeline', title: `${nm} ${chatMd(iso)} 예약`, items: day.map(b => ({from: b.start.slice(8, 10) + ':' + b.start.slice(10), to: b.end.slice(8, 10) + ':' + b.end.slice(10), label: (b.title || '예약') + (b.who ? ' · ' + b.who : '')}))}, {type: 'nav', label: '자원 예약 화면 열기', view: 'resource', v: `${car.resSeq},${d8}`}]};
+        const llm = `${pk0.label} ${shown.length}곳(${iso}): 첫 자원 예약 ${day.length}건, 빈 시간 ${free.length ? free.map(f => `${f.start}~${f.end}`).join(', ') : '없음'}.`;
+        return {ok: true, text, llm, data: {resource: nm, date: iso, bookings: day.length, free: free.map(f => `${f.start}~${f.end}`)}, cards: [{type: 'timeline', title: `${nm} ${chatMd(iso)} 예약`, items: day.map(b => ({from: b.start.slice(8, 10) + ':' + b.start.slice(10), to: b.end.slice(8, 10) + ':' + b.end.slice(10), label: (b.title || '예약') + (b.who ? ' · ' + b.who : '')}))}, {type: 'nav', label: '자원 예약 화면 열기', view: 'resource', v: `${car.resSeq},${d8}`}]};
       } catch (e) { return {ok: false, text: '자원 현황을 읽지 못했습니다: ' + String(e.message || e).slice(0, 80)}; }
   }
 
