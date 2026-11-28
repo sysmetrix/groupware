@@ -115,8 +115,8 @@
     lastOverlayFocus = anchor || root.activeElement;
     S.menuOpen = which; S.paletteOpen = false; S.helpOpen = false; S.coach = null;
     if (which === 'new') {
-      const action = (type, label, desc, icon, extra = '') => `<button type="button" class="new-action" data-act="${type}" ${extra}><span class="new-icon">${ic(icon)}</span><span class="new-copy"><b>${label}</b><small>${desc}</small></span></button>`;
-      $('#overlay').innerHTML = `<div class="menu new-menu" data-stop="1" aria-label="새로 만들기"><div class="new-heading"><strong>새로 만들기</strong><span>업무에 필요한 작업을 선택하세요</span></div><div class="new-section">전자결재</div>
+      const action = (type, label, desc, icon, extra = '') => `<button type="button" class="new-action" role="menuitem" data-act="${type}" ${extra}><span class="new-icon">${ic(icon)}</span><span class="new-copy"><b>${label}</b><small>${desc}</small></span></button>`;
+      $('#overlay').innerHTML = `<div class="menu new-menu" role="menu" data-stop="1" aria-label="새로 만들기"><div class="new-heading"><strong>새로 만들기</strong><span>업무에 필요한 작업을 선택하세요</span></div><div class="new-section">전자결재</div>
         ${action('quickDraft','결과보고','계획서를 바탕으로 작성','doc','data-t="result"')}
         ${action('quickDraft','운영·참가계획','이전 계획서 서식으로 작성','doc','data-t="plan"')}
         ${action('quickDraft','물품매입품의','운영물품 구입 품의','doc','data-t="goods"')}
@@ -149,7 +149,7 @@
       $('#overlay').innerHTML = `<div class="menu" data-stop="1" style="right:auto;left:50%;top:30%;transform:translateX(-50%);min-width:360px"><div class="mh">${head}</div><div class="mi" data-act="relAdd" data-l="${list}" data-t="key" data-v="${esc(key)}" data-label="${esc(x.title.slice(0, 40))}">이 항목만 <span class="muted">${esc(x.title.slice(0, 28))}</span></div>${who ? `<div class="mi" data-act="relAdd" data-l="${list}" data-t="sender" data-v="${esc(who)}" data-label="보낸 곳: ${esc(who)}">보낸 곳이 ‘${esc(who)}’인 항목 모두</div>` : ''}${RULE_KIND[x.base] ? `<div class="mi" data-act="relAdd" data-l="${list}" data-t="kind" data-v="${esc(x.base)}" data-label="종류: ${esc(kindName)}">‘${esc(kindName)}’ 종류 모두</div>` : ''}<div class="mi muted" data-act="closeOverlay">취소</div></div>`;
     } else if (which === 'view') {
       const fsName = {s: '작게', m: '보통', l: '크게', xl: '아주 크게'};
-      $('#overlay').innerHTML = `<div class="menu" data-stop="1"><div class="mh">글자 크기: ${fsName[S.settings.fontSize] || '보통'}</div><div class="mi" data-act="fsUp">가+ 글자 크게</div><div class="mi" data-act="fsDown">가− 글자 작게</div><div class="mi" data-act="theme">${ic(S.settings.theme === 'dark' ? 'sun' : 'moon')}${S.settings.theme === 'dark' ? '밝은 화면으로' : '어두운 화면으로'}</div><div class="mi" data-act="help">${ic('help')}사용법·용어·단축키</div><div class="mi" data-act="coach">${ic('play')}처음 안내 다시 보기</div><div class="mi" data-act="openHistory">${ic('clock')}자동화 작업 내역</div><div class="mi" data-act="openChangelog">${ic('doc')}업데이트 내역 <span class="muted">v${esc(VERSION)}</span></div><div class="mi" data-act="openPalette">${ic('search')}명령 찾기 <span class="muted">Ctrl+K</span></div><div class="mi" data-act="view" data-v="settings">${ic('gear')}설정</div></div>`;
+      $('#overlay').innerHTML = `<div class="menu" role="menu" aria-label="보기 및 도구" data-stop="1"><div class="mh">글자 크기: ${fsName[S.settings.fontSize] || '보통'}</div><div class="mi" role="menuitem" data-act="fsUp">가+ 글자 크게</div><div class="mi" role="menuitem" data-act="fsDown">가− 글자 작게</div><div class="mi" role="menuitem" data-act="theme">${ic(S.settings.theme === 'dark' ? 'sun' : 'moon')}${S.settings.theme === 'dark' ? '밝은 화면으로' : '어두운 화면으로'}</div><div class="mi" role="menuitem" data-act="help">${ic('help')}사용법·용어·단축키</div><div class="mi" role="menuitem" data-act="coach">${ic('play')}처음 안내 다시 보기</div><div class="mi" role="menuitem" data-act="openHistory">${ic('clock')}자동화 작업 내역</div><div class="mi" role="menuitem" data-act="openChangelog">${ic('doc')}업데이트 내역 <span class="muted">v${esc(VERSION)}</span></div><div class="mi" role="menuitem" data-act="openPalette">${ic('search')}명령 찾기 <span class="muted">Ctrl+K</span></div><div class="mi" role="menuitem" data-act="view" data-v="settings">${ic('gear')}설정</div></div>`;
     } else if (which === 'bell') {
       // v1.19.0: 종을 누르면 통합알림 미리보기 팝업. 안 읽은 알림을 먼저 보여 주고, 전체는 '통합알림 전체 보기'로 간다.
       const r = anchor ? anchor.getBoundingClientRect() : null, hr = wcEl.getBoundingClientRect();
@@ -298,6 +298,31 @@
 
 
   // v1.13.0: 덮개 창(근태 준비·결과보고·확인 창 등)이 닫혀 포커스가 갈 곳을 잃으면, 창을 열기 직전에 있던 자리로 돌려놓는다.
-  if (typeof $ === 'function' && typeof root === 'object' && root && root.addEventListener) { let lastOutside = null; const ovEl = $('#overlay');
+  // v1.33.0: 모달(.dlg) Tab 포커스 트랩 및 드롭다운 메뉴([role="menu"]) 화살표 키 탐색을 지원한다.
+  if (typeof $ === 'function' && typeof root === 'object' && root && root.addEventListener) {
+    let lastOutside = null; const ovEl = $('#overlay');
     root.addEventListener('focusin', e => { const t = e.target; if (t && t.closest && !t.closest('#overlay')) lastOutside = t; }, true);
-    if (ovEl && typeof MutationObserver === 'function') new MutationObserver(() => { if (ovEl.childElementCount) return; const a = root.activeElement; if ((!a || a === document.body || !a.isConnected) && lastOutside && lastOutside.isConnected) { try { lastOutside.focus({preventScroll: true}); } catch {} } }).observe(ovEl, {childList: true}); }
+    if (ovEl) {
+      ovEl.addEventListener('keydown', e => {
+        if (e.key === 'Tab') {
+          const dlg = ovEl.querySelector('.dlg');
+          if (!dlg) return;
+          const items = [...dlg.querySelectorAll('button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')].filter(el => el.offsetParent !== null);
+          if (items.length < 2) return;
+          const first = items[0], last = items[items.length - 1], cur = root.activeElement;
+          if (e.shiftKey && (cur === first || !dlg.contains(cur))) { e.preventDefault(); last.focus(); }
+          else if (!e.shiftKey && cur === last) { e.preventDefault(); first.focus(); }
+        } else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) {
+          const menu = ovEl.querySelector('.menu[role="menu"]');
+          if (!menu) return;
+          const items = [...menu.querySelectorAll('[role="menuitem"]')];
+          if (!items.length) return;
+          e.preventDefault();
+          const idx = items.indexOf(root.activeElement);
+          const next = e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1 : e.key === 'ArrowDown' ? (idx + 1 + items.length) % items.length : (idx - 1 + items.length) % items.length;
+          items[next].focus();
+        }
+      });
+      if (typeof MutationObserver === 'function') new MutationObserver(() => { if (ovEl.childElementCount) return; const a = root.activeElement; if ((!a || a === document.body || !a.isConnected) && lastOutside && lastOutside.isConnected) { try { lastOutside.focus({preventScroll: true}); } catch {} } }).observe(ovEl, {childList: true});
+    }
+  }

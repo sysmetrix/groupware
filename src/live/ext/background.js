@@ -8,9 +8,40 @@ const GW_ORIGIN = 'https://gw.bwyf.or.kr';
 const CAL_HOST = 'calendar.google.com';
 const MAX_DATES = 60;
 const WORKERS = 4;
+const SESSION_TABS_KEY = 'gcalWorkerTabs';
 
 let busy = false;
+let tabTrackQ = Promise.resolve();
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+const sessStore = () => (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.session) || null;
+function trackTab(id, add) {
+  const st = sessStore();
+  if (!st || typeof id !== 'number') return Promise.resolve();
+  tabTrackQ = tabTrackQ.then(async () => {
+    try {
+      const cur = (await st.get(SESSION_TABS_KEY))[SESSION_TABS_KEY];
+      const set = new Set(Array.isArray(cur) ? cur : []);
+      if (add) set.add(id); else set.delete(id);
+      await st.set({[SESSION_TABS_KEY]: [...set]});
+    } catch (e) { /* ignore */ }
+  });
+  return tabTrackQ;
+}
+async function cleanupOrphanTabs(force = false) {
+  const st = sessStore();
+  if (!st || (!force && busy)) return;
+  await tabTrackQ;
+  try {
+    const cur = (await st.get(SESSION_TABS_KEY))[SESSION_TABS_KEY];
+    if (!Array.isArray(cur) || !cur.length) return;
+    await st.set({[SESSION_TABS_KEY]: []});
+    for (const id of cur) { try { await chrome.tabs.remove(id); } catch (e) { /* 이미 닫힘 */ } }
+  } catch (e) { /* ignore */ }
+}
+if (typeof chrome !== 'undefined' && chrome.runtime) {
+  if (chrome.runtime.onStartup) chrome.runtime.onStartup.addListener(() => { cleanupOrphanTabs(); });
+  if (chrome.runtime.onInstalled) chrome.runtime.onInstalled.addListener(() => { cleanupOrphanTabs(); });
+}
 
 function validDate(s) {
   if (typeof s !== 'string' || !/^\d{8}$/.test(s)) return false;
@@ -60,7 +91,7 @@ async function readDays(dates, careful, onProgress, aborted) {
   const tabs = [];
   const worker = async () => {
     let tab;
-    try { tab = await chrome.tabs.create({url: 'about:blank', active: false}); tabs.push(tab.id); } catch (e) { return; }
+    try { tab = await chrome.tabs.create({url: 'about:blank', active: false}); tabs.push(tab.id); await trackTab(tab.id, true); } catch (e) { return; }
     while (queue.length && !aborted() && !loginError) {
       const ymd = queue.shift();
       const r = await readOne(tab.id, ymd, careful);
@@ -72,7 +103,7 @@ async function readDays(dates, careful, onProgress, aborted) {
     }
   };
   try { await Promise.all(Array.from({length: Math.min(careful ? 2 : WORKERS, dates.length)}, worker)); }
-  finally { for (const id of tabs) { try { await chrome.tabs.remove(id); } catch (e) { /* 이미 닫힘 */ } } }
+  finally { for (const id of tabs) { try { await chrome.tabs.remove(id); } catch (e) { /* 이미 닫힘 */ } await trackTab(id, false); } }
   return {days, why, loginError};
 }
 
@@ -87,6 +118,7 @@ chrome.runtime.onConnect.addListener(port => {
     if (busy) { send({type: 'result', ok: false, error: 'busy'}); return; }
     busy = true;
     try {
+      await cleanupOrphanTabs(true);
       const {days, why, loginError} = await readDays(dates.sort(), !!msg.careful, (done, total) => send({type: 'progress', done, total}), () => gone);
       if (loginError) send({type: 'result', ok: false, error: 'login'});
       else send({type: 'result', ok: true, days, why});

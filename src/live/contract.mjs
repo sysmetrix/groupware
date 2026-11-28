@@ -57,6 +57,10 @@ export function contractCheck(raw) {
   if (data.attendance && okArea('attendance')) {
     const a = data.attendance;
     if (!a.today || !/^\d{8}$/.test(String(a.today.date || ''))) issues.push({area: 'attendance', where: '오늘 출퇴근', kind: 'bad-format', field: 'date', detail: '오늘 날짜를 읽지 못했습니다'});
+    if (Array.isArray(a.days)) issues.push(...ctList('attendance', '일별 근태', a.days, ['date']));
+    if (a.month && !a.month.error && a.month.recognizedMin !== undefined && a.month.recognizedMin !== null && !Number.isFinite(Number(a.month.recognizedMin))) {
+      issues.push({area: 'attendance', where: '월 근무시간', kind: 'bad-format', field: 'recognizedMin', detail: '월 근무시간 집계가 숫자가 아닙니다'});
+    }
   }
   if (data.leave && okArea('leave')) {
     const l = data.leave;
@@ -77,9 +81,35 @@ export function contractCheck(raw) {
   return {ok: issues.length === 0, issues, areas};
 }
 
+/** 온디맨드 조회 API(카드·세금계산서·자원·ToDo·통합검색) 응답 모양 검사. */
+export function contractCheckOnDemand(kind, payload) {
+  const issues = [];
+  if (kind === 'cardUsage') {
+    const rows = payload && Array.isArray(payload.rows) ? payload.rows : null;
+    if (!rows) issues.push({area: 'budget', where: '카드 사용내역', kind: 'bad-format', field: 'rows', detail: '카드 사용내역 배열이 없습니다'});
+    else issues.push(...ctList('budget', '카드 사용내역', rows, ['date', 'place', 'amount']));
+  } else if (kind === 'etaxInvoices') {
+    const rows = payload && Array.isArray(payload.rows) ? payload.rows : null;
+    if (!rows) issues.push({area: 'budget', where: '세금계산서', kind: 'bad-format', field: 'rows', detail: '세금계산서 배열이 없습니다'});
+    else issues.push(...ctList('budget', '세금계산서', rows, ['date', 'supplier', 'sum']));
+  } else if (kind === 'resourceList') {
+    if (!Array.isArray(payload)) issues.push({area: 'schedule', where: '자원 목록', kind: 'bad-format', field: 'list', detail: '자원 목록 배열이 아닙니다'});
+    else issues.push(...ctList('schedule', '자원 목록', payload, ['resSeq', 'name']));
+  } else if (kind === 'todoList') {
+    const todos = payload && Array.isArray(payload.todos) ? payload.todos : null;
+    if (!todos) issues.push({area: 'todo', where: '개인 ToDo', kind: 'bad-format', field: 'todos', detail: 'ToDo 목록 배열이 없습니다'});
+    else issues.push(...ctList('todo', '개인 ToDo', todos, ['todoSeq', 'todoTitle']));
+  } else if (kind === 'search') {
+    if (!payload || !payload.groups || typeof payload.groups !== 'object') issues.push({area: 'search', where: '통합검색', kind: 'bad-format', field: 'groups', detail: '검색 결과 그룹이 없습니다'});
+  }
+  const areas = [...new Set(issues.map(i => i.area))];
+  return {ok: issues.length === 0, issues, areas};
+}
+
 /** 사용자에게 보일 한 줄. 문제가 없으면 빈 문자열. */
 export function contractMessage(result) {
   if (!result || result.ok || !result.areas || !result.areas.length) return '';
-  const names = result.areas.map(a => CONTRACT_AREA_LABEL[a] || a).join(', ');
+  const extra = {todo: '할 일', search: '통합검색'};
+  const names = result.areas.map(a => CONTRACT_AREA_LABEL[a] || extra[a] || a).join(', ');
   return `그룹웨어 화면이 바뀐 것으로 보입니다. ${names} 자료가 정확하지 않을 수 있으니 그룹웨어 원래 화면에서 확인해 주세요.`;
 }
